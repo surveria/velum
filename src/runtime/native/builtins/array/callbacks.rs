@@ -272,7 +272,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_reduce_with_direction(args, this_value, ReduceDirection::Forward)
+        self.eval_direct_array_reduce_with_direction(
+            args,
+            this_value,
+            ReduceDirection::Forward,
+            false,
+        )
     }
 
     pub(in crate::runtime::native) fn eval_array_reduce_right(
@@ -288,7 +293,26 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_reduce_with_direction(args, this_value, ReduceDirection::Reverse)
+        self.eval_direct_array_reduce_with_direction(
+            args,
+            this_value,
+            ReduceDirection::Reverse,
+            false,
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_typed_array_reduce(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+        reverse: bool,
+    ) -> Result<Value> {
+        let direction = if reverse {
+            ReduceDirection::Reverse
+        } else {
+            ReduceDirection::Forward
+        };
+        self.eval_direct_array_reduce_with_direction(args, this_value, direction, true)
     }
 
     fn eval_packed_numeric_array_map(
@@ -525,24 +549,31 @@ impl Context {
         args: &[Value],
         this_value: &Value,
         direction: ReduceDirection,
+        visit_out_of_bounds: bool,
     ) -> Result<Value> {
         let callback = self.array_callback_arg(args)?;
         let has_initial = args.get(1).is_some();
         let initial = args.get(1).cloned();
-        if let Some(value) =
-            self.eval_packed_numeric_array_reduce(callback, this_value, direction, initial.clone())?
+        if !visit_out_of_bounds
+            && let Some(value) = self.eval_packed_numeric_array_reduce(
+                callback,
+                this_value,
+                direction,
+                initial.clone(),
+            )?
         {
             return Ok(value);
         }
         let length = self.array_like_length_for_callback(this_value)?;
-        let Some(mut state) = self.initial_reduce_state(this_value, length, direction, initial)?
+        let Some(mut state) =
+            self.initial_reduce_state(this_value, length, direction, initial, visit_out_of_bounds)?
         else {
             return Err(Error::type_error(ARRAY_REDUCE_EMPTY_ERROR));
         };
 
         while let Some(index) = state.next_index(direction) {
             self.step()?;
-            if self.has_array_like_index(this_value, index)? {
+            if visit_out_of_bounds || self.has_array_like_index(this_value, index)? {
                 let value = self.get_array_like_index(this_value, index)?;
                 if has_initial || state.started {
                     state.accumulator = self.call_reduce_callback(
@@ -571,12 +602,30 @@ impl Context {
         length: usize,
         direction: ReduceDirection,
         initial: Option<Value>,
+        visit_out_of_bounds: bool,
     ) -> Result<Option<ReduceState>> {
         Self::ensure_array_like_object(object)?;
         if let Some(accumulator) = initial {
             let next = match direction {
                 ReduceDirection::Forward => 0,
                 ReduceDirection::Reverse => length,
+            };
+            return Ok(Some(ReduceState::with_next(
+                accumulator,
+                next,
+                length,
+                true,
+            )));
+        }
+        if visit_out_of_bounds && length > 0 {
+            let index = match direction {
+                ReduceDirection::Forward => 0,
+                ReduceDirection::Reverse => length.saturating_sub(1),
+            };
+            let accumulator = self.get_array_like_index(object, index)?;
+            let next = match direction {
+                ReduceDirection::Forward => 1,
+                ReduceDirection::Reverse => index,
             };
             return Ok(Some(ReduceState::with_next(
                 accumulator,

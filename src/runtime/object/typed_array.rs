@@ -265,6 +265,7 @@ pub struct TypedArrayView {
     buffer_object: ObjectId,
     byte_offset: usize,
     length: usize,
+    length_tracking: bool,
     element_kind: TypedArrayElementKind,
 }
 
@@ -281,6 +282,23 @@ impl TypedArrayView {
             buffer_object,
             byte_offset,
             length,
+            length_tracking: false,
+            element_kind,
+        }
+    }
+
+    pub(in crate::runtime) const fn new_length_tracking(
+        buffer: ByteBuffer,
+        buffer_object: ObjectId,
+        byte_offset: usize,
+        element_kind: TypedArrayElementKind,
+    ) -> Self {
+        Self {
+            buffer,
+            buffer_object,
+            byte_offset,
+            length: 0,
+            length_tracking: true,
             element_kind,
         }
     }
@@ -288,6 +306,10 @@ impl TypedArrayView {
     pub fn length(&self) -> usize {
         if self.is_out_of_bounds() {
             return 0;
+        }
+        if self.length_tracking {
+            return self.buffer.byte_length().saturating_sub(self.byte_offset)
+                / self.element_kind.bytes_per_element();
         }
         self.length
     }
@@ -344,6 +366,9 @@ impl TypedArrayView {
     fn is_out_of_bounds(&self) -> bool {
         if self.buffer.is_detached() {
             return true;
+        }
+        if self.length_tracking {
+            return self.byte_offset > self.buffer.byte_length();
         }
         let Some(byte_length) = self
             .length

@@ -39,18 +39,19 @@ fn resizes_shared_backing_storage_and_zero_fills_growth() -> TestResult {
     let value = context.eval(
         r"
         const buffer = new ArrayBuffer(4, { maxByteLength: 12 });
-        const bytes = new Uint8Array(buffer);
-        bytes[0] = 7;
-        bytes[3] = 9;
+        const fixed = new Uint8Array(buffer, 0, 4);
+        const tracking = new Uint8Array(buffer);
+        tracking[0] = 7;
+        tracking[3] = 9;
         buffer.resize(8);
         const grew = buffer.byteLength === 8 &&
             buffer.maxByteLength === 12 &&
             buffer.resizable === true &&
-            bytes[0] === 7 && bytes[3] === 9;
+            fixed.length === 4 && tracking.length === 8 &&
+            tracking[0] === 7 && tracking[3] === 9 && tracking[7] === 0;
         buffer.resize(2);
-        const current = new Uint8Array(buffer);
-        const shrank = buffer.byteLength === 2 && bytes.length === 0 &&
-            bytes[0] === undefined && current[0] === 7;
+        const shrank = buffer.byteLength === 2 && fixed.length === 0 &&
+            fixed[0] === undefined && tracking.length === 2 && tracking[0] === 7;
         grew && shrank ? 42 : 0
         ",
     )?;
@@ -119,6 +120,40 @@ fn reconciles_live_buffer_payload_after_resize_and_transfer() -> TestResult {
         3,
         "transferred byte payload",
     )
+}
+
+#[test]
+fn preserves_reduce_iteration_contracts_across_resize() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const genericBuffer = new ArrayBuffer(4, { maxByteLength: 4 });
+        const generic = new Uint8Array(genericBuffer);
+        const genericIndices = [];
+        Array.prototype.reduce.call(generic, function(previous, next, index) {
+            if (index === 0) genericBuffer.resize(2);
+            genericIndices.push(index);
+            return next;
+        }, 0);
+
+        const typedBuffer = new ArrayBuffer(4, { maxByteLength: 4 });
+        const typed = new Uint8Array(typedBuffer);
+        const typedValues = [];
+        typed.reduce(function(previous, next, index) {
+            if (index === 0) typedBuffer.resize(2);
+            typedValues.push(next);
+            return next;
+        }, 0);
+
+        genericIndices.length === 2 && genericIndices[0] === 0 &&
+            genericIndices[1] === 1 && typedValues.length === 4 &&
+            typedValues[0] === 0 && typedValues[1] === 0 &&
+            typedValues[2] === undefined && typedValues[3] === undefined
+            ? 42 : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

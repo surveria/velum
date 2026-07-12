@@ -270,7 +270,11 @@ impl Context {
                 TYPED_ARRAY_BUFFER_RANGE_ERROR,
             ));
         };
-        let length = if requested_length.is_some_and(|value| !matches!(value, Value::Undefined)) {
+        let length_tracking = buffer.is_resizable()
+            && requested_length.is_none_or(|value| matches!(value, Value::Undefined));
+        let length = if !length_tracking
+            && requested_length.is_some_and(|value| !matches!(value, Value::Undefined))
+        {
             let requested = Self::length_to_usize(
                 self.to_index(requested_length)?,
                 TYPED_ARRAY_LENGTH_LIMIT_ERROR,
@@ -284,7 +288,7 @@ impl Context {
             }
             requested
         } else {
-            if !available.is_multiple_of(element_size) {
+            if !length_tracking && !available.is_multiple_of(element_size) {
                 return Err(Error::exception(
                     ErrorName::RangeError,
                     TYPED_ARRAY_BUFFER_RANGE_ERROR,
@@ -292,7 +296,14 @@ impl Context {
             }
             available / element_size
         };
-        self.create_typed_array_value(element_kind, buffer, buffer_object, byte_offset, length)
+        self.create_typed_array_value(
+            element_kind,
+            buffer,
+            buffer_object,
+            byte_offset,
+            length,
+            length_tracking,
+        )
     }
 
     fn create_typed_array_with_length(
@@ -325,6 +336,7 @@ impl Context {
             buffer_object,
             0,
             byte_length / element_size,
+            false,
         )
     }
 
@@ -345,8 +357,13 @@ impl Context {
         buffer_object: ObjectId,
         byte_offset: usize,
         length: usize,
+        length_tracking: bool,
     ) -> Result<Value> {
-        let view = TypedArrayView::new(buffer, buffer_object, byte_offset, length, element_kind);
+        let view = if length_tracking {
+            TypedArrayView::new_length_tracking(buffer, buffer_object, byte_offset, element_kind)
+        } else {
+            TypedArrayView::new(buffer, buffer_object, byte_offset, length, element_kind)
+        };
         let prototype = self.typed_array_constructor_prototype(element_kind)?;
         self.objects
             .create_typed_array(view, prototype, self.limits.max_objects)

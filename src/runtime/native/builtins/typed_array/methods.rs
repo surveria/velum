@@ -188,9 +188,11 @@ impl Context {
             TypedArrayFunctionKind::LastIndexOf => {
                 self.eval_direct_array_last_index_of(args, this_value)
             }
-            TypedArrayFunctionKind::Reduce => self.eval_direct_array_reduce(args, this_value),
+            TypedArrayFunctionKind::Reduce => {
+                self.eval_direct_typed_array_reduce(args, this_value, false)
+            }
             TypedArrayFunctionKind::ReduceRight => {
-                self.eval_direct_array_reduce_right(args, this_value)
+                self.eval_direct_typed_array_reduce(args, this_value, true)
             }
             TypedArrayFunctionKind::Reverse => self.eval_direct_array_reverse(args, this_value),
             TypedArrayFunctionKind::Some => self.eval_direct_array_some(args, this_value),
