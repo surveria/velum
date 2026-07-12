@@ -1,7 +1,7 @@
 use crate::{
     api::native_call::NativeCallTarget,
     error::Result,
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, roots::VmRootKind},
     value::Value,
 };
 
@@ -14,6 +14,34 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Option<Result<Value>> {
+        let boxed_receiver = if direct_array_receiver_requires_to_object(target)
+            && !matches!(
+                this_value,
+                Value::Object(_)
+                    | Value::Function(_)
+                    | Value::NativeFunction(_)
+                    | Value::HostFunction(_)
+            ) {
+            match self.object_to_object(this_value) {
+                Ok(receiver) => Some(receiver),
+                Err(error) => return Some(Err(error)),
+            }
+        } else {
+            None
+        };
+        let _receiver_roots = if let Some(receiver) = boxed_receiver.as_ref() {
+            let roots = match self.active_transient_root_scope(VmRootKind::TransientTemporary) {
+                Ok(roots) => roots,
+                Err(error) => return Some(Err(error)),
+            };
+            if let Err(error) = roots.add_values(std::iter::once(receiver)) {
+                return Some(Err(error));
+            }
+            Some(roots)
+        } else {
+            None
+        };
+        let this_value = boxed_receiver.as_ref().unwrap_or(this_value);
         match target {
             NativeCallTarget::Array => Some(self.eval_direct_array_constructor(args)),
             NativeCallTarget::ArrayConcat => Some(self.eval_direct_array_concat(args, this_value)),
@@ -67,6 +95,34 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Option<Result<Value>> {
+        let boxed_receiver = if kind.array_receiver_requires_to_object()
+            && !matches!(
+                this_value,
+                Value::Object(_)
+                    | Value::Function(_)
+                    | Value::NativeFunction(_)
+                    | Value::HostFunction(_)
+            ) {
+            match self.object_to_object(this_value) {
+                Ok(receiver) => Some(receiver),
+                Err(error) => return Some(Err(error)),
+            }
+        } else {
+            None
+        };
+        let _receiver_roots = if let Some(receiver) = boxed_receiver.as_ref() {
+            let roots = match self.active_transient_root_scope(VmRootKind::TransientTemporary) {
+                Ok(roots) => roots,
+                Err(error) => return Some(Err(error)),
+            };
+            if let Err(error) = roots.add_values(std::iter::once(receiver)) {
+                return Some(Err(error));
+            }
+            Some(roots)
+        } else {
+            None
+        };
+        let this_value = boxed_receiver.as_ref().unwrap_or(this_value);
         match kind {
             NativeFunctionKind::Array => Some(self.eval_array_constructor(args)),
             NativeFunctionKind::ArrayConcat => Some(self.eval_array_concat(args, this_value)),
@@ -125,4 +181,32 @@ impl Context {
             _ => None,
         }
     }
+}
+
+const fn direct_array_receiver_requires_to_object(target: NativeCallTarget) -> bool {
+    matches!(
+        target,
+        NativeCallTarget::ArrayConcat
+            | NativeCallTarget::ArrayEvery
+            | NativeCallTarget::ArrayFilter
+            | NativeCallTarget::ArrayFind
+            | NativeCallTarget::ArrayFindIndex
+            | NativeCallTarget::ArrayFlat
+            | NativeCallTarget::ArrayFlatMap
+            | NativeCallTarget::ArrayForEach
+            | NativeCallTarget::ArrayIncludes
+            | NativeCallTarget::ArrayIndexOf
+            | NativeCallTarget::ArrayJoin
+            | NativeCallTarget::ArrayLastIndexOf
+            | NativeCallTarget::ArrayMap
+            | NativeCallTarget::ArrayPop
+            | NativeCallTarget::ArrayPush
+            | NativeCallTarget::ArrayReduce
+            | NativeCallTarget::ArrayReduceRight
+            | NativeCallTarget::ArrayReverse
+            | NativeCallTarget::ArrayShift
+            | NativeCallTarget::ArraySlice
+            | NativeCallTarget::ArraySome
+            | NativeCallTarget::ArrayUnshift
+    )
 }

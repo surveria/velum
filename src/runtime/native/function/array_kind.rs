@@ -78,6 +78,20 @@ const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_NAME: &str = "Array";
 
 impl NativeFunctionKind {
+    pub(in crate::runtime::native::function) const fn array_receiver_requires_to_object(
+        self,
+    ) -> bool {
+        self.array_length().is_some()
+            && !matches!(
+                self,
+                Self::Array
+                    | Self::ArrayFrom
+                    | Self::ArrayFromAsync
+                    | Self::ArrayIsArray
+                    | Self::ArrayValues
+            )
+    }
+
     pub(in crate::runtime::native::function) const fn array_length(self) -> Option<f64> {
         match self {
             Self::Array => Some(ARRAY_FUNCTION_LENGTH),
