@@ -9,13 +9,16 @@ use crate::{
 };
 
 mod combinator;
+mod finally_function;
 mod job;
 mod state;
 
 pub(in crate::runtime) use combinator::{PromiseCombinatorElementKind, PromiseCombinatorKind};
+pub(in crate::runtime) use finally_function::PromiseFinallyFunctionKind;
 use job::PromiseStatus;
 pub(in crate::runtime) use job::{
-    PromiseContinuationCancellation, PromiseJob, PromiseReaction, PromiseSettledState,
+    PromiseContinuationCancellation, PromiseJob, PromiseReaction, PromiseReactionResult,
+    PromiseSettledState,
 };
 use state::PromiseState;
 pub(in crate::runtime) use state::{Promise, PromiseId, PromiseResolverKind};
@@ -146,18 +149,17 @@ impl Context {
         promise: PromiseId,
         value: Value,
     ) -> Result<()> {
-        if let Ok(adopted) = self.promise_id_from_value(&value) {
-            if adopted == promise {
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::TypeError,
-                        "Promise cannot resolve to itself",
-                    ),
-                    true,
-                )?;
-                return self.reject_promise(promise, reason);
-            }
-            return self.adopt_promise(promise, adopted);
+        if let Ok(adopted) = self.promise_id_from_value(&value)
+            && adopted == promise
+        {
+            let reason = self.create_error_object(
+                JavaScriptErrorMetadata::new(
+                    ErrorName::TypeError,
+                    "Promise cannot resolve to itself",
+                ),
+                true,
+            )?;
+            return self.reject_promise(promise, reason);
         }
         if self.semantic_object_ref(&value)?.is_some() {
             let then = match self.get_named(&value, "then") {
@@ -437,18 +439,6 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    pub(in crate::runtime) fn promise_then(
-        &mut self,
-        promise: PromiseId,
-        on_fulfilled: Option<Value>,
-        on_rejected: Option<Value>,
-    ) -> Result<Value> {
-        let (result, object) = self.create_pending_promise()?;
-        let reaction = PromiseReaction::new(result, on_fulfilled, on_rejected);
-        self.add_promise_reaction(promise, reaction)?;
-        Ok(object)
-    }
-
     pub(in crate::runtime) fn promise_reaction_handler(
         &self,
         value: Option<&Value>,
@@ -507,11 +497,6 @@ impl Context {
         };
         *slot = Some(promise);
         Ok(())
-    }
-
-    fn adopt_promise(&mut self, promise: PromiseId, adopted: PromiseId) -> Result<()> {
-        let reaction = PromiseReaction::new(promise, None, None);
-        self.add_promise_reaction(adopted, reaction)
     }
 
     fn settle_promise(&mut self, promise: PromiseId, state: &PromiseSettledState) -> Result<()> {
@@ -625,18 +610,44 @@ impl Context {
         };
         let Some(handler) = handler else {
             return match state.status {
-                PromiseStatus::Fulfilled => self.resolve_promise(result, state.value),
-                PromiseStatus::Rejected => self.reject_promise(result, state.value),
+                PromiseStatus::Fulfilled => self.resolve_promise_reaction(result, state.value),
+                PromiseStatus::Rejected => self.reject_promise_reaction(result, state.value),
             };
         };
         match self.call_value(&handler, &[state.value], Value::Undefined) {
-            Ok(value) => self.resolve_promise(result, value),
+            Ok(value) => self.resolve_promise_reaction(result, value),
             Err(error) => {
                 let Some(reason) = runtime_exception_value(self, &error)? else {
                     return Err(error);
                 };
-                self.reject_promise(result, reason)
+                self.reject_promise_reaction(result, reason)
             }
+        }
+    }
+
+    fn resolve_promise_reaction(
+        &mut self,
+        result: PromiseReactionResult,
+        value: Value,
+    ) -> Result<()> {
+        match result {
+            PromiseReactionResult::Intrinsic(promise) => self.resolve_promise(promise, value),
+            PromiseReactionResult::Capability { resolve, .. } => self
+                .call_value(&resolve, &[value], Value::Undefined)
+                .map(|_value| ()),
+        }
+    }
+
+    fn reject_promise_reaction(
+        &mut self,
+        result: PromiseReactionResult,
+        reason: Value,
+    ) -> Result<()> {
+        match result {
+            PromiseReactionResult::Intrinsic(promise) => self.reject_promise(promise, reason),
+            PromiseReactionResult::Capability { reject, .. } => self
+                .call_value(&reject, &[reason], Value::Undefined)
+                .map(|_value| ()),
         }
     }
 

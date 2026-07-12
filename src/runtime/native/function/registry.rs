@@ -259,7 +259,8 @@ const TYPED_ARRAY_INTRINSIC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(2
 const PROMISE_ALL_SETTLED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(264);
 const PROMISE_ANY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(265);
 const PROMISE_RACE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(266);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 267;
+const PROMISE_FINALLY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(267);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 268;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -444,6 +445,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
+        NativeFunctionKind::PromiseFinally => Some(PROMISE_FINALLY_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         NativeFunctionKind::Iterator(iterator_kind) => iterator_slot(iterator_kind),

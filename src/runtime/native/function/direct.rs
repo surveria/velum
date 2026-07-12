@@ -269,6 +269,9 @@ impl Context {
             }
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
+            NativeCallTarget::PromiseFinally => {
+                self.eval_promise_finally(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
             target => self
                 .eval_direct_string_native_call_target(target, args, this_value)

@@ -14,9 +14,15 @@ use crate::{
 use super::state::PromiseId;
 
 #[derive(Debug)]
+pub(in crate::runtime) enum PromiseReactionResult {
+    Intrinsic(PromiseId),
+    Capability { resolve: Value, reject: Value },
+}
+
+#[derive(Debug)]
 pub(in crate::runtime) enum PromiseReaction {
     Then {
-        result: PromiseId,
+        result: PromiseReactionResult,
         on_fulfilled: Option<Value>,
         on_rejected: Option<Value>,
     },
@@ -38,7 +44,20 @@ impl PromiseReaction {
         on_rejected: Option<Value>,
     ) -> Self {
         Self::Then {
-            result,
+            result: PromiseReactionResult::Intrinsic(result),
+            on_fulfilled,
+            on_rejected,
+        }
+    }
+
+    pub(in crate::runtime) const fn with_capability(
+        resolve: Value,
+        reject: Value,
+        on_fulfilled: Option<Value>,
+        on_rejected: Option<Value>,
+    ) -> Self {
+        Self::Then {
+            result: PromiseReactionResult::Capability { resolve, reject },
             on_fulfilled,
             on_rejected,
         }
@@ -72,10 +91,22 @@ impl PromiseReaction {
                 on_fulfilled,
                 on_rejected,
             } => {
-                visitor.visit(
-                    VmAsyncEdgeKind::PromiseReaction,
-                    StrongEdgeReference::Promise(*result),
-                )?;
+                match result {
+                    PromiseReactionResult::Intrinsic(result) => visitor.visit(
+                        VmAsyncEdgeKind::PromiseReaction,
+                        StrongEdgeReference::Promise(*result),
+                    )?,
+                    PromiseReactionResult::Capability { resolve, reject } => {
+                        visitor.visit(
+                            VmAsyncEdgeKind::PromiseReaction,
+                            StrongEdgeReference::Value(resolve),
+                        )?;
+                        visitor.visit(
+                            VmAsyncEdgeKind::PromiseReaction,
+                            StrongEdgeReference::Value(reject),
+                        )?;
+                    }
+                }
                 if let Some(handler) = on_fulfilled {
                     visitor.visit(
                         VmAsyncEdgeKind::PromiseReaction,
@@ -123,7 +154,15 @@ impl PromiseReaction {
                 on_fulfilled,
                 on_rejected,
             } => {
-                visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
+                match result {
+                    PromiseReactionResult::Intrinsic(result) => {
+                        visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
+                    }
+                    PromiseReactionResult::Capability { resolve, reject } => {
+                        visitor.visit_value(VmRootKind::QueuedJob, resolve)?;
+                        visitor.visit_value(VmRootKind::QueuedJob, reject)?;
+                    }
+                }
                 if let Some(value) = on_fulfilled {
                     visitor.visit_value(VmRootKind::QueuedJob, value)?;
                 }
