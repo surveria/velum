@@ -3,14 +3,16 @@ use crate::{
     runtime::{
         Context,
         call::RuntimeCallArgs,
-        collections::{CollectionId, CollectionKind},
+        collections::{CollectionIteratorId, CollectionKind},
         control::Completion,
         object::{
-            AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-            PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
+            AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
+            PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
+            PropertyWritable,
         },
+        property::DynamicPropertyKey,
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::{NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
@@ -44,14 +46,14 @@ const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const CONSTRUCTOR_REQUIRES_NEW_ERROR: &str = "constructor requires 'new'";
 const MAP_ENTRY_NOT_OBJECT_ERROR: &str = "Map iterable entries must be objects";
 const FOR_EACH_CALLBACK_ERROR: &str = "forEach callback must be callable";
+const COLLECTION_ADDER_ERROR: &str = "collection adder must be callable";
+const COLLECTION_ITERATOR_RECEIVER_ERROR: &str =
+    "Collection Iterator.prototype.next requires a compatible iterator receiver";
+const COLLECTION_ITERATOR_STATE_PROPERTY: &str = "\0CollectionIteratorState";
+const MAP_ITERATOR_TAG: &str = "Map Iterator";
+const SET_ITERATOR_TAG: &str = "Set Iterator";
 
-/// Which entry component a collection iterator yields.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) enum CollectionIterationTarget {
-    Keys,
-    Values,
-    Entries,
-}
+pub(in crate::runtime) use crate::runtime::collections::CollectionIterationTarget;
 
 impl Context {
     pub(in crate::runtime::native) fn map_constructor_value(&mut self) -> Result<Value> {
@@ -191,7 +193,40 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        self.install_collection_to_string_tag(prototype, kind)?;
         self.install_collection_prototype_iterator(prototype, kind)
+    }
+
+    fn install_collection_to_string_tag(
+        &mut self,
+        prototype: ObjectId,
+        kind: CollectionKind,
+    ) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(symbol) = tag_symbol else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let tag = match kind {
+            CollectionKind::Map => MAP_NAME,
+            CollectionKind::Set => SET_NAME,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime("weak collection routed to Map or Set tag"));
+            }
+        };
+        let tag = self.heap_string_value(tag)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            TO_STRING_TAG_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(tag),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     /// Installs `Symbol.iterator` on the prototype, aliasing `entries` for
@@ -260,7 +295,7 @@ impl Context {
         self.bind_collection_object(*object_id, kind, collection)?;
         let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         if !matches!(iterable, Value::Undefined | Value::Null) {
-            self.seed_collection_from_iterable(kind, collection, &iterable)?;
+            self.seed_collection_from_iterable(kind, &object, &iterable)?;
         }
         Ok(object)
     }
@@ -268,14 +303,27 @@ impl Context {
     fn seed_collection_from_iterable(
         &mut self,
         kind: CollectionKind,
-        collection: CollectionId,
+        object: &Value,
         iterable: &Value,
     ) -> Result<()> {
+        let adder_name = match kind {
+            CollectionKind::Map => COLLECTION_SET_NAME,
+            CollectionKind::Set => COLLECTION_ADD_NAME,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set seeding",
+                ));
+            }
+        };
+        let adder = self.get_named(object, adder_name)?;
+        if !self.semantic_is_callable(&adder)? {
+            return Err(Error::type_error(COLLECTION_ADDER_ERROR));
+        }
         let mut source = self.get_iterator(iterable)?;
         loop {
             match self.iterator_step(&mut source)? {
                 crate::runtime::abstract_operations::IteratorStep::Value(item) => {
-                    let outcome = self.seed_collection_entry(kind, collection, item);
+                    let outcome = self.seed_collection_entry(kind, object, &adder, item);
                     if let Err(error) = outcome {
                         return Err(self.iterator_close_on_error(&mut source, error));
                     }
@@ -291,23 +339,27 @@ impl Context {
     fn seed_collection_entry(
         &mut self,
         kind: CollectionKind,
-        collection: CollectionId,
+        object: &Value,
+        adder: &Value,
         item: Value,
     ) -> Result<()> {
-        match kind {
+        let args = match kind {
             CollectionKind::Map => {
                 if !matches!(item, Value::Object(_)) {
                     return Err(Error::type_error(MAP_ENTRY_NOT_OBJECT_ERROR));
                 }
                 let key = self.get_named(&item, "0")?;
                 let value = self.get_named(&item, "1")?;
-                self.collection_set(collection, key, value)
+                vec![key, value]
             }
-            CollectionKind::Set => self.collection_set(collection, item.clone(), item),
-            CollectionKind::WeakMap | CollectionKind::WeakSet => Err(Error::runtime(
-                "weak collection routed to Map or Set seeding",
-            )),
-        }
+            CollectionKind::Set => vec![item],
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set seeding",
+                ));
+            }
+        };
+        self.call_value(adder, &args, object.clone()).map(|_| ())
     }
 
     pub(in crate::runtime::native) fn eval_collection_constructor_call() -> Result<Value> {
@@ -405,8 +457,13 @@ impl Context {
             return Err(Error::type_error(FOR_EACH_CALLBACK_ERROR));
         }
         let callback_this = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
-        let entries = self.collection_entries(collection)?;
-        for (key, value) in entries {
+        let mut cursor = 0usize;
+        while let Some((index, key, value)) =
+            self.collection_entry_at_or_after(collection, cursor)?
+        {
+            cursor = index
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("collection forEach cursor overflowed"))?;
             let call_args = [value, key, this_value.clone()];
             match self.call(&callback, &call_args, callback_this.clone())? {
                 Completion::Normal(_) => {}
@@ -424,19 +481,16 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let collection = self.collection_from_this(this_value, kind)?;
-        let entries = self.collection_entries(collection)?;
-        let mut items = Vec::with_capacity(entries.len());
-        for (key, value) in entries {
-            let item = match target {
-                CollectionIterationTarget::Keys => key,
-                CollectionIterationTarget::Values => value,
-                CollectionIterationTarget::Entries => {
-                    self.create_array_from_elements(vec![key, value])?
-                }
-            };
-            items.push(item);
-        }
-        self.create_collection_iterator_object(items)
+        let iterator =
+            self.create_live_collection_iterator(this_value.clone(), collection, kind, target)?;
+        let tag = match kind {
+            CollectionKind::Map => MAP_ITERATOR_TAG,
+            CollectionKind::Set => SET_ITERATOR_TAG,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime("weak collection cannot have an iterator"));
+            }
+        };
+        self.create_live_collection_iterator_object(iterator, tag)
     }
 
     pub(in crate::runtime::native) fn create_collection_iterator_object(
@@ -467,13 +521,14 @@ impl Context {
             next_key,
             ITERATOR_NEXT_NAME,
             PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(next),
+                Some(next.clone()),
                 Some(PropertyWritable::Yes),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::Yes),
             )),
             self.limits.max_object_properties,
         )?;
+        self.define_collection_iterator_state(*object_id, next)?;
         // Iterators are themselves iterable: [Symbol.iterator]() returns this.
         self.symbol_constructor_value()?;
         if let Some(symbol) = self.iterator_symbol() {
@@ -523,7 +578,7 @@ impl Context {
             next_key,
             ITERATOR_NEXT_NAME,
             PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(next),
+                Some(next.clone()),
                 Some(PropertyWritable::Yes),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::Yes),
@@ -531,10 +586,78 @@ impl Context {
             self.limits.max_object_properties,
         )?;
         self.install_iterator_prototype_symbols(prototype_id, tag)?;
-        self.objects.create_with_prototype(
+        let object = self.objects.create_with_prototype(
             Some(prototype_id),
             constructor_key,
             self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(object_id) = object else {
+            return Err(Error::runtime("tagged iterator object creation failed"));
+        };
+        self.define_collection_iterator_state(object_id, next)?;
+        Ok(Value::Object(object_id))
+    }
+
+    fn create_live_collection_iterator_object(
+        &mut self,
+        iterator: CollectionIteratorId,
+        tag: &str,
+    ) -> Result<Value> {
+        let iterator_parent = self.iterator_prototype_object_id()?;
+        let next = self.create_ephemeral_native_function(
+            NativeFunctionKind::CollectionIteratorNext(iterator),
+            Value::Undefined,
+        )?;
+        let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let prototype = self.objects.create_with_prototype(
+            Some(iterator_parent),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(prototype_id) = prototype else {
+            return Err(Error::runtime("live iterator prototype creation failed"));
+        };
+        self.objects.define_property(
+            prototype_id,
+            next_key,
+            ITERATOR_NEXT_NAME,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(next.clone()),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        self.install_iterator_prototype_symbols(prototype_id, tag)?;
+        let object = self.objects.create_with_prototype(
+            Some(prototype_id),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(object_id) = object else {
+            return Err(Error::runtime("live iterator object creation failed"));
+        };
+        self.define_collection_iterator_state(object_id, next)?;
+        Ok(Value::Object(object_id))
+    }
+
+    fn define_collection_iterator_state(&mut self, object: ObjectId, state: Value) -> Result<()> {
+        let key = self.intern_property_key(COLLECTION_ITERATOR_STATE_PROPERTY)?;
+        self.objects.define_property(
+            object,
+            key,
+            COLLECTION_ITERATOR_STATE_PROPERTY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(state),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
             self.limits.max_object_properties,
         )
     }
@@ -582,9 +705,19 @@ impl Context {
 
     pub(in crate::runtime::native) fn eval_collection_iterator_next(
         &mut self,
-        iterator: crate::runtime::collections::CollectionIteratorId,
+        iterator: CollectionIteratorId,
+        this_value: &Value,
     ) -> Result<Value> {
-        let step = self.collection_iterator_step(iterator)?;
+        let actual = self.collection_iterator_receiver_state(this_value)?;
+        self.eval_collection_iterator_next_state(iterator, actual)
+    }
+
+    pub(in crate::runtime::native) fn eval_collection_iterator_next_state(
+        &mut self,
+        iterator: CollectionIteratorId,
+        actual: CollectionIteratorId,
+    ) -> Result<Value> {
+        let step = self.collection_iterator_step_for_receiver(iterator, actual)?;
         let (value, done) = step.map_or((Value::Undefined, true), |value| (value, false));
         let value_key = self.intern_property_key(ITERATOR_RESULT_VALUE_NAME)?;
         let done_key = self.intern_property_key(ITERATOR_RESULT_DONE_NAME)?;
@@ -608,6 +741,31 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
+    }
+
+    fn collection_iterator_receiver_state(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<CollectionIteratorId> {
+        if !matches!(this_value, Value::Object(_)) {
+            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        }
+        let key = self.intern_property_key(COLLECTION_ITERATOR_STATE_PROPERTY)?;
+        let property =
+            DynamicPropertyKey::new(COLLECTION_ITERATOR_STATE_PROPERTY.to_owned(), Some(key));
+        let Some(OwnPropertyDescriptor::Data(descriptor)) =
+            self.semantic_own_property_descriptor(this_value, &property)?
+        else {
+            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        };
+        let Value::NativeFunction(id) = descriptor.value() else {
+            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        };
+        let NativeFunctionKind::CollectionIteratorNext(iterator) = self.native_function(id)?.kind()
+        else {
+            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        };
+        Ok(iterator)
     }
 }
 

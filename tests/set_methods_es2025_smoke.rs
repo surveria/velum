@@ -159,6 +159,50 @@ fn exposes_method_metadata() -> TestResult {
     )
 }
 
+#[test]
+fn predicates_iterate_lazily_close_early_and_observe_receiver_mutation() -> TestResult {
+    eval_is_42(
+        r#"
+        let receiver = new Set(["a", "b", "c"]);
+        const mutating = {
+            size: 3,
+            has: function (value) {
+                if (value === "a") {
+                    receiver.delete("b");
+                    receiver.delete("c");
+                    receiver.add("b");
+                }
+                return false;
+            },
+            keys: function () { throw new Error("unexpected keys"); }
+        };
+        const disjoint = receiver.isDisjointFrom(mutating);
+        let nextCalls = 0;
+        let returnCalls = 0;
+        const iterator = {
+            next: function () {
+                nextCalls += 1;
+                return { value: 2, done: false };
+            },
+            return: function () {
+                returnCalls += 1;
+                return {};
+            }
+        };
+        const setLike = {
+            size: 1,
+            has: function () { return false; },
+            keys: function () { return iterator; }
+        };
+        disjoint && [...receiver].join("") === "ab" &&
+            !new Set([3, 4]).isSupersetOf(setLike) &&
+            nextCalls === 1 && returnCalls === 1
+            ? 42
+            : 0
+        "#,
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

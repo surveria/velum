@@ -80,7 +80,7 @@ impl Context {
                 this_value,
             ),
             NativeFunctionKind::CollectionIteratorNext(iterator) => {
-                self.eval_collection_iterator_next(iterator)
+                self.eval_collection_iterator_next(iterator, this_value)
             }
             NativeFunctionKind::IteratorSelf => Ok(this_value.clone()),
             NativeFunctionKind::SetUnion => self.eval_set_union(args, this_value),

@@ -1,5 +1,5 @@
 use rs_quickjs::{
-    Engine, EngineConfig, RuntimeLimits, VmAsyncEdgeKind, VmConfig, VmGcKind, VmStorageKind,
+    Engine, EngineConfig, RuntimeLimits, Value, VmAsyncEdgeKind, VmConfig, VmGcKind, VmStorageKind,
     VmStorageLimits,
 };
 
@@ -400,7 +400,13 @@ fn invalidates_callable_caches_before_reusing_native_ids() -> TestResult {
         0
         ",
     )?;
-    let result = vm.eval("invokeTarget().value")?;
+    let detached_rejected =
+        vm.eval("try { invokeTarget(); false } catch (error) { error instanceof TypeError }")?;
+    ensure(
+        detached_rejected == Value::Bool(true),
+        "call cache did not dispatch the reused native id through iterator branding",
+    )?;
+    let result = vm.eval("iterator.next().value")?;
     ensure(
         result.to_string() == "42",
         "call cache dispatched a reused native id through its old kind",

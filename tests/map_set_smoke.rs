@@ -199,3 +199,75 @@ fn set_seeds_from_string_iterables() -> TestResult {
         "2:true:true:false",
     )
 }
+
+#[test]
+fn set_constructor_observes_the_add_protocol() -> TestResult {
+    ensure_string(
+        r#"
+        const original = Set.prototype.add;
+        let calls = 0;
+        Set.prototype.add = function (value) {
+            calls += 1;
+            return original.call(this, value);
+        };
+        const seeded = new Set([1, 2]);
+        Object.defineProperty(Set.prototype, "add", {
+            get: function () { throw new RangeError("adder"); }
+        });
+        let error = "none";
+        try { new Set([]); } catch (caught) { error = caught.name; }
+        calls + ":" + seeded.size + ":" + error
+        "#,
+        "2:2:RangeError",
+    )
+}
+
+#[test]
+fn set_iteration_is_live_branded_and_metadata_complete() -> TestResult {
+    ensure_string(
+        r#"
+        const set = new Set([1, 2]);
+        const iterator = set.values();
+        const first = iterator.next().value;
+        set.delete(2);
+        set.add(2);
+        set.add(3);
+        const rest = [iterator.next().value, iterator.next().value].join("");
+        const done = iterator.next().done;
+        set.add(4);
+        const remainsDone = iterator.next().done;
+        let rejected = false;
+        try { iterator.next.call({}); } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        const otherAccepted = iterator.next.call(new Set().values()).done;
+        const prototype = Object.getPrototypeOf(iterator);
+        first + ":" + rest + ":" + done + ":" + remainsDone + ":" + rejected +
+            ":" + otherAccepted + ":" + prototype[Symbol.toStringTag] +
+            ":" + Set.prototype[Symbol.toStringTag] +
+            ":" + Object.getOwnPropertyDescriptor(Set.prototype, "size").get.name
+        "#,
+        "1:23:true:true:true:true:Set Iterator:Set:get size",
+    )
+}
+
+#[test]
+fn set_for_each_observes_deletion_readdition_and_growth() -> TestResult {
+    ensure_string(
+        r#"
+        const set = new Set([1, 2, 3]);
+        const seen = [];
+        set.forEach(function (value) {
+            seen.push(value);
+            if (value === 1) {
+                set.delete(2);
+                set.delete(3);
+                set.add(2);
+                set.add(4);
+            }
+        });
+        seen.join("") + ":" + [...set].join("")
+        "#,
+        "124:124",
+    )
+}
