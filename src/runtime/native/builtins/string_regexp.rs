@@ -14,19 +14,21 @@ const REGEXP_MATCH_INDEX_PROPERTY: &str = "index";
 const REGEXP_MATCH_GROUPS_PROPERTY: &str = "groups";
 const REGEXP_MATCH_LENGTH_PROPERTY: &str = "length";
 const FIRST_MATCH_PROPERTY: &str = "0";
+const REPLACE_SYMBOL_DISPLAY: &str = "[Symbol.replace]";
+const REPLACE_SYMBOL_PROPERTY: &str = "replace";
 const SPLIT_SYMBOL_DISPLAY: &str = "[Symbol.split]";
 const SPLIT_SYMBOL_PROPERTY: &str = "split";
 const ZERO_INDEX: f64 = 0.0;
 
 #[derive(Debug)]
-struct StringRegExpMatch {
-    byte_start: usize,
-    byte_end: usize,
-    code_unit_start: usize,
-    code_unit_end: usize,
-    text: String,
-    captures: Vec<Value>,
-    groups: Value,
+pub(super) struct StringRegExpMatch {
+    pub(super) byte_start: usize,
+    pub(super) byte_end: usize,
+    pub(super) code_unit_start: usize,
+    pub(super) code_unit_end: usize,
+    pub(super) text: String,
+    pub(super) captures: Vec<Value>,
+    pub(super) groups: Value,
 }
 
 impl Context {
@@ -96,27 +98,66 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "String.prototype.replace requires a non-nullish receiver",
+            ));
+        }
+        let pattern = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let replacement = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        if self.semantic_object_ref(&pattern)?.is_some()
+            && let Some(replacer) = self.string_replace_method(&pattern)?
+        {
+            return self.call_value(&replacer, &[this_value.clone(), replacement], pattern);
+        }
+
         let text = self.string_receiver_value(this_value)?;
-        let pattern = args.as_slice().first();
-        let replacement = if let Some(value) = args.as_slice().get(1) {
-            self.string_argument_text(value)?
+        let needle = self.string_argument_text(&pattern)?;
+        let replacement = if self.semantic_is_callable(&replacement)? {
+            replacement
         } else {
-            String::new()
+            let replacement = self.string_argument_text(&replacement)?;
+            self.heap_string_value(&replacement)?
         };
-        let Some(pattern) = pattern else {
+        let Some(byte_start) = text.find(&needle) else {
             return self.heap_string_value(&text);
         };
-        if !self.string_regexp_is_object(pattern)? {
-            let needle = self.string_argument_text(pattern)?;
-            let output = replace_first_plain(&text, &needle, &replacement)?;
-            self.check_string_len(&output)?;
-            return self.heap_string_value(&output);
-        }
-        if self.string_regexp_is_global(pattern)? {
-            self.string_regexp_replace_global(&text, pattern, &replacement)
-        } else {
-            self.string_regexp_replace_first(&text, pattern, &replacement)
-        }
+        let byte_end = byte_start
+            .checked_add(needle.len())
+            .ok_or_else(|| Error::limit("String.prototype.replace match end overflowed"))?;
+        let code_unit_start = text
+            .get(..byte_start)
+            .ok_or_else(|| Error::runtime("String replacement prefix is invalid"))?
+            .encode_utf16()
+            .count();
+        let code_unit_end = code_unit_start
+            .checked_add(needle.encode_utf16().count())
+            .ok_or_else(|| Error::limit("String replacement index overflowed"))?;
+        let matched = StringRegExpMatch {
+            byte_start,
+            byte_end,
+            code_unit_start,
+            code_unit_end,
+            text: needle,
+            captures: Vec::new(),
+            groups: Value::Undefined,
+        };
+        let substitution = self.regexp_replacement_text(&text, &matched, &replacement)?;
+        let output = replace_span(&text, byte_start, byte_end, &substitution)?;
+        self.check_string_len(&output)?;
+        self.heap_string_value(&output)
+    }
+
+    fn string_replace_method(&mut self, pattern: &Value) -> Result<Option<Value>> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_named(&symbol_constructor, REPLACE_SYMBOL_PROPERTY)?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.replace is not initialized"));
+        };
+        self.get_method(
+            pattern,
+            PropertyLookup::from_key(REPLACE_SYMBOL_DISPLAY, PropertyKey::symbol(symbol.id())),
+        )
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_split(
@@ -199,89 +240,7 @@ impl Context {
         self.string_values_array(vec![needle.to_owned()])
     }
 
-    pub(in crate::runtime::native) fn string_regexp_replace_first(
-        &mut self,
-        text: &str,
-        pattern: &Value,
-        replacement: &str,
-    ) -> Result<Value> {
-        let Some(matched) = self.string_regexp_exec_match(pattern, text)? else {
-            return self.heap_string_value(text);
-        };
-        let output = replace_span(text, matched.byte_start, matched.byte_end, replacement)?;
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
-    }
-
-    pub(in crate::runtime::native) fn string_regexp_replace_global(
-        &mut self,
-        text: &str,
-        pattern: &Value,
-        replacement: &str,
-    ) -> Result<Value> {
-        self.string_regexp_set_last_index(pattern, 0)?;
-        let mut output = String::new();
-        let mut cursor = 0usize;
-        while let Some(matched) = self.string_regexp_exec_match(pattern, text)? {
-            if matched.byte_start < cursor {
-                return Err(Error::runtime("RegExp global match moved backwards"));
-            }
-            push_checked_slice(&mut output, text, cursor, matched.byte_start)?;
-            output.push_str(replacement);
-            cursor = matched.byte_end;
-            self.check_string_len(&output)?;
-            if matched.text.is_empty() {
-                self.string_regexp_advance_last_index(pattern, text, matched.code_unit_end)?;
-            }
-        }
-        push_checked_slice(&mut output, text, cursor, text.len())?;
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
-    }
-
-    pub(in crate::runtime::native) fn string_regexp_replace_first_value(
-        &mut self,
-        text: &str,
-        pattern: &Value,
-        replacement: &Value,
-    ) -> Result<Value> {
-        let Some(matched) = self.string_regexp_exec_match(pattern, text)? else {
-            return self.heap_string_value(text);
-        };
-        let substitution = self.regexp_replacement_text(text, &matched, replacement)?;
-        let output = replace_span(text, matched.byte_start, matched.byte_end, &substitution)?;
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
-    }
-
-    pub(in crate::runtime::native) fn string_regexp_replace_global_value(
-        &mut self,
-        text: &str,
-        pattern: &Value,
-        replacement: &Value,
-    ) -> Result<Value> {
-        self.string_regexp_set_last_index(pattern, 0)?;
-        let mut output = String::new();
-        let mut cursor = 0usize;
-        while let Some(matched) = self.string_regexp_exec_match(pattern, text)? {
-            if matched.byte_start < cursor {
-                return Err(Error::runtime("RegExp global match moved backwards"));
-            }
-            push_checked_slice(&mut output, text, cursor, matched.byte_start)?;
-            let substitution = self.regexp_replacement_text(text, &matched, replacement)?;
-            output.push_str(&substitution);
-            cursor = matched.byte_end;
-            self.check_string_len(&output)?;
-            if matched.text.is_empty() {
-                self.string_regexp_advance_last_index(pattern, text, matched.code_unit_end)?;
-            }
-        }
-        push_checked_slice(&mut output, text, cursor, text.len())?;
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
-    }
-
-    fn regexp_replacement_text(
+    pub(super) fn regexp_replacement_text(
         &mut self,
         text: &str,
         matched: &StringRegExpMatch,
@@ -298,6 +257,11 @@ impl Context {
             }
             let value = self.call_value(replacement, &args, Value::Undefined)?;
             return self.to_string(&value);
+        }
+        if matches!(matched.groups, Value::Null) {
+            return Err(Error::type_error(
+                "RegExp replacement named captures cannot be null",
+            ));
         }
         let replacement = self.to_string(replacement)?;
         self.regexp_substitution(text, matched, &replacement)
@@ -339,7 +303,7 @@ impl Context {
                     push_checked_slice(&mut output, text, matched.byte_end, text.len())?;
                     2
                 }
-                '1'..='9' => self.append_regexp_numeric_capture(
+                '0'..='9' => self.append_regexp_numeric_capture(
                     &mut output,
                     &chars,
                     index.saturating_add(1),
@@ -379,14 +343,15 @@ impl Context {
             .and_then(|digit| digit.to_digit(10))
             .and_then(|digit| usize::try_from(digit).ok());
         let combined = second.and_then(|second| first.checked_mul(10)?.checked_add(second));
-        let (capture, consumed) = if combined.is_some_and(|capture| capture <= captures.len()) {
-            (combined.unwrap_or(first), 3)
-        } else if first <= captures.len() {
-            (first, 2)
-        } else {
-            output.push('$');
-            return Ok(1);
-        };
+        let (capture, consumed) =
+            if combined.is_some_and(|capture| capture >= 1 && capture <= captures.len()) {
+                (combined.unwrap_or(first), 3)
+            } else if first >= 1 && first <= captures.len() {
+                (first, 2)
+            } else {
+                output.push('$');
+                return Ok(1);
+            };
         if let Some(value) = captures.get(capture.saturating_sub(1))
             && !matches!(value, Value::Undefined)
         {
@@ -422,7 +387,7 @@ impl Context {
         Ok(relative_end.saturating_add(3))
     }
 
-    fn string_regexp_match_from_value(
+    pub(super) fn string_regexp_match_from_value(
         &mut self,
         text: &str,
         result: &Value,
@@ -430,21 +395,36 @@ impl Context {
         let Value::Object(id) = result else {
             return Ok(None);
         };
-        let index = self
-            .get_named(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?
-            .as_number()
-            .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
-        let code_unit_start = number_to_usize(index)?;
-        let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
-        let matched = self.to_string(&matched_value)?;
         let length_value = self.get_named(&Value::Object(*id), REGEXP_MATCH_LENGTH_PROPERTY)?;
         let length = Self::length_to_usize(
             self.to_length(&length_value)?,
             "RegExp match capture count exceeded supported range",
         )?;
+        let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
+        let matched = self.to_string(&matched_value)?;
+        let index = self.get_named(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?;
+        let index = self.to_integer_or_infinity(&index)?;
+        let input_length = text.encode_utf16().count();
+        let code_unit_start = if index <= 0.0 {
+            0
+        } else if index.is_infinite() {
+            input_length
+        } else {
+            Self::finite_nonnegative_integer_to_usize(
+                index,
+                "RegExp match index exceeded supported range",
+            )?
+            .min(input_length)
+        };
         let mut captures = Vec::with_capacity(length.saturating_sub(1));
         for capture in 1..length {
-            captures.push(self.get_named(&Value::Object(*id), &capture.to_string())?);
+            let capture = self.get_named(&Value::Object(*id), &capture.to_string())?;
+            if matches!(capture, Value::Undefined) {
+                captures.push(capture);
+            } else {
+                let capture = self.to_string(&capture)?;
+                captures.push(self.heap_string_value(&capture)?);
+            }
         }
         let groups = self.get_named(&Value::Object(*id), REGEXP_MATCH_GROUPS_PROPERTY)?;
         let byte_start = utf16_index_to_byte_boundary(text, code_unit_start).ok_or_else(|| {
@@ -543,16 +523,6 @@ impl Context {
     }
 }
 
-fn replace_first_plain(text: &str, needle: &str, replacement: &str) -> Result<String> {
-    let Some(start) = text.find(needle) else {
-        return Ok(text.to_owned());
-    };
-    let end = start
-        .checked_add(needle.len())
-        .ok_or_else(|| Error::limit("String.prototype.replace end overflowed"))?;
-    replace_span(text, start, end, replacement)
-}
-
 fn replace_span(text: &str, start: usize, end: usize, replacement: &str) -> Result<String> {
     let mut output = String::new();
     push_checked_slice(&mut output, text, 0, start)?;
@@ -644,15 +614,6 @@ fn advance_utf16_index(text: &str, index: usize, unicode: bool) -> Result<usize>
     index
         .checked_add(width)
         .ok_or_else(|| Error::limit("RegExp string index overflowed"))
-}
-
-fn number_to_usize(number: f64) -> Result<usize> {
-    if !number.is_finite() || number <= 0.0 {
-        return Ok(0);
-    }
-    format!("{:.0}", number.trunc())
-        .parse::<usize>()
-        .map_err(|_| Error::limit("numeric index exceeded supported range"))
 }
 
 fn optional_index_to_number(index: Option<usize>) -> Result<f64> {
