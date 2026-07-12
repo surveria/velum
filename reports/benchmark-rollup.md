@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T035912Z.md`
-- Task: PR #481: AS-09t: complete Array.fromAsync semantics
-- Performance: 8.97x (4/5 >1.00x) (from `rsqjs-test-report-20260712T035912Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T035912Z.md`)
+- `rsqjs-test-report-20260712T043039Z.md`
+- Task: PR #482: runtime: implement with statement environments
+- Performance: 8.66x (4/5 >1.00x) (from `rsqjs-test-report-20260712T043039Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T043039Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 67536 passed / 35042 failed (65.84%) (from `rsqjs-test-report-20260712T035912Z.md`)
+- Full Test262: 67892 passed / 34686 failed (66.19%) (from `rsqjs-test-report-20260712T043039Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -467,3 +467,4 @@ Latest report:
 | `20260712T003903Z` `c8c9d36` PR #480: AS-09s: complete Array.from semantics | 8.71x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66928 passed / 35650 failed (65.25%) |
 | `20260712T004702Z` `4a75445` PR #479: parser: expand arrow function grammar | 13.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67196 passed / 35382 failed (65.51%) |
 | `20260712T035912Z` `9031c93` PR #481: AS-09t: complete Array.fromAsync semantics | 8.97x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67536 passed / 35042 failed (65.84%) |
+| `20260712T043039Z` `5227ef2` PR #482: runtime: implement with statement environments | 8.66x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67892 passed / 34686 failed (66.19%) |
