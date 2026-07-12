@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T082725Z.md`
-- Task: PR #495: runtime: complete residual Set semantics
-- Performance: 8.80x (4/5 >1.00x) (from `rsqjs-test-report-20260712T082725Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T082725Z.md`)
+- `rsqjs-test-report-20260712T084645Z.md`
+- Task: PR #498: runtime: implement modern Map APIs
+- Performance: 8.96x (4/5 >1.00x) (from `rsqjs-test-report-20260712T084645Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T084645Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 71692 passed / 30886 failed (69.89%) (from `rsqjs-test-report-20260712T082725Z.md`)
+- Full Test262: 71765 passed / 30813 failed (69.96%) (from `rsqjs-test-report-20260712T084645Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -478,3 +478,4 @@ Latest report:
 | `20260712T073236Z` `b3a2cc8` PR #492: runtime: complete ArrayBuffer lifecycle semantics | 8.83x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 70658 passed / 31920 failed (68.88%) |
 | `20260712T080258Z` `6fc94d2` PR #494: runner: restore Test262 primitive harness contract | 8.88x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71394 passed / 31184 failed (69.60%) |
 | `20260712T082725Z` `edc4a3b` PR #495: runtime: complete residual Set semantics | 8.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71692 passed / 30886 failed (69.89%) |
+| `20260712T084645Z` `d53d7bf` PR #498: runtime: implement modern Map APIs | 8.96x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71765 passed / 30813 failed (69.96%) |
