@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T043039Z.md`
-- Task: PR #482: runtime: implement with statement environments
-- Performance: 8.66x (4/5 >1.00x) (from `rsqjs-test-report-20260712T043039Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T043039Z.md`)
+- `rsqjs-test-report-20260712T044049Z.md`
+- Task: PR #483: AS-09u: complete Promise settlement combinators
+- Performance: 8.74x (4/5 >1.00x) (from `rsqjs-test-report-20260712T044049Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T044049Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 67892 passed / 34686 failed (66.19%) (from `rsqjs-test-report-20260712T043039Z.md`)
+- Full Test262: 68553 passed / 34025 failed (66.83%) (from `rsqjs-test-report-20260712T044049Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -468,3 +468,4 @@ Latest report:
 | `20260712T004702Z` `4a75445` PR #479: parser: expand arrow function grammar | 13.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67196 passed / 35382 failed (65.51%) |
 | `20260712T035912Z` `9031c93` PR #481: AS-09t: complete Array.fromAsync semantics | 8.97x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67536 passed / 35042 failed (65.84%) |
 | `20260712T043039Z` `5227ef2` PR #482: runtime: implement with statement environments | 8.66x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67892 passed / 34686 failed (66.19%) |
+| `20260712T044049Z` `ca0f073` PR #483: AS-09u: complete Promise settlement combinators | 8.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68553 passed / 34025 failed (66.83%) |
