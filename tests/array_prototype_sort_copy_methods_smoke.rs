@@ -81,6 +81,51 @@ fn sort_is_stable_and_rejects_non_callable_comparators() -> TestResult {
 }
 
 #[test]
+fn numeric_sort_declines_packed_fast_paths_for_nan_values() -> TestResult {
+    eval_is_42(
+        r"
+        let values = [];
+        let expectedSum = 0;
+        for (let index = 0; index < 128; index = index + 1) {
+            let value = index % 7 === 0 ? NaN : 128 - index;
+            values.push(value);
+            if (!Number.isNaN(value)) {
+                expectedSum = expectedSum + value;
+            }
+        }
+        let source = values.slice();
+        let sortedCopy = source.toSorted((left, right) => left - right);
+        values.sort((left, right) => left - right);
+
+        let actualSum = 0;
+        let nanCount = 0;
+        for (let value of values) {
+            if (Number.isNaN(value)) {
+                nanCount = nanCount + 1;
+            } else {
+                actualSum = actualSum + value;
+            }
+        }
+        let copyNanCount = 0;
+        for (let value of sortedCopy) {
+            if (Number.isNaN(value)) {
+                copyNanCount = copyNanCount + 1;
+            }
+        }
+
+        values.length === 128 &&
+            sortedCopy.length === 128 &&
+            source.length === 128 &&
+            nanCount === 19 &&
+            copyNanCount === 19 &&
+            actualSum === expectedSum
+            ? 42
+            : 0
+        ",
+    )
+}
+
+#[test]
 fn splices_with_deletion_insertion_and_growth() -> TestResult {
     eval_is_42(
         r#"

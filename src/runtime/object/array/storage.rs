@@ -228,9 +228,9 @@ impl ArrayStorage {
             return false;
         };
         if elements.len() != len
-            || !elements
-                .iter()
-                .all(|property| Self::default_number_property_value(property).is_some())
+            || !elements.iter().all(|property| {
+                Self::default_number_property_value(property).is_some_and(|number| !number.is_nan())
+            })
         {
             return false;
         }

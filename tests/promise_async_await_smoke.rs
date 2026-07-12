@@ -406,6 +406,31 @@ fn rejected_await_can_resume_catch_and_async_finally() -> TestResult {
 }
 
 #[test]
+fn await_resumes_catch_parameter_destructuring_in_the_existing_scope() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let result = "pending";
+        async function task() {
+            try {
+                throw { left: 20 };
+            } catch ({ left, right = await Promise.resolve(22) }) {
+                return left + right;
+            }
+        }
+        task().then(
+            function(value) { result = value; },
+            function(error) { result = error.name + ":" + error.message; }
+        );
+        "#,
+    )?;
+
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
 fn embedder_can_cancel_parked_async_jobs() -> TestResult {
     let mut vm = Vm::new();
     vm.eval(

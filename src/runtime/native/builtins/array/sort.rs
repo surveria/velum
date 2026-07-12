@@ -165,6 +165,9 @@ impl Context {
             let Value::Number(number) = value else {
                 return Ok(None);
             };
+            if number.is_nan() {
+                return Ok(None);
+            }
             numbers.push(number);
         }
         Ok(Some(numbers))
