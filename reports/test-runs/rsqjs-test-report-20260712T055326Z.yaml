@@ -1,0 +1,893 @@
+schema_version: 1
+detail_level: summary
+metadata:
+  timestamp: 20260712T055326Z
+  commit: 552d206a96b3e510bfd27cb85d40a12f62515e53
+  tree: e1e854eb469a616c784556d1af6472c2e4e36eab
+  event: pull_request
+  run_id: '29181826750'
+  run_attempt: '1'
+  repository: surveria/rs-quickjs
+  workflow: CI
+  pull_request: '486'
+  task: 'runtime: complete Promise keyed combinators'
+  engine_version: 0.2.130
+  engine_commit: 552d206a96b3e510bfd27cb85d40a12f62515e53
+  runner_version: 0.2.30
+  runner_commit: 552d206a96b3e510bfd27cb85d40a12f62515e53
+environment:
+  operating_system: linux
+  architecture: x86_64
+  available_parallelism: 32
+  build_profile: release
+  kernel_release: 6.17.0-40-generic
+  cpu_model: AMD Ryzen 9 9950X3D 16-Core Processor
+  cpu_affinity: 0-31
+  scaling_governor: powersave
+configuration:
+  report_mode: full
+  jetstream: disabled
+  quickjs_differential: configured
+  test262: configured
+  test262_mode: full
+  test262_path_filters: []
+  test262_flag_filters: []
+  benchmark_set: sentinel
+  quickjs_baseline: require
+  benchmark:
+    reference_quickjs_compiled: false
+    warmup_duration_ns: 150000000
+    minimum_sample_duration_ns: 500000000
+    samples: 10
+    minimum_operation_duration_ns: 1000000
+    maximum_cv_permille: 100
+    attempts: 3
+    maximum_operation_duration_ns: 2000000000
+    maximum_total_duration_ns: 3000000000
+components:
+- mode: correctness
+  timestamp: 20260712T055005Z
+  commit: b9c1641f963fe08ebfb885d6bd4e320166684a69
+  tree: e1e854eb469a616c784556d1af6472c2e4e36eab
+  run_id: '29181722226'
+  duration_ns: 81325394751
+- mode: performance
+  timestamp: 20260712T055326Z
+  commit: 552d206a96b3e510bfd27cb85d40a12f62515e53
+  tree: e1e854eb469a616c784556d1af6472c2e4e36eab
+  run_id: '29181826750'
+  duration_ns: 10838444877
+duration_ns: 92163839628
+suites:
+- name: Engine fixtures
+  required: true
+  status: passed
+  counts:
+    total: 69
+    executed: 69
+    passed: 69
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 69
+  duration_ns: 14044983
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 active subset
+  required: true
+  status: passed
+  counts:
+    total: 120
+    executed: 120
+    passed: 120
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 120
+  duration_ns: 33366089
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 file conformance
+  required: false
+  status: failed
+  counts:
+    total: 53404
+    executed: 53404
+    passed: 35566
+    failed: 17838
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 53404
+  duration_ns: 80424232356
+  skip_reasons: []
+  feature_areas: []
+  diagnostics_derived_from: Test262 full corpus
+- name: Test262 expected-pass baseline
+  required: true
+  status: passed
+  counts:
+    total: 68926
+    executed: 68926
+    passed: 68926
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 68926
+  duration_ns: 0
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 full corpus
+  required: false
+  status: failed
+  counts:
+    total: 102578
+    executed: 102578
+    passed: 68926
+    failed: 33652
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 102578
+  duration_ns: 80424232356
+  skip_reasons: []
+  feature_areas:
+  - name: language/expressions
+    total: 21284
+    executed: 21284
+    passed: 18833
+    failed: 2451
+    manifest_enabled: 141
+    top_skip_reason: none
+  - name: language/statements
+    total: 18001
+    executed: 18001
+    passed: 16452
+    failed: 1549
+    manifest_enabled: 276
+    top_skip_reason: none
+  - name: built-ins/Temporal
+    total: 9206
+    executed: 9206
+    failed: 9206
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Object
+    total: 6802
+    executed: 6802
+    passed: 6427
+    failed: 375
+    manifest_enabled: 14
+    top_skip_reason: none
+  - name: built-ins/Array
+    total: 6115
+    executed: 6115
+    passed: 5108
+    failed: 1007
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: intl402/Temporal
+    total: 4058
+    executed: 4058
+    failed: 4058
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/RegExp
+    total: 3756
+    executed: 3756
+    passed: 3306
+    failed: 450
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/TypedArray
+    total: 2876
+    executed: 2876
+    passed: 626
+    failed: 2250
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: staging/sm
+    total: 2631
+    executed: 2631
+    passed: 1399
+    failed: 1232
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/String
+    total: 2443
+    executed: 2443
+    passed: 1949
+    failed: 494
+    manifest_enabled: 3
+    top_skip_reason: none
+  - name: built-ins/Promise
+    total: 1452
+    executed: 1452
+    passed: 1392
+    failed: 60
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/TypedArrayConstructors
+    total: 1446
+    executed: 1446
+    passed: 457
+    failed: 989
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Date
+    total: 1188
+    executed: 1188
+    passed: 1074
+    failed: 114
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/DataView
+    total: 1122
+    executed: 1122
+    passed: 712
+    failed: 410
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/literals
+    total: 1037
+    executed: 1037
+    passed: 940
+    failed: 97
+    manifest_enabled: 3
+    top_skip_reason: none
+  - name: built-ins/Iterator
+    total: 1028
+    executed: 1028
+    passed: 776
+    failed: 252
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: annexB/language
+    total: 895
+    executed: 895
+    passed: 295
+    failed: 600
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Function
+    total: 893
+    executed: 893
+    passed: 636
+    failed: 257
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Atomics
+    total: 778
+    executed: 778
+    failed: 778
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Set
+    total: 764
+    executed: 764
+    passed: 652
+    failed: 112
+    manifest_enabled: 1
+    top_skip_reason: none
+  - name: built-ins/Number
+    total: 680
+    executed: 680
+    passed: 566
+    failed: 114
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Math
+    total: 654
+    executed: 654
+    passed: 652
+    failed: 2
+    manifest_enabled: 42
+    top_skip_reason: none
+  - name: built-ins/Proxy
+    total: 607
+    executed: 607
+    passed: 412
+    failed: 195
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/module-code
+    total: 602
+    executed: 602
+    passed: 162
+    failed: 440
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/identifiers
+    total: 535
+    executed: 535
+    passed: 535
+    manifest_enabled: 12
+    top_skip_reason: none
+  - name: intl402/NumberFormat
+    total: 498
+    executed: 498
+    failed: 498
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: intl402/DateTimeFormat
+    total: 488
+    executed: 488
+    failed: 488
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: annexB/built-ins
+    total: 482
+    executed: 482
+    passed: 88
+    failed: 394
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/arguments-object
+    total: 460
+    executed: 460
+    passed: 336
+    failed: 124
+    manifest_enabled: 10
+    top_skip_reason: none
+  - name: language/eval-code
+    total: 454
+    executed: 454
+    passed: 302
+    failed: 152
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/ArrayBuffer
+    total: 442
+    executed: 442
+    passed: 56
+    failed: 386
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Map
+    total: 405
+    executed: 405
+    passed: 300
+    failed: 105
+    manifest_enabled: 4
+    top_skip_reason: none
+  - name: other feature areas
+    total: 8496
+    executed: 8496
+    passed: 4483
+    failed: 4013
+    manifest_enabled: 71
+    top_skip_reason: none
+  failure_diagnostics:
+    total_failed: 33652
+    represented_failed: 22242
+    total_groups: 509
+    omitted_groups: 479
+    categories:
+    - category: other
+      failed: 18524
+    - category: harness include
+      failed: 6423
+    - category: lexer
+      failed: 3617
+    - category: parser
+      failed: 2748
+    - category: runtime
+      failed: 1299
+    - category: negative metadata
+      failed: 870
+    - category: resource limit
+      failed: 147
+    - category: async protocol
+      failed: 24
+    groups:
+    - count: 3824
+      feature_area: built-ins/Temporal
+      category: other
+      reason: 'missing binding: Temporal'
+      representative_case: test/built-ins/Temporal/Duration/builtin.js#default
+      representative_source: test262:test/built-ins/Temporal/Duration/builtin.js
+      detail: 'upstream Test262 case ''test/built-ins/Temporal/Duration/builtin.js'' failed: javascript exception: ReferenceError: ''Temporal'' is not defined'
+    - count: 2954
+      feature_area: built-ins/Temporal
+      category: harness include
+      reason: harness include
+      representative_case: test/built-ins/Temporal/Duration/basic.js#default
+      representative_source: test262:test/built-ins/Temporal/Duration/basic.js
+      detail: 'Test262 harness include ''temporalHelpers.js'' failed: lexer error at 23066: decimal numeric literal cannot use BigInt suffix without BigInt support'
+    - count: 2630
+      feature_area: intl402/Temporal
+      category: harness include
+      reason: harness include
+      representative_case: test/intl402/Temporal/Duration/prototype/round/adjust-rounded-duration-days.js#default
+      representative_source: test262:test/intl402/Temporal/Duration/prototype/round/adjust-rounded-duration-days.js
+      detail: 'Test262 harness include ''temporalHelpers.js'' failed: lexer error at 23066: decimal numeric literal cannot use BigInt suffix without BigInt support'
+    - count: 1692
+      feature_area: built-ins/Temporal
+      category: lexer
+      reason: lexer
+      representative_case: test/built-ins/Temporal/Duration/compare/blank-duration.js#default
+      representative_source: test262:test/built-ins/Temporal/Duration/compare/blank-duration.js
+      detail: 'upstream Test262 case ''test/built-ins/Temporal/Duration/compare/blank-duration.js'' failed: lexer error at 474: decimal numeric literal cannot use BigInt suffix without BigInt support'
+    - count: 1255
+      feature_area: language/expressions
+      category: parser
+      reason: 'parser: expected expression'
+      representative_case: test/language/expressions/assignmenttargettype/simple-basic-identifierreference-await.js#default
+      representative_source: test262:test/language/expressions/assignmenttargettype/simple-basic-identifierreference-await.js
+      detail: 'upstream Test262 case ''test/language/expressions/assignmenttargettype/simple-basic-identifierreference-await.js'' failed: parser error at 329: expected expression'
+    - count: 1070
+      feature_area: intl402/Temporal
+      category: other
+      reason: 'missing binding: Temporal'
+      representative_case: test/intl402/Temporal/Duration/compare/relativeto-hour.js#default
+      representative_source: test262:test/intl402/Temporal/Duration/compare/relativeto-hour.js
+      detail: 'upstream Test262 case ''test/intl402/Temporal/Duration/compare/relativeto-hour.js'' failed: javascript exception: ReferenceError: ''Temporal'' is not defined'
+    - count: 688
+      feature_area: built-ins/Temporal
+      category: other
+      reason: other
+      representative_case: test/built-ins/Temporal/Duration/compare/argument-duration-out-of-range.js#default
+      representative_source: test262:test/built-ins/Temporal/Duration/compare/argument-duration-out-of-range.js
+      detail: 'upstream Test262 case ''test/built-ins/Temporal/Duration/compare/argument-duration-out-of-range.js'' failed: javascript exception: [object Object]'
+    - count: 579
+      feature_area: staging/sm
+      category: other
+      reason: other
+      representative_case: test/staging/sm/Array/array-length-set-during-for-in.js#default
+      representative_source: test262:test/staging/sm/Array/array-length-set-during-for-in.js
+      detail: 'upstream Test262 case ''test/staging/sm/Array/array-length-set-during-for-in.js'' failed: javascript exception: [object Object]'
+    - count: 552
+      feature_area: built-ins/TypedArray
+      category: lexer
+      reason: lexer
+      representative_case: test/built-ins/TypedArray/prototype/copyWithin/BigInt/coerced-values-end.js#default
+      representative_source: test262:test/built-ins/TypedArray/prototype/copyWithin/BigInt/coerced-values-end.js
+      detail: 'upstream Test262 case ''test/built-ins/TypedArray/prototype/copyWithin/BigInt/coerced-values-end.js'' failed: lexer error at 1123: decimal numeric literal cannot use BigInt suffix without BigInt support'
+    - count: 538
+      feature_area: built-ins/TypedArray
+      category: other
+      reason: 'missing binding: isPrimitive'
+      representative_case: test/built-ins/TypedArray/prototype/Symbol.toStringTag/return-typedarrayname.js#default
+      representative_source: test262:test/built-ins/TypedArray/prototype/Symbol.toStringTag/return-typedarrayname.js
+      detail: 'upstream Test262 case ''test/built-ins/TypedArray/prototype/Symbol.toStringTag/return-typedarrayname.js'' failed: javascript exception: ReferenceError: ''isPrimitive'' is not defined'
+    - count: 519
+      feature_area: built-ins/Array
+      category: other
+      reason: other
+      representative_case: test/built-ins/Array/isArray/15.4.3.2-0-5.js#default
+      representative_source: test262:test/built-ins/Array/isArray/15.4.3.2-0-5.js
+      detail: 'upstream Test262 case ''test/built-ins/Array/isArray/15.4.3.2-0-5.js'' failed: javascript exception: [object Object]'
+    - count: 486
+      feature_area: built-ins/TypedArray
+      category: other
+      reason: 'missing binding: BigInt64Array'
+      representative_case: test/built-ins/TypedArray/out-of-bounds-get-and-set.js#default
+      representative_source: test262:test/built-ins/TypedArray/out-of-bounds-get-and-set.js
+      detail: 'upstream Test262 case ''test/built-ins/TypedArray/out-of-bounds-get-and-set.js'' failed: javascript exception: ReferenceError: ''BigInt64Array'' is not defined'
+    - count: 460
+      feature_area: annexB/language
+      category: other
+      reason: other
+      representative_case: test/annexB/language/eval-code/direct/func-block-decl-eval-func-existing-block-fn-no-init.js#default
+      representative_source: test262:test/annexB/language/eval-code/direct/func-block-decl-eval-func-existing-block-fn-no-init.js
+      detail: 'upstream Test262 case ''test/annexB/language/eval-code/direct/func-block-decl-eval-func-existing-block-fn-no-init.js'' failed: javascript exception: [object Object]'
+    - count: 448
+      feature_area: language/statements
+      category: other
+      reason: other
+      representative_case: test/language/statements/class/definition/constructable-but-no-prototype.js#default
+      representative_source: test262:test/language/statements/class/definition/constructable-but-no-prototype.js
+      detail: 'upstream Test262 case ''test/language/statements/class/definition/constructable-but-no-prototype.js'' failed: javascript exception: [object Object]'
+    - count: 416
+      feature_area: built-ins/String
+      category: other
+      reason: other
+      representative_case: test/built-ins/String/S15.5.1.1_A1_T19.js#default
+      representative_source: test262:test/built-ins/String/S15.5.1.1_A1_T19.js
+      detail: 'upstream Test262 case ''test/built-ins/String/S15.5.1.1_A1_T19.js'' failed: javascript exception: [object Object]'
+    - count: 384
+      feature_area: built-ins/RegExp
+      category: other
+      reason: other
+      representative_case: test/built-ins/RegExp/S15.10.2.8_A3_T18.js#default
+      representative_source: test262:test/built-ins/RegExp/S15.10.2.8_A3_T18.js
+      detail: 'upstream Test262 case ''test/built-ins/RegExp/S15.10.2.8_A3_T18.js'' failed: javascript exception: [object Object]'
+    - count: 374
+      feature_area: built-ins/TypedArray
+      category: other
+      reason: other
+      representative_case: test/built-ins/TypedArray/from/arylk-get-length-error.js#default
+      representative_source: test262:test/built-ins/TypedArray/from/arylk-get-length-error.js
+      detail: 'upstream Test262 case ''test/built-ins/TypedArray/from/arylk-get-length-error.js'' failed: javascript exception: [object Object]'
+    - count: 362
+      feature_area: language/expressions
+      category: other
+      reason: other
+      representative_case: test/language/expressions/arrow-function/scope-param-elem-var-close.js#default
+      representative_source: test262:test/language/expressions/arrow-function/scope-param-elem-var-close.js
+      detail: 'upstream Test262 case ''test/language/expressions/arrow-function/scope-param-elem-var-close.js'' failed: javascript exception: [object Object]'
+    - count: 336
+      feature_area: intl402/NumberFormat
+      category: other
+      reason: 'missing binding: Intl'
+      representative_case: test/intl402/NumberFormat/builtin.js#default
+      representative_source: test262:test/intl402/NumberFormat/builtin.js
+      detail: 'upstream Test262 case ''test/intl402/NumberFormat/builtin.js'' failed: javascript exception: ReferenceError: ''Intl'' is not defined'
+    - count: 334
+      feature_area: built-ins/TypedArrayConstructors
+      category: other
+      reason: 'missing binding: BigInt64Array'
+      representative_case: test/built-ins/TypedArrayConstructors/BigInt64Array/BYTES_PER_ELEMENT.js#default
+      representative_source: test262:test/built-ins/TypedArrayConstructors/BigInt64Array/BYTES_PER_ELEMENT.js
+      detail: 'upstream Test262 case ''test/built-ins/TypedArrayConstructors/BigInt64Array/BYTES_PER_ELEMENT.js'' failed: javascript exception: ReferenceError: ''BigInt64Array'' is not defined'
+    - count: 328
+      feature_area: built-ins/ArrayBuffer
+      category: other
+      reason: other
+      representative_case: test/built-ins/ArrayBuffer/isView/arg-has-no-viewedarraybuffer.js#default
+      representative_source: test262:test/built-ins/ArrayBuffer/isView/arg-has-no-viewedarraybuffer.js
+      detail: 'upstream Test262 case ''test/built-ins/ArrayBuffer/isView/arg-has-no-viewedarraybuffer.js'' failed: javascript exception: TypeError: ''undefined'' is not callable'
+    - count: 314
+      feature_area: intl402/DateTimeFormat
+      category: other
+      reason: 'missing binding: Intl'
+      representative_case: test/intl402/DateTimeFormat/builtin.js#default
+      representative_source: test262:test/intl402/DateTimeFormat/builtin.js
+      detail: 'upstream Test262 case ''test/intl402/DateTimeFormat/builtin.js'' failed: javascript exception: ReferenceError: ''Intl'' is not defined'
+    - count: 304
+      feature_area: language/expressions
+      category: lexer
+      reason: lexer
+      representative_case: test/language/expressions/addition/bigint-and-number.js#default
+      representative_source: test262:test/language/expressions/addition/bigint-and-number.js
+      detail: 'upstream Test262 case ''test/language/expressions/addition/bigint-and-number.js'' failed: lexer error at 566: decimal numeric literal cannot use BigInt suffix without BigInt support'
+    - count: 279
+      feature_area: built-ins/Object
+      category: other
+      reason: other
+      representative_case: test/built-ins/Object/defineProperty/15.2.3.6-2-39.js#default
+      representative_source: test262:test/built-ins/Object/defineProperty/15.2.3.6-2-39.js
+      detail: 'upstream Test262 case ''test/built-ins/Object/defineProperty/15.2.3.6-2-39.js'' failed: javascript exception: [object Object]'
+    - count: 272
+      feature_area: language/statements
+      category: negative metadata
+      reason: negative metadata
+      representative_case: test/language/statements/async-function/early-errors-declaration-formals-body-duplicate.js#default
+      representative_source: test262:test/language/statements/async-function/early-errors-declaration-formals-body-duplicate.js
+      detail: 'upstream negative parse case ''test/language/statements/async-function/early-errors-declaration-formals-body-duplicate.js'' expected SyntaxError, got javascript exception: [object Object]'
+    - count: 268
+      feature_area: intl402/Locale
+      category: other
+      reason: 'missing binding: Intl'
+      representative_case: test/intl402/Locale/canonicalize-locale-list-take-locale.js#default
+      representative_source: test262:test/intl402/Locale/canonicalize-locale-list-take-locale.js
+      detail: 'upstream Test262 case ''test/intl402/Locale/canonicalize-locale-list-take-locale.js'' failed: javascript exception: ReferenceError: ''Intl'' is not defined'
+    - count: 260
+      feature_area: built-ins/Array
+      category: runtime
+      reason: runtime
+      representative_case: test/built-ins/Array/length/S15.4.2.2_A2.2_T1.js#default
+      representative_source: test262:test/built-ins/Array/length/S15.4.2.2_A2.2_T1.js
+      detail: 'upstream Test262 case ''test/built-ins/Array/length/S15.4.2.2_A2.2_T1.js'' failed: runtime error: invalid array length'
+    - count: 253
+      feature_area: language/statements
+      category: runtime
+      reason: runtime
+      representative_case: test/language/statements/async-function/evaluation-mapped-arguments.js#default
+      representative_source: test262:test/language/statements/async-function/evaluation-mapped-arguments.js
+      detail: 'upstream async Test262 case ''test/language/statements/async-function/evaluation-mapped-arguments.js'' signaled failure: Test262:AsyncTestFailure:Test262Error: Test262Error: Expected SameValue'
+    - count: 39
+      feature_area: staging/sm
+      category: resource limit
+      reason: resource limit
+      representative_case: test/staging/sm/Array/to-length.js#default
+      representative_source: test262:test/staging/sm/Array/to-length.js
+      detail: 'upstream Test262 case ''test/staging/sm/Array/to-length.js'' failed: resource limit exceeded: array length exceeded supported range'
+    - count: 24
+      feature_area: language/eval-code
+      category: async protocol
+      reason: async protocol
+      representative_case: test/language/eval-code/direct/async-func-decl-fn-body-cntns-arguments-func-decl-declare-arguments-and-assign.js#default
+      representative_source: test262:test/language/eval-code/direct/async-func-decl-fn-body-cntns-arguments-func-decl-declare-arguments-and-assign.js
+      detail: upstream async Test262 case 'test/language/eval-code/direct/async-func-decl-fn-body-cntns-arguments-func-decl-declare-arguments-and-assign.js' signaled completion 2 times
+- name: QuickJS differential
+  required: true
+  status: passed
+  counts:
+    total: 99
+    executed: 99
+    passed: 99
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 99
+  duration_ns: 84120098
+  skip_reasons: []
+  feature_areas: []
+benchmarks:
+  name: Benchmarks
+  duration_ns: 10838323737
+  counts:
+    measured: 5
+    in_process_measured: 5
+    failed: 0
+    invalid: 0
+    skipped_reference: 0
+    over_latency_budget: 4
+    over_memory_budget: 0
+  rows:
+  - id: sentinel_arithmetic
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_arithmetic.js
+    iterations: 10
+    case_duration_ns: 1081110000
+    engine:
+      availability: measured
+      wall_duration_ns: 1081030000
+      median_duration_ns: 83100000
+      coefficient_variation_permille: 1
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 14710000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 564
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 66770
+        compile:
+          kind: duration
+          duration_ns: 103620
+        setup:
+          kind: duration
+          duration_ns: 79331
+        warmup:
+          kind: duration
+          duration_ns: 166831294
+        run:
+          kind: duration
+          duration_ns: 830976178
+        verify:
+          kind: duration
+          duration_ns: 83023835
+        teardown:
+          kind: duration
+          duration_ns: 13880
+      checksum:
+        kind: number
+        bits: 4719737225112190976
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_array_index
+    status: within_budget
+    source: tests/corpora/benchmarks/prepared/sentinel_array_index.js
+    iterations: 210
+    case_duration_ns: 660260000
+    engine:
+      availability: measured
+      wall_duration_ns: 650560000
+      median_duration_ns: 2350000
+      coefficient_variation_permille: 7
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 8880000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 26
+    latency_budget: within
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 9682383
+        compile:
+          kind: duration
+          duration_ns: 162171
+        setup:
+          kind: duration
+          duration_ns: 1216352
+        warmup:
+          kind: duration
+          duration_ns: 150751065
+        run:
+          kind: duration
+          duration_ns: 496005409
+        verify:
+          kind: duration
+          duration_ns: 2335576
+        teardown:
+          kind: duration
+          duration_ns: 89271
+      checksum:
+        kind: number
+        bits: 4719737225112190976
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: not_counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed
+  - id: sentinel_property_read
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_property_read.js
+    iterations: 10
+    case_duration_ns: 2702320000
+    engine:
+      availability: measured
+      wall_duration_ns: 2692630000
+      median_duration_ns: 224740000
+      coefficient_variation_permille: 3
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 19950000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 1126
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 9675593
+        compile:
+          kind: duration
+          duration_ns: 91430
+        setup:
+          kind: duration
+          duration_ns: 42030
+        warmup:
+          kind: duration
+          duration_ns: 224749890
+        run:
+          kind: duration
+          duration_ns: 2245147292
+        verify:
+          kind: duration
+          duration_ns: 222580504
+        teardown:
+          kind: duration
+          duration_ns: 16990
+      checksum:
+        kind: number
+        bits: 4711750372648026112
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_function_call
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_function_call.js
+    iterations: 10
+    case_duration_ns: 2037830000
+    engine:
+      availability: measured
+      wall_duration_ns: 2028140000
+      median_duration_ns: 168740000
+      coefficient_variation_permille: 3
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 17050000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 989
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 9678473
+        compile:
+          kind: duration
+          duration_ns: 91250
+        setup:
+          kind: duration
+          duration_ns: 48780
+        warmup:
+          kind: duration
+          duration_ns: 168468277
+        run:
+          kind: duration
+          duration_ns: 1689543402
+        verify:
+          kind: duration
+          duration_ns: 169971781
+        teardown:
+          kind: duration
+          duration_ns: 17400
+      checksum:
+        kind: number
+        bits: 4607182418800017408
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_string_scan
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_string_scan.js
+    iterations: 4
+    case_duration_ns: 4356450000
+    engine:
+      availability: measured
+      wall_duration_ns: 4355890000
+      median_duration_ns: 722990000
+      coefficient_variation_permille: 2
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 2160000
+      coefficient_variation_permille: 2
+    latency_ratio_centi_units: 33382
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 556581
+        compile:
+          kind: duration
+          duration_ns: 110670
+        setup:
+          kind: duration
+          duration_ns: 360661
+        warmup:
+          kind: duration
+          duration_ns: 724251017
+        run:
+          kind: duration
+          duration_ns: 2895370995
+        verify:
+          kind: duration
+          duration_ns: 735759094
+        teardown:
+          kind: duration
+          duration_ns: 33370
+      checksum:
+        kind: number
+        bits: 4704986177113948160
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
