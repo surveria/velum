@@ -68,6 +68,32 @@ fn supports_regexp_constructor_and_preserves_slash_operator() -> TestResult {
 }
 
 #[test]
+fn scopes_regexp_modifier_flags_to_their_groups() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let dotAll = /(?s:^.$)/.test("\n") &&
+            !/(?-s:^.$)/s.test("\n") &&
+            !/(?s:^.$)/.test(String.fromCodePoint(0x10300));
+        let multiline = /(?m:^b)/.test("a\nb") && !/(?-m:^b)/m.test("a\nb");
+        let backreferences = /(a)(?i:\1)/.test("aA") &&
+            !/(a)(?-i:\1)/i.test("aA");
+        let boundaries = /(?i:\b)/u.test("\u017F") &&
+            !/(?-i:\b)/ui.test("\u017F");
+        let properties = /(?i:\p{Lu})/u.test("a") &&
+            /(?i:\P{Lu})/u.test("A") &&
+            !/(?-i:\p{Lu})/ui.test("a");
+
+        dotAll && multiline && backreferences && boundaries && properties ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_ecmascript_patterns_captures_and_match_indices() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

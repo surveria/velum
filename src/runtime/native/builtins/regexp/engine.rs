@@ -26,7 +26,12 @@ pub(super) fn regexp_find_utf16(
         return Ok(None);
     }
     let compiled = compile_regexp(pattern, flags)?;
-    let Some(matched) = compiled.find_from_utf16(input, start).next() else {
+    let matched = if flags.unicode() || flags.unicode_sets() {
+        compiled.find_from_utf16(input, start).next()
+    } else {
+        compiled.find_from_ucs2(input, start).next()
+    };
+    let Some(matched) = matched else {
         return Ok(None);
     };
     if flags.sticky() && matched.start() != start {
@@ -59,7 +64,12 @@ pub(super) fn regexp_test_utf16(
         return Ok(None);
     }
     let compiled = compile_regexp(pattern, flags)?;
-    let Some(matched) = compiled.find_from_utf16(input, start).next() else {
+    let matched = if flags.unicode() || flags.unicode_sets() {
+        compiled.find_from_utf16(input, start).next()
+    } else {
+        compiled.find_from_ucs2(input, start).next()
+    };
+    let Some(matched) = matched else {
         return Ok(None);
     };
     if flags.sticky() && matched.start() != start {

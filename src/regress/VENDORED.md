@@ -35,6 +35,9 @@ of the project-owned 800-line source-file gate.
   aliases for both `Script` and `Script_Extensions`. The resulting character
   class is the union of the `Cn`, `Co`, and `Cs` general categories, including
   direct support for negated `\P` escapes.
+- RegExp modifier groups preserve their scoped `ignoreCase` semantics in word
+  boundaries, backreferences, and Unicode property escapes throughout the IR
+  and executor instruction stream.
 
 When changing vendored source, update `VENDORED-SOURCE-SHA256SUMS` in the same
 commit and describe the semantic deviation here or in the owning pull request.
