@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T110514Z.md`
-- Task: PR #508: runtime: implement Annex B String prototype methods
-- Performance: 8.88x (4/5 >1.00x) (from `rsqjs-test-report-20260712T110514Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T110514Z.md`)
+- `rsqjs-test-report-20260712T112024Z.md`
+- Task: PR #510: runtime: implement standard Function toString native syntax
+- Performance: 8.97x (4/5 >1.00x) (from `rsqjs-test-report-20260712T112024Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T112024Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 72998 passed / 29580 failed (71.16%) (from `rsqjs-test-report-20260712T110514Z.md`)
+- Full Test262: 73124 passed / 29454 failed (71.29%) (from `rsqjs-test-report-20260712T112024Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -487,3 +487,4 @@ Latest report:
 | `20260712T104709Z` `886f92c` PR #507: runtime: implement live Array iterator protocol semantics | 11.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72775 passed / 29803 failed (70.95%) |
 | `20260712T105532Z` `cf3a791` PR #506: runtime: consolidate recursive Proxy forwarding | 8.85x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72800 passed / 29778 failed (70.97%) |
 | `20260712T110514Z` `b9043e8` PR #508: runtime: implement Annex B String prototype methods | 8.88x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72998 passed / 29580 failed (71.16%) |
+| `20260712T112024Z` `34ec524` PR #510: runtime: implement standard Function toString native syntax | 8.97x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 73124 passed / 29454 failed (71.29%) |
