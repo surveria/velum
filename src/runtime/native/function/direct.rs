@@ -463,6 +463,9 @@ impl Context {
         if let Some(result) = Self::eval_shared_function_accessor_kind(kind, this_value) {
             return result;
         }
+        if let NativeFunctionKind::Temporal(kind) = kind {
+            return self.eval_temporal_native_function_kind(kind, args, this_value);
+        }
 
         self.eval_non_object_native_function_kind(kind, args, this_value)
     }

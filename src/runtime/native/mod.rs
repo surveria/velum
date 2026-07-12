@@ -65,7 +65,7 @@ pub(in crate::runtime) use function::{
     DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
     ITERATOR_NAME, IteratorFunctionKind, NativeFunction, NativeFunctionKind,
     NativeFunctionRegistry, SHADOW_REALM_NAME, ShadowRealmFunctionKind,
-    SharedArrayBufferFunctionKind, TypedArrayFunctionKind,
+    SharedArrayBufferFunctionKind, TEMPORAL_NAME, TemporalFunctionKind, TypedArrayFunctionKind,
 };
 pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_DEFINE_GETTER_NAME,

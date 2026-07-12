@@ -19,8 +19,8 @@ use super::{
     INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
     PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
-    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, UNDEFINED_NAME,
-    WEAK_MAP_NAME, WEAK_SET_NAME,
+    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, TEMPORAL_NAME,
+    TemporalFunctionKind, UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -103,6 +103,7 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            TEMPORAL_NAME => self.temporal_namespace_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
@@ -225,6 +226,9 @@ impl Context {
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
+            NativeFunctionKind::Temporal(TemporalFunctionKind::Constructor) => {
+                self.construct_temporal_duration(args)
+            }
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
             NativeFunctionKind::BigInt => Err(Error::type_error("BigInt is not a constructor")),

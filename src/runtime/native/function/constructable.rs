@@ -1,6 +1,7 @@
 use super::{
     AsyncDisposableStackFunctionKind, DataViewFunctionKind, DateFunctionKind,
     DisposableStackFunctionKind, IteratorFunctionKind, NativeFunctionKind, ShadowRealmFunctionKind,
+    TemporalFunctionKind,
 };
 
 impl NativeFunctionKind {
@@ -34,6 +35,7 @@ impl NativeFunctionKind {
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::Date(DateFunctionKind::Constructor)
+                | Self::Temporal(TemporalFunctionKind::Constructor)
                 | Self::DisposableStack(
                     super::disposable_stack_kind::DisposableStackFunctionKind::Constructor,
                 )
@@ -68,6 +70,7 @@ impl NativeFunctionKind {
                 | Self::WeakSet
                 | Self::TypedArray(_)
                 | Self::Date(DateFunctionKind::Constructor)
+                | Self::Temporal(TemporalFunctionKind::Constructor)
                 | Self::AsyncDisposableStack(AsyncDisposableStackFunctionKind::Constructor)
                 | Self::DisposableStack(DisposableStackFunctionKind::Constructor)
         )

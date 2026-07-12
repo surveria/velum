@@ -560,6 +560,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeToPrimitive,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
+    Temporal(super::TemporalFunctionKind),
     ThrowTypeError,
     TypedArrayIntrinsic,
     TypedArrayPrototype(TypedArrayFunctionKind),
@@ -579,6 +580,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
 
 impl NativeFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
+        if let Self::Temporal(kind) = self {
+            return kind.length();
+        }
         if let Self::Date(kind) = self {
             return kind.length();
         }
@@ -646,6 +650,9 @@ impl NativeFunctionKind {
     }
 
     pub(in crate::runtime) const fn name(self) -> &'static str {
+        if let Self::Temporal(kind) = self {
+            return kind.name();
+        }
         if let Self::Date(kind) = self {
             return kind.name();
         }

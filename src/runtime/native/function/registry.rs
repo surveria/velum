@@ -286,7 +286,8 @@ const SHARED_ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 311;
 const ATOMICS_METHOD_SLOT_BASE: usize = 316;
 const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330);
 const REGEXP_ESCAPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(331);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 332;
+const TEMPORAL_FUNCTION_SLOT_BASE: usize = 332;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 358;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -421,6 +422,12 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     }
     if let Some(slot) = object_slot(kind) {
         return Some(slot);
+    }
+    if let NativeFunctionKind::Temporal(method) = kind {
+        let Some(index) = TEMPORAL_FUNCTION_SLOT_BASE.checked_add(method.index()) else {
+            return None;
+        };
+        return Some(NativeFunctionSlot::new(index));
     }
 
     match kind {
