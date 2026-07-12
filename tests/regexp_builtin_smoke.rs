@@ -86,8 +86,10 @@ fn scopes_regexp_modifier_flags_to_their_groups() -> TestResult {
         let properties = /(?i:\p{Lu})/u.test("a") &&
             /(?i:\P{Lu})/u.test("A") &&
             !/(?-i:\p{Lu})/ui.test("a");
+        let namedGroup = /(?<𝑓>f)/.exec("f").groups.𝑓 === "f";
 
-        dotAll && astralLiteral && multiline && backreferences && boundaries && properties ? 42 : 0
+        dotAll && astralLiteral && multiline && backreferences && boundaries &&
+            properties && namedGroup ? 42 : 0
         "#,
     )?;
 

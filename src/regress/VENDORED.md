@@ -38,6 +38,9 @@ of the project-owned 800-line source-file gate.
 - RegExp modifier groups preserve their scoped `ignoreCase` semantics in word
   boundaries, backreferences, and Unicode property escapes throughout the IR
   and executor instruction stream.
+- Non-Unicode pattern parsing retains UTF-16 code units for matching while
+  named capture-group identifiers decode valid surrogate pairs as Unicode
+  identifier characters.
 
 When changing vendored source, update `VENDORED-SOURCE-SHA256SUMS` in the same
 commit and describe the semantic deviation here or in the owning pull request.
