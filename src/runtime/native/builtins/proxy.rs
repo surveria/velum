@@ -8,7 +8,14 @@ use crate::{
     value::{NativeFunctionId, ObjectId, Value},
 };
 
-use super::{NativeFunctionKind, PROXY_REVOCABLE_NAME};
+use super::{
+    NativeFunctionKind, PROXY_REVOCABLE_NAME,
+    proxy_invariants::{
+        validate_define_property, validate_delete, validate_get,
+        validate_get_own_property_descriptor, validate_get_prototype, validate_has,
+        validate_is_extensible, validate_prevent_extensions, validate_set, validate_set_prototype,
+    },
+};
 
 const PROXY_REVOCABLE_PROXY_PROPERTY: &str = "proxy";
 const PROXY_REVOCABLE_REVOKE_PROPERTY: &str = "revoke";
@@ -166,8 +173,12 @@ impl Context {
             return self.finish_semantic_property_read(read, &receiver, property);
         };
         let key = self.proxy_property_key_value(property)?;
-        self.call(&trap, &[target, key, receiver], handler)?
-            .into_native_value_result()
+        let result = self
+            .call(&trap, &[target.clone(), key, receiver], handler)?
+            .into_native_value_result()?;
+        let descriptor = self.proxy_target_descriptor(&target, property)?;
+        validate_get(descriptor.as_ref(), &result)?;
+        Ok(result)
     }
 
     /// Proxy `[[Has]]`: dispatch to the `has` trap or fall back to the target.
@@ -182,9 +193,15 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .call(&trap, &[target, key], handler)?
+            .call(&trap, &[target.clone(), key], handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let present = to_boolean(&result);
+        if !present {
+            let descriptor = self.proxy_target_descriptor(&target, property)?;
+            let extensible = self.proxy_target_is_extensible(&target)?;
+            validate_has(descriptor.as_ref(), extensible)?;
+        }
+        Ok(present)
     }
 
     fn proxy_property_key_value(&mut self, property: PropertyLookup<'_>) -> Result<Value> {
@@ -192,6 +209,21 @@ impl Context {
             return self.symbols.get(symbol).cloned().map(Value::Symbol);
         }
         self.heap_string_value(property.name())
+    }
+
+    fn proxy_target_descriptor(
+        &mut self,
+        target: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        let key = self.proxy_property_key_value(property)?;
+        let dynamic = self.dynamic_property_key(&key)?;
+        self.semantic_own_property_descriptor(target, &dynamic)
+    }
+
+    fn proxy_target_is_extensible(&mut self, target: &Value) -> Result<bool> {
+        self.semantic_is_extensible(target)?
+            .ok_or_else(|| Error::type_error("proxy target is not an object"))
     }
 
     /// Proxy `[[Set]]`: dispatch to the `set` trap or fall back to the target.
@@ -215,9 +247,18 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .call(&trap, &[target, key, value, receiver], handler)?
+            .call(
+                &trap,
+                &[target.clone(), key, value.clone(), receiver],
+                handler,
+            )?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let updated = to_boolean(&result);
+        if updated {
+            let descriptor = self.proxy_target_descriptor(&target, property)?;
+            validate_set(descriptor.as_ref(), &value)?;
+        }
+        Ok(updated)
     }
 
     /// Proxy `[[Delete]]`: dispatch to the `deleteProperty` trap or fall back to
@@ -233,9 +274,15 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .call(&trap, &[target, key], handler)?
+            .call(&trap, &[target.clone(), key], handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let deleted = to_boolean(&result);
+        if deleted {
+            let descriptor = self.proxy_target_descriptor(&target, property)?;
+            let extensible = self.proxy_target_is_extensible(&target)?;
+            validate_delete(descriptor.as_ref(), extensible)?;
+        }
+        Ok(deleted)
     }
 
     /// Proxy `[[GetPrototypeOf]]`.
@@ -251,6 +298,13 @@ impl Context {
             .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
+        }
+        let extensible = self.proxy_target_is_extensible(&target)?;
+        if !extensible {
+            let target_prototype = self
+                .semantic_get_prototype(&target)?
+                .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR))?;
+            validate_get_prototype(extensible, &target_prototype, &result)?;
         }
         Ok(result)
     }
@@ -268,9 +322,20 @@ impl Context {
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .call(&trap, &[target, prototype], handler)?
+            .call(&trap, &[target.clone(), prototype.clone()], handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let updated = to_boolean(&result);
+        if !updated {
+            return Ok(false);
+        }
+        let extensible = self.proxy_target_is_extensible(&target)?;
+        if !extensible {
+            let target_prototype = self
+                .semantic_get_prototype(&target)?
+                .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR))?;
+            validate_set_prototype(extensible, &target_prototype, &prototype)?;
+        }
+        Ok(true)
     }
 
     /// Proxy `[[IsExtensible]]`.
@@ -282,9 +347,12 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .call(&trap, &[target], handler)?
+            .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let extensible = to_boolean(&result);
+        let target_extensible = self.proxy_target_is_extensible(&target)?;
+        validate_is_extensible(target_extensible, extensible)?;
+        Ok(extensible)
     }
 
     /// Proxy `[[PreventExtensions]]`.
@@ -296,9 +364,13 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .call(&trap, &[target], handler)?
+            .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let prevented = to_boolean(&result);
+        if prevented {
+            validate_prevent_extensions(self.proxy_target_is_extensible(&target)?)?;
+        }
+        Ok(prevented)
     }
 
     /// Proxy `[[DefineOwnProperty]]`: dispatch the `defineProperty` trap or
@@ -323,9 +395,16 @@ impl Context {
             );
         };
         let result = self
-            .call(&trap, &[target, key, descriptor], handler)?
+            .call(&trap, &[target.clone(), key, descriptor], handler)?
             .into_native_value_result()?;
-        Ok(to_boolean(&result))
+        let defined = to_boolean(&result);
+        if !defined {
+            return Ok(false);
+        }
+        let target_descriptor = self.proxy_target_descriptor(&target, property)?;
+        let extensible = self.proxy_target_is_extensible(&target)?;
+        validate_define_property(&update, target_descriptor.as_ref(), extensible)?;
+        Ok(true)
     }
 
     /// Proxy `[[OwnPropertyKeys]]`: dispatch the `ownKeys` trap or read the
@@ -362,15 +441,23 @@ impl Context {
             return self.semantic_own_property_descriptor(&target, &dynamic);
         };
         let result = self
-            .call(&trap, &[target, key_value], handler)?
+            .call(&trap, &[target.clone(), key_value], handler)?
             .into_native_value_result()?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
-        match result {
-            Value::Undefined => Ok(None),
-            Value::Object(_) => Ok(Some(self.own_property_descriptor_from_object(&result)?)),
-            _ => Err(Error::type_error(PROXY_DESCRIPTOR_INVALID_ERROR)),
-        }
+        let descriptor = match result {
+            Value::Undefined => None,
+            Value::Object(_) => Some(self.own_property_descriptor_from_object(&result)?),
+            _ => return Err(Error::type_error(PROXY_DESCRIPTOR_INVALID_ERROR)),
+        };
+        let target_descriptor = self.proxy_target_descriptor(&target, property)?;
+        let extensible = self.proxy_target_is_extensible(&target)?;
+        validate_get_own_property_descriptor(
+            descriptor.as_ref(),
+            target_descriptor.as_ref(),
+            extensible,
+        )?;
+        Ok(descriptor)
     }
 
     /// Spec `ToPropertyDescriptor` completed with the defineProperty defaults,

@@ -6,7 +6,7 @@ use crate::{
             DataPropertyDescriptor, OwnPropertyDescriptor, PropertyConfigurable,
             PropertyEnumerable, PropertyUpdate, PropertyWritable, TypedArrayPropertyIndex,
         },
-        property::DynamicPropertyKey,
+        property::{DynamicPropertyKey, has_property},
     },
     value::Value,
 };
@@ -237,7 +237,7 @@ impl Context {
         target: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<Option<OwnPropertyDescriptor>> {
-        if !self.has_own_property_value(target, property)? {
+        if !has_property(&self.objects, target, property.lookup())? {
             return Ok(None);
         }
         Ok(Some(OwnPropertyDescriptor::Data(

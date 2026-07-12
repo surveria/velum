@@ -569,7 +569,12 @@ impl Context {
         })
     }
 
-    pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {
+    pub(crate) fn enumerable_keys(&mut self, object: &Value) -> Result<Vec<String>> {
+        if let Value::Object(id) = object
+            && self.objects.is_proxy(*id)
+        {
+            return self.semantic_enumerable_property_keys(object);
+        }
         if let Value::Function(id) = object {
             return self.function_enumerable_keys(*id);
         }

@@ -14,6 +14,9 @@ pub use descriptor::{
     OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
     PropertyWritable,
 };
+pub(in crate::runtime) use descriptor::{
+    is_compatible_own_property_descriptor, is_compatible_property_update,
+};
 pub use key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
 pub use lookup::{
     CacheableNativePropertyValue, CacheablePropertyDelete, CacheablePropertyLookup,

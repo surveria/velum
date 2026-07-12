@@ -35,6 +35,9 @@ pub use property::{
     OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
     PropertyUpdate, PropertyWritable,
 };
+pub(in crate::runtime) use property::{
+    is_compatible_own_property_descriptor, is_compatible_property_update,
+};
 pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};

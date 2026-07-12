@@ -6,6 +6,34 @@ use crate::{
 };
 
 impl Context {
+    /// Spec-shaped `EnumerateObjectProperties` key snapshot. Each prototype is
+    /// queried through semantic internal methods so Proxy traps and exotic
+    /// property descriptors remain observable.
+    pub(in crate::runtime) fn semantic_enumerable_property_keys(
+        &mut self,
+        target: &Value,
+    ) -> Result<Vec<String>> {
+        let mut keys = Vec::new();
+        let mut current = target.clone();
+        loop {
+            for key in self.semantic_own_enumerable_string_keys(&current)? {
+                self.step()?;
+                if !keys.contains(&key) {
+                    keys.push(key);
+                }
+            }
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
+                return Err(Error::type_error(
+                    "enumeration target cannot be converted to an object",
+                ));
+            };
+            if matches!(prototype, Value::Null) {
+                return Ok(keys);
+            }
+            current = prototype;
+        }
+    }
+
     /// Shared `EnumerableOwnProperties` key selection for string-keyed users.
     pub(in crate::runtime) fn semantic_own_enumerable_string_keys(
         &mut self,
