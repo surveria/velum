@@ -280,12 +280,27 @@ impl Context {
             self.to_index(byte_offset)?,
             TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
         )?;
+        if buffer.is_detached() {
+            return Err(Error::type_error("ArrayBuffer is detached"));
+        }
         let element_size = element_kind.bytes_per_element();
         if !byte_offset.is_multiple_of(element_size) {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 TYPED_ARRAY_OFFSET_ALIGNMENT_ERROR,
             ));
+        }
+        let requested_length =
+            if requested_length.is_some_and(|value| !matches!(value, Value::Undefined)) {
+                Some(Self::length_to_usize(
+                    self.to_index(requested_length)?,
+                    TYPED_ARRAY_LENGTH_LIMIT_ERROR,
+                )?)
+            } else {
+                None
+            };
+        if buffer.is_detached() {
+            return Err(Error::type_error("ArrayBuffer is detached"));
         }
         let buffer_length = buffer.byte_length();
         let Some(available) = buffer_length.checked_sub(byte_offset) else {
@@ -294,15 +309,8 @@ impl Context {
                 TYPED_ARRAY_BUFFER_RANGE_ERROR,
             ));
         };
-        let length_tracking = buffer.is_resizable()
-            && requested_length.is_none_or(|value| matches!(value, Value::Undefined));
-        let length = if !length_tracking
-            && requested_length.is_some_and(|value| !matches!(value, Value::Undefined))
-        {
-            let requested = Self::length_to_usize(
-                self.to_index(requested_length)?,
-                TYPED_ARRAY_LENGTH_LIMIT_ERROR,
-            )?;
+        let length_tracking = buffer.is_resizable() && requested_length.is_none();
+        let length = if let Some(requested) = requested_length {
             let required = self.typed_array_byte_length(element_kind, requested)?;
             if required > available {
                 return Err(Error::exception(

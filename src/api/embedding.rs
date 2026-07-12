@@ -331,6 +331,20 @@ impl Vm {
         self.context.register_host_function_typed(name, callback)
     }
 
+    /// Registers an engine-owned host operation under an embedder-selected
+    /// global function name.
+    ///
+    /// # Errors
+    /// Fails when the name is empty, exceeds string limits, duplicates an
+    /// existing binding, or would exceed the binding limit.
+    pub fn register_host_operation(
+        &mut self,
+        name: impl Into<String>,
+        operation: crate::HostOperation,
+    ) -> Result<()> {
+        self.context.register_host_operation(name, operation)
+    }
+
     #[must_use]
     pub fn resource_usage(&self) -> VmResourceUsage {
         let optimization = self.optimization_snapshot();

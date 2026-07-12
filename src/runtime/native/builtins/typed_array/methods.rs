@@ -177,7 +177,7 @@ impl Context {
             TypedArrayFunctionKind::CopyWithin => {
                 self.eval_direct_array_copy_within(args, this_value)
             }
-            TypedArrayFunctionKind::Every => self.eval_direct_array_every(args, this_value),
+            TypedArrayFunctionKind::Every => self.eval_direct_array_every(args, this_value, true),
             TypedArrayFunctionKind::Fill => self.eval_typed_array_fill(args, this_value),
             TypedArrayFunctionKind::Find => self.eval_direct_array_find(args, this_value),
             TypedArrayFunctionKind::FindIndex => {
@@ -187,7 +187,9 @@ impl Context {
             TypedArrayFunctionKind::FindLastIndex => {
                 self.eval_direct_array_find_last_index(args, this_value)
             }
-            TypedArrayFunctionKind::ForEach => self.eval_direct_array_for_each(args, this_value),
+            TypedArrayFunctionKind::ForEach => {
+                self.eval_direct_array_for_each(args, this_value, true)
+            }
             TypedArrayFunctionKind::Includes => self.eval_direct_array_includes(args, this_value),
             TypedArrayFunctionKind::IndexOf => self.eval_direct_array_index_of(args, this_value),
             TypedArrayFunctionKind::Join => self.eval_direct_array_join(args, this_value),
@@ -201,7 +203,7 @@ impl Context {
                 self.eval_direct_typed_array_reduce(args, this_value, true)
             }
             TypedArrayFunctionKind::Reverse => self.eval_direct_array_reverse(args, this_value),
-            TypedArrayFunctionKind::Some => self.eval_direct_array_some(args, this_value),
+            TypedArrayFunctionKind::Some => self.eval_direct_array_some(args, this_value, true),
             TypedArrayFunctionKind::ToLocaleString | TypedArrayFunctionKind::ToString => {
                 self.eval_direct_array_join(&[], this_value)
             }
@@ -310,9 +312,9 @@ impl Context {
     ) -> Result<Value> {
         self.typed_array_receiver(this_value)?;
         let array = if map {
-            self.eval_direct_array_map(args, this_value)?
+            self.eval_direct_array_map(args, this_value, true)?
         } else {
-            self.eval_direct_array_filter(args, this_value)?
+            self.eval_direct_array_filter(args, this_value, true)?
         };
         let values = self.typed_array_collect_array_like(&array)?;
         self.typed_array_species_create_from_values(this_value, values)
@@ -392,10 +394,14 @@ impl Context {
 
     fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (id, view) = self.typed_array_receiver(this_value)?;
+        let length = view.length();
         let value = args.first().unwrap_or(&Value::Undefined);
         let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
-        let start = self.typed_array_relative_index(args.get(1), view.length(), 0)?;
-        let end = self.typed_array_relative_index(args.get(2), view.length(), view.length())?;
+        let start = self.typed_array_relative_index(args.get(1), length, 0)?;
+        let end = self.typed_array_relative_index(args.get(2), length, length)?;
+        if view.is_out_of_bounds() {
+            return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
+        }
         for index in start..end {
             self.step()?;
             if !self.objects.set_typed_array_value(id, index, &element)? {
@@ -535,7 +541,7 @@ impl Context {
         source: &Value,
         values: Vec<Value>,
     ) -> Result<Value> {
-        let (_, view) = self.typed_array_receiver(source)?;
+        let (_, view) = self.typed_array_branded_receiver(source)?;
         let constructor = self.typed_array_species_constructor(source, view.element_kind())?;
         self.typed_array_create_from_values_with_constructor(
             &constructor,
@@ -624,9 +630,7 @@ impl Context {
                 value
             };
             let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
-            if !self.objects.set_typed_array_value(id, index, &element)? {
-                return Err(Error::runtime("typed array result index is out of bounds"));
-            }
+            self.objects.set_typed_array_value(id, index, &element)?;
         }
         Ok(result)
     }
