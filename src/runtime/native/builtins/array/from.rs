@@ -62,7 +62,8 @@ impl Context {
         let result = self.array_from_result(constructor, None)?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, [iterator_method, &result])?;
-        let mut iterator = self.get_iterator_from_method(items, iterator_method)?;
+        let mut iterator =
+            self.get_iterator_from_method_with_array_fast_path(items, iterator_method)?;
         let _iterator_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, iterator.root_values())?;
         let mut index = 0_usize;

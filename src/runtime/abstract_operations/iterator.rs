@@ -156,7 +156,7 @@ impl Context {
             }
             Value::Object(id) => {
                 if let Some(method) = self.iterator_method(iterable)? {
-                    return self.get_iterator_from_method(iterable, &method);
+                    return self.get_iterator_from_method_with_array_fast_path(iterable, &method);
                 }
                 if self.objects.array_len_if_array(*id)?.is_some() {
                     return Err(not_iterable_error(iterable));
@@ -205,15 +205,6 @@ impl Context {
         iterable: &Value,
         method: &Value,
     ) -> Result<IteratorSource> {
-        if let Value::Object(id) = iterable
-            && self.objects.array_len_if_array(*id)?.is_some()
-            && self.is_default_array_iterator_method(method)?
-        {
-            return Ok(IteratorSource::ArrayIndex {
-                array: iterable.clone(),
-                index: 0,
-            });
-        }
         let iterator = self.call_value(method, &[], iterable.clone())?;
         if self.semantic_object_ref(&iterator)?.is_none() {
             return Err(Error::type_error(format!(
@@ -228,6 +219,25 @@ impl Context {
             next,
             done: false,
         })
+    }
+
+    /// Guarded direct Array implementation for synchronous consumers that
+    /// already captured the default iterator method exactly once.
+    pub(in crate::runtime) fn get_iterator_from_method_with_array_fast_path(
+        &mut self,
+        iterable: &Value,
+        method: &Value,
+    ) -> Result<IteratorSource> {
+        if let Value::Object(id) = iterable
+            && self.objects.array_len_if_array(*id)?.is_some()
+            && self.is_default_array_iterator_method(method)?
+        {
+            return Ok(IteratorSource::ArrayIndex {
+                array: iterable.clone(),
+                index: 0,
+            });
+        }
+        self.get_iterator_from_method(iterable, method)
     }
 
     /// ECMAScript `IteratorStep` followed by `IteratorValue` when the result
