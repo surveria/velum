@@ -36,9 +36,11 @@ impl Context {
                 spread_flags,
                 holes,
             } => self.eval_bytecode_array_literal_spread(state, spread_flags, holes, next),
-            BytecodeInstruction::CallBindingSpread { callee } => {
-                self.eval_bytecode_call_binding_spread(state, callee, next)
-            }
+            BytecodeInstruction::CallBindingSpread {
+                callee,
+                native,
+                strict,
+            } => self.eval_bytecode_call_binding_spread(state, callee, *native, *strict, next),
             BytecodeInstruction::CallValueSpread => {
                 self.eval_bytecode_call_value_spread(state, next)
             }

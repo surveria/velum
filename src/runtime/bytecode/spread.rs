@@ -1,4 +1,5 @@
 use crate::{
+    api::native_call::NativeCallTarget,
     bytecode::{BytecodeAddress, BytecodeBinding, BytecodeDynamicProperty, BytecodeProperty},
     error::{Error, Result},
     runtime::{Context, abstract_operations::IteratorStep, control::Completion},
@@ -151,12 +152,14 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
-        let callee = self.eval_bytecode_identifier(callee)?;
-        let completion = self.call(&callee, &args, Value::Undefined)?;
+        let completion =
+            self.eval_bytecode_identifier_call_completion(callee, native, strict, &args)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 

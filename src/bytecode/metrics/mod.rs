@@ -97,7 +97,7 @@ impl BytecodeInstruction {
             Self::UpdateBinding { name, .. } | Self::CompoundStoreBinding { name, .. } => {
                 name.direct_operand_count()
             }
-            Self::CallBinding { callee, .. } | Self::CallBindingSpread { callee } => {
+            Self::CallBinding { callee, .. } | Self::CallBindingSpread { callee, .. } => {
                 callee.direct_operand_count()
             }
             Self::Construct { constructor, .. } => constructor.direct_operand_count(),

@@ -64,6 +64,28 @@ fn indirect_eval_uses_the_global_variable_environment() -> TestResult {
     )
 }
 
+#[test]
+fn direct_eval_spread_calls_keep_the_caller_environment() -> TestResult {
+    expect_true(
+        r#"
+        function sloppy() {
+            let value = 0;
+            eval(...[], "value = 1");
+            eval("value = 2", ...[]);
+            eval(...["value = 3"]);
+            return value;
+        }
+        function strict() {
+            "use strict";
+            let value = 0;
+            eval(...["value = 4"]);
+            return value;
+        }
+        sloppy() === 3 && strict() === 4
+        "#,
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -16,7 +16,7 @@ impl BytecodeCompiler<'_> {
         args: &[Expression],
     ) -> Result<()> {
         if has_spread_arg(args) {
-            return self.compile_spread_call_expr(callee, args);
+            return self.compile_spread_call_expr(callee, strict, args);
         }
         match callee.kind() {
             Expr::Identifier(name) => {
@@ -88,13 +88,20 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    fn compile_spread_call_expr(&mut self, callee: &Expression, args: &[Expression]) -> Result<()> {
+    fn compile_spread_call_expr(
+        &mut self,
+        callee: &Expression,
+        strict: bool,
+        args: &[Expression],
+    ) -> Result<()> {
         match callee.kind() {
             Expr::Identifier(name) => {
                 let spread_flags = self.compile_spread_parts(args)?;
                 self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
                 self.emit(BytecodeInstruction::CallBindingSpread {
                     callee: self.compile_binding(name)?,
+                    native: NativeCallTarget::from_binding_name(name.as_str()),
+                    strict,
                 });
                 Ok(())
             }
@@ -142,7 +149,7 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            Expr::Parenthesized(callee) => self.compile_spread_call_expr(callee, args),
+            Expr::Parenthesized(callee) => self.compile_spread_call_expr(callee, strict, args),
             _ => {
                 self.compile_expr(callee)?;
                 let spread_flags = self.compile_spread_parts(args)?;
