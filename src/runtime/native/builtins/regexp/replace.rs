@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{Context, abstract_operations::to_boolean, call::RuntimeCallArgs},
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 use super::{REGEXP_FLAGS_PROPERTY, REGEXP_GLOBAL_PROPERTY, REGEXP_LAST_INDEX_PROPERTY};
@@ -356,14 +356,17 @@ fn extend_replace_output(
     value: &[u16],
     max_string_len: usize,
 ) -> Result<()> {
-    let length = output
-        .len()
-        .checked_add(value.len())
-        .ok_or_else(|| Error::limit("RegExp replacement length overflowed"))?;
+    let length = output.len().checked_add(value.len()).ok_or_else(|| {
+        Error::exception(
+            ErrorName::RangeError,
+            "RegExp replacement length overflowed",
+        )
+    })?;
     if length > max_string_len {
-        return Err(Error::limit(format!(
-            "RegExp replacement length {length} exceeded {max_string_len}"
-        )));
+        return Err(Error::exception(
+            ErrorName::RangeError,
+            format!("RegExp replacement length {length} exceeded {max_string_len}"),
+        ));
     }
     output.extend_from_slice(value);
     Ok(())
