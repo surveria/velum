@@ -10,9 +10,9 @@ fn enforces_atom_and_heap_string_limits_before_interning() -> TestResult {
         .with_max_count(VmStorageKind::Atom, 1)
         .with_max_payload_bytes(VmStorageKind::Atom, "camera".len());
     let mut vm = vm_with_storage_limits(atom_limits);
-    vm.eval("var camera = 42; camera;")?;
+    vm.eval("let camera = 42; camera;")?;
     let before = vm.storage_snapshot()?;
-    let error = expect_eval_error(&mut vm, "var lens = 24;")?;
+    let error = expect_eval_error(&mut vm, "let lens = 24;")?;
     ensure_limit(&error, "Atom")?;
     ensure_snapshot(&vm, &before, "atom limit failure")?;
 
