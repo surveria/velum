@@ -460,6 +460,9 @@ impl Context {
         if let Some(value) = self.eval_reflect_native_function_kind(kind, args, this_value) {
             return value;
         }
+        if let Some(result) = Self::eval_shared_function_accessor_kind(kind, this_value) {
+            return result;
+        }
 
         self.eval_non_object_native_function_kind(kind, args, this_value)
     }
@@ -486,9 +489,6 @@ impl Context {
             return result;
         }
         if let Some(result) = self.eval_promise_native_function_kind(kind, args, this_value) {
-            return result;
-        }
-        if let Some(result) = Self::eval_shared_function_accessor_kind(kind, this_value) {
             return result;
         }
         match kind {
@@ -533,6 +533,9 @@ impl Context {
             }
             NativeFunctionKind::DisposableStack(method) => {
                 self.eval_disposable_stack_function(method, args, this_value)
+            }
+            NativeFunctionKind::AsyncDisposableStack(method) => {
+                self.eval_async_disposable_stack_function(method, args, this_value)
             }
             NativeFunctionKind::TypedArrayIntrinsic => {
                 Err(Error::type_error("%TypedArray% is an abstract constructor"))

@@ -71,7 +71,7 @@ impl Context {
         let constructor_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::Map,
             CollectionKind::Set => NativeFunctionKind::Set,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set constructor",
                 ));
@@ -106,7 +106,7 @@ impl Context {
         let global_name = match kind {
             CollectionKind::Map => MAP_NAME,
             CollectionKind::Set => SET_NAME,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set global",
                 ));
@@ -165,7 +165,7 @@ impl Context {
                     NativeFunctionKind::SetIsDisjointFrom,
                 ),
             ],
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set prototype",
                 ));
@@ -181,7 +181,7 @@ impl Context {
         let size_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::MapSizeGetter,
             CollectionKind::Set => NativeFunctionKind::SetSizeGetter,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime("weak collection routed to Map or Set size"));
             }
         };
@@ -216,7 +216,7 @@ impl Context {
         let tag = match kind {
             CollectionKind::Map => MAP_NAME,
             CollectionKind::Set => SET_NAME,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime("weak collection routed to Map or Set tag"));
             }
         };
@@ -249,7 +249,7 @@ impl Context {
         let iterator_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::MapEntries,
             CollectionKind::Set => NativeFunctionKind::SetValues,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set iterator",
                 ));
@@ -315,7 +315,7 @@ impl Context {
         let adder_name = match kind {
             CollectionKind::Map => COLLECTION_SET_NAME,
             CollectionKind::Set => COLLECTION_ADD_NAME,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set seeding",
                 ));
@@ -359,7 +359,7 @@ impl Context {
                 vec![key, value]
             }
             CollectionKind::Set => vec![item],
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime(
                     "weak collection routed to Map or Set seeding",
                 ));
@@ -492,7 +492,7 @@ impl Context {
         let tag = match kind {
             CollectionKind::Map => MAP_ITERATOR_TAG,
             CollectionKind::Set => SET_ITERATOR_TAG,
-            CollectionKind::WeakMap | CollectionKind::WeakSet | CollectionKind::DisposableStack => {
+            _ => {
                 return Err(Error::runtime("weak collection cannot have an iterator"));
             }
         };

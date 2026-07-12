@@ -10,15 +10,15 @@ use crate::{
 };
 
 use super::{
-    ARRAY_BUFFER_NAME, ARRAY_NAME, BIGINT_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME,
-    DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
-    EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
-    GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
-    GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
-    INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
-    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
-    WEAK_MAP_NAME, WEAK_SET_NAME,
+    ARRAY_BUFFER_NAME, ARRAY_NAME, ASYNC_DISPOSABLE_STACK_NAME, AsyncDisposableStackFunctionKind,
+    BIGINT_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME, DISPOSABLE_STACK_NAME,
+    DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind, EVAL_NAME, FUNCTION_NAME,
+    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
+    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
+    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME,
+    MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME,
+    REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -73,6 +73,9 @@ impl Context {
             ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             JSON_NAME => self.json_object_value().map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
+            ASYNC_DISPOSABLE_STACK_NAME => {
+                self.async_disposable_stack_constructor_value().map(Some)
+            }
             DISPOSABLE_STACK_NAME => self.disposable_stack_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             MATH_NAME => self.math_object_value().map(Some),
@@ -142,6 +145,9 @@ impl Context {
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
+            ASYNC_DISPOSABLE_STACK_NAME => {
+                self.async_disposable_stack_constructor_value().map(Some)
+            }
             DISPOSABLE_STACK_NAME => self.disposable_stack_constructor_value().map(Some),
             ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
@@ -215,6 +221,9 @@ impl Context {
             NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
                 self.construct_date_object(args)
             }
+            NativeFunctionKind::AsyncDisposableStack(
+                AsyncDisposableStackFunctionKind::Constructor,
+            ) => self.construct_async_disposable_stack(),
             NativeFunctionKind::DisposableStack(DisposableStackFunctionKind::Constructor) => {
                 self.construct_disposable_stack()
             }

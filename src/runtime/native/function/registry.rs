@@ -272,7 +272,8 @@ const BIGINT_PROTOTYPE_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctio
 const BIGINT_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(294);
 const BIGINT_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(295);
 const ARRAY_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(296);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 297;
+const ASYNC_DISPOSABLE_STACK_SLOT_BASE: usize = 297;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 304;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -464,10 +465,14 @@ const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFun
     if let Some(slot) = array_buffer_slot(kind) {
         return Some(slot);
     }
-    let NativeFunctionKind::DisposableStack(method) = kind else {
-        return None;
+    let (base, index) = match kind {
+        NativeFunctionKind::DisposableStack(method) => (DISPOSABLE_STACK_SLOT_BASE, method.index()),
+        NativeFunctionKind::AsyncDisposableStack(method) => {
+            (ASYNC_DISPOSABLE_STACK_SLOT_BASE, method.index())
+        }
+        _ => return None,
     };
-    let Some(index) = DISPOSABLE_STACK_SLOT_BASE.checked_add(method.index()) else {
+    let Some(index) = base.checked_add(index) else {
         return None;
     };
     Some(NativeFunctionSlot::new(index))

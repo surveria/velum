@@ -1,6 +1,7 @@
 use crate::{
     error::Result,
     runtime::{
+        async_disposable_stack::AsyncDisposableStackContinuation,
         async_operation::ArrayFromAsyncContinuation,
         async_trace::VmAsyncEdgeKind,
         function::SuspendedAsyncFunction,
@@ -34,6 +35,9 @@ pub(in crate::runtime) enum PromiseReaction {
     },
     ArrayFromAsync {
         continuation: Box<ArrayFromAsyncContinuation>,
+    },
+    AsyncDisposableStack {
+        continuation: Box<AsyncDisposableStackContinuation>,
     },
 }
 
@@ -77,6 +81,14 @@ impl PromiseReaction {
         continuation: ArrayFromAsyncContinuation,
     ) -> Self {
         Self::ArrayFromAsync {
+            continuation: Box::new(continuation),
+        }
+    }
+
+    pub(in crate::runtime) fn awaiting_async_disposable_stack(
+        continuation: AsyncDisposableStackContinuation,
+    ) -> Self {
+        Self::AsyncDisposableStack {
             continuation: Box::new(continuation),
         }
     }
@@ -125,6 +137,9 @@ impl PromiseReaction {
             Self::ArrayFromAsync { continuation } => {
                 continuation.visit_strong_edges(visitor)?;
             }
+            Self::AsyncDisposableStack { continuation } => {
+                continuation.visit_strong_edges(visitor)?;
+            }
         }
         Ok(())
     }
@@ -132,18 +147,20 @@ impl PromiseReaction {
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Await { continuation } => continuation.execution_frame_count(),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
-                Ok(0)
-            }
+            Self::Then { .. }
+            | Self::AsyncGeneratorAwait { .. }
+            | Self::ArrayFromAsync { .. }
+            | Self::AsyncDisposableStack { .. } => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Await { continuation } => continuation.cache_entry_count(),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
-                Ok(0)
-            }
+            Self::Then { .. }
+            | Self::AsyncGeneratorAwait { .. }
+            | Self::ArrayFromAsync { .. }
+            | Self::AsyncDisposableStack { .. } => Ok(0),
         }
     }
 
@@ -174,6 +191,7 @@ impl PromiseReaction {
             Self::Await { continuation } => continuation.visit_direct_roots(visitor),
             Self::AsyncGeneratorAwait { .. } => Ok(()),
             Self::ArrayFromAsync { continuation } => continuation.visit_direct_roots(visitor),
+            Self::AsyncDisposableStack { continuation } => continuation.visit_direct_roots(visitor),
         }
     }
 
@@ -185,16 +203,19 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
-            Self::Then { .. } | Self::ArrayFromAsync { .. } => None,
+            Self::Then { .. } | Self::ArrayFromAsync { .. } | Self::AsyncDisposableStack { .. } => {
+                None
+            }
         }
     }
 
     pub(in crate::runtime) fn into_suspended(self) -> Option<SuspendedAsyncFunction> {
         match self {
             Self::Await { continuation } => Some(*continuation),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
-                None
-            }
+            Self::Then { .. }
+            | Self::AsyncGeneratorAwait { .. }
+            | Self::ArrayFromAsync { .. }
+            | Self::AsyncDisposableStack { .. } => None,
         }
     }
 }

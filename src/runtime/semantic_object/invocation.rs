@@ -163,6 +163,13 @@ impl Context {
                 {
                     return self.construct_disposable_stack_with_new_target(&new_target);
                 }
+                if kind
+                    == NativeFunctionKind::AsyncDisposableStack(
+                        crate::runtime::native::AsyncDisposableStackFunctionKind::Constructor,
+                    )
+                {
+                    return self.construct_async_disposable_stack_with_new_target(&new_target);
+                }
                 self.construct_native_with_new_target(kind, args, constructor, &new_target)
             }
             Value::Object(id) if self.objects.proxy_constructability(*id)? => {
