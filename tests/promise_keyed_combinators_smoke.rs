@@ -24,7 +24,7 @@ fn promise_all_keyed_preserves_keys_and_settlement_order() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(&context.eval("observed")?, &Value::String("ok".to_owned()))
+    ensure_value(&context.eval("observed")?, &Value::from("ok"))
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn promise_all_settled_keyed_materializes_standard_entries() -> TestResult {
     )?;
     ensure_value(
         &context.eval("observed")?,
-        &Value::String("fulfilled:1|rejected:2".to_owned()),
+        &Value::from("fulfilled:1|rejected:2"),
     )
 }
 
@@ -73,7 +73,7 @@ fn keyed_combinators_filter_descriptors_and_preserve_symbols() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(&context.eval("observed")?, &Value::String("ok".to_owned()))
+    ensure_value(&context.eval("observed")?, &Value::from("ok"))
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn keyed_combinators_reject_invalid_and_abrupt_inputs() -> TestResult {
     )?;
     ensure_value(
         &context.eval("invalid + '|' + abrupt")?,
-        &Value::String("type|marker".to_owned()),
+        &Value::from("type|marker"),
     )
 }
 

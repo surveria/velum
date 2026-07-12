@@ -67,13 +67,13 @@ impl IntoJsValue for f64 {
 
 impl IntoJsValue for String {
     fn into_js_value(self) -> Result<Value> {
-        Ok(Value::String(self))
+        Ok(Value::from(self))
     }
 }
 
 impl IntoJsValue for &str {
     fn into_js_value(self) -> Result<Value> {
-        Ok(Value::String(self.to_owned()))
+        Ok(Value::from(self))
     }
 }
 
@@ -110,8 +110,7 @@ impl<'value> FromJsValue<'value> for &'value str {
 
     fn from_js_value(value: &'value Value) -> Option<Self> {
         match value {
-            Value::String(value) => Some(value.as_str()),
-            Value::HeapString(value) => value.as_utf8(),
+            Value::String(value) => value.as_utf8(),
             _ => None,
         }
     }
@@ -122,8 +121,7 @@ impl FromJsValue<'_> for String {
 
     fn from_js_value(value: &Value) -> Option<Self> {
         match value {
-            Value::String(value) => Some(value.clone()),
-            Value::HeapString(value) => value.as_utf8().map(str::to_owned),
+            Value::String(value) => value.as_utf8().map(str::to_owned),
             _ => None,
         }
     }
@@ -603,13 +601,12 @@ impl Context {
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Object(_) => Err(Error::runtime(HOST_FUNCTION_HANDLE_RETURN_ERROR)),
-            Value::String(value) => self.heap_string_value(&value),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
             | Value::BigInt(_)
-            | Value::HeapString(_)
+            | Value::String(_)
             | Value::Symbol(_) => self.runtime_value(value),
         }
     }

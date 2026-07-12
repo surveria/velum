@@ -295,15 +295,25 @@ impl Context {
     }
 
     fn strict_string_value(&self, value: &Value) -> Result<Vec<u16>> {
+        if let Some(units) = value.string_units() {
+            return Ok(units.into_owned());
+        }
         match value {
-            Value::String(value) => Ok(value.encode_utf16().collect()),
-            Value::HeapString(value) => Ok(value.as_utf16().to_vec()),
             Value::Object(id) => self
                 .objects
                 .string_object_utf16_value(*id)?
                 .map(<[u16]>::to_vec)
                 .ok_or_else(|| Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
-            _ => Err(Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::String(_)
+            | Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Err(Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
         }
     }
 
@@ -314,7 +324,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Object(_)
             | Value::Function(_)
             | Value::NativeFunction(_)

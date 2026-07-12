@@ -19,10 +19,7 @@ fn ensure_string_after(source: &str, expression: &str, expected: &str) -> TestRe
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)?;
-    ensure_value(
-        &context.eval(expression)?,
-        &Value::String(expected.to_owned()),
-    )
+    ensure_value(&context.eval(expression)?, &Value::from(expected))
 }
 
 #[test]

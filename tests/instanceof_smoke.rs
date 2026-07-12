@@ -61,7 +61,7 @@ fn supports_function_prototype_call_and_bind() -> TestResult {
         direct + "|" + bound("b")
         "#,
     )?;
-    ensure_value(&value, &Value::String("box:a:b|box:a:b".to_owned()))
+    ensure_value(&value, &Value::from("box:a:b|box:a:b"))
 }
 
 #[test]

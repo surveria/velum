@@ -7,7 +7,6 @@ fn eval(source: &str) -> rs_quickjs::Result<Value> {
     let mut context = runtime.context();
     context.eval(source)
 }
-
 #[test]
 fn supports_while_statements() -> TestResult {
     expect_value(
@@ -44,7 +43,6 @@ fn supports_while_statements() -> TestResult {
         &Value::Undefined,
     )
 }
-
 #[test]
 fn preserves_if_statement_completion_values() -> TestResult {
     expect_value(
@@ -68,7 +66,6 @@ fn preserves_if_statement_completion_values() -> TestResult {
         &Value::Number(42.0),
     )
 }
-
 #[test]
 fn supports_do_while_statements() -> TestResult {
     expect_value(
@@ -105,7 +102,6 @@ fn supports_do_while_statements() -> TestResult {
         &Value::Number(42.0),
     )
 }
-
 #[test]
 fn propagates_do_while_control_flow() -> TestResult {
     expect_value(
@@ -156,10 +152,9 @@ fn propagates_do_while_control_flow() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
-
 #[test]
 fn supports_labeled_break_statements() -> TestResult {
     expect_value(
@@ -195,7 +190,6 @@ fn supports_labeled_break_statements() -> TestResult {
         &Value::Number(3.0),
     )
 }
-
 #[test]
 fn supports_labeled_continue_statements() -> TestResult {
     expect_value(
@@ -258,10 +252,9 @@ fn supports_labeled_continue_statements() -> TestResult {
         }
         seen
         "#,
-        &Value::String("ac".to_owned()),
+        &Value::from("ac"),
     )
 }
-
 #[test]
 fn propagates_while_completion() -> TestResult {
     expect_value(
@@ -293,10 +286,9 @@ fn propagates_while_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
-
 #[test]
 fn supports_break_and_continue() -> TestResult {
     expect_value(
@@ -343,7 +335,6 @@ fn supports_break_and_continue() -> TestResult {
         &Value::Number(4.0),
     )
 }
-
 #[test]
 fn supports_for_statements() -> TestResult {
     expect_value(
@@ -433,7 +424,7 @@ fn propagates_for_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
 
@@ -492,7 +483,7 @@ fn supports_switch_statements() -> TestResult {
         }
         selected
         "#,
-        &Value::String("two".to_owned()),
+        &Value::from("two"),
     )?;
 
     expect_value(
@@ -555,7 +546,7 @@ fn propagates_switch_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )?;
 
     expect_value(
@@ -699,7 +690,7 @@ fn propagates_try_finally_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("finally".to_owned()),
+        &Value::from("finally"),
     )?;
 
     expect_value(

@@ -38,7 +38,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(prototype))
@@ -68,7 +67,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(updated))
@@ -93,7 +91,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(extensible))
@@ -129,7 +126,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(prevented))
@@ -175,7 +171,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         }
         if !self.semantic_prevent_extensions(target)?.unwrap_or(false) {
@@ -235,7 +230,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         }
         if self.semantic_is_extensible(target)?.unwrap_or(false) {

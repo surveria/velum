@@ -32,7 +32,7 @@ fn object_literal_getter_returns_value() -> TestResult {
 fn object_literal_setter_receives_assigned_value() -> TestResult {
     ensure_eval(
         "var log = ''; var o = { set x(v) { log += 'set:' + v; } }; o.x = 5; log",
-        &Value::String("set:5".to_owned()),
+        &Value::from("set:5"),
     )
 }
 
@@ -63,7 +63,7 @@ fn accessor_keys_support_string_number_and_computed_forms() -> TestResult {
              get [key]() { return 3; }
          };
          o['a b'] + ':' + o[42] + ':' + o.c",
-        &Value::String("1:2:3".to_owned()),
+        &Value::from("1:2:3"),
     )
 }
 
@@ -73,7 +73,7 @@ fn get_and_set_stay_usable_as_plain_property_names() -> TestResult {
         "var o = { get: 1, set: 2, get get() { return 3; } };
          var m = { get() { return 5; } };
          o.get + ':' + o.set + ':' + m.get()",
-        &Value::String("3:2:5".to_owned()),
+        &Value::from("3:2:5"),
     )
 }
 
@@ -83,7 +83,7 @@ fn prototype_getter_sees_receiver_as_this() -> TestResult {
         "function C() { this.tag = 'T'; }
          C.prototype = { get x() { return this.tag; } };
          new C().x",
-        &Value::String("T".to_owned()),
+        &Value::from("T"),
     )
 }
 
@@ -95,7 +95,7 @@ fn prototype_setter_intercepts_assignment_on_instance() -> TestResult {
          var c = new C();
          c.x = 21;
          c.stored + ':' + Object.prototype.hasOwnProperty.call(c, 'x')",
-        &Value::String("42:false".to_owned()),
+        &Value::from("42:false"),
     )
 }
 
@@ -127,7 +127,7 @@ fn get_own_property_descriptor_reports_accessor_fields() -> TestResult {
          var d = Object.getOwnPropertyDescriptor(o, 'x');
          (typeof d.get) + ':' + (typeof d.set) + ':' + d.enumerable + ':' + d.configurable
              + ':' + ('value' in d) + ':' + ('writable' in d)",
-        &Value::String("function:undefined:true:true:false:false".to_owned()),
+        &Value::from("function:undefined:true:true:false:false"),
     )
 }
 
@@ -167,7 +167,7 @@ fn for_in_enumerates_accessor_key_without_calling_getter() -> TestResult {
          var keys = '';
          for (var k in o) { keys += k; }
          keys + ':' + called",
-        &Value::String("x:false".to_owned()),
+        &Value::from("x:false"),
     )
 }
 
@@ -177,7 +177,7 @@ fn delete_removes_accessor_property() -> TestResult {
         "var o = { get x() { return 1; } };
          var removed = delete o.x;
          removed + ':' + (o.x === undefined)",
-        &Value::String("true:true".to_owned()),
+        &Value::from("true:true"),
     )
 }
 
@@ -188,7 +188,7 @@ fn getter_can_throw_catchable_error() -> TestResult {
          var caught = '';
          try { o.x; } catch (e) { caught = e.message; }
          caught",
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
 

@@ -15,7 +15,7 @@ fn array_from_async_maps_sync_iterables_and_array_like_values() -> TestResult {
         });
         "#,
         "observed",
-        &Value::String("40,43".to_owned()),
+        &Value::from("40,43"),
     )?;
     ensure_after_jobs(
         r#"
@@ -24,7 +24,7 @@ fn array_from_async_maps_sync_iterables_and_array_like_values() -> TestResult {
             .then(function(values) { observed = values.join(","); });
         "#,
         "observed",
-        &Value::String("20,22".to_owned()),
+        &Value::from("20,22"),
     )
 }
 
@@ -92,7 +92,7 @@ fn array_from_async_uses_custom_constructors_and_throwing_length_set() -> TestRe
             });
         "#,
         "observed",
-        &Value::String("2|20|22".to_owned()),
+        &Value::from("2|20|22"),
     )?;
     ensure_after_jobs(
         r#"

@@ -301,7 +301,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(REFLECT_PROTOTYPE_NOT_OBJECT_ERROR)),
         }
     }

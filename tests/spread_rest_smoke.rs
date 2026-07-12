@@ -16,7 +16,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 }
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
-    ensure_value(&eval(source)?, &Value::String(expected.to_owned()))
+    ensure_value(&eval(source)?, &Value::from(expected))
 }
 
 fn ensure_error_contains(source: &str, expected: &str) -> TestResult {

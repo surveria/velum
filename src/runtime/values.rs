@@ -20,8 +20,10 @@ impl Context {
     }
 
     pub(crate) fn runtime_value(&mut self, value: Value) -> Result<Value> {
-        if let Value::String(text) = value {
-            return self.heap_string_value(&text);
+        if let Value::String(text) = &value
+            && !text.is_heap_owned()
+        {
+            return self.heap_js_string_value(text);
         }
         self.checked_value(value)
     }
@@ -38,9 +40,7 @@ impl Context {
             right,
             crate::runtime::abstract_operations::PreferredType::Default,
         )?;
-        if matches!(left, Value::String(_) | Value::HeapString(_))
-            || matches!(right, Value::String(_) | Value::HeapString(_))
-        {
+        if left.is_string() || right.is_string() {
             let value = self.concat_utf16_values(&left, &right)?;
             return self.heap_utf16_string_value(&value);
         }
@@ -70,24 +70,27 @@ impl Context {
             || requires_generic_add(right)
             || !has_exact_utf8(&left)
             || !has_exact_utf8(right)
-            || (!matches!(left, Value::String(_) | Value::HeapString(_))
-                && !matches!(right, Value::String(_) | Value::HeapString(_)))
+            || (!left.is_string() && !right.is_string())
         {
             return self.add(&left, right);
         }
 
         let mut text = match left {
-            Value::String(mut text) => {
+            Value::String(text) if text.is_well_formed() => {
+                let mut text = text
+                    .into_utf8_accumulator()
+                    .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
                 self.push_primitive_string(&mut text, right)?;
                 text
             }
             left => self.concat_values(&left, right)?,
         };
 
-        if !final_result {
-            self.reserve_string_concat_tail(&mut text)?;
+        if final_result {
+            return self.heap_string_value(&text);
         }
-        self.checked_value(Value::String(text))
+        self.reserve_string_concat_tail(&mut text)?;
+        Ok(Value::String(text.into()))
     }
 
     pub(crate) fn string_concat_static_step(
@@ -102,20 +105,24 @@ impl Context {
             left
         };
         if !has_exact_utf8(&left) {
-            return self.add(&left, &Value::String(right.to_owned()));
+            return self.add(&left, &Value::String(right.into()));
         }
         let mut text = match left {
-            Value::String(mut text) => {
+            Value::String(text) if text.is_well_formed() => {
+                let mut text = text
+                    .into_utf8_accumulator()
+                    .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
                 self.push_concat_text(&mut text, right)?;
                 text
             }
             left => self.concat_value_with_static(&left, right)?,
         };
 
-        if !final_result {
-            self.reserve_string_concat_tail(&mut text)?;
+        if final_result {
+            return self.heap_string_value(&text);
         }
-        self.checked_value(Value::String(text))
+        self.reserve_string_concat_tail(&mut text)?;
+        Ok(Value::String(text.into()))
     }
 
     fn reserve_string_concat_tail(&self, text: &mut String) -> Result<()> {
@@ -184,8 +191,7 @@ impl Context {
 
     fn concat_capacity_hint(value: &Value) -> usize {
         match value {
-            Value::String(value) => value.len(),
-            Value::HeapString(value) => value.as_str().len(),
+            Value::String(_) => value.string_text().map_or(0, str::len),
             Value::Undefined => "undefined".len(),
             Value::Null => "null".len(),
             Value::Bool(value) => {
@@ -234,13 +240,15 @@ impl Context {
 
     pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
         match &value {
-            Value::String(text) => self.check_string_len(text)?,
-            Value::HeapString(text) => {
+            Value::String(text) => {
                 self.check_utf16_string_len(text.as_utf16())?;
-                if text.identity() != self.identity() {
+                if text.identity() != Some(self.identity()) {
                     return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
                 }
-                self.strings.get(text.id())?;
+                let Some(id) = text.id() else {
+                    return Err(Error::runtime("string is not owned by a VM"));
+                };
+                self.strings.get(id)?;
             }
             Value::Symbol(symbol) => {
                 if let Some(description) = symbol.description() {
@@ -367,13 +375,12 @@ const fn requires_generic_add(value: &Value) -> bool {
 }
 
 fn has_exact_utf8(value: &Value) -> bool {
-    !matches!(value, Value::HeapString(text) if !text.is_well_formed())
+    !matches!(value, Value::String(text) if !text.is_well_formed())
 }
 
 fn primitive_utf16_units(value: &Value) -> Result<Cow<'_, [u16]>> {
-    match value {
-        Value::String(text) => Ok(Cow::Owned(text.encode_utf16().collect())),
-        Value::HeapString(text) => Ok(Cow::Borrowed(text.as_utf16())),
-        value => to_string_primitive(value).map(|text| Cow::Owned(text.encode_utf16().collect())),
+    if let Some(units) = value.string_units() {
+        return Ok(units);
     }
+    to_string_primitive(value).map(|text| Cow::Owned(text.encode_utf16().collect()))
 }

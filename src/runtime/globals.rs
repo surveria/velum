@@ -142,9 +142,9 @@ impl Context {
         Ok(string)
     }
 
-    pub(crate) fn intern_owned_heap_string(&mut self, text: String) -> Result<JsString> {
-        self.check_string_len(&text)?;
-        let reservation = if self.strings.contains(&text) {
+    pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
+        self.check_utf16_string_len(string.as_utf16())?;
+        let reservation = if self.strings.contains_utf16(string.as_utf16()) {
             None
         } else {
             Some(
@@ -152,7 +152,7 @@ impl Context {
                     .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
             )
         };
-        let string = self.strings.intern_owned(text)?;
+        let string = self.strings.intern_js_string(string)?;
         if let Some(reservation) = reservation {
             reservation.commit()?;
         }
@@ -177,15 +177,15 @@ impl Context {
     }
 
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
-        self.intern_heap_string(text).map(Value::HeapString)
+        self.intern_heap_string(text).map(Value::String)
     }
 
-    pub(crate) fn heap_string_owned_value(&mut self, text: String) -> Result<Value> {
-        self.intern_owned_heap_string(text).map(Value::HeapString)
+    pub(crate) fn heap_js_string_value(&mut self, string: &JsString) -> Result<Value> {
+        self.intern_js_string(string).map(Value::String)
     }
 
     pub(crate) fn heap_utf16_string_value(&mut self, units: &[u16]) -> Result<Value> {
-        self.intern_utf16_heap_string(units).map(Value::HeapString)
+        self.intern_utf16_heap_string(units).map(Value::String)
     }
 
     pub(crate) fn create_symbol_value(&mut self, description: Option<&str>) -> Result<Value> {

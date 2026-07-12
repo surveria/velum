@@ -84,7 +84,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(write))
@@ -212,7 +211,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(deletion))

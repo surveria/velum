@@ -70,7 +70,7 @@ fn function_constructor_does_not_capture_caller_locals() -> TestResult {
         "#,
     )?;
 
-    ensure_value(&value, &Value::String("undefined".to_owned()))
+    ensure_value(&value, &Value::from("undefined"))
 }
 
 #[test]
@@ -87,10 +87,7 @@ fn function_constructor_name_is_metadata_not_a_lexical_binding() -> TestResult {
         "#,
     )?;
 
-    ensure_value(
-        &value,
-        &Value::String("anonymous:undefined:undefined".to_owned()),
-    )
+    ensure_value(&value, &Value::from("anonymous:undefined:undefined"))
 }
 
 #[test]

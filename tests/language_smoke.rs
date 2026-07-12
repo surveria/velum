@@ -45,7 +45,7 @@ fn supports_strings_and_host_print() -> TestResult {
 
     let value = context.eval(r#"let name = "camera"; print("hello", name); "id-" + 7"#)?;
 
-    ensure_value(&value, &Value::String("id-7".to_owned()))?;
+    ensure_value(&value, &Value::from("id-7"))?;
     ensure_output(context.output(), &["hello camera".to_owned()])?;
     Ok(())
 }
@@ -91,7 +91,7 @@ fn supports_basic_var_hoisting() -> TestResult {
 #[test]
 fn short_circuits_logical_operators() -> TestResult {
     expect_value("false && missing", &Value::Bool(false))?;
-    expect_value(r#""ok" || missing"#, &Value::String("ok".to_owned()))
+    expect_value(r#""ok" || missing"#, &Value::from("ok"))
 }
 
 #[test]
@@ -422,7 +422,7 @@ fn supports_computed_properties() -> TestResult {
         object[key()] = payload();
         order + ":" + object.value
         "#,
-        &Value::String("kv:42".to_owned()),
+        &Value::from("kv:42"),
     )?;
 
     expect_value(
@@ -433,7 +433,7 @@ fn supports_computed_properties() -> TestResult {
             error["name"] + ":" + error["message"]
         }
         "#,
-        &Value::String("ReferenceError:'missing' is not defined".to_owned()),
+        &Value::from("ReferenceError:'missing' is not defined"),
     )?;
 
     let Err(error) = eval("let value = 1; value['name'] = 2;") else {
@@ -522,11 +522,11 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
     ensure_optional_value(context.get_global("first").as_ref(), &Value::Undefined)?;
     ensure_optional_value(
         context.get_global("caught_name").as_ref(),
-        &Value::String("ReferenceError".to_owned()),
+        &Value::from("ReferenceError"),
     )?;
     ensure_optional_value(
         context.get_global("caught_message").as_ref(),
-        &Value::String("'missing' is not defined".to_owned()),
+        &Value::from("'missing' is not defined"),
     )?;
     ensure_output(
         context.output(),
@@ -563,7 +563,7 @@ fn supports_error_object_properties() -> TestResult {
             error.name + ":" + error.message
         }
         "#,
-        &Value::String("ReferenceError:'missing' is not defined".to_owned()),
+        &Value::from("ReferenceError:'missing' is not defined"),
     )?;
 
     expect_value(
@@ -574,7 +574,7 @@ fn supports_error_object_properties() -> TestResult {
             error.name + ":" + error.message
         }
         "#,
-        &Value::String("Test262Error:bad value".to_owned()),
+        &Value::from("Test262Error:bad value"),
     )
 }
 
@@ -666,10 +666,7 @@ fn catches_thrown_values() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(
-        context.get_global("marker").as_ref(),
-        &Value::String("outer".to_owned()),
-    )?;
+    ensure_optional_value(context.get_global("marker").as_ref(), &Value::from("outer"))?;
     ensure_output(context.output(), &["boom".to_owned()])?;
 
     let Err(error) = eval(

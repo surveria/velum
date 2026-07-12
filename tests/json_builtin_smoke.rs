@@ -232,7 +232,7 @@ fn ensure_string(source: &str, expected: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(source)?;
-    ensure_value(&value, &Value::String(expected.to_owned()))
+    ensure_value(&value, &Value::from(expected))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

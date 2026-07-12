@@ -95,7 +95,7 @@ fn ensure_string(source: &str, expected: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(source)?;
-    if value == Value::String(expected.to_owned()) {
+    if value == Value::from(expected) {
         return Ok(());
     }
     Err(format!("expected {expected:?}, got {value:?}").into())

@@ -284,7 +284,7 @@ impl ObjectHeap {
         object.define(
             constructor_key,
             OBJECT_CONSTRUCTOR_PROPERTY,
-            Value::String("Object".to_owned()),
+            Value::Undefined,
             PropertyEnumerable::No,
             &mut self.shapes,
             max_properties,

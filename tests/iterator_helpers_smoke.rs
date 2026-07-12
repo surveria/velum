@@ -16,7 +16,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 }
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
-    ensure_value(&eval(source)?, &Value::String(expected.to_owned()))
+    ensure_value(&eval(source)?, &Value::from(expected))
 }
 
 #[test]
@@ -171,6 +171,21 @@ fn iterator_from_wraps_plain_iterators_and_strings() -> TestResult {
 }
 
 #[test]
+fn iterator_from_string_fallback_preserves_exact_utf16_code_points() -> TestResult {
+    ensure_string(
+        r#"
+        delete String.prototype[Symbol.iterator];
+        const lone = String.fromCharCode(0xD800);
+        const pair = String.fromCodePoint(0x1F4F7);
+        const values = Iterator.from(lone + pair).toArray();
+        values.length + ":" + values[0].length + ":" + values[0].charCodeAt(0)
+            + ":" + values[1].length + ":" + values[1].codePointAt(0)
+        "#,
+        "2:1:55296:2:128247",
+    )
+}
+
+#[test]
 fn helper_methods_validate_receiver_and_callback() -> TestResult {
     ensure_string(
         r#"
@@ -238,7 +253,7 @@ fn iterator_results_survive_garbage_collection() -> TestResult {
     context.collect_garbage()?;
     let value =
         context.eval("first + \":\" + helper.next().value + \":\" + helper.next().value")?;
-    ensure_value(&value, &Value::String("2:4:6".to_owned()))
+    ensure_value(&value, &Value::from("2:4:6"))
 }
 
 #[test]

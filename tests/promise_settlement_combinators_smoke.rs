@@ -25,7 +25,7 @@ fn settlement_combinators_preserve_standard_results() -> TestResult {
     )?;
     ensure_value(
         &context.eval("settled + '|' + any + '|' + race")?,
-        &Value::String("fulfilled:1,rejected:2|right|first".to_owned()),
+        &Value::from("fulfilled:1,rejected:2|right|first"),
     )
 }
 
@@ -52,7 +52,7 @@ fn settlement_combinators_handle_empty_inputs() -> TestResult {
     )?;
     ensure_value(
         &context.eval("settled + '|' + any + '|' + race")?,
-        &Value::String("empty|aggregate|pending".to_owned()),
+        &Value::from("empty|aggregate|pending"),
     )
 }
 
@@ -75,10 +75,7 @@ fn promise_any_uses_generic_resolve_and_rejects_when_capability_resolve_throws()
         });
         "#,
     )?;
-    ensure_value(
-        &context.eval("observed")?,
-        &Value::String("marker".to_owned()),
-    )
+    ensure_value(&context.eval("observed")?, &Value::from("marker"))
 }
 
 #[test]

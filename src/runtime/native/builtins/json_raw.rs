@@ -92,11 +92,10 @@ impl Context {
     }
 
     fn raw_json_stored_text(value: &Value) -> Result<String> {
-        match value {
-            Value::String(value) => Ok(value.clone()),
-            Value::HeapString(value) => Ok(value.as_str().to_owned()),
-            _ => Err(Error::runtime("RawJSON text property is not a string")),
-        }
+        value
+            .string_text()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::runtime("RawJSON text property is not a string"))
     }
 
     fn validate_raw_json_text(text: &str) -> Result<()> {

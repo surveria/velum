@@ -118,8 +118,7 @@ impl Context {
         Ok(keys
             .into_iter()
             .filter_map(|key| match key {
-                Value::String(name) => Some(name),
-                Value::HeapString(name) => Some(name.as_str().to_owned()),
+                Value::String(name) => Some(name.into_string()),
                 _ => None,
             })
             .collect())
@@ -148,7 +147,7 @@ impl Context {
     ) -> Result<Vec<Value>> {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return match target {
-                Value::String(_) | Value::HeapString(_) => self
+                Value::String(_) => self
                     .enumerable_keys(target)?
                     .into_iter()
                     .map(|name| self.heap_string_value(&name))
@@ -186,7 +185,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Ok(Vec::new()),
         }
     }

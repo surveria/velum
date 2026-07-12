@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use crate::storage::{string_heap::JsString, symbol::JsSymbol};
 
@@ -11,8 +11,7 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     BigInt(JsBigInt),
-    String(String),
-    HeapString(JsString),
+    String(JsString),
     Symbol(JsSymbol),
     Function(FunctionId),
     NativeFunction(NativeFunctionId),
@@ -29,7 +28,7 @@ impl Value {
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::BigInt(_) => "bigint",
-            Self::String(_) | Self::HeapString(_) => "string",
+            Self::String(_) => "string",
             Self::Symbol(_) => "symbol",
             Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => "function",
         }
@@ -41,6 +40,42 @@ impl Value {
             _ => None,
         }
     }
+
+    pub(crate) const fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+
+    pub(crate) fn string_text(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn string_units(&self) -> Option<Cow<'_, [u16]>> {
+        match self {
+            Self::String(value) => Some(Cow::Borrowed(value.as_utf16())),
+            _ => None,
+        }
+    }
+}
+
+impl From<JsString> for Value {
+    fn from(value: JsString) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::String(value.into())
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Self::String(value.into())
+    }
 }
 
 impl PartialEq for Value {
@@ -51,13 +86,6 @@ impl PartialEq for Value {
             (Self::Number(left), Self::Number(right)) => left == right,
             (Self::BigInt(left), Self::BigInt(right)) => left == right,
             (Self::String(left), Self::String(right)) => left == right,
-            (Self::HeapString(left), Self::HeapString(right)) => left == right,
-            (Self::String(left), Self::HeapString(right)) => {
-                left.encode_utf16().eq(right.as_utf16().iter().copied())
-            }
-            (Self::HeapString(left), Self::String(right)) => {
-                right.encode_utf16().eq(left.as_utf16().iter().copied())
-            }
             (Self::Symbol(left), Self::Symbol(right)) => left == right,
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::NativeFunction(left), Self::NativeFunction(right)) => left == right,
@@ -70,7 +98,6 @@ impl PartialEq for Value {
                 | Self::Number(_)
                 | Self::BigInt(_)
                 | Self::String(_)
-                | Self::HeapString(_)
                 | Self::Symbol(_)
                 | Self::Function(_)
                 | Self::NativeFunction(_)
@@ -90,8 +117,7 @@ impl fmt::Display for Value {
             Self::Bool(value) => write!(f, "{value}"),
             Self::Number(value) => f.write_str(&format_ecmascript_number(*value)),
             Self::BigInt(value) => value.fmt(f),
-            Self::String(value) => f.write_str(value),
-            Self::HeapString(value) => f.write_str(value.as_str()),
+            Self::String(value) => f.write_str(value.as_str()),
             Self::Symbol(value) => f.write_str(&value.display_name()),
             Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => {
                 f.write_str("function()")

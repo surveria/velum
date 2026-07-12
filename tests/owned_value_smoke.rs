@@ -85,7 +85,7 @@ fn owned_values_convert_back_to_plain_runtime_primitives() -> TestResult {
         ),
         (
             OwnedValue::String("camera".to_owned()),
-            Value::String("camera".to_owned()),
+            Value::from("camera"),
         ),
     ] {
         let actual = Value::from(owned);

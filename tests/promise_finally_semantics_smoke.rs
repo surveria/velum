@@ -24,7 +24,7 @@ fn promise_finally_preserves_fulfillment_and_rejection() -> TestResult {
         "#,
     )?;
     let actual = context.eval("fulfilled + '|' + rejected + '|' + overridden")?;
-    ensure_value(&actual, &Value::String("value|reason|override".to_owned()))
+    ensure_value(&actual, &Value::from("value|reason|override"))
 }
 
 #[test]

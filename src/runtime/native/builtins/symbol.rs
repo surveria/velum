@@ -117,7 +117,7 @@ impl Context {
         let Some(key) = self.symbols.key_for(symbol.id())? else {
             return Ok(Value::Undefined);
         };
-        Ok(Value::HeapString(key))
+        Ok(Value::String(key))
     }
 
     pub(in crate::runtime::native) fn create_symbol_object_from_value(
@@ -433,7 +433,7 @@ impl Context {
             Some(value) => self.to_string(value)?,
             None => self.to_string(&Value::Undefined)?,
         };
-        self.intern_owned_heap_string(text)
+        self.intern_heap_string(&text)
     }
 
     fn symbol_receiver_value(&self, value: &Value) -> Result<crate::storage::symbol::JsSymbol> {

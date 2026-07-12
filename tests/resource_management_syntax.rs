@@ -6,7 +6,7 @@ fn ensure_string(source: &str, expected: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let actual = context.eval(source)?;
-    if actual == Value::String(expected.to_owned()) {
+    if actual == Value::from(expected) {
         return Ok(());
     }
     Err(format!("expected string {expected:?}, got {actual:?}").into())
@@ -17,7 +17,7 @@ fn ensure_string_after_jobs(source: &str, expected: &str) -> TestResult {
     let mut context = runtime.context();
     context.eval(source)?;
     let actual = context.eval("result")?;
-    if actual == Value::String(expected.to_owned()) {
+    if actual == Value::from(expected) {
         return Ok(());
     }
     Err(format!("expected string {expected:?}, got {actual:?}").into())

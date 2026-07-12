@@ -157,7 +157,7 @@ fn honors_concat_spreadability_and_sparse_array_like_values() -> TestResult {
     )?;
     ensure_value(
         &value,
-        &Value::String("7:zero:false:one:false:three:true:tail".to_owned()),
+        &Value::from("7:zero:false:one:false:three:true:tail"),
     )
 }
 
@@ -196,7 +196,11 @@ fn uses_array_species_before_spreadability_lookup() -> TestResult {
     )?;
     ensure_value(
         &value,
-        &Value::String("custom:1:value:constructor,species:0,spreadable".to_owned()),
+        &Value::String(
+            "custom:1:value:constructor,species:0,spreadable"
+                .to_owned()
+                .into(),
+        ),
     )
 }
 
@@ -227,7 +231,7 @@ fn propagates_spreadable_and_length_getter_errors() -> TestResult {
             + ":" + kind(function () { [].concat(lengthError); })
         "#,
     )?;
-    ensure_value(&value, &Value::String("RangeError:SyntaxError".to_owned()))
+    ensure_value(&value, &Value::from("RangeError:SyntaxError"))
 }
 
 #[test]

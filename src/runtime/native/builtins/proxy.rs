@@ -602,7 +602,7 @@ impl Context {
             self.step()?;
             let element = self.get_named(value, &index.to_string())?;
             let key = match element {
-                Value::String(_) | Value::HeapString(_) | Value::Symbol(_) => element,
+                Value::String(_) | Value::Symbol(_) => element,
                 _ => {
                     return Err(Error::type_error(
                         "proxy ownKeys trap keys must be strings or symbols",

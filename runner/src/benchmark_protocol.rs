@@ -191,8 +191,7 @@ impl BenchmarkChecksum {
             Value::Null => Ok(Self::Null),
             Value::Bool(value) => Ok(Self::boolean(value)),
             Value::Number(value) => Ok(Self::number(value)),
-            Value::String(value) => Ok(Self::string(value)),
-            Value::HeapString(value) => Ok(Self::string(value.to_string())),
+            Value::String(value) => Ok(Self::string(value.to_string())),
             unsupported => bail!(
                 "benchmark checksum must be a primitive value, got {}",
                 unsupported.type_name()

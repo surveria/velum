@@ -177,7 +177,6 @@ fn ensure_string_contains(value: &Value, expected: &str) -> TestResult {
 fn string_value(value: &Value) -> std::result::Result<&str, Box<dyn std::error::Error>> {
     match value {
         Value::String(actual) => Ok(actual.as_str()),
-        Value::HeapString(actual) => Ok(actual.as_str()),
         _ => Err(format!("expected string value, got {value:?}").into()),
     }
 }

@@ -66,7 +66,7 @@ check_value_representation() {
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected='Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(String),HeapString(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
+  expected='Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
   if [[ "${actual}" != "${expected}" ]]; then
     fail "Value representation changed; AS-02 owns object-like representation changes"
   fi
@@ -1843,9 +1843,9 @@ storage_ledger'
     grep -F '    identity: VmIdentity,' "${repo_root}/src/storage/symbol.rs" || true
   } | wc -l | tr -d '[:space:]')"
   if [[ "${primitive_owner_fields}" != "4" ]]; then
-    fail "VM primitive owner boundary changed; JsString, StringHeap, JsSymbol, and SymbolTable require identity"
+    fail "VM primitive owner boundary changed; heap-admitted JsString, StringHeap, JsSymbol, and SymbolTable require identity"
   fi
-  if ! grep -F -q 'if text.identity() != self.identity()' \
+  if ! grep -F -q 'if text.identity() != Some(self.identity())' \
       "${repo_root}/src/runtime/values.rs" \
     || ! grep -F -q 'if symbol.identity() != self.identity()' \
       "${repo_root}/src/runtime/values.rs"; then

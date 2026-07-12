@@ -5,7 +5,6 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 fn ensure_string_value(actual: &Value, expected: &str) -> TestResult {
     let actual = match actual {
         Value::String(value) => value.as_str(),
-        Value::HeapString(value) => value.as_str(),
         other => return Err(format!("expected string {expected:?}, got {other:?}").into()),
     };
     if actual == expected {

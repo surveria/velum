@@ -45,7 +45,7 @@ operations.
 
 ## Value And Object Identity Map
 
-`Value` currently has twelve variants. Four variants are object-like in
+`Value` currently has eleven variants. Four variants are object-like in
 JavaScript terms and carry four unrelated numeric ids. Built-in Error instances
 now use the ordinary `Object(ObjectId)` representation.
 
@@ -62,11 +62,13 @@ mutation, key, extensibility, equality, and identity behavior uses the same
 ordinary object paths as other `ObjectId` values.
 
 Primitive variants are `Undefined`, `Null`, `Bool`, `Number`, `BigInt`,
-`String`, `HeapString`, and `Symbol`. `BigInt` is an immutable, ownerless,
+`String`, and `Symbol`. `BigInt` is an immutable, ownerless,
 arbitrary-precision mathematical value whose shared payload has no JavaScript
-identity. `HeapString` owns exact UTF-16 code units plus a cached UTF-8 or
-diagnostic rendering; `HeapString` and `Symbol` contain VM-owned ids or VM-owned
-shared data even though public `Value` does not encode a VM identity.
+identity. `String(JsString)` owns exact UTF-16 code units plus a cached UTF-8 or
+diagnostic rendering. Portable strings use the same payload without owner
+metadata until runtime admission; retained strings and Symbols carry VM-owned
+ids or VM-owned shared data even though public `Value` does not encode a VM
+identity directly.
 
 All current ids are slot indexes without a VM id or generation. A stale id or a
 value moved between VMs cannot be rejected from the id alone. This is the main
@@ -451,7 +453,7 @@ one marker and a safe non-moving sweep over sparse indexed arenas.
 
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
-| interned names and text | permanent `atoms`, sparse `strings` and `symbols`, well-known caches | registered Symbols and their keys are direct roots; live Symbol descriptions trace heap strings | logical Atom/HeapString/Symbol, cache, and association counts plus existing string bytes; AS-07 reclaims unmarked strings/Symbols |
+| interned names and text | permanent `atoms`, sparse `strings` and `symbols`, well-known caches | registered Symbols and their keys are direct roots; live Symbol descriptions trace heap strings | logical Atom/HeapString/Symbol, cache, and association counts plus exact UTF-16 bytes and reserved lazy-rendering bytes; AS-07 reclaims unmarked strings/Symbols |
 | bindings and closures | globals, builtin globals, activation-owned upvalue frames, captured `with` object-environment chains, `BindingCell(Rc<Mutex<Binding>>)` | binding values, captured cells, and object environment values | logical Binding, ExecutionFrame, and binding-index CacheEntry counts |
 | executable functions | sparse function, native-function, bound-function, and host-function arenas plus the native registry | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | logical JavaScriptFunction/NativeFunction/BoundFunction/HostCallback counts plus callable property, metadata-cache, binding, and source-record counts; AS-07 sweeps unmarked arena records |
 | objects | sparse `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; AS-07 recomputes live payload counters after sweep |
@@ -512,15 +514,19 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   explicit `VmGeneration`. Independent owners cannot alias and no mutable
   process-global JavaScript state or wrapping numeric allocator is required;
 - `StringHeap` and `SymbolTable` clone that owner capability into every
-  `JsString` and `JsSymbol`. `checked_value` rejects a foreign identity before
-  validating the numeric slot, and Symbol equality includes owner identity;
+  heap-admitted `JsString` and every `JsSymbol`. Portable `JsString` values
+  carry the same exact UTF-16/Rc payload without an owner until the central
+  runtime admission boundary interns them. `checked_value` rejects a foreign
+  identity before validating the numeric slot, and Symbol equality includes
+  owner identity;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
 - `HostCall` exposes callback-borrowed `LocalValue` arguments containing the
   active owner identity and the raw Value. Arbitrary host JavaScript throws
   are created from this local capability rather than an unowned Value;
 - host return validation rejects Function, NativeFunction, HostFunction, and
-  Object. Same-VM `HeapString` and `Symbol` values remain permitted, while
-  foreign owners are rejected with callback context;
+  Object. Same-VM `String(JsString)` and `Symbol` values remain permitted,
+  portable strings are admitted centrally, and foreign owners are rejected
+  with callback context;
 - every public evaluation `Error::JavaScript` carries its Context identity,
   and host throws retain the `LocalValue` identity. Throw conversion rejects a
   foreign owner before JavaScript can catch or inspect a colliding raw id;
@@ -758,7 +764,7 @@ must fail on growth.
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | one direct optimizer-state owner, eight recorded linear modules, three function fast-path files, and four reusable control modules; zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler/runtime source-shape recognizer without reusable plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
-| VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
+| VM primitive owner boundary | one identity on each StringHeap, SymbolTable, and JsSymbol plus owner metadata on every heap-admitted JsString and central admission/checked-value validation | removing an admitted primitive owner stamp/check, retaining a detached string, or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/BigInt/String and copies local heap text; BigInt is an immutable ownerless mathematical payload | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |

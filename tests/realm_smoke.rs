@@ -42,10 +42,10 @@ fn realm_switch_restores_the_caller_after_abrupt_completion() -> TestResult {
         "globalThis.marker = 'other'; throw new Error('stop')",
     );
     assert!(result.is_err());
-    assert_eq!(context.eval("marker")?, Value::String("root".to_owned()));
+    assert_eq!(context.eval("marker")?, Value::from("root"));
     assert_eq!(
         context.eval_in_realm(&other, "marker")?,
-        Value::String("other".to_owned())
+        Value::from("other")
     );
     Ok(())
 }

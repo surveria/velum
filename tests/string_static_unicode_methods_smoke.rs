@@ -129,7 +129,7 @@ fn preserves_lone_utf16_surrogates_in_strings_and_regexp_tests() -> TestResult {
 
     ensure_value(&value, &Value::Number(42.0))?;
     let surrogate = context.eval("String.fromCodePoint(0xD800)")?;
-    let Value::HeapString(text) = &surrogate else {
+    let Value::String(text) = &surrogate else {
         return Err(format!("expected heap string, got {surrogate:?}").into());
     };
     if text.as_utf16() != [0xD800] || text.as_utf8().is_some() {

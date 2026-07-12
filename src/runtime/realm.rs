@@ -295,7 +295,6 @@ impl Context {
                 | Value::Number(_)
                 | Value::BigInt(_)
                 | Value::String(_)
-                | Value::HeapString(_)
                 | Value::Symbol(_) => {
                     return Err(Error::type_error("new.target is not a constructor"));
                 }

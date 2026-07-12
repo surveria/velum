@@ -49,7 +49,7 @@ camera.name;
 ",
     )?;
 
-    ensure_value(&value, &Value::String("Camera".to_owned()))
+    ensure_value(&value, &Value::from("Camera"))
 }
 
 #[test]
