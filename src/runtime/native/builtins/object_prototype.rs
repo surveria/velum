@@ -118,7 +118,7 @@ impl Context {
             ));
         }
         let result = self.create_object_from_constructor()?;
-        let mut source = self.get_iterator(iterable)?;
+        let mut source = self.get_iterator(&iterable)?;
         loop {
             self.step()?;
             match self.iterator_step(&mut source)? {

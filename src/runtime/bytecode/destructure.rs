@@ -206,7 +206,7 @@ impl Context {
                 });
             }
             BytecodePattern::Array { elements, rest } => {
-                let source = self.get_iterator(value)?;
+                let source = self.get_iterator(&value)?;
                 continuation.tasks.push(DestructureTask::Array {
                     elements,
                     rest,

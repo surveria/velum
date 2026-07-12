@@ -74,7 +74,7 @@ impl Context {
                 expanded.push(value);
                 continue;
             }
-            let mut source = self.get_iterator(value)?;
+            let mut source = self.get_iterator(&value)?;
             loop {
                 self.step()?;
                 match self.iterator_step(&mut source)? {
@@ -116,7 +116,7 @@ impl Context {
                 expanded.push(Some(value));
                 continue;
             }
-            let mut source = self.get_iterator(value)?;
+            let mut source = self.get_iterator(&value)?;
             loop {
                 self.step()?;
                 match self.iterator_step(&mut source)? {
