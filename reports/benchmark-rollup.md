@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T003903Z.md`
-- Task: PR #480: AS-09s: complete Array.from semantics
-- Performance: 8.71x (4/5 >1.00x) (from `rsqjs-test-report-20260712T003903Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T003903Z.md`)
+- `rsqjs-test-report-20260712T004702Z.md`
+- Task: PR #479: parser: expand arrow function grammar
+- Performance: 13.40x (4/5 >1.00x) (from `rsqjs-test-report-20260712T004702Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T004702Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 66928 passed / 35650 failed (65.25%) (from `rsqjs-test-report-20260712T003903Z.md`)
+- Full Test262: 67196 passed / 35382 failed (65.51%) (from `rsqjs-test-report-20260712T004702Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -465,3 +465,4 @@ Latest report:
 | `20260712T000814Z` `91ece91` PR #477: parser: add class async and generator methods | 9.13x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66673 passed / 35905 failed (65.00%) |
 | `20260712T001208Z` `041a48d` PR #478: AS-09r: complete Promise.all semantics | 8.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66815 passed / 35763 failed (65.14%) |
 | `20260712T003903Z` `c8c9d36` PR #480: AS-09s: complete Array.from semantics | 8.71x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66928 passed / 35650 failed (65.25%) |
+| `20260712T004702Z` `4a75445` PR #479: parser: expand arrow function grammar | 13.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67196 passed / 35382 failed (65.51%) |
