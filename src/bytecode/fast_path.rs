@@ -1,9 +1,6 @@
 use crate::{syntax::StaticString, value::Value};
 
-use super::{
-    BytecodeBlock,
-    types::{BytecodeCompletion, BytecodeInstruction},
-};
+use super::{BytecodeBlock, BytecodeCompletion, types::BytecodeInstruction};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeDirectThrow {

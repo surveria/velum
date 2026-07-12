@@ -10,7 +10,7 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::for_init_needs_lexical_scope;
+use super::{RootLayoutMode, for_init_needs_lexical_scope};
 
 mod annex_b;
 mod function;
@@ -26,12 +26,6 @@ pub(super) struct LayoutBuilder {
     local_slot_count: usize,
     pub(super) upvalue_slot_count: usize,
     with_scopes: Vec<ScopeId>,
-}
-
-pub(super) enum RootLayoutMode {
-    Script,
-    SloppyEval,
-    StrictEval,
 }
 
 impl LayoutBuilder {

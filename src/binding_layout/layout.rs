@@ -1,6 +1,6 @@
 use crate::{ast::Program, binding_metadata::BindingLayout, error::Result};
 
-use super::{LayoutBuilder, builder::RootLayoutMode};
+use super::{LayoutBuilder, RootLayoutMode};
 
 impl BindingLayout {
     pub fn build(

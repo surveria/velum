@@ -5,3 +5,9 @@ mod upvalues;
 
 use builder::LayoutBuilder;
 pub use scope_rules::for_init_needs_lexical_scope;
+
+pub(super) enum RootLayoutMode {
+    Script,
+    SloppyEval,
+    StrictEval,
+}
