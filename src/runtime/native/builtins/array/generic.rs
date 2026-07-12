@@ -351,7 +351,13 @@ impl Context {
     }
 
     pub(super) fn ensure_array_like_object(object: &Value) -> Result<()> {
-        if matches!(object, Value::Object(_)) {
+        if matches!(
+            object,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
             return Ok(());
         }
         Err(Error::runtime(ARRAY_LIKE_RECEIVER_ERROR))
