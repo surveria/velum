@@ -608,7 +608,9 @@ impl Parser {
             return Err(self.parse_error("line terminator is not allowed after 'throw'"));
         }
         let value = self.expression()?;
-        self.consume_statement_terminator("expected statement terminator after throw expression")?;
+        self.consume_restricted_statement_terminator(
+            "expected statement terminator after throw expression",
+        )?;
         Ok(Stmt::Throw(value))
     }
 
@@ -625,8 +627,20 @@ impl Parser {
         } else {
             Some(self.expression()?)
         };
-        self.consume_statement_terminator("expected statement terminator after return statement")?;
+        self.consume_restricted_statement_terminator(
+            "expected statement terminator after return statement",
+        )?;
         Ok(Stmt::Return(value))
+    }
+
+    fn consume_restricted_statement_terminator(&mut self, message: &str) -> Result<()> {
+        // Tagged templates are a documented deferred grammar. The expression
+        // parser leaves their TemplateHead suffix at the cursor, so it must not
+        // be misclassified as a separate statement missing a terminator.
+        if matches!(self.peek_kind(0), Some(TokenKind::TemplateHead(_))) {
+            return Ok(());
+        }
+        self.consume_statement_terminator(message)
     }
 
     pub(super) fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
