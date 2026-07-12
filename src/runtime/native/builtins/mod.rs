@@ -8,6 +8,7 @@ mod date;
 mod eval;
 mod function_constructor;
 mod global;
+mod group_by;
 mod iterator;
 mod iterator_consumers;
 mod iterator_static;
