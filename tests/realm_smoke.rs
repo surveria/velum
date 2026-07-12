@@ -165,3 +165,51 @@ fn foreign_callable_allocates_typed_errors_in_its_origin_realm() -> TestResult {
     assert_eq!(result, Value::Bool(true));
     Ok(())
 }
+
+#[test]
+fn array_species_ignores_a_foreign_realms_intrinsic_array_constructor() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let result = context.eval(
+        r#"
+        var other = __createRealm();
+        var array = [];
+        var callCount = 0;
+        var OArray = other.Array;
+        var speciesDesc = { get: function () { callCount += 1; } };
+        array.constructor = OArray;
+        Object.defineProperty(OArray, Symbol.species, speciesDesc);
+        var result = array.map(function () {});
+        Object.getPrototypeOf(result) === Array.prototype &&
+            other.Array.prototype !== Array.prototype &&
+            other.Object.prototype !== Object.prototype &&
+            callCount === 0;
+        "#,
+    )?;
+    assert_eq!(result, Value::Bool(true));
+    Ok(())
+}
+
+#[test]
+fn throw_type_error_is_shared_within_and_distinct_between_realms() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let result = context.eval(
+        r#"
+        function thrower(global) {
+            return global.Object.getOwnPropertyDescriptor(
+                new global.Function('"use strict"; return arguments;')(),
+                "callee"
+            ).get;
+        }
+        var other = __createRealm();
+        var local = thrower(globalThis);
+        var foreign = thrower(other);
+        local === thrower(globalThis) && foreign === thrower(other) && local !== foreign;
+        "#,
+    )?;
+    assert_eq!(result, Value::Bool(true));
+    Ok(())
+}

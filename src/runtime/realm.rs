@@ -48,7 +48,10 @@ pub(in crate::runtime) struct RealmState {
     pub(super) globals: BindingScope,
     pub(super) builtin_globals: BindingScope,
     pub(super) native_function_registry: NativeFunctionRegistry,
+    pub(super) throw_type_error: Option<NativeFunctionId>,
     pub(super) global_object: Option<ObjectId>,
+    pub(super) object_prototype: Option<ObjectId>,
+    pub(super) array_prototype: Option<ObjectId>,
     pub(super) generator_prototype: Option<ObjectId>,
     pub(super) generator_function_prototype: Option<ObjectId>,
     pub(super) async_iterator_prototype: Option<ObjectId>,
@@ -63,7 +66,10 @@ impl RealmState {
             globals: BindingScope::new_active(storage_ledger.clone()),
             builtin_globals: BindingScope::new_active(storage_ledger),
             native_function_registry: NativeFunctionRegistry::new(),
+            throw_type_error: None,
             global_object: None,
+            object_prototype: None,
+            array_prototype: None,
             generator_prototype: None,
             generator_function_prototype: None,
             async_iterator_prototype: None,
@@ -91,6 +97,8 @@ impl RealmState {
     pub(super) fn association_count(&self) -> usize {
         [
             self.global_object,
+            self.object_prototype,
+            self.array_prototype,
             self.promise_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
@@ -101,11 +109,14 @@ impl RealmState {
         .into_iter()
         .flatten()
         .count()
+        .saturating_add(usize::from(self.throw_type_error.is_some()))
     }
 
     pub(super) fn anchor_objects(&self) -> impl Iterator<Item = ObjectId> {
         [
             self.global_object,
+            self.object_prototype,
+            self.array_prototype,
             self.promise_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
@@ -118,7 +129,9 @@ impl RealmState {
     }
 
     pub(super) fn native_function_ids(&self) -> impl Iterator<Item = NativeFunctionId> + '_ {
-        self.native_function_registry.ids()
+        self.native_function_registry
+            .ids()
+            .chain(self.throw_type_error)
     }
 }
 
@@ -312,6 +325,20 @@ impl Context {
         })
     }
 
+    pub(in crate::runtime) fn is_foreign_intrinsic_array_constructor(
+        &mut self,
+        constructor: &Value,
+    ) -> Result<bool> {
+        let realm = self.callable_realm_index(constructor)?;
+        if realm == self.active_realm {
+            return Ok(false);
+        }
+        self.with_realm(realm, |context| {
+            let intrinsic = context.array_constructor_value()?;
+            Ok(constructor == &intrinsic)
+        })
+    }
+
     pub(in crate::runtime) fn with_realm<T>(
         &mut self,
         target: RealmIndex,
@@ -355,22 +382,43 @@ impl Context {
     }
 
     fn swap_active_realm(&mut self, target: RealmIndex) -> Result<()> {
+        let previous = self.active_realm;
+        if !self
+            .inactive_realms
+            .get(previous.index())
+            .is_some_and(Option::is_none)
+        {
+            return Err(Error::runtime("active realm slot is occupied"));
+        }
         let target_state = self
             .inactive_realms
             .get_mut(target.index())
             .ok_or_else(|| Error::runtime("realm is not defined"))?
             .take()
             .ok_or_else(|| Error::runtime("realm is already active"))?;
+        std::mem::swap(
+            &mut self.realm.object_prototype,
+            &mut self.objects.object_prototype,
+        );
+        std::mem::swap(
+            &mut self.realm.array_prototype,
+            &mut self.objects.array_prototype,
+        );
         let previous_state = std::mem::replace(&mut self.realm, target_state);
         let previous_slot = self
             .inactive_realms
-            .get_mut(self.active_realm.index())
+            .get_mut(previous.index())
             .ok_or_else(|| Error::runtime("active realm slot is not defined"))?;
-        if previous_slot.is_some() {
-            return Err(Error::runtime("active realm slot is occupied"));
-        }
         *previous_slot = Some(previous_state);
         self.active_realm = target;
+        std::mem::swap(
+            &mut self.realm.object_prototype,
+            &mut self.objects.object_prototype,
+        );
+        std::mem::swap(
+            &mut self.realm.array_prototype,
+            &mut self.objects.array_prototype,
+        );
         Ok(())
     }
 }

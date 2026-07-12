@@ -46,8 +46,9 @@ pub struct ObjectHeap {
     pub(super) objects: SlotArena<super::Object>,
     pub(super) private_slots: Vec<Vec<crate::runtime::private::PrivateSlot>>,
     pub(super) shapes: ShapeTable,
-    pub(super) object_prototype: Option<ObjectId>,
-    pub(super) array_prototype: Option<ObjectId>,
+    /// Working slots for the active realm, parked in `RealmState` on a switch.
+    pub(in crate::runtime) object_prototype: Option<ObjectId>,
+    pub(in crate::runtime) array_prototype: Option<ObjectId>,
     pub(super) storage_limits: VmStorageLimits,
     pub(super) storage_ledger: VmStorageLedger,
     pub(super) object_payload_bytes: usize,
