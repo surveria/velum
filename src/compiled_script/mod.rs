@@ -7,7 +7,8 @@ use crate::{
     bytecode::BytecodeProgram,
     compiler,
     error::{Error, Result},
-    lexer, parser,
+    lexer,
+    parser::{self, ModuleSyntax},
     runtime::limits::RuntimeLimits,
     source::SourceId,
 };
@@ -25,6 +26,7 @@ pub struct CompiledScript {
 #[derive(Clone, Copy)]
 enum CompileMode {
     Script,
+    Module,
     Eval {
         strict: bool,
         super_context: EvalSuperContext,
@@ -56,13 +58,14 @@ impl CompileMode {
     const fn strict(self) -> bool {
         match self {
             Self::Script => false,
+            Self::Module => true,
             Self::Eval { strict, .. } => strict,
         }
     }
 
     const fn eval_super_context(self) -> Option<EvalSuperContext> {
         match self {
-            Self::Script => None,
+            Self::Script | Self::Module => None,
             Self::Eval { super_context, .. } => Some(super_context),
         }
     }
@@ -96,18 +99,45 @@ impl CompiledScript {
         )
     }
 
+    pub(crate) fn compile_module_named(
+        source_name: &str,
+        source: &str,
+        limits: RuntimeLimits,
+    ) -> Result<(Self, ModuleSyntax)> {
+        let (script, module) = Self::compile_with_name_and_mode_parts(
+            Some(source_name),
+            source,
+            limits,
+            CompileMode::Module,
+        )?;
+        let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
+        Ok((script, module))
+    }
+
     fn compile_with_name_and_mode(
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
         mode: CompileMode,
     ) -> Result<Self> {
+        Self::compile_with_name_and_mode_parts(source_name, source, limits, mode)
+            .map(|(script, _)| script)
+    }
+
+    fn compile_with_name_and_mode_parts(
+        source_name: Option<&str>,
+        source: &str,
+        limits: RuntimeLimits,
+        mode: CompileMode,
+    ) -> Result<(Self, Option<ModuleSyntax>)> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
         let tokens =
             lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
-        let parsed = if let Some(super_context) = mode.eval_super_context() {
+        let parsed = if matches!(mode, CompileMode::Module) {
+            parser::parse_module_with_usage(tokens, limits)
+        } else if let Some(super_context) = mode.eval_super_context() {
             let allow_super_property = matches!(
                 super_context,
                 EvalSuperContext::Property | EvalSuperContext::PropertyAndCall
@@ -126,6 +156,7 @@ impl CompiledScript {
             parser::parse_with_usage(tokens, limits)
         }
         .map_err(|error| error.with_source(source_id, source))?;
+        let module = parsed.module;
         let program = parsed.program;
         let binding_layout = if matches!(mode, CompileMode::Eval { .. }) {
             BindingLayout::build_eval(
@@ -150,7 +181,7 @@ impl CompiledScript {
         let bytecode_numeric_instruction_count = bytecode.numeric_instruction_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();
-        Ok(Self {
+        let script = Self {
             bytecode,
             usage: CompiledScriptUsage {
                 source_len: source.len(),
@@ -179,7 +210,8 @@ impl CompiledScript {
             source_id,
             source_name: source_name.map(str::to_owned),
             strict: parsed.strict,
-        })
+        };
+        Ok((script, module))
     }
 
     pub(crate) const fn binding_layout(&self) -> &BindingLayout {

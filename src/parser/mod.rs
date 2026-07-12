@@ -18,6 +18,7 @@ mod function;
 mod function_expression;
 mod literal;
 mod member;
+mod module;
 mod pattern;
 mod property_name;
 mod sequence;
@@ -30,6 +31,8 @@ use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
 use class_private::ClassPrivateScope;
 use static_tables::{StaticBindingTable, StaticFunctionTable, StaticNameTable, StaticStringTable};
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
+
+pub use module::{ModuleExportEntry, ModuleImportName, ModuleSyntax};
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
 const AWAIT_IDENTIFIER_NAME: &str = "await";
@@ -56,6 +59,10 @@ pub fn parse_with_usage_in_mode(
     Parser::new(tokens, limits, strict_mode).parse()
 }
 
+pub fn parse_module_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
+    Parser::new_module(tokens, limits).parse()
+}
+
 pub fn parse_eval_with_usage_in_context(
     tokens: Vec<Token>,
     limits: RuntimeLimits,
@@ -71,6 +78,7 @@ pub fn parse_eval_with_usage_in_context(
 
 pub struct ParsedProgram {
     pub program: Program,
+    pub module: Option<ModuleSyntax>,
     pub usage: ParseUsage,
     pub strict: bool,
 }
@@ -115,6 +123,13 @@ struct Parser {
     /// Unlike other contexts this stack must stay visible across nested
     /// function boundaries, so function entry never resets it.
     class_private_scopes: Vec<ClassPrivateScope>,
+    source_goal: SourceGoal,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum SourceGoal {
+    Script,
+    Module,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -157,11 +172,20 @@ impl Parser {
             yield_identifier_context: YieldIdentifierContext::Allowed,
             class_arguments: ClassArgumentsContext::Allowed,
             class_private_scopes: Vec::new(),
+            source_goal: SourceGoal::Script,
         }
+    }
+
+    const fn new_module(tokens: Vec<Token>, limits: RuntimeLimits) -> Self {
+        let mut parser = Self::new(tokens, limits, true);
+        parser.await_identifier_context = AwaitIdentifierContext::Reserved;
+        parser.source_goal = SourceGoal::Module;
+        parser
     }
 
     fn parse(mut self) -> Result<ParsedProgram> {
         let mut statements = Vec::new();
+        let mut module = self.is_module_goal().then(ModuleSyntax::default);
         let mut directive_prologue = true;
         while !self.at_end() {
             if self.match_kind(&TokenKind::Semicolon) {
@@ -173,9 +197,17 @@ impl Parser {
                     self.limits.max_statements
                 )));
             }
+            if let Some(module) = module.as_mut()
+                && self.parse_module_declaration(module, &mut statements)?
+            {
+                continue;
+            }
             let statement = self.statement()?;
             self.update_directive_prologue(&mut directive_prologue, &statement);
             statements.push(statement);
+        }
+        if let Some(module) = module.as_ref() {
+            Self::validate_module_syntax(module)?;
         }
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),
@@ -189,9 +221,14 @@ impl Parser {
         };
         Ok(ParsedProgram {
             program: Program { statements },
+            module,
             usage,
             strict: self.strict_mode,
         })
+    }
+
+    const fn is_module_goal(&self) -> bool {
+        matches!(self.source_goal, SourceGoal::Module)
     }
 
     pub(super) fn consume_identifier(&mut self, message: &str) -> Result<StaticName> {

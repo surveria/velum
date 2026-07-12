@@ -378,7 +378,10 @@ impl Parser {
         Ok(())
     }
 
-    fn collect_pattern_names(pattern: &BindingPattern, names: &mut Vec<String>) -> Result<()> {
+    pub(super) fn collect_pattern_names(
+        pattern: &BindingPattern,
+        names: &mut Vec<String>,
+    ) -> Result<()> {
         pattern.for_each_binding(&mut |binding| {
             names.push(binding.name().as_str().to_owned());
             Ok(())

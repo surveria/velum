@@ -606,7 +606,7 @@ impl Parser {
         Ok(Stmt::Return(value))
     }
 
-    fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
+    pub(super) fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
         let name_await_reserved = kind.is_async() || self.await_identifier_is_reserved();
         let name = self.with_await_identifier_reserved(name_await_reserved, |parser| {
             parser.consume_binding_identifier("expected function declaration name")
@@ -694,7 +694,7 @@ impl Parser {
         Statement::new(Stmt::Block(vec![statement]), span)
     }
 
-    fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
+    pub(super) fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
         let declarations = self.var_declarations(kind)?;
         self.consume_statement_terminator(
             "expected statement terminator after variable declaration",

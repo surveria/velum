@@ -1,5 +1,6 @@
 use crate::api::host::{HostCall, IntoJsValue};
 use crate::api::owned_value::OwnedValue;
+use crate::compiled_module::CompiledModule;
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
@@ -231,6 +232,15 @@ impl Vm {
     /// lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
         self.context.compile_named(source_name, source)
+    }
+
+    /// Compiles an ECMAScript module with a stable embedder-provided specifier.
+    ///
+    /// # Errors
+    /// Fails when module lexing, parsing, static validation, or configured
+    /// compile-time resource limits fail.
+    pub fn compile_module_named(&self, source_name: &str, source: &str) -> Result<CompiledModule> {
+        self.context.compile_module_named(source_name, source)
     }
 
     /// # Errors

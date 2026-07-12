@@ -1,7 +1,7 @@
-use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime::limits::RuntimeLimits;
+use crate::{compiled_module::CompiledModule, compiled_script::CompiledScript};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -56,6 +56,15 @@ impl Runtime {
     /// lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
         CompiledScript::compile_named(source_name, source, self.limits.clone())
+    }
+
+    /// Compiles an ECMAScript module with a stable embedder-provided specifier.
+    ///
+    /// # Errors
+    /// Fails when module lexing, parsing, static validation, or configured
+    /// compile-time resource limits fail.
+    pub fn compile_module_named(&self, source_name: &str, source: &str) -> Result<CompiledModule> {
+        CompiledModule::compile_named(source_name, source, self.limits.clone())
     }
 }
 
