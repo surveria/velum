@@ -96,9 +96,35 @@ impl BytecodeBlock {
         let fallback_span = statements
             .first()
             .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
-        let inner = Self::compile_statements(statements, StatementValue::Store, layout)?;
+        let inner = Self::compile_lexical_statements(statements, StatementValue::Store, layout)?;
         let mut compiler = BytecodeCompiler::new(layout, fallback_span);
         compiler.emit(BytecodeInstruction::ScopedBlock(inner));
+        compiler.finish()
+    }
+
+    fn compile_lexical_statements(
+        statements: &[Statement],
+        value: StatementValue,
+        layout: &BindingLayout,
+    ) -> Result<Self> {
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
+        compiler.compile_block_function_initializers(statements)?;
+        compiler.compile_statements(statements, value)?;
+        compiler.finish()
+    }
+
+    fn compile_block_function_init(
+        statements: &[Statement],
+        layout: &BindingLayout,
+    ) -> Result<Self> {
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
+        compiler.compile_block_function_initializers(statements)?;
         compiler.finish()
     }
 }
@@ -257,6 +283,12 @@ impl<'a> BytecodeCompiler<'a> {
                 }
                 Ok(())
             }
+            Stmt::FunctionDecl {
+                name,
+                annex_b_var_binding: Some(variable),
+                block_scoped: true,
+                ..
+            } => self.compile_annex_b_function_update(name, variable),
             Stmt::Empty | Stmt::FunctionDecl { .. } => Ok(()),
             Stmt::VarDecl { name, kind, init } => {
                 self.compile_declaration(name, *kind, init.as_ref())
@@ -508,7 +540,7 @@ impl<'a> BytecodeCompiler<'a> {
         value: StatementValue,
     ) -> Result<()> {
         if statements_need_lexical_scope(statements) {
-            let block = BytecodeBlock::compile_statements(statements, value, self.layout)?;
+            let block = BytecodeBlock::compile_lexical_statements(statements, value, self.layout)?;
             self.emit(BytecodeInstruction::ScopedBlock(block));
             return Ok(());
         }
@@ -536,6 +568,18 @@ impl<'a> BytecodeCompiler<'a> {
 
 fn statements_need_lexical_scope(statements: &[Statement]) -> bool {
     statements.iter().any(statement_needs_lexical_scope)
+}
+
+fn statements_have_block_functions(statements: &[Statement]) -> bool {
+    statements.iter().any(|statement| {
+        matches!(
+            statement.kind(),
+            Stmt::FunctionDecl {
+                block_scoped: true,
+                ..
+            }
+        )
+    })
 }
 
 fn statement_needs_lexical_scope(statement: &Statement) -> bool {

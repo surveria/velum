@@ -1,11 +1,8 @@
 use crate::{
-    bytecode::{
-        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow,
-    },
+    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow},
     error::{Error, Result},
     runtime::{
         Context,
-        binding::scope::BindingCell,
         bytecode::{
             control_continuation::{
                 BytecodeControlRecord, BytecodeControlStateSlot, BytecodeTryPhase,
@@ -211,6 +208,17 @@ impl Context {
         let resumes = state.is_resuming();
         if !resumes {
             self.push_lexical_scope()?;
+            let hoist_result = catch
+                .param_bindings
+                .iter()
+                .try_for_each(|binding| self.hoist_bytecode_lexical_binding(binding));
+            if let Err(error) = hoist_result {
+                let removed = self.pop_lexical_scope()?;
+                if removed.is_none() {
+                    return Err(Error::runtime("bytecode catch lexical scope disappeared"));
+                }
+                return Err(error);
+            }
         }
         let result = if resumes {
             self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state)
@@ -229,24 +237,30 @@ impl Context {
 
     fn eval_bytecode_catch_scope(
         &mut self,
-        param: &BytecodeBinding,
+        param: &crate::bytecode::BytecodePattern,
         value: Value,
         body: &BytecodeBlock,
         body_scoped: bool,
         state: &mut BytecodeState,
     ) -> Result<Completion> {
-        let atom = self.ensure_binding_capacity_static(param.name())?;
-        let frame = self.compiled_local_binding_frame(param.name())?;
-        let value = self.runtime_value(value)?;
-        let inserted = self
-            .active_bindings_mut()
-            .insert_or_replace_at_optional_slot(
-                atom,
-                BindingCell::new(value, true, DeclKind::Let),
-                frame.map(crate::runtime::CompiledBindingFrame::slot),
-            )?;
-        self.mark_active_binding_frame_slot(frame, inserted)?;
-        self.remember_active_static_binding(param.name(), atom)?;
+        if !state.is_resuming() || state.has_destructure_continuation() {
+            let value = if state.has_destructure_continuation() {
+                None
+            } else {
+                Some(value)
+            };
+            match self.eval_resumable_destructure(
+                state,
+                param,
+                crate::bytecode::BytecodeDestructureMode::Declaration(DeclKind::Let),
+                value,
+            )? {
+                crate::runtime::bytecode::destructure::DestructureOutcome::Completed => {}
+                crate::runtime::bytecode::destructure::DestructureOutcome::Abrupt(completion) => {
+                    return Ok(completion);
+                }
+            }
+        }
         self.eval_bytecode_try_block_with_state(body, body_scoped, state)
     }
 

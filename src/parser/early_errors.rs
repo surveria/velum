@@ -9,19 +9,22 @@ use super::Parser;
 
 impl Parser {
     pub(super) fn reject_invalid_single_statement(&self, statement: &Statement) -> Result<()> {
-        if matches!(
-            statement.kind(),
-            Stmt::FunctionDecl { kind, .. } if kind.is_generator()
-        ) || matches!(
-            statement.kind(),
-            Stmt::VarDecl {
-                kind: DeclKind::Let | DeclKind::Const,
-                ..
-            } | Stmt::PatternDecl {
-                kind: DeclKind::Let | DeclKind::Const,
-                ..
-            }
-        ) {
+        if (self.is_strict_mode() && matches!(statement.kind(), Stmt::FunctionDecl { .. }))
+            || matches!(
+                statement.kind(),
+                Stmt::FunctionDecl { kind, .. } if kind.is_generator()
+            )
+            || matches!(
+                statement.kind(),
+                Stmt::VarDecl {
+                    kind: DeclKind::Let | DeclKind::Const,
+                    ..
+                } | Stmt::PatternDecl {
+                    kind: DeclKind::Let | DeclKind::Const,
+                    ..
+                }
+            )
+        {
             return Err(self.parse_error("declaration is not allowed as a single statement body"));
         }
         Ok(())

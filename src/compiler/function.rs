@@ -65,6 +65,73 @@ impl BytecodeCompiler<'_> {
         });
         Ok(())
     }
+
+    pub(super) fn compile_block_function_initializers(
+        &mut self,
+        statements: &[Statement],
+    ) -> Result<()> {
+        for statement in statements {
+            let Stmt::FunctionDecl {
+                name,
+                arguments_binding,
+                id,
+                params,
+                body,
+                parameter_prologue_count,
+                kind,
+                strict,
+                block_scoped: true,
+                ..
+            } = statement.kind()
+            else {
+                continue;
+            };
+            let binding = self.compile_binding(name)?;
+            self.emit(BytecodeInstruction::DeclareBinding {
+                name: binding.clone(),
+                kind: crate::syntax::DeclKind::Let,
+                has_init: false,
+            });
+            self.emit(BytecodeInstruction::CreateFunction {
+                id: *id,
+                name: Some(name.name().clone()),
+                bytecode: BytecodeFunction::compile(
+                    None,
+                    arguments_binding.clone(),
+                    params,
+                    body,
+                    *parameter_prologue_count,
+                    FunctionCompileMode::new(*kind, *strict),
+                    self.layout,
+                )?,
+                constructable: kind.is_constructable(),
+                kind: *kind,
+                new_target_mode: BytecodeNewTargetMode::Own,
+            });
+            self.emit(BytecodeInstruction::StoreBinding(binding));
+            self.emit(BytecodeInstruction::Pop);
+        }
+        Ok(())
+    }
+
+    pub(super) fn compile_annex_b_function_update(
+        &mut self,
+        lexical: &StaticBinding,
+        variable: &StaticBinding,
+    ) -> Result<()> {
+        let variable = self.compile_binding(variable)?;
+        if variable.operand() == crate::binding_metadata::BindingOperand::Unresolved {
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::LoadBinding(
+            self.compile_binding(lexical)?,
+        ));
+        self.emit(BytecodeInstruction::StoreAnnexBVar(
+            variable.name().name().clone(),
+        ));
+        self.emit(BytecodeInstruction::Pop);
+        Ok(())
+    }
 }
 
 impl BytecodeFunction {
@@ -412,6 +479,9 @@ impl CaptureBindingCollector {
     }
 
     fn collect_catch(&mut self, catch: &CatchClause) {
+        if let Some(param) = &catch.param {
+            self.collect_pattern(param);
+        }
         self.collect_statements(&catch.body);
     }
 

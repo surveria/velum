@@ -72,7 +72,7 @@ impl Context {
         }
     }
 
-    fn eval_resumable_destructure(
+    pub(super) fn eval_resumable_destructure(
         &mut self,
         state: &mut BytecodeState,
         pattern: &BytecodePattern,

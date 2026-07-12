@@ -10,6 +10,7 @@ use crate::{
     syntax::StaticName,
 };
 
+use super::statements_have_block_functions;
 use super::{BytecodeCompiler, StatementValue, statements_need_lexical_scope};
 
 impl BytecodeCompiler<'_> {
@@ -267,10 +268,24 @@ impl BytecodeCompiler<'_> {
                 )?,
             });
         }
+        let scoped = switch_needs_lexical_scope(cases);
+        let scope_statements = cases
+            .iter()
+            .flat_map(|case| case.statements.iter().cloned())
+            .collect::<Vec<_>>();
+        let scope_init = if scoped && statements_have_block_functions(&scope_statements) {
+            Some(BytecodeBlock::compile_block_function_init(
+                &scope_statements,
+                self.layout,
+            )?)
+        } else {
+            None
+        };
         self.emit(BytecodeInstruction::Switch {
             discriminant: BytecodeBlock::compile_expression(discriminant, self.layout)?,
             cases: std::rc::Rc::from(bytecode_cases.into_boxed_slice()),
-            scoped: switch_needs_lexical_scope(cases),
+            scoped,
+            scope_init,
         });
         Ok(())
     }
@@ -281,9 +296,12 @@ impl BytecodeCompiler<'_> {
         catch: Option<&CatchClause>,
         finally_body: Option<&[Statement]>,
     ) -> Result<()> {
-        let body_block =
-            BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)?;
         let body_scoped = statements_need_lexical_scope(body);
+        let body_block = if body_scoped {
+            BytecodeBlock::compile_lexical_statements(body, StatementValue::Store, self.layout)?
+        } else {
+            BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)?
+        };
         let body_direct_throw = if body_scoped {
             None
         } else {
@@ -295,23 +313,49 @@ impl BytecodeCompiler<'_> {
                 let param = catch
                     .param
                     .as_ref()
-                    .map(|param| self.compile_binding(param))
+                    .map(|param| self.compile_pattern(param).map(Rc::new))
                     .transpose()?;
-                let body = BytecodeBlock::compile_statements(
-                    &catch.body,
-                    StatementValue::Store,
-                    self.layout,
-                )?;
+                let mut param_bindings = Vec::new();
+                if let Some(pattern) = &catch.param {
+                    pattern.for_each_binding(&mut |binding| {
+                        param_bindings.push(self.compile_binding(binding)?);
+                        Ok(())
+                    })?;
+                }
                 let body_scoped = statements_need_lexical_scope(&catch.body);
+                let body = if body_scoped {
+                    BytecodeBlock::compile_lexical_statements(
+                        &catch.body,
+                        StatementValue::Store,
+                        self.layout,
+                    )?
+                } else {
+                    BytecodeBlock::compile_statements(
+                        &catch.body,
+                        StatementValue::Store,
+                        self.layout,
+                    )?
+                };
                 Ok(BytecodeCatch {
                     param,
+                    param_bindings: Rc::from(param_bindings.into_boxed_slice()),
                     body,
                     body_scoped,
                 })
             })
             .transpose()?;
         let finally_body = finally_body
-            .map(|body| BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout))
+            .map(|body| {
+                if statements_need_lexical_scope(body) {
+                    BytecodeBlock::compile_lexical_statements(
+                        body,
+                        StatementValue::Store,
+                        self.layout,
+                    )
+                } else {
+                    BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)
+                }
+            })
             .transpose()?;
         self.emit(BytecodeInstruction::Try {
             body: body_block,

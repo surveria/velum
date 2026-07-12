@@ -58,6 +58,7 @@ impl Context {
             | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
+            | BytecodeInstruction::StoreAnnexBVar(_)
             | BytecodeInstruction::ResolveBinding(_)
             | BytecodeInstruction::StoreResolvedBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }

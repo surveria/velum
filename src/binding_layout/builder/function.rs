@@ -114,6 +114,7 @@ impl LayoutBuilder {
                 self.analyze_expr(default, function_scope, function)?;
             }
         }
+        self.collect_annex_b_var_bindings(body, function_scope)?;
         self.analyze_statements(body, function_scope, function_scope, function)
     }
 

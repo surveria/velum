@@ -121,11 +121,9 @@ impl Context {
             BytecodeInstruction::DestructurePattern { pattern, mode } => {
                 self.eval_bytecode_destructure_instruction(state, pattern, *mode, next)
             }
-            BytecodeInstruction::Switch {
-                discriminant,
-                cases,
-                scoped,
-            } => self.eval_bytecode_switch(state, discriminant, cases, *scoped, next),
+            instruction @ BytecodeInstruction::Switch { .. } => {
+                self.eval_bytecode_switch_instruction(state, instruction, next)
+            }
             BytecodeInstruction::Try {
                 body,
                 body_scoped,

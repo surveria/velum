@@ -68,6 +68,13 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::StoreAnnexBVar(name) => {
+                let value = state.stack.pop()?;
+                self.assign_annex_b_var(name, value.clone())?;
+                state.stack.push(value);
+                state.pc = next;
+                Ok(None)
+            }
             BytecodeInstruction::ResolveBinding(_)
             | BytecodeInstruction::StoreResolvedBinding(_) => {
                 self.eval_bytecode_resolved_binding_instruction(state, instruction, next)

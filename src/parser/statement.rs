@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
     ast::{CatchClause, DeclKind, Expr, Expression, FunctionKind, Statement, Stmt, SwitchCase},
     error::{Error, Result},
@@ -156,7 +158,7 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after block"));
             }
-            statements.push(self.statement()?);
+            statements.push(self.with_lexical_function_declarations(Self::statement)?);
         }
         self.consume(&TokenKind::RBrace, "expected '}' after block")?;
         self.validate_generator_block_declarations(&statements)?;
@@ -169,8 +171,11 @@ impl Parser {
 
     pub(super) fn function_body(&mut self, inherited_strict: bool) -> Result<ParsedFunctionBody> {
         let previous_strict = self.is_strict_mode();
+        let previous_function_scope = self.function_declaration_context;
         self.set_strict_mode(inherited_strict);
+        self.function_declaration_context = super::FunctionDeclarationContext::Var;
         let result = self.function_body_inner();
+        self.function_declaration_context = previous_function_scope;
         self.set_strict_mode(previous_strict);
         result
     }
@@ -206,12 +211,13 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after 'if'")?;
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
-        let consequent = Box::new(self.statement()?);
+        let consequent = self.with_lexical_function_declarations(Self::statement)?;
         self.reject_invalid_single_statement(&consequent)?;
+        let consequent = Box::new(Self::wrap_single_statement_function(consequent));
         let alternate = if self.match_kind(&TokenKind::Else) {
-            let alternate = Box::new(self.statement()?);
+            let alternate = self.with_lexical_function_declarations(Self::statement)?;
             self.reject_invalid_single_statement(&alternate)?;
-            Some(alternate)
+            Some(Box::new(Self::wrap_single_statement_function(alternate)))
         } else {
             None
         };
@@ -489,7 +495,7 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after switch body"));
             }
-            statements.push(self.statement()?);
+            statements.push(self.with_lexical_function_declarations(Self::statement)?);
         }
         Ok(SwitchCase { test, statements })
     }
@@ -524,7 +530,14 @@ impl Parser {
             return Ok(CatchClause { param: None, body });
         }
         self.consume(&TokenKind::LParen, "expected '(' or '{' after 'catch'")?;
-        let param = self.consume_binding_identifier("expected catch binding name")?;
+        let param = self.binding_pattern()?;
+        let mut names = BTreeSet::new();
+        param.for_each_binding(&mut |binding| {
+            if !names.insert(binding.name().as_str().to_owned()) {
+                return Err(self.parse_error("duplicate catch binding"));
+            }
+            Ok(())
+        })?;
         self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
         self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
         let body = self.block_statements()?;
@@ -599,8 +612,18 @@ impl Parser {
         };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
+        let block_scoped =
+            self.function_declaration_context == super::FunctionDeclarationContext::Lexical;
+        let annex_b_var_binding =
+            if block_scoped && !self.is_strict_mode() && kind == FunctionKind::Ordinary {
+                Some(self.static_binding(name.name().clone())?)
+            } else {
+                None
+            };
         Ok(Stmt::FunctionDecl {
             name,
+            block_scoped,
+            annex_b_var_binding,
             arguments_binding,
             id,
             params: params.into(),
@@ -609,6 +632,25 @@ impl Parser {
             kind,
             strict,
         })
+    }
+
+    fn with_lexical_function_declarations<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = self.function_declaration_context;
+        self.function_declaration_context = super::FunctionDeclarationContext::Lexical;
+        let result = parse(self);
+        self.function_declaration_context = previous;
+        result
+    }
+
+    fn wrap_single_statement_function(statement: Statement) -> Statement {
+        if !matches!(statement.kind(), Stmt::FunctionDecl { .. }) {
+            return statement;
+        }
+        let span = statement.span();
+        Statement::new(Stmt::Block(vec![statement]), span)
     }
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
