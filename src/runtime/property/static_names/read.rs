@@ -1,7 +1,9 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::object::{CacheablePropertyPresence, CacheablePropertyValue, PropertyLookup},
+    runtime::object::{
+        CacheablePropertyPresence, CacheablePropertyValue, PropertyKey, PropertyLookup,
+    },
     runtime::property::{DynamicPropertyKey, get_property, has_property},
     runtime::semantic_object::{SemanticPropertyPresence, SemanticPropertyRead},
     syntax::{StaticName, StaticPropertyAccessId},
@@ -115,15 +117,26 @@ impl Context {
                 ),
             };
         }
-        if matches!(
-            object,
-            Value::Bool(_)
-                | Value::Number(_)
-                | Value::String(_)
-                | Value::HeapString(_)
-                | Value::Symbol(_)
-        ) {
+        if matches!(property.lookup().key(), Some(PropertyKey::Symbol(_)))
+            && matches!(
+                object,
+                Value::Bool(_)
+                    | Value::Number(_)
+                    | Value::String(_)
+                    | Value::HeapString(_)
+                    | Value::Symbol(_)
+            )
+        {
             return self.get(object, property.lookup());
+        }
+        if let Value::String(value) = object {
+            return self.get_string_property_value(object, value, property.name());
+        }
+        if let Value::HeapString(value) = object {
+            return self.get_utf16_string_property_value(object, value.as_utf16(), property.name());
+        }
+        if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
+            return Ok(value);
         }
         let value = get_property(&self.objects, object, property.lookup())?;
         self.runtime_property_value(value)

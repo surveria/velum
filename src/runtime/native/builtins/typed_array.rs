@@ -138,10 +138,10 @@ impl Context {
                 values.get(2),
             );
         }
-        if let Some(values) = self.typed_array_iterable_values(&source)? {
-            return self.create_typed_array_from_values(element_kind, values);
-        }
         if self.semantic_object_ref(&source)?.is_some() {
+            if let Some(values) = self.typed_array_iterable_values(&source)? {
+                return self.create_typed_array_from_values(element_kind, values);
+            }
             return self.create_typed_array_from_array_like(element_kind, &source);
         }
         let index = self.to_index(Some(&source))?;

@@ -34,6 +34,29 @@ fn replace_all_dispatches_regexp_replacement_with_captures() -> TestResult {
 }
 
 #[test]
+fn regexp_replace_coerces_non_callable_replacement_before_matching() -> TestResult {
+    expect_true(
+        r#"
+        var expected = new TypeError("replacement");
+        var actual;
+        try {
+            /./[Symbol.replace]("", {
+                toString: function() { throw expected; }
+            });
+        } catch (error) {
+            actual = error;
+        }
+        actual === expected
+        "#,
+    )
+}
+
+#[test]
+fn computed_primitive_reads_preserve_string_numeric_coercion() -> TestResult {
+    expect_true(r#"new Int8Array("0").length === 0"#)
+}
+
+#[test]
 fn well_formed_helpers_preserve_pairs_and_replace_lone_surrogates() -> TestResult {
     expect_true(
         r"
