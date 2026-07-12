@@ -142,6 +142,7 @@ struct Function {
     fast_path: Option<Rc<function::FunctionFastPath>>,
     source: Option<Rc<str>>,
     upvalues: FunctionUpvalues,
+    with_environments: Rc<[Value]>,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
     static_binding_layout: Option<BindingLayout>,
@@ -162,6 +163,7 @@ struct Function {
 }
 
 type FunctionUpvalues = Rc<[BindingCell]>;
+type FunctionActivationEnvironment = (FunctionUpvalues, Vec<Value>);
 
 #[derive(Debug, Clone)]
 enum FunctionNewTarget {
@@ -207,6 +209,21 @@ enum CallReference {
         this_value: Value,
         strict: bool,
     },
+}
+
+impl CallReference {
+    fn with_this(self, this_value: Value) -> Self {
+        match self {
+            Self::Function { id, .. } => Self::Function { id, this_value },
+            Self::Generic { callee, .. } => Self::Generic { callee, this_value },
+            Self::Native { kind, .. } => Self::Native { kind, this_value },
+            Self::DirectNative { target, strict, .. } => Self::DirectNative {
+                target,
+                this_value,
+                strict,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -578,6 +595,13 @@ impl Context {
         native: Option<NativeCallTarget>,
         strict: bool,
     ) -> Result<CallReference> {
+        if let Some(reference) = self.resolve_with_binding(callee)? {
+            let function = reference.get(self, callee)?;
+            let this_value = reference.object().clone();
+            return self
+                .call_reference_from_value(callee, native, strict, function)
+                .map(|reference| reference.with_this(this_value));
+        }
         if let Some(function) = self.unresolved_direct_builtin_callable(callee)? {
             return self.call_reference_from_value(callee, native, strict, function);
         }
@@ -738,7 +762,7 @@ impl Context {
             Completion::Normal(_) => Ok(object),
             Completion::Throw(value) => Err(Error::javascript(value)),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)

@@ -149,7 +149,7 @@ impl Context {
     }
 
     /// Coerce a receiver to an object (`ToObject`), boxing primitives.
-    fn object_to_object(&mut self, this_value: &Value) -> Result<Value> {
+    pub(in crate::runtime) fn object_to_object(&mut self, this_value: &Value) -> Result<Value> {
         match this_value {
             Value::Object(_)
             | Value::Function(_)

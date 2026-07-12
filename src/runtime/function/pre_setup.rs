@@ -1,12 +1,39 @@
 use std::rc::Rc;
 
 use crate::{
+    binding_metadata::BindingLayout,
     error::Result,
-    runtime::{Context, control::Completion},
-    value::FunctionId,
+    runtime::{CompiledBindingFrame, Context, control::Completion},
+    value::{FunctionId, Value},
 };
 
+use super::{BytecodeFunctionInit, FunctionFastPath};
+
 impl Context {
+    pub(super) fn capture_function_environment(
+        &self,
+        init: &BytecodeFunctionInit<'_>,
+        param_frames: &[Option<CompiledBindingFrame>],
+        layout: Option<&BindingLayout>,
+    ) -> Result<(
+        crate::runtime::CapturedFunctionUpvalues,
+        Rc<[Value]>,
+        Option<FunctionFastPath>,
+    )> {
+        let fast_path = if self.current_with_environments().is_empty() {
+            self.compile_optional_function_fast_path(init, param_frames)?
+        } else {
+            None
+        };
+        let upvalues = self.capture_function_upvalues(
+            init.static_function_id,
+            init.bytecode.capture_bindings(),
+            layout,
+        )?;
+        let with_environments = Rc::from(self.current_with_environments());
+        Ok((upvalues, with_environments, fast_path))
+    }
+
     pub(super) fn try_eval_pre_setup_function_fast_path(
         &mut self,
         id: FunctionId,
@@ -14,6 +41,9 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let Some((fast_path, upvalues, atom_cache, binding_cache, binding_layout)) = ({
             let function = self.function(id)?;
+            if !function.with_environments.is_empty() {
+                return Ok(None);
+            }
             function.fast_path.as_ref().map(|fast_path| {
                 let upvalues = fast_path
                     .needs_upvalues()

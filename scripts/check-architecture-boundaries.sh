@@ -413,7 +413,7 @@ check_storage_limit_boundary() {
       "${repo_root}/src/runtime/transient_roots.rs" \
     || ! grep -F -q 'self.activation_frames.push(ActivationFrame::call(' \
       "${repo_root}/src/runtime/execution_storage.rs" \
-    || ! grep -F -q '.push(ActivationFrame::bytecode(continuation));' \
+    || ! grep -F -q '.push(ActivationFrame::bytecode(continuation, with_environments));' \
       "${repo_root}/src/runtime/bytecode/continuation.rs" \
     || ! grep -F -q 'release_count(VmStorageKind::ExecutionFrame, 1)?;' \
       "${repo_root}/src/runtime/bytecode/continuation.rs"; then
@@ -1263,7 +1263,7 @@ check_bytecode_continuation_boundary() {
     'pub(in crate::runtime) const fn block(block: BytecodeBlock) -> Self {' \
     'pub(super) fn ensure_running_function_continuation(' \
     'self.activation_frames' \
-    '.push(ActivationFrame::bytecode(continuation));' \
+    '.push(ActivationFrame::bytecode(continuation, with_environments));' \
     'pub(super) fn pop_bytecode_continuation('; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/continuation.rs"; then

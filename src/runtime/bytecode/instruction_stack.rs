@@ -68,6 +68,10 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::ResolveBinding(_)
+            | BytecodeInstruction::StoreResolvedBinding(_) => {
+                self.eval_bytecode_resolved_binding_instruction(state, instruction, next)
+            }
             BytecodeInstruction::DeclareBinding {
                 name,
                 kind,
@@ -88,9 +92,7 @@ impl Context {
             }
             BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
             BytecodeInstruction::GeneratorStart => {
-                state.pc = next;
-                state.mark_generator_start_suspended();
-                Ok(Some(Completion::GeneratorStart))
+                Ok(Some(Self::eval_generator_start(state, next)))
             }
             BytecodeInstruction::Yield { delegate } => {
                 self.eval_bytecode_yield_instruction(state, next, *delegate)
@@ -98,22 +100,72 @@ impl Context {
             BytecodeInstruction::NullishCoalescing { right } => {
                 self.eval_bytecode_nullish_coalescing(state, right, next)
             }
+            BytecodeInstruction::TypeOfBinding(_) | BytecodeInstruction::TypeOfValue => {
+                self.eval_bytecode_typeof_instruction(state, instruction, next)
+            }
+            _ => Err(Error::runtime("bytecode stack instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_typeof_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let value = match instruction {
             BytecodeInstruction::TypeOfBinding(binding) => {
-                state
-                    .stack
-                    .push(self.eval_bytecode_typeof_binding(binding)?);
-                state.pc = next;
-                Ok(None)
+                self.eval_bytecode_typeof_binding(binding)?
             }
             BytecodeInstruction::TypeOfValue => {
                 let value = state.stack.pop()?;
                 let type_name = self.semantic_type_name(&value)?;
-                state.stack.push(self.heap_string_value(type_name)?);
-                state.pc = next;
-                Ok(None)
+                self.heap_string_value(type_name)?
             }
-            _ => Err(Error::runtime("bytecode stack instruction mismatch")),
+            _ => return Err(Error::runtime("typeof instruction mismatch")),
+        };
+        state.stack.push(value);
+        state.pc = next;
+        Ok(None)
+    }
+
+    fn eval_generator_start(state: &mut BytecodeState, next: BytecodeAddress) -> Completion {
+        state.pc = next;
+        state.mark_generator_start_suspended();
+        Completion::GeneratorStart
+    }
+
+    fn eval_bytecode_resolved_binding_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::ResolveBinding(binding) => {
+                let object = self
+                    .resolve_with_binding(binding)?
+                    .map_or(Value::Undefined, |reference| reference.object().clone());
+                state.stack.push(object);
+            }
+            BytecodeInstruction::StoreResolvedBinding(binding) => {
+                let value = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                if matches!(object, Value::Undefined) {
+                    self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
+                } else {
+                    crate::runtime::binding::WithBindingReference::new(object).set(
+                        self,
+                        binding,
+                        value.clone(),
+                    )?;
+                }
+                state.stack.push(value);
+            }
+            _ => return Err(Error::runtime("resolved binding instruction mismatch")),
         }
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_declare_binding(
@@ -156,7 +208,7 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
-            | Completion::Continue(_)
+            | Completion::Continue { .. }
             | Completion::GeneratorStart
             | Completion::Yielded(_)
             | Completion::YieldedIteratorResult(_)) => completion.into_result().map(|_| None),
@@ -257,7 +309,7 @@ impl Context {
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
-                | Completion::Continue(_)) => return completion.into_result().map(|_| None),
+                | Completion::Continue { .. }) => return completion.into_result().map(|_| None),
             }
         }
         state.pc = next;

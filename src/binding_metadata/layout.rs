@@ -10,6 +10,7 @@ use super::types::{BindingOperand, FunctionScope, FunctionScopeId, Scope};
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BindingLayout {
     pub(super) operands: Rc<[BindingOperand]>,
+    pub(super) with_environment_counts: Rc<[u32]>,
     pub(super) static_functions: Rc<[Option<FunctionScopeId>]>,
     pub(super) scopes: Rc<[Scope]>,
     pub(super) functions: Rc<[FunctionScope]>,
@@ -23,6 +24,7 @@ impl BindingLayout {
     pub fn from_parts(parts: BindingLayoutParts) -> Self {
         Self {
             operands: Rc::from(parts.operands.into_boxed_slice()),
+            with_environment_counts: Rc::from(parts.with_environment_counts.into_boxed_slice()),
             static_functions: Rc::from(parts.static_functions.into_boxed_slice()),
             scopes: Rc::from(parts.scopes.into_boxed_slice()),
             functions: Rc::from(parts.functions.into_boxed_slice()),
@@ -60,7 +62,8 @@ impl BindingLayout {
     pub(crate) fn storage_entry_count(&self) -> Result<usize> {
         self.operands
             .len()
-            .checked_add(self.static_functions.len())
+            .checked_add(self.with_environment_counts.len())
+            .and_then(|count| count.checked_add(self.static_functions.len()))
             .and_then(|count| count.checked_add(self.scopes.len()))
             .and_then(|count| count.checked_add(self.functions.len()))
             .ok_or_else(|| Error::limit("binding layout entry count overflowed"))
@@ -97,10 +100,18 @@ impl BindingLayout {
         }
         Ok(Some(operand))
     }
+
+    pub fn with_environment_count(&self, binding: StaticBindingId) -> Result<u32> {
+        self.with_environment_counts
+            .get(binding.index()?)
+            .copied()
+            .ok_or_else(|| Error::runtime("binding layout with-environment slot is not defined"))
+    }
 }
 
 pub struct BindingLayoutParts {
     pub operands: Vec<BindingOperand>,
+    pub with_environment_counts: Vec<u32>,
     pub static_functions: Vec<Option<FunctionScopeId>>,
     pub scopes: Vec<Scope>,
     pub functions: Vec<FunctionScope>,

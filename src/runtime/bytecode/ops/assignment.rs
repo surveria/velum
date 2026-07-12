@@ -22,6 +22,10 @@ pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
         name: BytecodeBinding,
         cell: Option<BindingCell>,
     },
+    WithBinding {
+        name: BytecodeBinding,
+        reference: crate::runtime::binding::WithBindingReference,
+    },
     StaticProperty {
         object: Value,
         property: BytecodeProperty,
@@ -54,6 +58,7 @@ impl BytecodeAssignmentReference {
                 };
                 cell.value(name.name())
             }
+            Self::WithBinding { name, reference } => reference.get(context, name),
             Self::StaticProperty { object, property } => {
                 context.get_static_property_value(object, property.name(), property.access())
             }
@@ -91,6 +96,7 @@ impl BytecodeAssignmentReference {
                 }
                 context.assign_bytecode_or_create_sloppy_global(name, value)
             }
+            Self::WithBinding { name, reference } => reference.set(context, name, value),
             Self::StaticProperty { object, property } => {
                 context.set_static_property_value(object, property.name(), property.access(), value)
             }
@@ -124,6 +130,7 @@ impl BytecodeAssignmentReference {
     pub(in crate::runtime::bytecode) fn root_values(&self) -> Vec<&Value> {
         match self {
             Self::Binding { .. } => Vec::new(),
+            Self::WithBinding { reference, .. } => vec![reference.object()],
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => {
@@ -145,6 +152,13 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            let old_value = reference.get(self, name)?;
+            let new_value = Self::updated_bytecode_number(&old_value, op)?;
+            self.checked_value(new_value.clone())?;
+            reference.set(self, name, new_value.clone())?;
+            return Ok(if prefix { new_value } else { old_value });
+        }
         let binding = self
             .get_binding_bytecode(name)?
             .ok_or_else(|| reference_error_undefined(name.name()))?;
@@ -219,6 +233,12 @@ impl Context {
         name: &BytecodeBinding,
         right: &Value,
     ) -> Result<Value> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            let old_value = reference.get(self, name)?;
+            let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
+            reference.set(self, name, value.clone())?;
+            return Ok(value);
+        }
         let binding = self
             .get_or_materialize_binding_bytecode(name)?
             .ok_or_else(|| reference_error_undefined(name.name()))?;
@@ -341,6 +361,12 @@ impl Context {
     ) -> Result<BytecodeAssignmentReference> {
         match target {
             BytecodeAssignmentTarget::Binding(name) => {
+                if let Some(reference) = self.resolve_with_binding(name)? {
+                    return Ok(BytecodeAssignmentReference::WithBinding {
+                        name: name.clone(),
+                        reference,
+                    });
+                }
                 let cell = self.get_or_materialize_binding_bytecode(name)?;
                 Ok(BytecodeAssignmentReference::Binding {
                     name: name.clone(),

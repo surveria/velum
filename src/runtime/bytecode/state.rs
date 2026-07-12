@@ -363,7 +363,10 @@ impl BytecodeState {
                 label,
                 value: self.last.clone(),
             }),
-            BytecodeCompletion::Continue(label) => Ok(Completion::Continue(label)),
+            BytecodeCompletion::Continue(label) => Ok(Completion::Continue {
+                label,
+                value: self.last.clone(),
+            }),
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
             BytecodeCompletion::ReturnDirect => {
                 Ok(Completion::ReturnDirect(self.stack.pop_single()?))
@@ -395,9 +398,10 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
+        | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }
 
@@ -502,19 +506,24 @@ pub(super) fn bytecode_loop_completion(
     labels: Option<&[StaticName]>,
 ) -> Option<Completion> {
     match completion {
-        Completion::Normal(value) => {
+        Completion::Normal(value) | Completion::Continue { label: None, value } => {
             *last = value;
             None
         }
-        Completion::Continue(None) => None,
         Completion::Break { label: None, value } => Some(Completion::Normal(value)),
-        Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => None,
+        Completion::Continue {
+            label: Some(target),
+            value,
+        } if loop_label_matches(labels, &target) => {
+            *last = value;
+            None
+        }
         Completion::Break {
             label: Some(target),
             value,
         } if loop_label_matches(labels, &target) => Some(Completion::Normal(value)),
         completion @ (Completion::Break { .. }
-        | Completion::Continue(Some(_))
+        | Completion::Continue { label: Some(_), .. }
         | Completion::Throw(_)
         | Completion::Return(_)
         | Completion::ReturnDirect(_)

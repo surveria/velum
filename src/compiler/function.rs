@@ -273,6 +273,10 @@ impl CaptureBindingCollector {
                 self.collect_statement(body);
                 self.collect_expr(condition);
             }
+            Stmt::With { object, body } => {
+                self.collect_expr(object);
+                self.collect_statement(body);
+            }
             Stmt::Label { body, .. } => self.collect_statement(body),
             Stmt::For {
                 init,

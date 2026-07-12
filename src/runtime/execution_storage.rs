@@ -4,8 +4,9 @@ use crate::{
 };
 
 use super::{
-    Context, FunctionUpvalues, VmStorageKind, activation::ActivationFrame,
-    binding::scope::BindingScope, function::FunctionSuperBinding, private::PrivateEnvironment,
+    Context, FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
+    activation::ActivationFrame, binding::scope::BindingScope, function::FunctionSuperBinding,
+    private::PrivateEnvironment,
 };
 
 impl Context {
@@ -23,6 +24,9 @@ impl Context {
         let upvalue_count = frames.iter().try_fold(0_usize, |count, frame| {
             count
                 .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                .and_then(|count| {
+                    count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
+                })
                 .ok_or_else(|| Error::limit("discarded upvalue count overflowed"))
         })?;
         let execution_frame_count = frames.iter().try_fold(frames.len(), |count, frame| {
@@ -42,27 +46,32 @@ impl Context {
     pub(super) fn push_call_activation(
         &mut self,
         function: FunctionId,
-        upvalues: FunctionUpvalues,
+        environment: FunctionActivationEnvironment,
         this_value: Value,
         new_target: Value,
         super_binding: Option<std::rc::Rc<FunctionSuperBinding>>,
         private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
     ) -> Result<usize> {
+        let (upvalues, with_environments) = environment;
+        let binding_count = upvalues
+            .len()
+            .checked_add(with_environments.len())
+            .ok_or_else(|| Error::limit("call captured binding count overflowed"))?;
         self.storage_ledger
-            .grow_count(VmStorageKind::Binding, upvalues.len())?;
+            .grow_count(VmStorageKind::Binding, binding_count)?;
         if let Err(error) = self
             .storage_ledger
             .grow_count(VmStorageKind::ExecutionFrame, 1)
         {
             self.storage_ledger
-                .release_count(VmStorageKind::Binding, upvalues.len())?;
+                .release_count(VmStorageKind::Binding, binding_count)?;
             return Err(error);
         }
         let base = self.locals.len();
         self.activation_frames.push(ActivationFrame::call(
             function,
             base,
-            upvalues,
+            (upvalues, with_environments),
             this_value,
             new_target,
             super_binding,
@@ -96,7 +105,11 @@ impl Context {
         let Some(frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("function activation frame disappeared"));
         };
-        let upvalue_count = frame.upvalues().map_or(0, |upvalues| upvalues.len());
+        let upvalue_count = frame
+            .upvalues()
+            .map_or(0, |upvalues| upvalues.len())
+            .checked_add(frame.with_environments().map_or(0, <[Value]>::len))
+            .ok_or_else(|| Error::limit("call captured binding count overflowed"))?;
         self.storage_ledger
             .release_count(VmStorageKind::Binding, upvalue_count)?;
         self.storage_ledger

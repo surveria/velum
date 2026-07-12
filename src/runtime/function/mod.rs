@@ -45,6 +45,7 @@ struct FunctionCallSetup {
     param_frames: Rc<[Option<crate::runtime::binding::static_bindings::CompiledBindingFrame>]>,
     bytecode: crate::bytecode::BytecodeFunction,
     upvalues: super::FunctionUpvalues,
+    with_environments: Rc<[Value]>,
     static_name_atom_cache:
         Option<crate::runtime::property::static_names::StaticNameAtomCacheHandle>,
     static_binding_cache:
@@ -189,12 +190,8 @@ impl Context {
             self.compile_function_self_binding(init.bytecode, static_binding_layout.as_ref())?;
         let arguments_binding =
             self.compile_function_arguments_binding(init.bytecode, static_binding_layout.as_ref())?;
-        let fast_path = self.compile_optional_function_fast_path(init, &param_frames)?;
-        let upvalues = self.capture_function_upvalues(
-            init.static_function_id,
-            init.bytecode.capture_bindings(),
-            static_binding_layout.as_ref(),
-        )?;
+        let (upvalues, with_environments, fast_path) =
+            self.capture_function_environment(init, &param_frames, static_binding_layout.as_ref())?;
         let scope_template = parameters::function_scope_template(
             &param_atoms,
             &param_frames,
@@ -211,7 +208,11 @@ impl Context {
             arguments_binding.is_some(),
         )?;
         let properties = self.activate_function_storage(
-            upvalues.cells.len(),
+            upvalues
+                .cells
+                .len()
+                .checked_add(with_environments.len())
+                .ok_or_else(|| Error::limit("function captured binding count overflowed"))?,
             metadata_cache_count,
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
@@ -233,6 +234,7 @@ impl Context {
                 fast_path: fast_path.map(Rc::new),
                 source: None,
                 upvalues: upvalues.cells,
+                with_environments,
                 static_name_atom_cache,
                 static_binding_cache,
                 static_binding_layout,
@@ -363,6 +365,7 @@ impl Context {
             param_frames: Rc::clone(&function.param_frames),
             bytecode: function.bytecode.clone(),
             upvalues: Rc::clone(&function.upvalues),
+            with_environments: Rc::clone(&function.with_environments),
             static_name_atom_cache: function.static_name_atom_cache.clone(),
             static_binding_cache: function.static_binding_cache.clone(),
             static_binding_layout: function.static_binding_layout.clone(),
@@ -392,6 +395,7 @@ impl Context {
             param_frames,
             bytecode,
             upvalues,
+            with_environments,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -418,7 +422,7 @@ impl Context {
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base = self.push_call_activation(
             id,
-            upvalues,
+            (upvalues, with_environments.to_vec()),
             this_value,
             new_target,
             super_binding,

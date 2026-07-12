@@ -47,6 +47,25 @@ const ARRAY_PROTOTYPE_TO_SPLICED_PROPERTY: &str = "toSpliced";
 const ARRAY_PROTOTYPE_WITH_PROPERTY: &str = "with";
 const ARRAY_PROTOTYPE_VALUES_PROPERTY: &str = "values";
 const ARRAY_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
+const ARRAY_UNSCOPABLES_SYMBOL_DISPLAY: &str = "[Symbol.unscopables]";
+const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
+const ARRAY_UNSCOPABLE_PROPERTIES: &[&str] = &[
+    ARRAY_PROTOTYPE_COPY_WITHIN_PROPERTY,
+    "entries",
+    ARRAY_PROTOTYPE_FILL_PROPERTY,
+    ARRAY_PROTOTYPE_FIND_PROPERTY,
+    ARRAY_PROTOTYPE_FIND_INDEX_PROPERTY,
+    ARRAY_PROTOTYPE_FIND_LAST_PROPERTY,
+    ARRAY_PROTOTYPE_FIND_LAST_INDEX_PROPERTY,
+    ARRAY_PROTOTYPE_FLAT_PROPERTY,
+    ARRAY_PROTOTYPE_FLAT_MAP_PROPERTY,
+    ARRAY_PROTOTYPE_INCLUDES_PROPERTY,
+    "keys",
+    ARRAY_PROTOTYPE_TO_REVERSED_PROPERTY,
+    ARRAY_PROTOTYPE_TO_SORTED_PROPERTY,
+    ARRAY_PROTOTYPE_TO_SPLICED_PROPERTY,
+    ARRAY_PROTOTYPE_VALUES_PROPERTY,
+];
 
 /// `Array.prototype` method table installed as non-enumerable data properties.
 const ARRAY_PROTOTYPE_METHODS: [(&str, NativeFunctionKind); 33] = [
@@ -180,6 +199,49 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        self.install_array_unscopables(prototype)?;
         Ok(())
+    }
+
+    fn install_array_unscopables(&mut self, prototype: ObjectId) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let Value::Symbol(symbol) =
+            self.get_named(&symbol_constructor, SYMBOL_UNSCOPABLES_PROPERTY)?
+        else {
+            return Err(Error::runtime("Symbol.unscopables is not a symbol"));
+        };
+        let Value::Object(list) = self
+            .objects
+            .create_with_exact_prototype(None, self.limits.max_objects)?
+        else {
+            return Err(Error::runtime("array unscopables list is not an object"));
+        };
+        for property in ARRAY_UNSCOPABLE_PROPERTIES {
+            let key = self.intern_property_key(property)?;
+            self.objects.define_property(
+                list,
+                key,
+                property,
+                PropertyUpdate::Data(DataPropertyUpdate::new(
+                    Some(Value::Bool(true)),
+                    Some(PropertyWritable::Yes),
+                    Some(PropertyEnumerable::Yes),
+                    Some(PropertyConfigurable::Yes),
+                )),
+                self.limits.max_object_properties,
+            )?;
+        }
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            ARRAY_UNSCOPABLES_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Object(list)),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 }

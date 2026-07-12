@@ -173,9 +173,10 @@ impl<'a> HoistCollector<'a> {
                 }
                 Ok(())
             }
-            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { body, .. } => {
-                self.collect_statement(body)
-            }
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::With { body, .. }
+            | Stmt::Label { body, .. } => self.collect_statement(body),
             Stmt::For { init, body, .. } => {
                 if let Some(init) = init {
                     self.collect_statement(init)?;
@@ -231,23 +232,9 @@ impl<'a> HoistCollector<'a> {
                 self.collect_pattern_var_declarations(pattern);
                 Ok(())
             }
-            Stmt::FunctionDecl {
-                name,
-                arguments_binding,
-                id,
-                params,
-                body,
-                parameter_prologue_count,
-                kind,
-                strict,
-            } => self.collect_function_declaration(
-                (name, arguments_binding.as_ref()),
-                *id,
-                params,
-                body,
-                *parameter_prologue_count,
-                FunctionCompileMode::new(*kind, *strict),
-            ),
+            declaration @ Stmt::FunctionDecl { .. } => {
+                self.collect_function_declaration_statement(declaration)
+            }
             Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)
@@ -258,5 +245,31 @@ impl<'a> HoistCollector<'a> {
             | Stmt::VarDecl { .. }
             | Stmt::Expr(_) => Ok(()),
         }
+    }
+
+    fn collect_function_declaration_statement(&mut self, statement: &Stmt) -> Result<()> {
+        let Stmt::FunctionDecl {
+            name,
+            arguments_binding,
+            id,
+            params,
+            body,
+            parameter_prologue_count,
+            kind,
+            strict,
+        } = statement
+        else {
+            return Err(crate::Error::runtime(
+                "expected function declaration during hoisting",
+            ));
+        };
+        self.collect_function_declaration(
+            (name, arguments_binding.as_ref()),
+            *id,
+            params,
+            body,
+            *parameter_prologue_count,
+            FunctionCompileMode::new(*kind, *strict),
+        )
     }
 }

@@ -270,6 +270,23 @@ impl ObjectHeap {
         Ok(self.object(id)?.typed_array.clone())
     }
 
+    pub(crate) fn typed_array_rejects_numeric_property(
+        &self,
+        id: ObjectId,
+        property: &str,
+    ) -> Result<bool> {
+        let Some(view) = self.object(id)?.typed_array.as_ref() else {
+            return Ok(false);
+        };
+        if matches!(property, "NaN" | "Infinity" | "-Infinity" | "-0") {
+            return Ok(true);
+        }
+        let Some(index) = super::array::ArrayIndex::parse(property) else {
+            return Ok(false);
+        };
+        Ok(index.position()? >= view.length())
+    }
+
     pub(crate) fn typed_array_number(&self, id: ObjectId, index: usize) -> Result<Option<f64>> {
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(None);

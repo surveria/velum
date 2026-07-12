@@ -509,7 +509,7 @@ impl Context {
                 self.create_generator_result(value, true)?,
             )),
             Completion::Throw(value) => Err(Error::javascript(value)),
-            Completion::Break { .. } | Completion::Continue(_) => {
+            Completion::Break { .. } | Completion::Continue { .. } => {
                 Err(Error::runtime("invalid generator completion"))
             }
             Completion::Suspended(_) => Err(Error::runtime(

@@ -13,27 +13,32 @@ use crate::{
 use super::scope_rules::for_init_needs_layout_scope;
 
 mod function;
+mod with_environment;
 use function::FunctionBindings;
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,
+    with_environment_counts: Vec<u32>,
     static_functions: Vec<Option<FunctionScopeId>>,
     scopes: Vec<Scope>,
     functions: Vec<FunctionScope>,
     global_slot_count: usize,
     local_slot_count: usize,
     pub(super) upvalue_slot_count: usize,
+    with_scopes: Vec<ScopeId>,
 }
 
 impl LayoutBuilder {
     pub(super) fn new(static_binding_count: usize, static_function_count: usize) -> Self {
         Self {
             operands: vec![BindingOperand::Unresolved; static_binding_count],
+            with_environment_counts: vec![0; static_binding_count],
             static_functions: vec![None; static_function_count],
             scopes: Vec::new(),
             functions: Vec::new(),
             global_slot_count: 0,
             local_slot_count: 0,
             upvalue_slot_count: 0,
+            with_scopes: Vec::new(),
         }
     }
 
@@ -44,6 +49,7 @@ impl LayoutBuilder {
         let unresolved_count = self.unresolved_count();
         Ok(BindingLayout::from_parts(BindingLayoutParts {
             operands: self.operands.clone(),
+            with_environment_counts: self.with_environment_counts.clone(),
             static_functions: self.static_functions.clone(),
             scopes: self.scopes.clone(),
             functions: self.functions.clone(),
@@ -111,6 +117,7 @@ impl LayoutBuilder {
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::DoWhile { .. }
+            | Stmt::With { .. }
             | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
@@ -144,9 +151,10 @@ impl LayoutBuilder {
                 }
                 Ok(())
             }
-            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { body, .. } => {
-                self.collect_hoisted_vars(body, var_scope)
-            }
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::With { body, .. }
+            | Stmt::Label { body, .. } => self.collect_hoisted_vars(body, var_scope),
             Stmt::For { init, body, .. } => {
                 if let Some(init) = init {
                     self.collect_hoisted_vars(init, var_scope)?;
@@ -255,6 +263,9 @@ impl LayoutBuilder {
                 self.analyze_expr(condition, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
+            Stmt::With { object, body } => {
+                self.analyze_with_statement(object, body, scope, var_scope, function)
+            }
             Stmt::Label { body, .. } => self.analyze_statement(body, scope, var_scope, function),
             Stmt::For {
                 init,
@@ -296,32 +307,25 @@ impl LayoutBuilder {
             Stmt::Throw(expr) | Stmt::Return(Some(expr)) | Stmt::Expr(expr) => {
                 self.analyze_expr(expr, scope, function)
             }
-            Stmt::FunctionDecl {
-                id,
-                arguments_binding,
-                params,
-                body,
-                ..
-            } => self.analyze_function(
-                *id,
-                FunctionBindings::new(None, arguments_binding.as_ref()),
-                params,
-                body,
-                scope,
-                function,
-            ),
+            declaration @ Stmt::FunctionDecl { .. } => {
+                self.analyze_function_declaration(declaration, scope, function)
+            }
             Stmt::Empty | Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
-            Stmt::VarDecl { init, .. } => {
+            Stmt::VarDecl { name, init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
                 }
-                Ok(())
+                self.resolve(name, scope, function)
             }
             Stmt::PatternDecl { pattern, init, .. } => {
                 self.analyze_expr(init, scope, function)?;
-                self.analyze_pattern_exprs(pattern, scope, function)
+                self.analyze_pattern_exprs(pattern, scope, function)?;
+                pattern.for_each_binding(&mut |binding| self.resolve(binding, scope, function))
             }
-            Stmt::ClassDecl { class, .. } => self.analyze_class(class, scope, function),
+            Stmt::ClassDecl { name, class } => {
+                self.resolve(name, scope, function)?;
+                self.analyze_class(class, scope, function)
+            }
         }
     }
 
@@ -372,6 +376,7 @@ impl LayoutBuilder {
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare(loop_scope, name)?;
+                self.resolve(name, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
             ForInTarget::Binding {
@@ -379,6 +384,7 @@ impl LayoutBuilder {
                 kind: DeclKind::Var,
             } => {
                 self.declare(var_scope, name)?;
+                self.resolve(name, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
             ForInTarget::PatternBinding {
@@ -387,6 +393,8 @@ impl LayoutBuilder {
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare_pattern(pattern, loop_scope)?;
+                pattern
+                    .for_each_binding(&mut |binding| self.resolve(binding, loop_scope, function))?;
                 self.analyze_pattern_exprs(pattern, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
@@ -395,6 +403,7 @@ impl LayoutBuilder {
                 kind: DeclKind::Var,
             } => {
                 self.declare_pattern(pattern, var_scope)?;
+                pattern.for_each_binding(&mut |binding| self.resolve(binding, scope, function))?;
                 self.analyze_pattern_exprs(pattern, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
@@ -711,15 +720,6 @@ impl LayoutBuilder {
         Ok(None)
     }
 
-    fn set_operand(&mut self, binding: &StaticBinding, operand: BindingOperand) -> Result<()> {
-        let index = binding.id().index()?;
-        let Some(slot) = self.operands.get_mut(index) else {
-            return Err(Error::runtime("static binding operand slot is not defined"));
-        };
-        *slot = operand;
-        Ok(())
-    }
-
     fn add_function(&mut self, parent: Option<FunctionScopeId>) -> FunctionScopeId {
         let id = FunctionScopeId::from_index(self.functions.len());
         self.functions.push(FunctionScope::new(parent));
@@ -750,13 +750,6 @@ impl LayoutBuilder {
         id
     }
 
-    fn unresolved_count(&self) -> usize {
-        self.operands
-            .iter()
-            .filter(|operand| matches!(operand, BindingOperand::Unresolved))
-            .count()
-    }
-
     pub(super) fn scope(&self, id: ScopeId) -> Result<&Scope> {
         self.scopes
             .get(id.index())
@@ -772,12 +765,6 @@ impl LayoutBuilder {
     pub(super) fn function(&self, id: FunctionScopeId) -> Result<&FunctionScope> {
         self.functions
             .get(id.index())
-            .ok_or_else(|| Error::runtime("binding layout function is not defined"))
-    }
-
-    pub(super) fn function_mut(&mut self, id: FunctionScopeId) -> Result<&mut FunctionScope> {
-        self.functions
-            .get_mut(id.index())
             .ok_or_else(|| Error::runtime("binding layout function is not defined"))
     }
 }

@@ -186,6 +186,7 @@ impl<'a> BytecodeCompiler<'a> {
             } => self.compile_if(condition, consequent, alternate.as_deref(), value),
             Stmt::While { condition, body } => self.compile_while(condition, body),
             Stmt::DoWhile { body, condition } => self.compile_do_while(body, condition),
+            Stmt::With { object, body } => self.compile_with(object, body, value),
             Stmt::Label { label, body } => self.compile_label(label, body, value),
             Stmt::For {
                 init,
@@ -555,6 +556,7 @@ fn statement_needs_lexical_scope(statement: &Statement) -> bool {
         | Stmt::If { .. }
         | Stmt::While { .. }
         | Stmt::DoWhile { .. }
+        | Stmt::With { .. }
         | Stmt::Label { .. }
         | Stmt::For { .. }
         | Stmt::ForIn { .. }

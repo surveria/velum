@@ -32,6 +32,10 @@ pub enum Stmt {
         body: Box<Statement>,
         condition: Expression,
     },
+    With {
+        object: Expression,
+        body: Box<Statement>,
+    },
     Label {
         label: StaticName,
         body: Box<Statement>,

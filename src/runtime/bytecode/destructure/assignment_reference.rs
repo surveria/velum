@@ -27,6 +27,14 @@ impl Context {
     ) -> Result<PatternStep<BytecodeAssignmentReference>> {
         match target {
             BytecodeAssignmentTarget::Binding(name) => {
+                if let Some(reference) = self.resolve_with_binding(name)? {
+                    return Ok(PatternStep::Value(
+                        BytecodeAssignmentReference::WithBinding {
+                            name: name.clone(),
+                            reference,
+                        },
+                    ));
+                }
                 let cell = self.get_or_materialize_binding_bytecode(name)?;
                 Ok(PatternStep::Value(BytecodeAssignmentReference::Binding {
                     name: name.clone(),

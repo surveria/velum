@@ -1,4 +1,7 @@
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    value::Value,
+};
 
 use super::Context;
 
@@ -395,6 +398,10 @@ impl Context {
             counter.record(VmStorageKind::Binding, scope.len())?;
         }
         for frame in &self.activation_frames {
+            counter.record(
+                VmStorageKind::Binding,
+                frame.with_environments().map_or(0, <[Value]>::len),
+            )?;
             if let Some(upvalues) = frame.upvalues() {
                 counter.record(VmStorageKind::Binding, upvalues.len())?;
             }
@@ -408,7 +415,13 @@ impl Context {
 
     fn record_callable_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         for function in &self.functions {
-            counter.record(VmStorageKind::Binding, function.upvalues.len())?;
+            counter.record(
+                VmStorageKind::Binding,
+                function
+                    .upvalues
+                    .len()
+                    .saturating_add(function.with_environments.len()),
+            )?;
             counter.record(
                 VmStorageKind::ObjectProperty,
                 function

@@ -23,6 +23,9 @@ impl Context {
         };
         let Some((fast_path, fast_upvalues)) = ({
             let function = self.function(*id)?;
+            if !function.with_environments.is_empty() {
+                return Ok(None);
+            }
             function.fast_path.as_ref().and_then(|fast_path| {
                 fast_path.kind.is_pure_return().then(|| {
                     let upvalues = if fast_path.needs_upvalues() {

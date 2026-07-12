@@ -150,7 +150,7 @@ impl Context {
             }
             completion @ Completion::Throw(_) => Ok(completion),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)

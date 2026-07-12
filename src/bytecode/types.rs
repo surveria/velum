@@ -1,8 +1,7 @@
-use std::{fmt, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     api::native_call::NativeCallTarget,
-    binding_metadata::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{
@@ -19,6 +18,10 @@ use super::numeric::{
     BytecodeNumericUnaryOp,
 };
 use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
+
+mod binding;
+
+pub use binding::BytecodeBinding;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -218,54 +221,6 @@ impl BytecodeFunctionDeclaration {
 
     pub const fn kind(&self) -> FunctionKind {
         self.kind
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BytecodeBinding {
-    name: StaticBinding,
-    operand: BindingOperand,
-    strict_write: bool,
-}
-
-impl BytecodeBinding {
-    pub(crate) fn compile(name: &StaticBinding, layout: &BindingLayout) -> Result<Self> {
-        let operand = layout
-            .operand_for_binding_id(name.id())?
-            .unwrap_or(BindingOperand::Unresolved);
-        Ok(Self {
-            name: name.clone(),
-            operand,
-            strict_write: false,
-        })
-    }
-
-    pub(crate) fn compile_write(
-        name: &StaticBinding,
-        layout: &BindingLayout,
-        strict_write: bool,
-    ) -> Result<Self> {
-        let mut binding = Self::compile(name, layout)?;
-        binding.strict_write = strict_write;
-        Ok(binding)
-    }
-
-    pub const fn name(&self) -> &StaticBinding {
-        &self.name
-    }
-
-    pub const fn operand(&self) -> BindingOperand {
-        self.operand
-    }
-
-    pub const fn strict_write(&self) -> bool {
-        self.strict_write
-    }
-}
-
-impl fmt::Display for BytecodeBinding {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.name.fmt(formatter)
     }
 }
 
@@ -521,6 +476,8 @@ pub enum BytecodeInstruction {
     LoadNewTarget,
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),
+    ResolveBinding(BytecodeBinding),
+    StoreResolvedBinding(BytecodeBinding),
     DeclareBinding {
         name: BytecodeBinding,
         kind: DeclKind,
@@ -709,6 +666,9 @@ pub enum BytecodeInstruction {
         labels: Option<Rc<[StaticName]>>,
         body: BytecodeBlock,
         condition: BytecodeBlock,
+    },
+    With {
+        body: BytecodeBlock,
     },
     For {
         labels: Option<Rc<[StaticName]>>,

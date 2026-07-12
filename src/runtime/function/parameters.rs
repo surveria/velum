@@ -284,7 +284,9 @@ impl Context {
         function: FunctionId,
         bytecode: &BytecodeFunction,
     ) -> Result<Completion> {
-        if let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)? {
+        if self.current_with_environments().is_empty()
+            && let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)?
+        {
             return Ok(completion);
         }
         self.eval_bytecode_function_body::<CAN_SUSPEND>(function, bytecode.body())

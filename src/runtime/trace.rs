@@ -332,6 +332,12 @@ impl Function {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
+        for object in self.with_environments.iter() {
+            visitor.visit(
+                VmCallableEdgeKind::JavaScriptFunctionInternal,
+                StrongEdgeReference::Value(object),
+            )?;
+        }
         for cell in self.upvalues.iter() {
             if let Some(result) = cell.with_initialized_value(|value| {
                 visitor.visit(

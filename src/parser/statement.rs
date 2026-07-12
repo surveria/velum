@@ -33,6 +33,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Do) {
             return self.do_while_statement();
         }
+        if self.match_kind(&TokenKind::With) {
+            return self.with_statement();
+        }
         if self.label_statement_start() {
             return self.label_statement();
         }
@@ -249,6 +252,61 @@ impl Parser {
         Ok(Stmt::DoWhile { body, condition })
     }
 
+    fn with_statement(&mut self) -> Result<Stmt> {
+        if self.is_strict_mode() {
+            return Err(self.parse_error("with statement is not allowed in strict mode"));
+        }
+        self.consume(&TokenKind::LParen, "expected '(' after 'with'")?;
+        let object = self.expression()?;
+        self.consume(&TokenKind::RParen, "expected ')' after with object")?;
+        let body = Box::new(self.statement()?);
+        if Self::invalid_with_body(&body) {
+            return Err(self.parse_error("declaration is not allowed as a with body"));
+        }
+        Ok(Stmt::With { object, body })
+    }
+
+    fn invalid_with_body(statement: &Statement) -> bool {
+        match statement.kind() {
+            Stmt::FunctionDecl { .. }
+            | Stmt::ClassDecl { .. }
+            | Stmt::VarDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            }
+            | Stmt::PatternDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            } => true,
+            Stmt::Label { body, .. } => Self::invalid_with_body(body),
+            Stmt::Empty
+            | Stmt::Block(_)
+            | Stmt::DeclList(_)
+            | Stmt::If { .. }
+            | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::With { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
+            | Stmt::Switch { .. }
+            | Stmt::Try { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::VarDecl {
+                kind: DeclKind::Var,
+                ..
+            }
+            | Stmt::PatternDecl {
+                kind: DeclKind::Var,
+                ..
+            }
+            | Stmt::Expr(_) => false,
+        }
+    }
+
     fn invalid_do_while_body(statement: &Statement) -> bool {
         match statement.kind() {
             Stmt::VarDecl {
@@ -263,6 +321,7 @@ impl Parser {
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::DoWhile { .. }
+            | Stmt::With { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
             | Stmt::ForOf { .. }

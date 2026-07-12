@@ -29,6 +29,7 @@ pub(super) fn for_init_needs_layout_scope(init: Option<&Statement>) -> bool {
         | Stmt::If { .. }
         | Stmt::While { .. }
         | Stmt::DoWhile { .. }
+        | Stmt::With { .. }
         | Stmt::Label { .. }
         | Stmt::For { .. }
         | Stmt::ForIn { .. }

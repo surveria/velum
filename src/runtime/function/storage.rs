@@ -35,7 +35,7 @@ impl Context {
 
     pub(super) fn activate_function_storage(
         &self,
-        upvalue_count: usize,
+        binding_count: usize,
         metadata_cache_count: usize,
         mut properties: FunctionProperties,
     ) -> Result<FunctionProperties> {
@@ -44,7 +44,7 @@ impl Context {
             .reserve_count(VmStorageKind::JavaScriptFunction, 1)?;
         let binding_reservation = self
             .storage_ledger
-            .reserve_count(VmStorageKind::Binding, upvalue_count)?;
+            .reserve_count(VmStorageKind::Binding, binding_count)?;
         let cache_reservation = self
             .storage_ledger
             .reserve_count(VmStorageKind::CacheEntry, metadata_cache_count)?;

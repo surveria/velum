@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::value::{FunctionId, Value};
 
 use super::{
-    FunctionUpvalues, bytecode::BytecodeContinuationFrame, function::FunctionSuperBinding,
-    private::PrivateEnvironment,
+    FunctionActivationEnvironment, FunctionUpvalues, bytecode::BytecodeContinuationFrame,
+    function::FunctionSuperBinding, private::PrivateEnvironment,
 };
 
 /// One VM-owned synchronous execution activation.
@@ -18,6 +18,7 @@ pub(in crate::runtime) enum ActivationFrame {
     Call {
         local_base: usize,
         upvalues: FunctionUpvalues,
+        with_environments: Vec<Value>,
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
@@ -35,24 +36,27 @@ pub(in crate::runtime) enum ActivationFrame {
         continuation: Option<BytecodeContinuationFrame>,
     },
     Bytecode {
+        with_environments: Vec<Value>,
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
 }
 
 impl ActivationFrame {
-    pub(in crate::runtime) const fn call(
+    pub(in crate::runtime) fn call(
         function: FunctionId,
         local_base: usize,
-        upvalues: FunctionUpvalues,
+        environment: FunctionActivationEnvironment,
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
         private_environment: Option<Rc<PrivateEnvironment>>,
     ) -> Self {
+        let (upvalues, with_environments) = environment;
         Self::Call {
             local_base,
             upvalues,
+            with_environments,
             this_value,
             new_target,
             super_binding,
@@ -80,8 +84,12 @@ impl ActivationFrame {
         }
     }
 
-    pub(in crate::runtime) const fn bytecode(continuation: BytecodeContinuationFrame) -> Self {
+    pub(in crate::runtime) const fn bytecode(
+        continuation: BytecodeContinuationFrame,
+        with_environments: Vec<Value>,
+    ) -> Self {
         Self::Bytecode {
+            with_environments,
             private_environment: None,
             continuation: Some(continuation),
         }
@@ -162,6 +170,30 @@ impl ActivationFrame {
         match self {
             Self::Call { upvalues, .. } => Some(upvalues),
             Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) fn with_environments(&self) -> Option<&[Value]> {
+        match self {
+            Self::Call {
+                with_environments, ..
+            }
+            | Self::Bytecode {
+                with_environments, ..
+            } => Some(with_environments),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn with_environments_mut(&mut self) -> Option<&mut Vec<Value>> {
+        match self {
+            Self::Call {
+                with_environments, ..
+            }
+            | Self::Bytecode {
+                with_environments, ..
+            } => Some(with_environments),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
         }
     }
 
