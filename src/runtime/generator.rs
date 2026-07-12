@@ -302,7 +302,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn generator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.generator_prototype {
+        if let Some(prototype) = self.realm.generator_prototype {
             return Ok(prototype);
         }
         // %GeneratorPrototype% inherits the iterator helpers through
@@ -321,12 +321,12 @@ impl Context {
         self.install_generator_prototype(prototype)?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.generator_prototype = Some(prototype);
+        self.realm.generator_prototype = Some(prototype);
         Ok(prototype)
     }
 
     pub(in crate::runtime) fn generator_function_prototype_value(&mut self) -> Result<Value> {
-        if let Some(prototype) = self.generator_function_prototype {
+        if let Some(prototype) = self.realm.generator_function_prototype {
             return Ok(Value::Object(prototype));
         }
         let function_prototype = self.function_constructor_prototype_value()?;
@@ -361,7 +361,7 @@ impl Context {
         )?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.generator_function_prototype = Some(prototype);
+        self.realm.generator_function_prototype = Some(prototype);
         Ok(Value::Object(prototype))
     }
 

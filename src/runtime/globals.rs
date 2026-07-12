@@ -17,7 +17,7 @@ use crate::{
 
 impl Context {
     pub(crate) fn unresolved_global_property_value(&mut self, name: &str) -> Result<Option<Value>> {
-        let Some(global_object) = self.global_object else {
+        let Some(global_object) = self.realm.global_object else {
             return Ok(None);
         };
         let lookup = self.property_lookup(name);
@@ -25,7 +25,7 @@ impl Context {
     }
 
     pub(crate) fn delete_unresolved_global_property(&mut self, name: &str) -> Result<bool> {
-        let Some(global_object) = self.global_object else {
+        let Some(global_object) = self.realm.global_object else {
             return Ok(true);
         };
         let object = Value::Object(global_object);
@@ -51,9 +51,10 @@ impl Context {
     #[must_use]
     pub fn get_global(&self, name: &str) -> Option<Value> {
         let atom = self.atom(name)?;
-        self.globals
+        self.realm
+            .globals
             .get(atom)
-            .or_else(|| self.builtin_globals.get(atom))
+            .or_else(|| self.realm.builtin_globals.get(atom))
             .and_then(|binding| binding.value(name).ok())
     }
 
@@ -83,9 +84,10 @@ impl Context {
     }
 
     pub(crate) const fn global_binding_count(&self) -> usize {
-        self.globals
+        self.realm
+            .globals
             .len()
-            .saturating_add(self.builtin_globals.len())
+            .saturating_add(self.realm.builtin_globals.len())
     }
 
     pub(crate) const fn shape_count(&self) -> usize {
@@ -240,7 +242,7 @@ impl Context {
     }
 
     pub(crate) fn global_object_id(&mut self) -> Result<ObjectId> {
-        if let Some(id) = self.global_object {
+        if let Some(id) = self.realm.global_object {
             return Ok(id);
         }
 
@@ -253,7 +255,7 @@ impl Context {
         )?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.global_object = Some(id);
+        self.realm.global_object = Some(id);
         let value = Value::Object(id);
         self.define_global_object_data_property(
             id,
@@ -268,7 +270,7 @@ impl Context {
     }
 
     pub(crate) fn is_global_object_id(&self, id: ObjectId) -> bool {
-        matches!(self.global_object, Some(global) if global == id)
+        matches!(self.realm.global_object, Some(global) if global == id)
     }
 
     pub(crate) fn global_object_property_value(
@@ -349,7 +351,7 @@ impl Context {
         if name != GLOBAL_THIS_NAME {
             return Ok(());
         }
-        let Some(id) = self.global_object else {
+        let Some(id) = self.realm.global_object else {
             return Ok(());
         };
         self.define_global_object_data_property(
@@ -369,7 +371,7 @@ impl Context {
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
         if let Some(atom) = self.atom(name)
-            && let Some(cell) = self.globals.get(atom)
+            && let Some(cell) = self.realm.globals.get(atom)
             && cell.kind() == crate::syntax::DeclKind::Var
         {
             return cell.assign(name, value);
@@ -385,7 +387,7 @@ impl Context {
 
     fn global_binding_property_value(&mut self, name: &str) -> Result<Option<Value>> {
         if let Some(atom) = self.atom(name)
-            && let Some(binding) = self.globals.get(atom)
+            && let Some(binding) = self.realm.globals.get(atom)
             && binding.kind() == crate::syntax::DeclKind::Var
         {
             return binding.value(name).map(Some);
@@ -395,18 +397,19 @@ impl Context {
 
     fn insert_mutable_global_builtin(&mut self, name: &str, value: Value) -> Result<()> {
         let atom = self.intern_atom(name)?;
-        if self.builtin_globals.contains(atom) {
+        if self.realm.builtin_globals.contains(atom) {
             return Ok(());
         }
         self.ensure_extra_binding_capacity(1)?;
-        self.builtin_globals
+        self.realm
+            .builtin_globals
             .insert(atom, BindingCell::new(value, true, DeclKind::Var))?;
         Ok(())
     }
 
     fn builtin_global_cell(&self, name: &str) -> Option<BindingCell> {
         let atom = self.atom(name)?;
-        self.builtin_globals.get(atom)
+        self.realm.builtin_globals.get(atom)
     }
 
     pub(crate) fn define_global_object_data_property(

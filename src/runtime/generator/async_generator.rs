@@ -36,7 +36,7 @@ impl Context {
         &mut self,
         constructor: Value,
     ) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_generator_function_prototype {
+        if let Some(prototype) = self.realm.async_generator_function_prototype {
             return Ok(prototype);
         }
         let async_function_prototype = self.async_function_constructor_prototype_value()?;
@@ -97,12 +97,12 @@ impl Context {
         self.install_to_string_tag(prototype, "AsyncGeneratorFunction")?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_generator_function_prototype = Some(prototype);
+        self.realm.async_generator_function_prototype = Some(prototype);
         Ok(prototype)
     }
 
     pub(in crate::runtime) fn async_generator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_generator_prototype {
+        if let Some(prototype) = self.realm.async_generator_prototype {
             return Ok(prototype);
         }
         let parent = self.async_iterator_prototype_id()?;
@@ -119,12 +119,12 @@ impl Context {
         self.install_async_generator_prototype(prototype)?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_generator_prototype = Some(prototype);
+        self.realm.async_generator_prototype = Some(prototype);
         Ok(prototype)
     }
 
     fn async_iterator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_iterator_prototype {
+        if let Some(prototype) = self.realm.async_iterator_prototype {
             return Ok(prototype);
         }
         let constructor_key = self.object_constructor_property_key()?;
@@ -159,7 +159,7 @@ impl Context {
         )?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_iterator_prototype = Some(prototype);
+        self.realm.async_iterator_prototype = Some(prototype);
         Ok(prototype)
     }
 

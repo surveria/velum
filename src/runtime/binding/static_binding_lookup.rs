@@ -230,11 +230,13 @@ impl Context {
                 ));
             }
         }
-        self.globals
+        self.realm
+            .globals
             .slot_of(atom)
             .map(|slot| BindingLocation::global(atom, slot))
             .or_else(|| {
-                self.builtin_globals
+                self.realm
+                    .builtin_globals
                     .slot_of(atom)
                     .map(|slot| BindingLocation::builtin_global(atom, slot))
             })
@@ -247,7 +249,7 @@ impl Context {
         let Some(atom) = self.atom(name) else {
             return false;
         };
-        self.globals.contains(atom) || self.scope_above_has_binding(0, atom)
+        self.realm.globals.contains(atom) || self.scope_above_has_binding(0, atom)
     }
 
     fn direct_compiled_local_static_binding(
@@ -324,7 +326,8 @@ impl Context {
     }
 
     fn compiled_global_location(&self, atom: AtomId, slot: BindingSlot) -> BindingLocation {
-        if !self.has_visible_local_scope() && self.globals.cell_for_slot(atom, slot).is_some() {
+        if !self.has_visible_local_scope() && self.realm.globals.cell_for_slot(atom, slot).is_some()
+        {
             return BindingLocation::exact_global(slot);
         }
         BindingLocation::global(atom, slot)
@@ -374,14 +377,14 @@ impl Context {
         if location.needs_shadow_guard() && self.scope_above_has_binding(0, atom) {
             return None;
         }
-        self.globals.cell_for_slot(atom, slot)
+        self.realm.globals.cell_for_slot(atom, slot)
     }
 
     fn exact_global_binding_at_location(&self, slot: BindingSlot) -> Option<BindingCell> {
         if self.has_visible_local_scope() {
             return None;
         }
-        self.globals.cell_at_slot(slot)
+        self.realm.globals.cell_at_slot(slot)
     }
 
     fn builtin_global_binding_at_location(
@@ -390,12 +393,12 @@ impl Context {
         atom: AtomId,
         slot: BindingSlot,
     ) -> Option<BindingCell> {
-        if self.globals.contains(atom)
+        if self.realm.globals.contains(atom)
             || (location.needs_shadow_guard() && self.scope_above_has_binding(0, atom))
         {
             return None;
         }
-        self.builtin_globals.cell_for_slot(atom, slot)
+        self.realm.builtin_globals.cell_for_slot(atom, slot)
     }
 
     fn local_binding_at_location(

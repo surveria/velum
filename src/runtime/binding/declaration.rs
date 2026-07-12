@@ -61,7 +61,8 @@ impl Context {
             .filter_map(|scope| scope.get(atom))
             .find(|cell| cell.kind() == DeclKind::Var)
             .or_else(|| {
-                self.globals
+                self.realm
+                    .globals
                     .get(atom)
                     .filter(|cell| cell.kind() == DeclKind::Var)
             })
@@ -324,9 +325,10 @@ impl Context {
 
     fn binding_count(&self) -> Result<usize> {
         let global_count = self
+            .realm
             .globals
             .len()
-            .checked_add(self.builtin_globals.len())
+            .checked_add(self.realm.builtin_globals.len())
             .ok_or_else(|| Error::limit("binding count overflowed"))?;
         self.locals
             .iter()
@@ -344,7 +346,7 @@ impl Context {
         {
             return scope;
         }
-        &self.globals
+        &self.realm.globals
     }
 
     pub(crate) fn active_bindings_mut(&mut self) -> &mut BindingScope {
@@ -353,7 +355,7 @@ impl Context {
         {
             return scope;
         }
-        &mut self.globals
+        &mut self.realm.globals
     }
 
     pub(crate) fn get_binding(&self, name: &str) -> Option<BindingCell> {
@@ -367,7 +369,7 @@ impl Context {
             .skip(self.current_local_frame_start())
             .rev()
             .find_map(|scope| scope.get(atom))
-            .or_else(|| self.globals.get(atom))
-            .or_else(|| self.builtin_globals.get(atom))
+            .or_else(|| self.realm.globals.get(atom))
+            .or_else(|| self.realm.builtin_globals.get(atom))
     }
 }

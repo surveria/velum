@@ -392,8 +392,8 @@ impl Context {
     }
 
     fn record_binding_storage(&self, counter: &mut StorageCounter) -> Result<()> {
-        counter.record(VmStorageKind::Binding, self.globals.len())?;
-        counter.record(VmStorageKind::Binding, self.builtin_globals.len())?;
+        counter.record(VmStorageKind::Binding, self.realm.globals.len())?;
+        counter.record(VmStorageKind::Binding, self.realm.builtin_globals.len())?;
         for scope in &self.locals {
             counter.record(VmStorageKind::Binding, scope.len())?;
         }
@@ -549,10 +549,13 @@ impl Context {
         )?;
         counter.record(VmStorageKind::CacheEntry, self.atoms.index_entry_count())?;
         counter.record(VmStorageKind::CacheEntry, self.strings.index_entry_count())?;
-        counter.record(VmStorageKind::CacheEntry, self.globals.index_entry_count()?)?;
         counter.record(
             VmStorageKind::CacheEntry,
-            self.builtin_globals.index_entry_count()?,
+            self.realm.globals.index_entry_count()?,
+        )?;
+        counter.record(
+            VmStorageKind::CacheEntry,
+            self.realm.builtin_globals.index_entry_count()?,
         )?;
         for scope in &self.locals {
             counter.record(VmStorageKind::CacheEntry, scope.index_entry_count()?)?;
@@ -575,7 +578,7 @@ impl Context {
         }
         counter.record(
             VmStorageKind::CacheEntry,
-            self.native_function_registry.ids().count(),
+            self.realm.native_function_registry.ids().count(),
         )?;
         counter.record(
             VmStorageKind::CacheEntry,
@@ -603,31 +606,31 @@ impl Context {
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.global_object.is_some()),
+            usize::from(self.realm.global_object.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.promise_prototype.is_some()),
+            usize::from(self.realm.promise_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.generator_prototype.is_some()),
+            usize::from(self.realm.generator_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.generator_function_prototype.is_some()),
+            usize::from(self.realm.generator_function_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.async_iterator_prototype.is_some()),
+            usize::from(self.realm.async_iterator_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.async_generator_prototype.is_some()),
+            usize::from(self.realm.async_generator_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.async_generator_function_prototype.is_some()),
+            usize::from(self.realm.async_generator_function_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,

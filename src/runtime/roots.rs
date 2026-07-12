@@ -183,8 +183,12 @@ impl Context {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;
-        visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;
+        visit_scope(&self.realm.globals, VmRootKind::GlobalBinding, visitor)?;
+        visit_scope(
+            &self.realm.builtin_globals,
+            VmRootKind::BuiltinBinding,
+            visitor,
+        )?;
         for scope in &self.locals {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
@@ -227,25 +231,25 @@ impl Context {
                 }
             }
         }
-        if let Some(id) = self.global_object {
+        if let Some(id) = self.realm.global_object {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.promise_prototype {
+        if let Some(id) = self.realm.promise_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.generator_prototype {
+        if let Some(id) = self.realm.generator_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.generator_function_prototype {
+        if let Some(id) = self.realm.generator_function_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.async_iterator_prototype {
+        if let Some(id) = self.realm.async_iterator_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.async_generator_prototype {
+        if let Some(id) = self.realm.async_generator_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
-        if let Some(id) = self.async_generator_function_prototype {
+        if let Some(id) = self.realm.async_generator_function_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
         if let Some(symbol) = self.iterator_symbol {
@@ -265,7 +269,7 @@ impl Context {
                 &Value::Symbol(self.symbols.get(id)?.clone()),
             )?;
         }
-        for id in self.native_function_registry.ids() {
+        for id in self.realm.native_function_registry.ids() {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
         }
         self.objects.visit_direct_roots(visitor)?;
