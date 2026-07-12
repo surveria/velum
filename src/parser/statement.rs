@@ -599,20 +599,25 @@ impl Parser {
     }
 
     fn throw_statement(&mut self) -> Result<Stmt> {
+        if self.peek_has_line_terminator_before(0) {
+            return Err(self.parse_error("line terminator is not allowed after 'throw'"));
+        }
         let value = self.expression()?;
-        self.consume_optional_semicolon();
+        self.consume_statement_terminator("expected statement terminator after throw expression")?;
         Ok(Stmt::Throw(value))
     }
 
     fn return_statement(&mut self) -> Result<Stmt> {
-        let value =
-            if self.check(&TokenKind::Semicolon) || self.check(&TokenKind::RBrace) || self.at_end()
-            {
-                None
-            } else {
-                Some(self.expression()?)
-            };
-        self.consume_optional_semicolon();
+        let value = if self.peek_has_line_terminator_before(0)
+            || self.check(&TokenKind::Semicolon)
+            || self.check(&TokenKind::RBrace)
+            || self.at_end()
+        {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume_statement_terminator("expected statement terminator after return statement")?;
         Ok(Stmt::Return(value))
     }
 

@@ -69,7 +69,6 @@ pub enum TokenKind {
     True,
     False,
     Null,
-    Undefined,
     Plus,
     PlusPlus,
     PlusEqual,

@@ -455,7 +455,6 @@ impl Parser {
             TokenKind::True => Expression::new(Expr::Literal(Value::Bool(true)), token_span),
             TokenKind::False => Expression::new(Expr::Literal(Value::Bool(false)), token_span),
             TokenKind::Null => Expression::new(Expr::Literal(Value::Null), token_span),
-            TokenKind::Undefined => Expression::new(Expr::Literal(Value::Undefined), token_span),
             TokenKind::This => Expression::new(Expr::This, token_span),
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => {
                 return Err(Error::parse_at(
