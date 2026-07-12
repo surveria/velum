@@ -67,6 +67,13 @@ pub(in crate::runtime) enum IteratorStep {
     Abrupt(Completion),
 }
 
+/// Result of `IteratorStep` before `IteratorValue` observes the `value` field.
+pub(in crate::runtime) enum IteratorResultStep {
+    Result(Value),
+    Done,
+    Abrupt(Completion),
+}
+
 /// Iterator state selected by an ordinary or asynchronous for-of head.
 #[derive(Debug)]
 pub(in crate::runtime) enum ForOfIterator {
@@ -285,43 +292,64 @@ impl Context {
                 None => Ok(IteratorStep::Done),
             },
             IteratorSource::Protocol {
-                iterator,
-                next,
-                done,
-            } => {
-                if *done {
-                    return Ok(IteratorStep::Done);
-                }
-                let next = next.clone();
-                let iterator = iterator.clone();
-                let result = match self.call(&next, &[], iterator)? {
-                    Completion::Normal(value) => value,
-                    Completion::Throw(value) => {
-                        set_protocol_done(source);
-                        return Ok(IteratorStep::Abrupt(Completion::Throw(value)));
-                    }
-                    completion => {
-                        return completion.into_result().map(IteratorStep::Value);
-                    }
-                };
-                if self.semantic_object_ref(&result)?.is_none() {
-                    return Err(Error::type_error(format!(
-                        "iterator result '{result}' is not an object"
-                    )));
-                }
-                let _result_scope = self.transient_root_scope(
-                    VmRootKind::TransientTemporary,
-                    std::iter::once(&result),
-                )?;
-                if to_boolean(&self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
-                    set_protocol_done(source);
-                    return Ok(IteratorStep::Done);
-                }
-                Ok(IteratorStep::Value(
+                iterator: _,
+                next: _,
+                done: _,
+            } => match self.iterator_step_result(source)? {
+                IteratorResultStep::Result(result) => Ok(IteratorStep::Value(
                     self.get_named(&result, ITERATOR_RESULT_VALUE_PROPERTY)?,
-                ))
-            }
+                )),
+                IteratorResultStep::Done => Ok(IteratorStep::Done),
+                IteratorResultStep::Abrupt(completion) => Ok(IteratorStep::Abrupt(completion)),
+            },
         }
+    }
+
+    /// ECMAScript `IteratorStep` without eagerly reading `value` from a
+    /// non-complete result object. Joint iteration strict-mode checks use this
+    /// to test the remaining iterators without observing poisoned values.
+    pub(in crate::runtime) fn iterator_step_result(
+        &mut self,
+        source: &mut IteratorSource,
+    ) -> Result<IteratorResultStep> {
+        let _root_scope = self.iterator_root_scope(source)?;
+        let IteratorSource::Protocol {
+            iterator,
+            next,
+            done,
+        } = source
+        else {
+            return Err(Error::runtime(
+                "raw iterator result stepping requires a protocol iterator",
+            ));
+        };
+        if *done {
+            return Ok(IteratorResultStep::Done);
+        }
+        let next = next.clone();
+        let iterator = iterator.clone();
+        let result = match self.call(&next, &[], iterator)? {
+            Completion::Normal(value) => value,
+            Completion::Throw(value) => {
+                set_protocol_done(source);
+                return Ok(IteratorResultStep::Abrupt(Completion::Throw(value)));
+            }
+            completion => {
+                return completion.into_result().map(IteratorResultStep::Result);
+            }
+        };
+        if self.semantic_object_ref(&result)?.is_none() {
+            return Err(Error::type_error(format!(
+                "iterator result '{result}' is not an object"
+            )));
+        }
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+        if to_boolean(&self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
+            set_protocol_done(source);
+            return Ok(IteratorResultStep::Done);
+        }
+        Ok(IteratorResultStep::Result(result))
     }
 
     /// Resumes the ECMAScript `yield*` delegation loop.

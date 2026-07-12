@@ -18,7 +18,10 @@ impl Context {
         };
         let result = match kind {
             IteratorFunctionKind::Constructor => Self::eval_iterator_abstract_call(),
+            IteratorFunctionKind::Concat => self.eval_iterator_concat(args),
             IteratorFunctionKind::From { .. } => self.eval_iterator_from(args),
+            IteratorFunctionKind::Zip => self.eval_iterator_zip(args, false),
+            IteratorFunctionKind::ZipKeyed => self.eval_iterator_zip(args, true),
             IteratorFunctionKind::PrototypeMap => {
                 self.eval_iterator_prototype_map(args, this_value)
             }
@@ -65,6 +68,8 @@ impl Context {
             }
             IteratorFunctionKind::HelperNext(id) => self.eval_iterator_helper_next(id),
             IteratorFunctionKind::HelperReturn(id) => self.eval_iterator_helper_return(id),
+            IteratorFunctionKind::StaticNext(id) => self.eval_iterator_static_next(id),
+            IteratorFunctionKind::StaticReturn(id) => self.eval_iterator_static_return(id),
             IteratorFunctionKind::WrapNext(id) => self.eval_wrapped_iterator_next(id),
             IteratorFunctionKind::WrapReturn(id) => self.eval_wrapped_iterator_return(id),
         };
