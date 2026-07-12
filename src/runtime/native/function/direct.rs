@@ -23,19 +23,6 @@ const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
 }
 
 impl Context {
-    pub(in crate::runtime) fn eval_native_function_in_realm(
-        &mut self,
-        id: NativeFunctionId,
-        kind: NativeFunctionKind,
-        args: &[Value],
-        this_value: &Value,
-    ) -> Result<Value> {
-        let realm = self.native_function(id)?.realm();
-        self.with_realm(realm, |context| {
-            context.eval_direct_or_generic_native_function_kind(kind, args, this_value)
-        })
-    }
-
     pub(crate) fn eval_direct_native_property_call(
         &mut self,
         target: NativeCallTarget,

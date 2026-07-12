@@ -208,6 +208,7 @@ check_storage_accounting_boundary() {
     'self.inactive_realms.len().saturating_sub(1),' \
     'self.collection_object_slots.iter().flatten().count(),' \
     'self.symbols.registry_entry_count(),' \
+    'self.well_known_symbols.len())?;' \
     'self.promise_object_slots.iter().flatten().count(),' \
     'counter.record(VmStorageKind::Association, realm.association_count())?;' \
     'usize::from(self.iterator_symbol.is_some()),' \
@@ -1172,6 +1173,7 @@ check_direct_root_boundary() {
     'for id in realm.anchor_objects() {' \
     'if let Some(symbol) = self.iterator_symbol {' \
     'for key in self.well_known_properties.keys() {' \
+    'for (_, id) in &self.well_known_symbols {' \
     'if let Some(keys) = self.descriptor_property_keys {' \
     'for id in realm.native_function_ids() {' \
     'self.objects.visit_direct_roots(visitor)?;' \
@@ -1738,6 +1740,7 @@ storage_ledger
 atoms
 strings
 symbols
+well_known_symbols
 well_known_properties
 iterator_symbol
 descriptor_property_keys

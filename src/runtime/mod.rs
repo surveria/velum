@@ -13,7 +13,7 @@ use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
-use crate::storage::symbol::SymbolTable;
+use crate::storage::symbol::{SymbolId, SymbolTable};
 use crate::syntax::{FunctionKind, StaticBindingId};
 use crate::value::{ErrorName, FunctionId, Value};
 
@@ -96,6 +96,7 @@ pub struct Context {
     atoms: AtomTable,
     strings: StringHeap,
     symbols: SymbolTable,
+    well_known_symbols: Vec<(&'static str, SymbolId)>,
     well_known_properties: WellKnownPropertyKeys,
     /// VM-local id of the well-known `Symbol.iterator` symbol, cached when the
     /// `Symbol` builtin installs its well-known symbol properties.
@@ -365,6 +366,7 @@ impl Context {
                 identity.clone(),
                 storage_limits.max_count(VmStorageKind::Symbol),
             ),
+            well_known_symbols: Vec::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
             iterator_symbol: None,
             descriptor_property_keys: None,
@@ -726,74 +728,5 @@ impl Context {
         };
         self.objects.validate_id(id)?;
         Ok(Some(id))
-    }
-
-    pub(in crate::runtime) fn constructor_instance_prototype_with_default(
-        &mut self,
-        new_target: &Value,
-        default_kind: NativeFunctionKind,
-    ) -> Result<crate::value::ObjectId> {
-        if let Some(prototype) = self.constructor_instance_prototype(new_target)? {
-            return Ok(prototype);
-        }
-        let realm = self.callable_realm_index(new_target)?;
-        self.with_realm(realm, |context| {
-            context.native_constructor_default_prototype(default_kind)
-        })
-    }
-
-    fn callable_realm_index(&self, value: &Value) -> Result<RealmIndex> {
-        match value {
-            Value::Function(id) => self.function(*id).map(|function| function.realm),
-            Value::NativeFunction(id) => {
-                let function = self.native_function(*id)?;
-                if let NativeFunctionKind::BoundFunction(bound) = function.kind() {
-                    let target = self.bound_function_target(bound)?;
-                    return self.callable_realm_index(&target);
-                }
-                Ok(function.realm())
-            }
-            Value::Object(id) if self.objects.proxy_callability(*id)? => {
-                Err(Error::runtime("Proxy function realm is unavailable"))
-            }
-            Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::BigInt(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => Err(Error::type_error("new.target is not a constructor")),
-        }
-    }
-
-    fn native_constructor_default_prototype(
-        &mut self,
-        kind: NativeFunctionKind,
-    ) -> Result<crate::value::ObjectId> {
-        let constructor = match kind {
-            NativeFunctionKind::AsyncFunction => self.async_function_constructor_value()?,
-            NativeFunctionKind::AsyncGeneratorFunction => {
-                self.async_generator_function_constructor_value()?
-            }
-            NativeFunctionKind::GeneratorFunction => self.generator_function_constructor_value()?,
-            NativeFunctionKind::ErrorConstructor(name) => self.error_constructor_value(name)?,
-            _ => self
-                .builtin_value(kind.name())?
-                .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,
-        };
-        let Value::NativeFunction(id) = constructor else {
-            return Err(Error::runtime(
-                "default intrinsic constructor is not a native function",
-            ));
-        };
-        let Value::Object(prototype) = self.native_function(id)?.properties().prototype() else {
-            return Err(Error::runtime(
-                "default intrinsic constructor prototype is not an object",
-            ));
-        };
-        Ok(prototype)
     }
 }

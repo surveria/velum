@@ -591,6 +591,7 @@ impl Context {
             VmStorageKind::Association,
             self.symbols.registry_entry_count(),
         )?;
+        counter.record(VmStorageKind::Association, self.well_known_symbols.len())?;
         counter.record(
             VmStorageKind::Association,
             self.promise_object_slots.iter().flatten().count(),

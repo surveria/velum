@@ -143,3 +143,25 @@ fn foreign_generator_constructor_separates_new_target_and_body_realms() -> TestR
     assert_eq!(result, Value::Bool(true));
     Ok(())
 }
+
+#[test]
+fn foreign_callable_allocates_typed_errors_in_its_origin_realm() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let result = context.eval(
+        r#"
+        var other = __createRealm();
+        var C = other.eval("(class {})");
+        var classError;
+        try { C(); } catch (error) { classError = error; }
+        var otherToString = other.String.prototype.toString;
+        var methodError;
+        try { otherToString.call(true); } catch (error) { methodError = error; }
+        classError.constructor === other.TypeError &&
+            methodError.constructor === other.TypeError;
+        "#,
+    )?;
+    assert_eq!(result, Value::Bool(true));
+    Ok(())
+}

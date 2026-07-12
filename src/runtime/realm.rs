@@ -2,8 +2,10 @@ use crate::{
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::{
-        Context, VmStorageKind, abstract_operations::SetFailureBehavior,
-        binding::scope::BindingScope, native::NativeFunctionRegistry,
+        Context, VmStorageKind,
+        abstract_operations::SetFailureBehavior,
+        binding::scope::BindingScope,
+        native::{NativeFunctionKind, NativeFunctionRegistry},
         storage_ledger::VmStorageLedger,
     },
     value::{NativeFunctionId, ObjectId, Value},
@@ -211,6 +213,105 @@ impl Context {
             })
     }
 
+    pub(in crate::runtime) fn constructor_instance_prototype_with_default(
+        &mut self,
+        new_target: &Value,
+        default_kind: NativeFunctionKind,
+    ) -> Result<ObjectId> {
+        if let Some(prototype) = self.constructor_instance_prototype(new_target)? {
+            return Ok(prototype);
+        }
+        let realm = self.callable_realm_index(new_target)?;
+        self.with_realm(realm, |context| {
+            context.native_constructor_default_prototype(default_kind)
+        })
+    }
+
+    fn callable_realm_index(&self, value: &Value) -> Result<RealmIndex> {
+        let mut current = value.clone();
+        let mut depth = 0_usize;
+        loop {
+            if depth > self.limits.max_expression_depth {
+                return Err(Error::limit("function realm resolution depth exceeded"));
+            }
+            match current {
+                Value::Function(id) => return self.function(id).map(|function| function.realm),
+                Value::NativeFunction(id) => {
+                    let function = self.native_function(id)?;
+                    if let NativeFunctionKind::BoundFunction(bound) = function.kind() {
+                        current = self.bound_function_target(bound)?;
+                    } else {
+                        return Ok(function.realm());
+                    }
+                }
+                Value::Object(id) => {
+                    let proxy = self
+                        .objects
+                        .proxy_value(id)?
+                        .ok_or_else(|| Error::type_error("new.target is not a constructor"))?;
+                    current = proxy.target().cloned().ok_or_else(|| {
+                        Error::type_error("Cannot resolve the realm of a revoked Proxy")
+                    })?;
+                }
+                Value::HostFunction(_)
+                | Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::BigInt(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_) => {
+                    return Err(Error::type_error("new.target is not a constructor"));
+                }
+            }
+            depth = depth
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("function realm resolution depth overflowed"))?;
+        }
+    }
+
+    fn native_constructor_default_prototype(
+        &mut self,
+        kind: NativeFunctionKind,
+    ) -> Result<ObjectId> {
+        let constructor = match kind {
+            NativeFunctionKind::AsyncFunction => self.async_function_constructor_value()?,
+            NativeFunctionKind::AsyncGeneratorFunction => {
+                self.async_generator_function_constructor_value()?
+            }
+            NativeFunctionKind::GeneratorFunction => self.generator_function_constructor_value()?,
+            NativeFunctionKind::ErrorConstructor(name) => self.error_constructor_value(name)?,
+            _ => self
+                .builtin_value(kind.name())?
+                .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,
+        };
+        let Value::NativeFunction(id) = constructor else {
+            return Err(Error::runtime(
+                "default intrinsic constructor is not a native function",
+            ));
+        };
+        let Value::Object(prototype) = self.native_function(id)?.properties().prototype() else {
+            return Err(Error::runtime(
+                "default intrinsic constructor prototype is not an object",
+            ));
+        };
+        Ok(prototype)
+    }
+
+    pub(in crate::runtime) fn eval_native_function_in_realm(
+        &mut self,
+        id: NativeFunctionId,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let realm = self.native_function(id)?.realm();
+        self.with_realm(realm, |context| {
+            context.eval_direct_or_generic_native_function_kind(kind, args, this_value)
+        })
+    }
+
     pub(in crate::runtime) fn with_realm<T>(
         &mut self,
         target: RealmIndex,
@@ -221,7 +322,16 @@ impl Context {
             return operation(self);
         }
         self.swap_active_realm(target)?;
-        let result = operation(self);
+        let result = match operation(self) {
+            Err(error) if error.javascript_error_request().is_some() => {
+                match crate::runtime::control::runtime_exception_value(self, &error) {
+                    Ok(Some(value)) => Err(Error::javascript_local(self.identity.clone(), value)),
+                    Ok(None) => Err(error),
+                    Err(conversion_error) => Err(conversion_error),
+                }
+            }
+            result => result,
+        };
         let restore_result = self.swap_active_realm(previous);
         restore_result?;
         result

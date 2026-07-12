@@ -251,6 +251,12 @@ impl Context {
                 &Value::Symbol(self.symbols.get(id)?.clone()),
             )?;
         }
+        for (_, id) in &self.well_known_symbols {
+            visitor.visit_value(
+                VmRootKind::RuntimeAnchor,
+                &Value::Symbol(self.symbols.get(*id)?.clone()),
+            )?;
+        }
         for realm in self.realm_states() {
             for id in realm.native_function_ids() {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
