@@ -13,6 +13,7 @@ mod iterator_stepping;
 mod json;
 mod json_meta;
 mod json_raw;
+mod map_modern;
 mod map_set;
 mod math;
 mod math_sum_precise;

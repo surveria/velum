@@ -16,6 +16,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Option<Result<Value>> {
+        if let Some(result) = self.eval_modern_map_native_function_kind(kind, args, this_value) {
+            return Some(result);
+        }
         let result = match kind {
             NativeFunctionKind::Map
             | NativeFunctionKind::Set

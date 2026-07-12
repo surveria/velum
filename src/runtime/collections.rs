@@ -244,7 +244,7 @@ impl Context {
         key: Value,
         value: Value,
     ) -> Result<()> {
-        let key = normalize_zero_key(key);
+        let key = canonicalize_keyed_collection_key(key);
         if let Some(entry) = self
             .collection_mut(id)?
             .entries
@@ -790,7 +790,7 @@ impl Context {
 }
 
 /// Map and Set normalize a -0 key to +0 on insertion.
-fn normalize_zero_key(key: Value) -> Value {
+pub(in crate::runtime) fn canonicalize_keyed_collection_key(key: Value) -> Value {
     if matches!(&key, Value::Number(number) if *number == 0.0) {
         return Value::Number(0.0);
     }

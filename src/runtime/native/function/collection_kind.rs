@@ -1,6 +1,9 @@
 use super::kind::NativeFunctionKind;
 
 const MAP_NAME: &str = "Map";
+const MAP_GROUP_BY_NAME: &str = "groupBy";
+const MAP_GET_OR_INSERT_NAME: &str = "getOrInsert";
+const MAP_GET_OR_INSERT_COMPUTED_NAME: &str = "getOrInsertComputed";
 const SET_NAME: &str = "Set";
 pub(in crate::runtime::native) const WEAK_MAP_NAME: &str = "WeakMap";
 pub(in crate::runtime::native) const WEAK_SET_NAME: &str = "WeakSet";
@@ -64,7 +67,11 @@ impl NativeFunctionKind {
             | Self::SetIsSubsetOf
             | Self::SetIsSupersetOf
             | Self::SetIsDisjointFrom => Some(1.0),
-            Self::MapSet | Self::WeakMapSet => Some(2.0),
+            Self::MapSet
+            | Self::WeakMapSet
+            | Self::MapGroupBy
+            | Self::MapGetOrInsert
+            | Self::MapGetOrInsertComputed => Some(2.0),
             _ => None,
         }
     }
@@ -78,6 +85,9 @@ impl NativeFunctionKind {
             Self::WeakMap => Some(WEAK_MAP_NAME),
             Self::WeakSet => Some(WEAK_SET_NAME),
             Self::MapGet | Self::WeakMapGet => Some(COLLECTION_METHOD_GET_NAME),
+            Self::MapGroupBy => Some(MAP_GROUP_BY_NAME),
+            Self::MapGetOrInsert => Some(MAP_GET_OR_INSERT_NAME),
+            Self::MapGetOrInsertComputed => Some(MAP_GET_OR_INSERT_COMPUTED_NAME),
             Self::MapSet | Self::WeakMapSet => Some(COLLECTION_METHOD_SET_NAME),
             Self::SetAdd | Self::WeakSetAdd => Some(COLLECTION_METHOD_ADD_NAME),
             Self::MapHas | Self::SetHas | Self::WeakMapHas | Self::WeakSetHas => {

@@ -100,6 +100,9 @@ impl Context {
         self.push_native_function_with_id(id, constructor_kind, Value::Object(prototype), name)?;
         self.install_species_accessor(id)?;
         self.install_collection_prototype_methods(prototype, kind)?;
+        if kind == CollectionKind::Map {
+            self.install_modern_map_constructor_methods(id)?;
+        }
         let global_name = match kind {
             CollectionKind::Map => MAP_NAME,
             CollectionKind::Set => SET_NAME,
@@ -171,6 +174,9 @@ impl Context {
         for (name, method_kind) in methods {
             let method = self.collection_method_value(*method_kind)?;
             self.define_non_enumerable_object_property(prototype, name, method)?;
+        }
+        if kind == CollectionKind::Map {
+            self.install_modern_map_prototype_methods(prototype)?;
         }
         let size_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::MapSizeGetter,
