@@ -15,6 +15,7 @@ impl NativeFunctionKind {
 
     pub(super) const fn string_prototype_length(self) -> Option<f64> {
         match self {
+            Self::StringPrototypeAnnexB(kind) => Some(kind.length()),
             Self::StringPrototypeToLocaleLowerCase
             | Self::StringPrototypeToLocaleUpperCase
             | Self::StringPrototypeToLowerCase

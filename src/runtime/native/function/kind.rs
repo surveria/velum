@@ -461,6 +461,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,
     StringPrototypeAt,
+    StringPrototypeAnnexB(super::string_annexb_kind::StringAnnexBFunctionKind),
     StringPrototypeCodePointAt,
     StringPrototypeConcat,
     StringPrototypeEndsWith,

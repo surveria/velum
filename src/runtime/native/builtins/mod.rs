@@ -30,6 +30,7 @@ mod regexp;
 mod set_operations;
 mod species;
 mod string;
+mod string_annexb;
 mod string_extra;
 mod string_methods;
 mod string_modern;
