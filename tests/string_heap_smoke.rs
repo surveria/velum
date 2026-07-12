@@ -260,7 +260,7 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
 
     let length = vm
         .context()
-        .eval(r#"var boxed = new String("camera"); boxed.length"#)?;
+        .eval(r#"let boxed = new String("camera"); boxed.length"#)?;
     ensure_value(&length, &Value::Number(6.0))?;
     let after_construct = vm.resource_usage();
     ensure_usize(
@@ -319,7 +319,7 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
     let after_first_wrapper_shape_count = after_construct.shape_count;
     let short_length = vm
         .context()
-        .eval(r#"var shortBoxed = new String("go"); shortBoxed.length"#)?;
+        .eval(r#"let shortBoxed = new String("go"); shortBoxed.length"#)?;
     ensure_value(&short_length, &Value::Number(2.0))?;
     ensure_usize(
         vm.resource_usage().shape_count,

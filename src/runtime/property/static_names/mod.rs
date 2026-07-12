@@ -269,20 +269,13 @@ impl Context {
             return Ok(());
         };
         if let SemanticPropertyWrite::ObjectTail(id) = write
+            && !self.is_global_object_id(id)
             && property.as_str() != PROTOTYPE_PROPERTY
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
-            if self.is_global_object_id(id) {
-                self.sync_global_object_property_binding(id, property.as_str(), value)?;
-            }
             return Ok(());
         }
-        self.finish_semantic_property_write(write, lookup, value.clone())?;
-        if let Value::Object(id) = object
-            && self.is_global_object_id(*id)
-        {
-            self.sync_global_object_property_binding(*id, property.as_str(), value)?;
-        }
+        self.finish_semantic_property_write(write, lookup, value)?;
         Ok(())
     }
 
@@ -296,7 +289,7 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(false);
         };
-        if self.objects.is_proxy(*id) {
+        if self.objects.is_proxy(*id) || self.is_global_object_id(*id) {
             return Ok(false);
         }
         let value = self.runtime_value(value)?;
@@ -309,11 +302,8 @@ impl Context {
         ) {
             return Ok(false);
         }
-        if !self.set_cached_object_property_value(*id, access, lookup, value.clone())? {
+        if !self.set_cached_object_property_value(*id, access, lookup, value)? {
             return Ok(false);
-        }
-        if self.is_global_object_id(*id) {
-            self.sync_global_object_property_binding(*id, property.as_str(), value)?;
         }
         Ok(true)
     }
@@ -328,7 +318,7 @@ impl Context {
         let Value::Object(object_id) = object else {
             return Ok(None);
         };
-        if property.as_str() == PROTOTYPE_PROPERTY {
+        if self.is_global_object_id(*object_id) || property.as_str() == PROTOTYPE_PROPERTY {
             return Ok(None);
         }
 
@@ -369,21 +359,14 @@ impl Context {
             return Ok(());
         };
         if let SemanticPropertyWrite::ObjectTail(id) = write
+            && !self.is_global_object_id(id)
             && property.name() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
-            if self.is_global_object_id(id) {
-                self.sync_global_object_property_binding(id, property.name(), value)?;
-            }
             return Ok(());
         }
-        self.finish_semantic_property_write(write, lookup, value.clone())?;
-        if let Value::Object(id) = object
-            && self.is_global_object_id(*id)
-        {
-            self.sync_global_object_property_binding(*id, property.name(), value)?;
-        }
+        self.finish_semantic_property_write(write, lookup, value)?;
         Ok(())
     }
 
@@ -397,7 +380,10 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(false);
         };
-        if self.objects.is_proxy(*id) || self.objects.array_len_if_array(*id)?.is_some() {
+        if self.objects.is_proxy(*id)
+            || self.is_global_object_id(*id)
+            || self.objects.array_len_if_array(*id)?.is_some()
+        {
             return Ok(false);
         }
         let value = self.runtime_value(value)?;
@@ -409,11 +395,8 @@ impl Context {
         ) {
             return Ok(false);
         }
-        if !self.set_cached_object_property_value(*id, access, lookup, value.clone())? {
+        if !self.set_cached_object_property_value(*id, access, lookup, value)? {
             return Ok(false);
-        }
-        if self.is_global_object_id(*id) {
-            self.sync_global_object_property_binding(*id, property.name(), value)?;
         }
         Ok(true)
     }
@@ -428,7 +411,8 @@ impl Context {
         let Value::Object(object_id) = object else {
             return Ok(None);
         };
-        if property.name() == PROTOTYPE_PROPERTY
+        if self.is_global_object_id(*object_id)
+            || property.name() == PROTOTYPE_PROPERTY
             || self.objects.array_len_if_array(*object_id)?.is_some()
         {
             return Ok(None);
@@ -578,6 +562,7 @@ impl Context {
             return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
+            && !self.is_global_object_id(id)
             && property.as_str() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
         {
@@ -600,6 +585,7 @@ impl Context {
             return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
+            && !self.is_global_object_id(id)
             && property.name() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
         {

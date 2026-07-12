@@ -186,15 +186,9 @@ impl Context {
             return Ok(());
         }
         let value = self.runtime_value(value)?;
-        let sync_value = value.clone();
         let key = self.intern_static_property_key(property)?;
         let lookup = PropertyLookup::from_key(property.as_str(), key);
         self.set(object, lookup, value, object, bytecode_set_failure(strict))?;
-        if let Value::Object(id) = object
-            && self.is_global_object_id(*id)
-        {
-            self.sync_global_object_property_binding(*id, property.as_str(), sync_value)?;
-        }
         Ok(())
     }
 
@@ -220,7 +214,6 @@ impl Context {
             return Ok(());
         }
         let value = self.runtime_value(value)?;
-        let sync_value = value.clone();
         self.set(
             object,
             property.lookup(),
@@ -228,11 +221,6 @@ impl Context {
             object,
             bytecode_set_failure(strict),
         )?;
-        if let Value::Object(id) = object
-            && self.is_global_object_id(*id)
-        {
-            self.sync_global_object_property_binding(*id, property.name(), sync_value)?;
-        }
         Ok(())
     }
 
@@ -258,13 +246,20 @@ impl Context {
             reference.set(self, name, new_value.clone())?;
             return Ok(if prefix { new_value } else { old_value });
         }
-        let binding = self
-            .get_binding_bytecode(name)?
-            .ok_or_else(|| reference_error_undefined(name.name()))?;
-        let old_value = binding.value(name.name())?;
+        let binding = self.get_binding_bytecode(name)?;
+        let old_value = if let Some(binding) = &binding {
+            binding.value(name.name())?
+        } else {
+            self.unresolved_global_property_value(name.name().name())?
+                .ok_or_else(|| reference_error_undefined(name.name()))?
+        };
         let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
         self.checked_value(new_value.clone())?;
-        self.assign_bytecode_cell(name, &binding, new_value.clone())?;
+        if let Some(binding) = binding {
+            self.assign_bytecode_cell(name, &binding, new_value.clone())?;
+        } else {
+            self.assign_bytecode_or_create_sloppy_global(name, new_value.clone())?;
+        }
         Ok(if prefix { new_value } else { old_value })
     }
 

@@ -183,7 +183,6 @@ impl Context {
         let buffer = ByteBuffer::from_bytes(bytes, ByteBufferOrigin::HostProvided);
         let value = self.create_typed_array_with_buffer(TypedArrayElementKind::Uint8, buffer)?;
         self.insert_global_builtin(name, value.clone())?;
-        self.sync_global_object_binding_property(name, value.clone())?;
         Ok(value)
     }
 

@@ -323,7 +323,7 @@ fn compiled_layout_drives_hoisted_var_frame_slots() -> TestResult {
 fn compiled_global_slots_are_separate_from_builtins() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
-    vm.eval("Number; Array; Object")?;
+    vm.eval("globalThis; Number; Array; Object")?;
     let builtin_bindings = vm.resource_usage().global_bindings;
     ensure_greater_than(builtin_bindings, 0, "builtin global bindings")?;
 

@@ -535,10 +535,12 @@ impl Context {
         if let Some(function) = self.unresolved_direct_builtin_callable(callee)? {
             return self.call_reference_from_value(callee, native, strict, function);
         }
-        let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
-            return Err(reference_error_undefined(callee.name()));
+        let function = if let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? {
+            binding.value(callee.name())?
+        } else {
+            self.unresolved_global_property_value(callee.name().name())?
+                .ok_or_else(|| reference_error_undefined(callee.name()))?
         };
-        let function = binding.value(callee.name())?;
         self.call_reference_from_value(callee, native, strict, function)
     }
 

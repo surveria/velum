@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
     error::{Error, Result},
     ownership::VmIdentity,
@@ -8,6 +10,7 @@ use crate::{
         native::{NativeFunctionKind, NativeFunctionRegistry},
         storage_ledger::VmStorageLedger,
     },
+    storage::atom::AtomId,
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -47,6 +50,7 @@ impl RealmIndex {
 pub(in crate::runtime) struct RealmState {
     pub(super) globals: BindingScope,
     pub(super) builtin_globals: BindingScope,
+    pub(super) object_global_names: BTreeSet<AtomId>,
     pub(super) native_function_registry: NativeFunctionRegistry,
     pub(super) throw_type_error: Option<NativeFunctionId>,
     pub(super) shadow_realm_constructor: Option<NativeFunctionId>,
@@ -67,6 +71,7 @@ impl RealmState {
         Self {
             globals: BindingScope::new_active(storage_ledger.clone()),
             builtin_globals: BindingScope::new_active(storage_ledger),
+            object_global_names: BTreeSet::new(),
             native_function_registry: NativeFunctionRegistry::new(),
             throw_type_error: None,
             shadow_realm_constructor: None,
@@ -94,6 +99,7 @@ impl RealmState {
         self.globals
             .index_entry_count()?
             .checked_add(self.builtin_globals.index_entry_count()?)
+            .and_then(|count| count.checked_add(self.object_global_names.len()))
             .and_then(|count| count.checked_add(self.native_function_registry.ids().count()))
             .ok_or_else(|| Error::limit("realm cache entry count overflowed"))
     }

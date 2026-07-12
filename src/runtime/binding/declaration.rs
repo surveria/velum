@@ -30,6 +30,15 @@ impl Context {
                 binding.name(),
             ));
         }
+        if let Some(global_object) = self.realm.global_object {
+            let object = Value::Object(global_object);
+            let lookup = self.property_lookup(binding.name().name());
+            if self.has_property_value_with_lookup(&object, lookup)? {
+                let failure = crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse;
+                self.set(&object, lookup, value, &object, failure)?;
+                return Ok(());
+            }
+        }
         if binding.operand() != BindingOperand::Unresolved {
             return Err(crate::runtime::control::reference_error_uninitialized(
                 binding.name(),
@@ -197,7 +206,8 @@ impl Context {
         &mut self,
         declaration: &crate::bytecode::BytecodeFunctionDeclaration,
     ) -> Result<()> {
-        let global = self.locals.is_empty();
+        let object_authoritative = self.locals.is_empty()
+            && self.global_object_name_is_authoritative(declaration.name().name().name());
         self.hoist_var(declaration.name().name())?;
         let function = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: declaration.id(),
@@ -209,22 +219,21 @@ impl Context {
             prototype_parent: None,
             new_target_mode: BytecodeNewTargetMode::Own,
         })?;
-        self.assign_bytecode(declaration.name(), function.clone())?;
-        if global {
+        if object_authoritative {
+            let name = declaration.name().name().name();
+            let atom = self.intern_atom(name)?;
+            let cell = self.realm.globals.get(atom).ok_or_else(|| {
+                Error::runtime(format!("global function binding '{name}' is missing"))
+            })?;
+            cell.assign(name, function.clone())?;
             let global_object = self.global_object_id()?;
-            self.define_global_object_data_property(
-                global_object,
-                declaration.name().name().name(),
-                function,
-                PropertyWritable::Yes,
-                PropertyEnumerable::Yes,
-                PropertyConfigurable::No,
-            )?;
+            return self.update_global_object_data_property_value(global_object, name, function);
         }
-        Ok(())
+        self.assign_bytecode(declaration.name(), function)
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {
+        let global = self.locals.is_empty();
         let atom = self.intern_static_name_atom(name.name())?;
         if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {
@@ -248,6 +257,17 @@ impl Context {
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
         self.remember_active_static_binding(name, atom)?;
+        if global {
+            let global_object = self.global_object_id()?;
+            self.define_global_object_data_property(
+                global_object,
+                name.name(),
+                Value::Undefined,
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::No,
+            )?;
+        }
         Ok(())
     }
 

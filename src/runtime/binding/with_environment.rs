@@ -56,13 +56,7 @@ impl WithBindingReference {
         } else {
             crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse
         };
-        let updated = context.set(&self.object, lookup, value.clone(), &self.object, failure)?;
-        if updated
-            && let Value::Object(id) = &self.object
-            && context.is_global_object_id(*id)
-        {
-            context.sync_global_object_property_binding(*id, binding.name().as_str(), value)?;
-        }
+        context.set(&self.object, lookup, value, &self.object, failure)?;
         Ok(())
     }
 
