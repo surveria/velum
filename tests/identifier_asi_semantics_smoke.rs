@@ -40,6 +40,23 @@ fn undefined_is_an_ordinary_shadowable_identifier() -> TestResult {
 }
 
 #[test]
+fn unresolved_undefined_survives_cross_script_closures() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r"
+        function readUndefined() { return undefined; }
+        function bindUndefined(callback) { return callback.bind(undefined); }
+        ",
+    )?;
+    ensure_value(&context.eval("readUndefined()")?, &Value::Undefined)?;
+    ensure_value(
+        &context.eval(r#"bindUndefined(function () { "use strict"; return this; })()"#)?,
+        &Value::Undefined,
+    )
+}
+
+#[test]
 fn global_undefined_has_the_standard_constant_descriptor() -> TestResult {
     ensure_value(
         &eval(
