@@ -1,12 +1,13 @@
 use crate::{
     error::{Error, Result},
     runtime::{Context, native::TypedArrayFunctionKind, object::TypedArrayView, roots::VmRootKind},
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 const SOURCE_OUT_OF_BOUNDS_ERROR: &str = "TypedArray slice source is out of bounds";
 const RESULT_OUT_OF_BOUNDS_ERROR: &str = "TypedArray slice result became out of bounds";
 const COPY_RANGE_ERROR: &str = "TypedArray slice byte range exceeded supported range";
+const WITH_INDEX_ERROR: &str = "TypedArray.prototype.with index is out of range";
 
 impl Context {
     pub(super) fn eval_typed_array_copy_mutation_kind(
@@ -43,6 +44,92 @@ impl Context {
             values.push(record.value(index)?);
         }
         self.create_typed_array_from_values(record.view.element_kind(), values)
+    }
+
+    pub(super) fn eval_typed_array_subarray_record(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let record = self.typed_array_branded_view_record(this_value)?;
+        let (raw_byte_offset, length_tracking) = record.view.raw_view_slots();
+        let begin = self.typed_array_relative_index(args.first(), record.length, 0)?;
+        let explicit_end = args
+            .get(1)
+            .filter(|value| !matches!(value, Value::Undefined));
+        let end = if let Some(end) = explicit_end {
+            Some(self.typed_array_relative_index(Some(end), record.length, record.length)?)
+        } else if length_tracking {
+            None
+        } else {
+            Some(record.length)
+        };
+        let relative_bytes = begin
+            .checked_mul(record.view.element_kind().bytes_per_element())
+            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+        let byte_offset = raw_byte_offset
+            .checked_add(relative_bytes)
+            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+        let mut constructor_args = Vec::with_capacity(3);
+        constructor_args.push(Value::Object(record.view.buffer_object()));
+        constructor_args.push(Self::typed_array_usize_value(byte_offset)?);
+        if let Some(end) = end {
+            constructor_args.push(Self::typed_array_usize_value(end.saturating_sub(begin))?);
+        }
+        self.typed_array_species_construct(this_value, &constructor_args)
+    }
+
+    pub(super) fn eval_typed_array_with_record(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let record = self.typed_array_view_record(this_value)?;
+        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
+        let length_number = Self::typed_array_usize_number(record.length)?;
+        let actual = if relative >= 0.0 {
+            relative
+        } else {
+            length_number + relative
+        };
+        let value = args.get(1).unwrap_or(&Value::Undefined);
+        let numeric_value =
+            self.convert_typed_array_element_value(record.view.element_kind(), value)?;
+        let Some(index) = Self::valid_current_typed_array_index(&record.view, actual)? else {
+            return Err(Error::exception(ErrorName::RangeError, WITH_INDEX_ERROR));
+        };
+        let result =
+            self.create_typed_array_with_length(record.view.element_kind(), record.length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+        let (result_id, _) = self.typed_array_receiver(&result)?;
+        for current in 0..record.length {
+            self.step()?;
+            let element = if current == index {
+                numeric_value.clone()
+            } else {
+                let value = record.value(current)?;
+                self.convert_typed_array_element_value(record.view.element_kind(), &value)?
+            };
+            if !self
+                .objects
+                .set_typed_array_value(result_id, current, &element)?
+            {
+                return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+            }
+        }
+        Ok(result)
+    }
+
+    fn valid_current_typed_array_index(view: &TypedArrayView, index: f64) -> Result<Option<usize>> {
+        if !index.is_finite() || index < 0.0 || view.is_out_of_bounds() {
+            return Ok(None);
+        }
+        let index = Self::finite_nonnegative_integer_to_usize(index, COPY_RANGE_ERROR)?;
+        if index >= view.length() {
+            return Ok(None);
+        }
+        Ok(Some(index))
     }
 
     pub(super) fn eval_typed_array_slice_record(

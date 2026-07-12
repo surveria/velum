@@ -43,7 +43,7 @@ impl Context {
         self.create_array_iterator(this_value, ArrayIterationTarget::Entries)
     }
 
-    fn create_array_iterator(
+    pub(in crate::runtime::native) fn create_array_iterator(
         &mut self,
         this_value: &Value,
         target: ArrayIterationTarget,
@@ -178,7 +178,18 @@ impl Context {
         if done {
             return self.create_iterator_result_object(Value::Undefined, true);
         }
-        let length = self.array_like_length(&owner)?;
+        let length = if let Value::Object(owner_id) = &owner {
+            if let Some(view) = self.objects.typed_array(*owner_id)? {
+                if view.is_out_of_bounds() {
+                    return Err(Error::type_error(ARRAY_ITERATOR_RECEIVER_ERROR));
+                }
+                view.length()
+            } else {
+                self.array_like_length(&owner)?
+            }
+        } else {
+            self.array_like_length(&owner)?
+        };
         if index >= length {
             let Some(CollectionIteratorState::LiveArray(state)) =
                 self.collection_iterators.get_mut(id.index())

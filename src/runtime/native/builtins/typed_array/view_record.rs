@@ -30,4 +30,13 @@ impl Context {
         let length = view.length();
         Ok(TypedArrayViewRecord { view, length })
     }
+
+    pub(super) fn typed_array_branded_view_record(
+        &self,
+        this_value: &Value,
+    ) -> Result<TypedArrayViewRecord> {
+        let (_, view) = self.typed_array_branded_receiver(this_value)?;
+        let length = view.length();
+        Ok(TypedArrayViewRecord { view, length })
+    }
 }

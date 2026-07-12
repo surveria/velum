@@ -344,7 +344,7 @@ impl Context {
         )
     }
 
-    fn create_typed_array_with_length(
+    pub(super) fn create_typed_array_with_length(
         &mut self,
         element_kind: TypedArrayElementKind,
         length: usize,

@@ -556,15 +556,6 @@ impl Context {
         Ok(object)
     }
 
-    pub(in crate::runtime::native) fn create_tagged_collection_iterator_object(
-        &mut self,
-        items: Vec<Value>,
-        tag: &str,
-    ) -> Result<Value> {
-        let iterator_id = self.create_collection_iterator(items)?;
-        self.create_tagged_iterator_state_object(iterator_id, tag)
-    }
-
     pub(in crate::runtime::native) fn create_tagged_iterator_state_object(
         &mut self,
         iterator_id: CollectionIteratorId,

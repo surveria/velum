@@ -40,7 +40,6 @@ pub(in crate::runtime) enum TypedArrayFunctionKind {
     ToHex,
     ToReversed,
     ToSorted,
-    ToString,
     ToStringTagGetter,
     Values,
     With,
@@ -49,7 +48,7 @@ pub(in crate::runtime) enum TypedArrayFunctionKind {
 impl TypedArrayFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         match self {
-            Self::CopyWithin | Self::Slice | Self::With => 2.0,
+            Self::CopyWithin | Self::Slice | Self::Subarray | Self::With => 2.0,
             Self::At
             | Self::Every
             | Self::Fill
@@ -74,7 +73,6 @@ impl TypedArrayFunctionKind {
             | Self::SetFromHex
             | Self::Some
             | Self::Sort
-            | Self::Subarray
             | Self::ToSorted => 1.0,
             Self::BufferGetter
             | Self::ByteLengthGetter
@@ -88,7 +86,6 @@ impl TypedArrayFunctionKind {
             | Self::ToBase64
             | Self::ToHex
             | Self::ToReversed
-            | Self::ToString
             | Self::ToStringTagGetter
             | Self::Values => 0.0,
         }
@@ -136,7 +133,6 @@ impl TypedArrayFunctionKind {
             Self::ToHex => "toHex",
             Self::ToReversed => "toReversed",
             Self::ToSorted => "toSorted",
-            Self::ToString => "toString",
             Self::ToStringTagGetter => "get [Symbol.toStringTag]",
             Self::Values => "values",
             Self::With => "with",

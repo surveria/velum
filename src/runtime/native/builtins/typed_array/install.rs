@@ -16,6 +16,7 @@ const OF_PROPERTY: &str = "of";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_SYMBOL_PROPERTY: &str = "toStringTag";
+const TO_STRING_PROPERTY: &str = "toString";
 
 const ACCESSORS: &[(&str, TypedArrayFunctionKind)] = &[
     ("buffer", TypedArrayFunctionKind::BufferGetter),
@@ -53,7 +54,6 @@ const METHODS: &[(&str, TypedArrayFunctionKind)] = &[
     ("toLocaleString", TypedArrayFunctionKind::ToLocaleString),
     ("toReversed", TypedArrayFunctionKind::ToReversed),
     ("toSorted", TypedArrayFunctionKind::ToSorted),
-    ("toString", TypedArrayFunctionKind::ToString),
     ("with", TypedArrayFunctionKind::With),
 ];
 
@@ -165,6 +165,10 @@ impl Context {
         for (name, kind) in METHODS {
             self.define_typed_array_method(prototype, name, *kind)?;
         }
+        let array_prototype = self.array_constructor_prototype()?;
+        let array_to_string =
+            self.get_named(&Value::Object(array_prototype), TO_STRING_PROPERTY)?;
+        self.define_non_enumerable_object_property(prototype, TO_STRING_PROPERTY, array_to_string)?;
         let values = self.create_native_function(
             NativeFunctionKind::TypedArrayPrototype(TypedArrayFunctionKind::Values),
             Value::Undefined,

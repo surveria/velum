@@ -352,11 +352,25 @@ fn typed_array_iteration_uses_internal_length_and_live_view_values() -> TestResu
             return sum;
         }, 0);
 
+        let iteratorBuffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let fixed = new Uint8Array(iteratorBuffer, 0, 4);
+        let iterator = fixed.values();
+        iterator.next();
+        iteratorBuffer.resize(3);
+        let iteratorRejected = false;
+        try {
+            iterator.next();
+        } catch (error) {
+            iteratorRejected = error instanceof TypeError;
+        }
+        let sharedPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+
         internalLength && lengthReads === 0 && visits === 4 &&
             growSeen.join(",") === "1,2,3,4" &&
             shrinkSeen.length === 4 && shrinkSeen[0] === 1 &&
             shrinkSeen[1] === 2 && shrinkSeen[2] === 3 &&
-            shrinkSeen[3] === undefined ? 42 : 0
+            shrinkSeen[3] === undefined && iteratorRejected &&
+            sharedPrototype.toString === Array.prototype.toString ? 42 : 0
         "#,
         &Value::Number(42.0),
     )
@@ -395,10 +409,25 @@ fn typed_array_copy_methods_refresh_views_and_preserve_aliasing() -> TestResult 
         let reversedCopy = values.toReversed();
         values.reverse();
 
+        let subarrayBuffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let trackingSubarray = new Uint8Array(subarrayBuffer).subarray(1);
+        subarrayBuffer.resize(6);
+
+        let withSource = new Uint8Array([0, 1, 2]);
+        let withResult = withSource.with(1, {
+            valueOf() {
+                withSource[0] = 3;
+                return 4;
+            }
+        });
+
         aliased.join(",") === "20,20,20,60" &&
             tracking.join(",") === "0,1,0" &&
             reversedCopy.join(",") === "4,3,2,1" &&
-            values.join(",") === "4,3,2,1" && lengthReads === 0 ? 42 : 0
+            values.join(",") === "4,3,2,1" && lengthReads === 0 &&
+            trackingSubarray.length === 5 &&
+            withResult.join(",") === "3,4,2" &&
+            withSource.join(",") === "3,1,2" ? 42 : 0
         "#,
         &Value::Number(42.0),
     )
