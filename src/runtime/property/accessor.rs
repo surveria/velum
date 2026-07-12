@@ -71,7 +71,7 @@ impl Context {
             let Some(view) = self.objects.typed_array(object)? else {
                 return Err(Error::runtime("typed array view is not available"));
             };
-            let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
             self.objects
                 .set_typed_array_value(object, index, &element)?;
             return Ok(());

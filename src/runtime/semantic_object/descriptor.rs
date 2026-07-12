@@ -4,7 +4,7 @@ use crate::{
         Context,
         object::{
             DataPropertyDescriptor, OwnPropertyDescriptor, PropertyConfigurable,
-            PropertyEnumerable, PropertyUpdate, PropertyWritable,
+            PropertyEnumerable, PropertyUpdate, PropertyWritable, TypedArrayPropertyIndex,
         },
         property::DynamicPropertyKey,
     },
@@ -68,28 +68,7 @@ impl Context {
                 .objects
                 .typed_array_property_index(*id, property.name())?
         {
-            let crate::runtime::object::TypedArrayPropertyIndex::Valid(index) = index else {
-                return Ok(false);
-            };
-            let PropertyUpdate::Data(update) = update else {
-                return Ok(false);
-            };
-            if update.configurable().is_some_and(|value| !value.is_yes())
-                || update.enumerable().is_some_and(|value| !value.is_yes())
-                || update.writable().is_some_and(|value| !value.is_yes())
-            {
-                return Ok(false);
-            }
-            if let Some(value) = update.value() {
-                let Some(view) = self.objects.typed_array(*id)? else {
-                    return Err(Error::runtime("typed array view is not available"));
-                };
-                let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
-                if !self.objects.set_typed_array_value(*id, index, &element)? {
-                    return Ok(false);
-                }
-            }
-            return Ok(true);
+            return self.semantic_define_typed_array_index(*id, index, update);
         }
         if let Value::Object(id) = object_ref.value
             && property.name() == ARRAY_LENGTH_PROPERTY
@@ -156,6 +135,36 @@ impl Context {
                 return Err(Error::runtime(
                     "property definition target must be an object",
                 ));
+            }
+        }
+        Ok(true)
+    }
+
+    fn semantic_define_typed_array_index(
+        &mut self,
+        id: crate::value::ObjectId,
+        index: TypedArrayPropertyIndex,
+        update: PropertyUpdate,
+    ) -> Result<bool> {
+        let TypedArrayPropertyIndex::Valid(index) = index else {
+            return Ok(false);
+        };
+        let PropertyUpdate::Data(update) = update else {
+            return Ok(false);
+        };
+        if update.configurable().is_some_and(|value| !value.is_yes())
+            || update.enumerable().is_some_and(|value| !value.is_yes())
+            || update.writable().is_some_and(|value| !value.is_yes())
+        {
+            return Ok(false);
+        }
+        if let Some(value) = update.value() {
+            let Some(view) = self.objects.typed_array(id)? else {
+                return Err(Error::runtime("typed array view is not available"));
+            };
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
+            if !self.objects.set_typed_array_value(id, index, &element)? {
+                return Ok(false);
             }
         }
         Ok(true)

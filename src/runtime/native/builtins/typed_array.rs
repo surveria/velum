@@ -224,7 +224,7 @@ impl Context {
         for index in 0..length {
             self.step()?;
             let value = self.get_named(source, &index.to_string())?;
-            elements.push(self.to_typed_array_element_value(element_kind, &value)?);
+            elements.push(self.convert_typed_array_element_value(element_kind, &value)?);
         }
         let value = self.create_typed_array_with_length(element_kind, length)?;
         let Value::Object(id) = value else {
@@ -250,7 +250,7 @@ impl Context {
         self.check_typed_array_length(element_kind, values.len())?;
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
-            elements.push(self.to_typed_array_element_value(element_kind, &value)?);
+            elements.push(self.convert_typed_array_element_value(element_kind, &value)?);
         }
         let result = self.create_typed_array_with_length(element_kind, elements.len())?;
         let Value::Object(id) = result else {
@@ -477,7 +477,7 @@ impl Context {
         Ok(f64::from(size))
     }
 
-    pub(in crate::runtime) fn to_typed_array_element_value(
+    pub(in crate::runtime) fn convert_typed_array_element_value(
         &mut self,
         element_kind: TypedArrayElementKind,
         value: &Value,
@@ -498,7 +498,7 @@ impl Context {
             if index >= view.length() {
                 return Ok(true);
             }
-            let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
             self.objects.set_typed_array_value(id, index, &element)?;
             return Ok(true);
         }

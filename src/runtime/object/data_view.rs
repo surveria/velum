@@ -186,45 +186,65 @@ impl DataViewElementKind {
         little_endian: bool,
     ) -> Result<()> {
         if self.content_type() == TypedArrayContentType::BigInt {
-            let bigint = to_bigint_primitive(value)?;
-            return match self {
-                Self::BigInt64 => {
-                    let Some(integer) = bigint.as_int_n(64).to_i64() else {
-                        return Err(Error::runtime("DataView BigInt64 conversion overflowed"));
-                    };
-                    write_endian(
-                        buffer,
-                        offset,
-                        little_endian,
-                        integer.to_le_bytes(),
-                        integer.to_be_bytes(),
-                    )
-                }
-                Self::BigUint64 => {
-                    let Some(integer) = bigint.as_uint_n(64).to_u64() else {
-                        return Err(Error::runtime("DataView BigUint64 conversion overflowed"));
-                    };
-                    write_endian(
-                        buffer,
-                        offset,
-                        little_endian,
-                        integer.to_le_bytes(),
-                        integer.to_be_bytes(),
-                    )
-                }
-                Self::Int8
-                | Self::Uint8
-                | Self::Int16
-                | Self::Uint16
-                | Self::Int32
-                | Self::Uint32
-                | Self::Float16
-                | Self::Float32
-                | Self::Float64 => Err(Error::runtime(
-                    "BigInt DataView content type did not match its element kind",
-                )),
-            };
+            return self.write_bigint(buffer, offset, value, little_endian);
         }
+        self.write_number(buffer, offset, value, little_endian)
+    }
+
+    fn write_bigint(
+        self,
+        buffer: &ByteBuffer,
+        offset: usize,
+        value: &Value,
+        little_endian: bool,
+    ) -> Result<()> {
+        let bigint = to_bigint_primitive(value)?;
+        match self {
+            Self::BigInt64 => {
+                let Some(integer) = bigint.as_int_n(64).to_i64() else {
+                    return Err(Error::runtime("DataView BigInt64 conversion overflowed"));
+                };
+                write_endian(
+                    buffer,
+                    offset,
+                    little_endian,
+                    integer.to_le_bytes(),
+                    integer.to_be_bytes(),
+                )
+            }
+            Self::BigUint64 => {
+                let Some(integer) = bigint.as_uint_n(64).to_u64() else {
+                    return Err(Error::runtime("DataView BigUint64 conversion overflowed"));
+                };
+                write_endian(
+                    buffer,
+                    offset,
+                    little_endian,
+                    integer.to_le_bytes(),
+                    integer.to_be_bytes(),
+                )
+            }
+            Self::Int8
+            | Self::Uint8
+            | Self::Int16
+            | Self::Uint16
+            | Self::Int32
+            | Self::Uint32
+            | Self::Float16
+            | Self::Float32
+            | Self::Float64 => Err(Error::runtime(
+                "BigInt DataView content type did not match its element kind",
+            )),
+        }
+    }
+
+    fn write_number(
+        self,
+        buffer: &ByteBuffer,
+        offset: usize,
+        value: &Value,
+        little_endian: bool,
+    ) -> Result<()> {
         let number = to_number_primitive(value)?;
         match self {
             Self::Int8 => buffer.write(offset, &to_int8(number)?.to_ne_bytes()),

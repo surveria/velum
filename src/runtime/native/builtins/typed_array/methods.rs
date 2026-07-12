@@ -374,7 +374,7 @@ impl Context {
         }
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
-            elements.push(self.to_typed_array_element_value(target.element_kind(), &value)?);
+            elements.push(self.convert_typed_array_element_value(target.element_kind(), &value)?);
         }
         for (source_index, element) in elements.into_iter().enumerate() {
             let target_index = offset
@@ -393,7 +393,7 @@ impl Context {
     fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (id, view) = self.typed_array_receiver(this_value)?;
         let value = args.first().unwrap_or(&Value::Undefined);
-        let element = self.to_typed_array_element_value(view.element_kind(), value)?;
+        let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
         let start = self.typed_array_relative_index(args.get(1), view.length(), 0)?;
         let end = self.typed_array_relative_index(args.get(2), view.length(), view.length())?;
         for index in start..end {
@@ -514,7 +514,7 @@ impl Context {
             values,
             None,
             mapping,
-            callback_this,
+            &callback_this,
         )
     }
 
@@ -585,7 +585,7 @@ impl Context {
             values,
             expected_content_type,
             None,
-            Value::Undefined,
+            &Value::Undefined,
         )
     }
 
@@ -595,7 +595,7 @@ impl Context {
         values: Vec<Value>,
         expected_content_type: Option<TypedArrayContentType>,
         mapping: Option<&Value>,
-        callback_this: Value,
+        callback_this: &Value,
     ) -> Result<Value> {
         let length = Self::typed_array_usize_value(values.len())?;
         let result = self.semantic_construct(
@@ -623,7 +623,7 @@ impl Context {
             } else {
                 value
             };
-            let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
             if !self.objects.set_typed_array_value(id, index, &element)? {
                 return Err(Error::runtime("typed array result index is out of bounds"));
             }

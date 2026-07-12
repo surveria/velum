@@ -1,5 +1,6 @@
 use crate::{
     error::{Error, Result},
+    runtime::object::TypedArrayView,
     storage::{atom::AtomTable, symbol::SymbolTable},
     value::ObjectId,
 };
@@ -73,7 +74,7 @@ impl Object {
     fn enumerable_key_count_hint(&self) -> usize {
         self.enumerable_property_count
             .saturating_add(self.virtual_string_key_count())
-            .saturating_add(self.typed_array.as_ref().map_or(0, |view| view.length()))
+            .saturating_add(self.typed_array.as_ref().map_or(0, TypedArrayView::length))
     }
 
     fn extend_enumerable_keys(

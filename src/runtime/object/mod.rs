@@ -355,7 +355,7 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(true);
         }
-        if self.has_typed_array_property(property.name())? {
+        if self.has_typed_array_property(property.name()) {
             return Ok(true);
         }
         if self.array_length.is_some()
@@ -581,7 +581,7 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(false);
         }
-        if self.has_typed_array_property(property.name())? {
+        if self.has_typed_array_property(property.name()) {
             return Ok(false);
         }
         if self.array_length.is_some()
@@ -643,14 +643,14 @@ impl Object {
         }
     }
 
-    fn has_typed_array_property(&self, property: &str) -> Result<bool> {
+    fn has_typed_array_property(&self, property: &str) -> bool {
         let Some(view) = self.typed_array.as_ref() else {
-            return Ok(false);
+            return false;
         };
-        Ok(matches!(
+        matches!(
             typed_array_property_index(property, view.length()),
             Some(TypedArrayPropertyIndex::Valid(_))
-        ))
+        )
     }
 
     fn set_typed_array_property(&self, property: &str, value: &Value) -> Result<bool> {
