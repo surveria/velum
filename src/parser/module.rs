@@ -176,6 +176,7 @@ impl Parser {
         if self.match_kind(&TokenKind::LBrace) {
             return self.module_named_exports(module);
         }
+        self.validate_default_export_keyword()?;
         if self.match_kind(&TokenKind::Default) {
             let start = self.current_span();
             let async_function = self.check(&TokenKind::Async)
@@ -183,6 +184,13 @@ impl Parser {
             let declaration_like =
                 self.check(&TokenKind::Function) || self.check(&TokenKind::Class) || async_function;
             let expression = self.assignment_expression()?;
+            if declaration_like
+                && !matches!(expression.kind(), Expr::Function { .. } | Expr::Class(_))
+            {
+                return Err(
+                    self.parse_error("default function or class export must be a declaration")
+                );
+            }
             let declaration_name = if declaration_like {
                 match expression.kind() {
                     Expr::Function {
@@ -242,6 +250,16 @@ impl Parser {
             });
         }
         statements.push(self.statement_node(start, statement));
+        Ok(())
+    }
+
+    fn validate_default_export_keyword(&self) -> Result<()> {
+        if self
+            .peek()
+            .is_some_and(|token| token.kind == TokenKind::Default && token.identifier_escaped)
+        {
+            return Err(self.parse_error("escaped 'default' is not an export keyword"));
+        }
         Ok(())
     }
 

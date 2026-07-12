@@ -158,7 +158,11 @@ fn parse_metadata_yaml(yaml: &str, relative_path: &str) -> anyhow::Result<Test26
 fn variant_plans(metadata: &Test262Metadata) -> Vec<VariantPlan> {
     if metadata.has_flag(FLAG_MODULE) {
         return vec![VariantPlan::Run {
-            name: MODULE_VARIANT,
+            name: if metadata.has_flag(FLAG_RAW) {
+                RAW_VARIANT
+            } else {
+                MODULE_VARIANT
+            },
             strict: true,
         }];
     }
@@ -564,7 +568,7 @@ bad source
         ensure_plans(
             &variant_plans(&metadata_with_flags(&[FLAG_MODULE, FLAG_RAW])),
             &[VariantPlan::Run {
-                name: MODULE_VARIANT,
+                name: RAW_VARIANT,
                 strict: true,
             }],
         )

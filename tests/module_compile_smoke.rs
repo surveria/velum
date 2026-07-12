@@ -90,6 +90,20 @@ fn enforces_module_specific_early_errors() -> TestResult {
         duplicate_default.is_err(),
         "named default declaration must conflict with an existing lexical binding",
     )?;
+
+    let escaped_default =
+        runtime.compile_module_named("escaped-default.js", r"export d\u0065fault 0;");
+    ensure(
+        escaped_default.is_err(),
+        "escaped default export keyword must fail",
+    )?;
+
+    let invoked_anonymous =
+        runtime.compile_module_named("invoked-anonymous.js", "export default function() {}();");
+    ensure(
+        invoked_anonymous.is_err(),
+        "invoked anonymous function must not parse as a default declaration",
+    )?;
     Ok(())
 }
 
