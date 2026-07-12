@@ -234,8 +234,11 @@ impl Context {
         if frame.constructor.is_none() {
             return Err(Error::type_error(SUPER_NOT_CONSTRUCTOR_ERROR));
         }
+        let own_constructor = frame
+            .own_constructor
+            .ok_or_else(|| Error::type_error(SUPER_NOT_CONSTRUCTOR_ERROR))?;
         let constructor = self
-            .semantic_get_prototype(&frame.home_object)?
+            .semantic_get_prototype(&Value::Function(own_constructor))?
             .ok_or_else(|| Error::type_error(SUPER_NOT_CONSTRUCTOR_ERROR))?;
         let new_target = self.current_new_target()?;
         let this_value = self

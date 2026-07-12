@@ -78,9 +78,10 @@ impl Context {
                 *constructor_id,
                 Rc::new(FunctionSuperBinding {
                     constructor: Some(heritage.constructor.clone()),
-                    home_object: constructor.clone(),
+                    home_object: Value::Object(prototype_id),
                     own_constructor: Some(*constructor_id),
                     this_value: std::cell::RefCell::new(None),
+                    allow_direct_eval_super_call: std::cell::Cell::new(true),
                 }),
             )?;
         }
@@ -151,6 +152,7 @@ impl Context {
                     home_object,
                     own_constructor: None,
                     this_value: std::cell::RefCell::new(None),
+                    allow_direct_eval_super_call: std::cell::Cell::new(false),
                 }),
             )?;
         }

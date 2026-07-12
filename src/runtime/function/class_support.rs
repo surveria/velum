@@ -15,6 +15,7 @@ pub(in crate::runtime) struct FunctionSuperBinding {
     pub(in crate::runtime) home_object: Value,
     pub(in crate::runtime) own_constructor: Option<FunctionId>,
     pub(in crate::runtime) this_value: std::cell::RefCell<Option<Value>>,
+    pub(in crate::runtime) allow_direct_eval_super_call: std::cell::Cell<bool>,
 }
 
 pub(super) fn activation_super_bindings(
@@ -45,6 +46,9 @@ impl FunctionSuperBinding {
             home_object: self.home_object.clone(),
             own_constructor: self.own_constructor,
             this_value: std::cell::RefCell::new(None),
+            allow_direct_eval_super_call: std::cell::Cell::new(
+                self.allow_direct_eval_super_call.get(),
+            ),
         })
     }
 }
@@ -268,6 +272,10 @@ impl Context {
         };
         for field in fields.iter() {
             self.push_temporary_this(instance.clone())?;
+            let super_binding = self.current_super_frame();
+            let previous_super_call_permission = super_binding
+                .as_ref()
+                .map(|binding| binding.allow_direct_eval_super_call.replace(false));
             let initializer = match field {
                 ResolvedClassField::Public { initializer, .. }
                 | ResolvedClassField::Private { initializer, .. } => initializer,
@@ -277,6 +285,11 @@ impl Context {
                 .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
                     self.eval_bytecode_block(initializer)
                 });
+            if let (Some(binding), Some(previous)) =
+                (&super_binding, previous_super_call_permission)
+            {
+                binding.allow_direct_eval_super_call.set(previous);
+            }
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
             match field {

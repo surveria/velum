@@ -205,11 +205,8 @@ impl Context {
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
         let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
-        let lexical_this = if init.new_target_mode == BytecodeNewTargetMode::Lexical {
-            Some(self.current_this()?)
-        } else {
-            None
-        };
+        let lexical_this =
+            self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         self.functions.insert_at_next(
             id.index(),
             super::Function {

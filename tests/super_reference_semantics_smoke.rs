@@ -106,6 +106,40 @@ fn super_constructor_is_resolved_after_argument_evaluation() -> TestResult {
     )
 }
 
+#[test]
+fn constructor_arrows_resolve_super_properties_from_the_instance_prototype() -> TestResult {
+    expect_true(
+        r"
+        var calls = 0;
+        class Base {
+            method() { calls += 1; }
+        }
+        class Derived extends Base {
+            constructor() {
+                super();
+                (() => super.method())();
+            }
+        }
+        new Derived();
+        calls === 1
+        ",
+    )
+}
+
+#[test]
+fn derived_native_construction_uses_the_new_target_prototype() -> TestResult {
+    expect_true(
+        r"
+        class DerivedArray extends Array {}
+        class DerivedFunction extends Function {}
+        var array = new DerivedArray();
+        var callable = new DerivedFunction();
+        array instanceof DerivedArray && array instanceof Array &&
+            callable instanceof DerivedFunction && callable instanceof Function
+        ",
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

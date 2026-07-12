@@ -59,9 +59,9 @@ impl Context {
     ) -> Result<Value> {
         let super_binding = direct.then(|| self.current_super_frame()).flatten();
         let allow_super_property = super_binding.is_some();
-        let allow_super_call = super_binding
-            .as_ref()
-            .is_some_and(|binding| binding.constructor.is_some());
+        let allow_super_call = super_binding.as_ref().is_some_and(|binding| {
+            binding.constructor.is_some() && binding.allow_direct_eval_super_call.get()
+        });
         let script = crate::compiled_script::CompiledScript::compile_eval(
             source,
             self.limits.clone(),

@@ -365,7 +365,7 @@ impl Context {
         match value {
             Value::Object(id) => self.objects.prototype_chain_has_object(*id, target),
             Value::Function(id) => {
-                let prototype = self.function_object_prototype_value(*id)?;
+                let prototype = self.function_inheritance_prototype_value(*id)?;
                 self.prototype_value_chain_has_object(&prototype, target)
             }
             Value::NativeFunction(id) => {

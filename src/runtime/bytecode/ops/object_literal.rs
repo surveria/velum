@@ -148,6 +148,7 @@ impl Context {
                     home_object: object.clone(),
                     own_constructor: None,
                     this_value: std::cell::RefCell::new(None),
+                    allow_direct_eval_super_call: std::cell::Cell::new(false),
                 }),
             )?;
         }
