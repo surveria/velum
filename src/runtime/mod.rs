@@ -27,6 +27,7 @@ pub mod binding;
 pub mod bytecode;
 pub mod call;
 mod clock;
+pub(in crate::runtime) mod collection_array_iterator;
 mod collection_live_iterator;
 pub mod collections;
 pub mod control;

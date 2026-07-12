@@ -9,6 +9,8 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+use super::collection_array_iterator::LiveArrayIteratorState;
+
 const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
 
 /// VM-local index of one Map or Set backing store.
@@ -345,8 +347,7 @@ const ITERATOR_HELPER_ITEM_CHARGE: usize = 5;
 /// Fixed ledger charge for a wrapped iterator: the target and its `next`.
 const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
 
-/// One live runtime iterator record. The arena historically backed only
-/// collection snapshot iterators; it also hosts lazy iterator-helper and
+/// One live runtime iterator record. The arena also hosts lazy iterator-helper and
 /// `Iterator.from` wrapper states because the storage field and ledger kinds
 /// (`CollectionIterator` / `IteratorItem`) are frozen accounting categories.
 #[derive(Debug, Clone)]
@@ -357,21 +358,6 @@ pub(in crate::runtime) enum CollectionIteratorState {
     Helper(IteratorHelperState),
     Static(IteratorStaticState),
     Wrap(WrappedIteratorState),
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) enum ArrayIterationTarget {
-    Keys,
-    Values,
-    Entries,
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct LiveArrayIteratorState {
-    pub(in crate::runtime) owner: Value,
-    pub(in crate::runtime) target: ArrayIterationTarget,
-    pub(in crate::runtime) cursor: usize,
-    pub(in crate::runtime) done: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -676,19 +662,6 @@ impl Context {
         ))
     }
 
-    pub(in crate::runtime) fn create_live_array_iterator(
-        &mut self,
-        owner: Value,
-        target: ArrayIterationTarget,
-    ) -> Result<CollectionIteratorId> {
-        self.insert_iterator_state(CollectionIteratorState::LiveArray(LiveArrayIteratorState {
-            owner,
-            target,
-            cursor: 0,
-            done: false,
-        }))
-    }
-
     pub(in crate::runtime) fn create_iterator_helper(
         &mut self,
         state: IteratorHelperState,
@@ -714,7 +687,7 @@ impl Context {
         }))
     }
 
-    fn insert_iterator_state(
+    pub(in crate::runtime) fn insert_iterator_state(
         &mut self,
         state: CollectionIteratorState,
     ) -> Result<CollectionIteratorId> {

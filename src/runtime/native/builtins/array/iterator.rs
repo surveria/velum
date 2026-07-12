@@ -2,7 +2,8 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        collections::{ArrayIterationTarget, CollectionIteratorState},
+        collection_array_iterator::ArrayIterationTarget,
+        collections::CollectionIteratorState,
         native::NativeFunctionKind,
         object::{
             DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable,
