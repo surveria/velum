@@ -10,6 +10,9 @@ use super::{Object, ObjectHeap};
 
 const TYPED_ARRAY_INDEX_ERROR: &str = "typed array byte index is out of bounds";
 const TYPED_ARRAY_RANGE_ERROR: &str = "typed array byte range exceeded supported range";
+const DETACHED_BUFFER_ERROR: &str = "ArrayBuffer is detached";
+const FIXED_BUFFER_ERROR: &str = "ArrayBuffer is not resizable";
+const RESIZE_LIMIT_ERROR: &str = "ArrayBuffer resize exceeds maxByteLength";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ByteBufferOrigin {
@@ -19,34 +22,127 @@ pub enum ByteBufferOrigin {
 
 #[derive(Debug, Clone)]
 pub struct ByteBuffer {
-    bytes: Rc<RefCell<Vec<u8>>>,
+    state: Rc<RefCell<ByteBufferState>>,
     origin: ByteBufferOrigin,
+}
+
+#[derive(Debug)]
+struct ByteBufferState {
+    bytes: Option<Vec<u8>>,
+    max_byte_length: Option<usize>,
 }
 
 impl ByteBuffer {
     pub fn new(length: usize, origin: ByteBufferOrigin) -> Self {
         Self {
-            bytes: Rc::new(RefCell::new(vec![0; length])),
+            state: Rc::new(RefCell::new(ByteBufferState {
+                bytes: Some(vec![0; length]),
+                max_byte_length: None,
+            })),
             origin,
+        }
+    }
+
+    pub(in crate::runtime) fn new_resizable(length: usize, max_byte_length: usize) -> Self {
+        Self {
+            state: Rc::new(RefCell::new(ByteBufferState {
+                bytes: Some(vec![0; length]),
+                max_byte_length: Some(max_byte_length),
+            })),
+            origin: ByteBufferOrigin::EngineOwned,
+        }
+    }
+
+    pub(in crate::runtime) fn from_resizable_bytes(bytes: Vec<u8>, max_byte_length: usize) -> Self {
+        Self {
+            state: Rc::new(RefCell::new(ByteBufferState {
+                bytes: Some(bytes),
+                max_byte_length: Some(max_byte_length),
+            })),
+            origin: ByteBufferOrigin::EngineOwned,
         }
     }
 
     pub fn from_bytes(bytes: Vec<u8>, origin: ByteBufferOrigin) -> Self {
         Self {
-            bytes: Rc::new(RefCell::new(bytes)),
+            state: Rc::new(RefCell::new(ByteBufferState {
+                bytes: Some(bytes),
+                max_byte_length: None,
+            })),
             origin,
         }
     }
 
     pub fn byte_length(&self) -> usize {
-        self.bytes.borrow().len()
+        self.state
+            .borrow()
+            .bytes
+            .as_ref()
+            .map_or(0, std::vec::Vec::len)
+    }
+
+    pub(in crate::runtime) fn max_byte_length(&self) -> usize {
+        let state = self.state.borrow();
+        let Some(bytes) = state.bytes.as_ref() else {
+            return 0;
+        };
+        state.max_byte_length.unwrap_or(bytes.len())
+    }
+
+    pub(in crate::runtime) fn is_resizable(&self) -> bool {
+        let state = self.state.borrow();
+        state.bytes.is_some() && state.max_byte_length.is_some()
+    }
+
+    pub(in crate::runtime) fn is_detached(&self) -> bool {
+        self.state.borrow().bytes.is_none()
+    }
+
+    pub(in crate::runtime) fn copy_bytes(&self, start: usize, end: usize) -> Result<Vec<u8>> {
+        let state = self.state.borrow();
+        let Some(bytes) = state.bytes.as_ref() else {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        };
+        bytes
+            .get(start..end)
+            .map(<[u8]>::to_vec)
+            .ok_or_else(|| Error::runtime(TYPED_ARRAY_INDEX_ERROR))
+    }
+
+    pub(in crate::runtime) fn resize(&self, new_length: usize) -> Result<()> {
+        let mut state = self.state.borrow_mut();
+        let Some(max_byte_length) = state.max_byte_length else {
+            return Err(Error::type_error(FIXED_BUFFER_ERROR));
+        };
+        if new_length > max_byte_length {
+            return Err(Error::exception(
+                crate::value::ErrorName::RangeError,
+                RESIZE_LIMIT_ERROR,
+            ));
+        }
+        let Some(bytes) = state.bytes.as_mut() else {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        };
+        bytes.resize(new_length, 0);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn detach(&self) -> Result<Vec<u8>> {
+        let mut state = self.state.borrow_mut();
+        state
+            .bytes
+            .take()
+            .ok_or_else(|| Error::type_error(DETACHED_BUFFER_ERROR))
     }
 
     pub(in crate::runtime) fn read<const N: usize>(&self, offset: usize) -> Result<[u8; N]> {
         let end = offset
             .checked_add(N)
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
-        let bytes = self.bytes.borrow();
+        let state = self.state.borrow();
+        let Some(bytes) = state.bytes.as_ref() else {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        };
         let Some(source) = bytes.get(offset..end) else {
             return Err(Error::runtime(TYPED_ARRAY_INDEX_ERROR));
         };
@@ -59,7 +155,10 @@ impl ByteBuffer {
         let end = offset
             .checked_add(value.len())
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
-        let mut bytes = self.bytes.borrow_mut();
+        let mut state = self.state.borrow_mut();
+        let Some(bytes) = state.bytes.as_mut() else {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        };
         let Some(target) = bytes.get_mut(offset..end) else {
             return Err(Error::runtime(TYPED_ARRAY_INDEX_ERROR));
         };
@@ -264,6 +363,66 @@ impl ObjectHeap {
 
     pub(crate) fn array_buffer(&self, id: ObjectId) -> Result<Option<ByteBuffer>> {
         Ok(self.object(id)?.byte_buffer.clone())
+    }
+
+    pub(in crate::runtime) fn is_array_buffer_view(&self, id: ObjectId) -> Result<bool> {
+        let object = self.object(id)?;
+        Ok(object.typed_array.is_some() || object.data_view.is_some())
+    }
+
+    pub(in crate::runtime) fn resize_array_buffer(
+        &mut self,
+        id: ObjectId,
+        new_length: usize,
+    ) -> Result<()> {
+        let buffer = self.array_buffer(id)?.ok_or_else(|| {
+            Error::type_error("ArrayBuffer method receiver is not an ArrayBuffer")
+        })?;
+        if buffer.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
+        if !buffer.is_resizable() {
+            return Err(Error::type_error(FIXED_BUFFER_ERROR));
+        }
+        if new_length > buffer.max_byte_length() {
+            return Err(Error::exception(
+                crate::value::ErrorName::RangeError,
+                RESIZE_LIMIT_ERROR,
+            ));
+        }
+        let old_length = buffer.byte_length();
+        let projected = if new_length >= old_length {
+            self.byte_buffer_payload_bytes
+                .checked_add(new_length - old_length)
+        } else {
+            self.byte_buffer_payload_bytes
+                .checked_sub(old_length - new_length)
+        }
+        .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
+        if projected
+            > self
+                .storage_limits
+                .max_payload_bytes(crate::runtime::VmStorageKind::ByteBuffer)
+        {
+            return Err(Error::limit(RESIZE_LIMIT_ERROR));
+        }
+        buffer.resize(new_length)?;
+        self.byte_buffer_payload_bytes = projected;
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn detach_array_buffer(&mut self, id: ObjectId) -> Result<Vec<u8>> {
+        let buffer = self.array_buffer(id)?.ok_or_else(|| {
+            Error::type_error("ArrayBuffer method receiver is not an ArrayBuffer")
+        })?;
+        let old_length = buffer.byte_length();
+        let projected = self
+            .byte_buffer_payload_bytes
+            .checked_sub(old_length)
+            .ok_or_else(|| Error::runtime("byte buffer payload accounting underflowed"))?;
+        let bytes = buffer.detach()?;
+        self.byte_buffer_payload_bytes = projected;
+        Ok(bytes)
     }
 
     pub(crate) fn typed_array(&self, id: ObjectId) -> Result<Option<TypedArrayView>> {

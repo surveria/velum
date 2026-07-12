@@ -1,0 +1,91 @@
+use rs_quickjs::{Runtime, Value};
+
+type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn supports_array_buffer_metadata_and_view_detection() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        const buffer = new ArrayBuffer(8);
+        const typed = new Uint8Array(buffer);
+        const view = new DataView(buffer);
+        const descriptor = Object.getOwnPropertyDescriptor(
+            ArrayBuffer.prototype,
+            "byteLength"
+        );
+
+        ArrayBuffer.isView(buffer) === false &&
+            ArrayBuffer.isView(typed) === true &&
+            ArrayBuffer.isView(view) === true &&
+            ArrayBuffer.isView({}) === false &&
+            buffer.byteLength === 8 &&
+            buffer.maxByteLength === 8 &&
+            buffer.resizable === false &&
+            buffer.detached === false &&
+            descriptor.get.name === "get byteLength" &&
+            Object.prototype.toString.call(buffer) === "[object ArrayBuffer]"
+            ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn resizes_shared_backing_storage_and_zero_fills_growth() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const buffer = new ArrayBuffer(4, { maxByteLength: 12 });
+        const bytes = new Uint8Array(buffer);
+        bytes[0] = 7;
+        bytes[3] = 9;
+        buffer.resize(8);
+        const grew = buffer.byteLength === 8 &&
+            buffer.maxByteLength === 12 &&
+            buffer.resizable === true &&
+            bytes[0] === 7 && bytes[3] === 9;
+        buffer.resize(2);
+        const shrank = buffer.byteLength === 2 && bytes[0] === 7;
+        grew && shrank ? 42 : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn slices_and_transfers_array_buffers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const source = new ArrayBuffer(6, { maxByteLength: 10 });
+        const bytes = new Uint8Array(source);
+        bytes[1] = 11;
+        bytes[2] = 22;
+        bytes[3] = 33;
+        const sliced = source.slice(1, 4);
+        const slicedBytes = new Uint8Array(sliced);
+        const transferred = source.transfer(8);
+        const transferredBytes = new Uint8Array(transferred);
+
+        sliced.byteLength === 3 &&
+            slicedBytes[0] === 11 && slicedBytes[1] === 22 && slicedBytes[2] === 33 &&
+            source.detached === true && source.byteLength === 0 &&
+            transferred.byteLength === 8 && transferred.maxByteLength === 10 &&
+            transferred.resizable === true && transferredBytes[1] === 11 &&
+            transferredBytes[2] === 22 && transferredBytes[6] === 0
+            ? 42 : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected:?}, got {actual:?}").into())
+}

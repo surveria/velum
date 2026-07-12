@@ -1,6 +1,9 @@
 use crate::{
     error::{Error, Result},
-    runtime::{object::TypedArrayElementKind, promise::PromiseCombinatorKind},
+    runtime::{
+        native::ArrayBufferFunctionKind, object::TypedArrayElementKind,
+        promise::PromiseCombinatorKind,
+    },
     value::{ErrorName, NativeFunctionId},
 };
 
@@ -265,7 +268,16 @@ const PROMISE_ALL_SETTLED_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::n
 const ITERATOR_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(270);
 const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
 const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 273;
+const ARRAY_BUFFER_IS_VIEW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(273);
+const ARRAY_BUFFER_BYTE_LENGTH_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(274);
+const ARRAY_BUFFER_MAX_BYTE_LENGTH_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(275);
+const ARRAY_BUFFER_RESIZABLE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(276);
+const ARRAY_BUFFER_DETACHED_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(277);
+const ARRAY_BUFFER_RESIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(278);
+const ARRAY_BUFFER_SLICE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(279);
+const ARRAY_BUFFER_TRANSFER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(280);
+const ARRAY_BUFFER_TRANSFER_TO_FIXED_LENGTH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(281);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 282;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -391,6 +403,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = data_view_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = array_buffer_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
         NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
@@ -461,6 +476,39 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         NativeFunctionKind::Iterator(iterator_kind) => iterator_slot(iterator_kind),
         _ => collection_slot(kind),
+    }
+}
+
+const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::IsView) => {
+            Some(ARRAY_BUFFER_IS_VIEW_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::ByteLengthGetter) => {
+            Some(ARRAY_BUFFER_BYTE_LENGTH_GETTER_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::MaxByteLengthGetter) => {
+            Some(ARRAY_BUFFER_MAX_BYTE_LENGTH_GETTER_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::ResizableGetter) => {
+            Some(ARRAY_BUFFER_RESIZABLE_GETTER_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::DetachedGetter) => {
+            Some(ARRAY_BUFFER_DETACHED_GETTER_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::Resize) => {
+            Some(ARRAY_BUFFER_RESIZE_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::Slice) => {
+            Some(ARRAY_BUFFER_SLICE_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(ArrayBufferFunctionKind::Transfer) => {
+            Some(ARRAY_BUFFER_TRANSFER_SLOT)
+        }
+        NativeFunctionKind::ArrayBufferPrototype(
+            ArrayBufferFunctionKind::TransferToFixedLength,
+        ) => Some(ARRAY_BUFFER_TRANSFER_TO_FIXED_LENGTH_SLOT),
+        _ => None,
     }
 }
 

@@ -40,6 +40,7 @@ impl Context {
             Value::Object(prototype),
             name,
         )?;
+        self.install_array_buffer_builtins(id, prototype)?;
         self.install_species_accessor(id)?;
         self.insert_global_builtin(ARRAY_BUFFER_NAME, constructor.clone())?;
         Ok(constructor)
@@ -79,8 +80,42 @@ impl Context {
         let index = self.to_index(args.as_slice().first())?;
         let length = Self::length_to_usize(index, TYPED_ARRAY_LENGTH_LIMIT_ERROR)?;
         self.check_byte_buffer_length(length)?;
-        let buffer = ByteBuffer::new(length, ByteBufferOrigin::EngineOwned);
+        let max_byte_length = self.array_buffer_max_byte_length_option(args.as_slice().get(1))?;
+        if max_byte_length.is_some_and(|maximum| maximum < length) {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                "ArrayBuffer maxByteLength is smaller than byteLength",
+            ));
+        }
+        if let Some(maximum) = max_byte_length {
+            self.check_byte_buffer_length(maximum)?;
+        }
+        let buffer = max_byte_length.map_or_else(
+            || ByteBuffer::new(length, ByteBufferOrigin::EngineOwned),
+            |maximum| ByteBuffer::new_resizable(length, maximum),
+        );
         self.create_array_buffer_value(buffer)
+    }
+
+    fn array_buffer_max_byte_length_option(
+        &mut self,
+        options: Option<&Value>,
+    ) -> Result<Option<usize>> {
+        let Some(options) = options else {
+            return Ok(None);
+        };
+        if self.semantic_object_ref(options)?.is_none() {
+            return Ok(None);
+        }
+        let maximum = self.get_named(options, "maxByteLength")?;
+        if matches!(maximum, Value::Undefined) {
+            return Ok(None);
+        }
+        Self::length_to_usize(
+            self.to_index(Some(&maximum))?,
+            TYPED_ARRAY_LENGTH_LIMIT_ERROR,
+        )
+        .map(Some)
     }
 
     pub(in crate::runtime) fn construct_typed_array(
@@ -293,7 +328,7 @@ impl Context {
         )
     }
 
-    fn create_array_buffer_value(&mut self, buffer: ByteBuffer) -> Result<Value> {
+    pub(super) fn create_array_buffer_value(&mut self, buffer: ByteBuffer) -> Result<Value> {
         self.create_array_buffer_object(buffer).map(Value::Object)
     }
 
@@ -385,7 +420,7 @@ impl Context {
         self.typed_array_byte_length(element_kind, length).map(drop)
     }
 
-    fn check_byte_buffer_length(&self, length: usize) -> Result<()> {
+    pub(super) fn check_byte_buffer_length(&self, length: usize) -> Result<()> {
         if length > self.limits.max_object_properties {
             return Err(Error::limit(format!(
                 "typed array byte length exceeded {}",

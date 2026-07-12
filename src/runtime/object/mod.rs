@@ -633,13 +633,6 @@ impl Object {
     }
 
     fn typed_array_property(&self, property: &str) -> Result<Option<Value>> {
-        if let Some(buffer) = self.byte_buffer.as_ref()
-            && property == "byteLength"
-        {
-            return Ok(Some(Value::Number(usize_property_number(
-                buffer.byte_length(),
-            )?)));
-        }
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(None);
         };
@@ -653,9 +646,6 @@ impl Object {
     }
 
     fn has_typed_array_property(&self, property: &str) -> Result<bool> {
-        if self.byte_buffer.is_some() && property == "byteLength" {
-            return Ok(true);
-        }
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(false);
         };
@@ -714,10 +704,4 @@ impl Object {
             .len()
             .saturating_add(self.array_storage.property_count())
     }
-}
-
-fn usize_property_number(value: usize) -> Result<f64> {
-    let value = u32::try_from(value)
-        .map_err(|_| Error::limit("typed array length exceeded supported number range"))?;
-    Ok(f64::from(value))
 }
