@@ -352,10 +352,26 @@ const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
 #[derive(Debug, Clone)]
 pub(in crate::runtime) enum CollectionIteratorState {
     Snapshot(SnapshotIteratorState),
+    LiveArray(LiveArrayIteratorState),
     LiveCollection(LiveCollectionIteratorState),
     Helper(IteratorHelperState),
     Static(IteratorStaticState),
     Wrap(WrappedIteratorState),
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum ArrayIterationTarget {
+    Keys,
+    Values,
+    Entries,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct LiveArrayIteratorState {
+    pub(in crate::runtime) owner: Value,
+    pub(in crate::runtime) target: ArrayIterationTarget,
+    pub(in crate::runtime) cursor: usize,
+    pub(in crate::runtime) done: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -481,6 +497,10 @@ impl CollectionIteratorState {
     {
         match self {
             Self::Snapshot(state) => state.visit_strong_edges(visitor),
+            Self::LiveArray(state) => visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(&state.owner),
+            ),
             Self::LiveCollection(state) => visitor.visit(
                 VmAsyncEdgeKind::IteratorItem,
                 StrongEdgeReference::Value(&state.owner),
@@ -505,7 +525,7 @@ impl CollectionIteratorState {
     fn item_charge(&self) -> Result<usize> {
         match self {
             Self::Snapshot(state) => Ok(state.items.len()),
-            Self::LiveCollection(_) => Ok(1),
+            Self::LiveArray(_) | Self::LiveCollection(_) => Ok(1),
             Self::Helper(_) => Ok(ITERATOR_HELPER_ITEM_CHARGE),
             Self::Static(state) => state.item_charge(),
             Self::Wrap(_) => Ok(WRAPPED_ITERATOR_ITEM_CHARGE),
@@ -654,6 +674,19 @@ impl Context {
                 done: false,
             },
         ))
+    }
+
+    pub(in crate::runtime) fn create_live_array_iterator(
+        &mut self,
+        owner: Value,
+        target: ArrayIterationTarget,
+    ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::LiveArray(LiveArrayIteratorState {
+            owner,
+            target,
+            cursor: 0,
+            done: false,
+        }))
     }
 
     pub(in crate::runtime) fn create_iterator_helper(

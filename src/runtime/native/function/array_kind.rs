@@ -74,6 +74,9 @@ const ARRAY_WITH_FUNCTION_LENGTH: f64 = 2.0;
 const ARRAY_WITH_NAME: &str = "with";
 const ARRAY_VALUES_FUNCTION_LENGTH: f64 = 0.0;
 const ARRAY_VALUES_NAME: &str = "values";
+const ARRAY_ENTRIES_NAME: &str = "entries";
+const ARRAY_KEYS_NAME: &str = "keys";
+const ARRAY_ITERATOR_NEXT_NAME: &str = "next";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_NAME: &str = "Array";
 
@@ -84,11 +87,7 @@ impl NativeFunctionKind {
         self.array_length().is_some()
             && !matches!(
                 self,
-                Self::Array
-                    | Self::ArrayFrom
-                    | Self::ArrayFromAsync
-                    | Self::ArrayIsArray
-                    | Self::ArrayValues
+                Self::Array | Self::ArrayFrom | Self::ArrayFromAsync | Self::ArrayIsArray
             )
     }
 
@@ -131,6 +130,9 @@ impl NativeFunctionKind {
             Self::ArrayToReversed => Some(ARRAY_TO_REVERSED_FUNCTION_LENGTH),
             Self::ArrayToSpliced => Some(ARRAY_TO_SPLICED_FUNCTION_LENGTH),
             Self::ArrayWith => Some(ARRAY_WITH_FUNCTION_LENGTH),
+            Self::ArrayEntries | Self::ArrayKeys | Self::ArrayIteratorNext => {
+                Some(ARRAY_VALUES_FUNCTION_LENGTH)
+            }
             Self::ArrayValues => Some(ARRAY_VALUES_FUNCTION_LENGTH),
             _ => None,
         }
@@ -175,7 +177,10 @@ impl NativeFunctionKind {
             Self::ArrayToReversed => Some(ARRAY_TO_REVERSED_NAME),
             Self::ArrayToSpliced => Some(ARRAY_TO_SPLICED_NAME),
             Self::ArrayWith => Some(ARRAY_WITH_NAME),
+            Self::ArrayEntries => Some(ARRAY_ENTRIES_NAME),
+            Self::ArrayKeys => Some(ARRAY_KEYS_NAME),
             Self::ArrayValues => Some(ARRAY_VALUES_NAME),
+            Self::ArrayIteratorNext => Some(ARRAY_ITERATOR_NEXT_NAME),
             _ => None,
         }
     }
