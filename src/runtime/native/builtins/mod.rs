@@ -1,5 +1,6 @@
 mod array;
 mod array_buffer;
+mod atomics;
 mod bigint;
 mod boolean;
 mod data_view;
@@ -29,6 +30,7 @@ mod proxy;
 mod reflect;
 mod regexp;
 mod set_operations;
+mod shared_array_buffer;
 mod species;
 mod string;
 mod string_annexb;

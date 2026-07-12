@@ -26,6 +26,7 @@ impl NativeFunctionKind {
                 | Self::Set
                 | Self::Symbol
                 | Self::ArrayBuffer
+                | Self::SharedArrayBuffer
                 | Self::TypedArrayIntrinsic
                 | Self::TypedArray(_)
                 | Self::WeakMap
@@ -42,6 +43,7 @@ impl NativeFunctionKind {
             self,
             Self::Array
                 | Self::ArrayBuffer
+                | Self::SharedArrayBuffer
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
                 | Self::Boolean

@@ -4,6 +4,8 @@ const PATH_TEST262_NUMERIC_TYPED_ARRAYS: &str =
     "tests/corpora/test262/active/built-ins/TypedArray/numeric_typed_arrays.js";
 const PATH_TEST262_DATA_VIEW: &str =
     "tests/corpora/test262/active/built-ins/DataView/data_view_numeric.js";
+const PATH_TEST262_SHARED_ATOMICS: &str =
+    "tests/corpora/test262/active/built-ins/Atomics/shared_array_buffer.js";
 
 pub(super) fn test262_typed_array_cases() -> Vec<EngineCase> {
     vec![EngineCase {
@@ -17,6 +19,14 @@ pub(super) fn test262_data_view_cases() -> Vec<EngineCase> {
     vec![EngineCase {
         id: "built-ins/DataView/numeric-accessors",
         path: PATH_TEST262_DATA_VIEW,
+        expectation: Expectation::Value("42"),
+    }]
+}
+
+pub(super) fn test262_shared_atomics_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "built-ins/Atomics/shared-array-buffer",
+        path: PATH_TEST262_SHARED_ATOMICS,
         expectation: Expectation::Value("42"),
     }]
 }

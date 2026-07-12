@@ -281,7 +281,10 @@ const DATA_VIEW_GET_BIGINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(
 const DATA_VIEW_GET_BIGUINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(307);
 const DATA_VIEW_SET_BIGINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(308);
 const DATA_VIEW_SET_BIGUINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(309);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 310;
+const SHARED_ARRAY_BUFFER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(310);
+const SHARED_ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 311;
+const ATOMICS_METHOD_SLOT_BASE: usize = 316;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 330;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -420,6 +423,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 
     match kind {
         NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
+        NativeFunctionKind::SharedArrayBuffer => Some(SHARED_ARRAY_BUFFER_SLOT),
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
         NativeFunctionKind::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_SLOT),
         NativeFunctionKind::AsyncGeneratorNext => Some(ASYNC_GENERATOR_NEXT_SLOT),
@@ -470,8 +474,20 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 }
 
 const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    if let NativeFunctionKind::Atomics(method) = kind {
+        let Some(index) = ATOMICS_METHOD_SLOT_BASE.checked_add(method.index()) else {
+            return None;
+        };
+        return Some(NativeFunctionSlot::new(index));
+    }
     if let Some(slot) = array_buffer_slot(kind) {
         return Some(slot);
+    }
+    if let NativeFunctionKind::SharedArrayBufferPrototype(method) = kind {
+        let Some(index) = SHARED_ARRAY_BUFFER_METHOD_SLOT_BASE.checked_add(method.index()) else {
+            return None;
+        };
+        return Some(NativeFunctionSlot::new(index));
     }
     let (base, index) = match kind {
         NativeFunctionKind::DisposableStack(method) => (DISPOSABLE_STACK_SLOT_BASE, method.index()),

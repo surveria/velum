@@ -520,6 +520,7 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
     cases.extend(test262_string_builtin_cases());
     cases.extend(super::cases_test262_collections::test262_collection_builtin_cases());
     cases.extend(super::cases_test262_typed_array::test262_data_view_cases());
+    cases.extend(super::cases_test262_typed_array::test262_shared_atomics_cases());
     cases.extend(super::cases_test262_typed_array::test262_typed_array_cases());
     cases
 }
