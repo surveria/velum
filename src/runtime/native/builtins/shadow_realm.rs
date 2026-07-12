@@ -280,7 +280,7 @@ impl Context {
             Value::Number(0.0)
         };
         let name = match self.get_named(target, NAME_NAME)? {
-            value @ (Value::String(_) | Value::HeapString(_)) => value,
+            value @ Value::String(_) => value,
             _ => self.heap_string_value("")?,
         };
         Ok((length, name))

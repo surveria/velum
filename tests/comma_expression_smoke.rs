@@ -10,7 +10,7 @@ fn eval(source: &str) -> rs_quickjs::Result<Value> {
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
     let actual = eval(source)?;
-    if actual == Value::String(expected.to_owned()) {
+    if actual == Value::from(expected) {
         return Ok(());
     }
     Err(format!("expected string {expected:?}, got {actual:?}").into())

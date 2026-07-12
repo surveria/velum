@@ -57,7 +57,6 @@ fn error_prototype_properties_are_non_enumerable() -> TestResult {
 fn ensure_value(value: &Value, expected: &str) -> TestResult {
     let actual = match value {
         Value::String(value) => value.as_str(),
-        Value::HeapString(value) => value.as_str(),
         _ => return Err(format!("expected string value, got {value:?}").into()),
     };
     if actual == expected {

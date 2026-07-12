@@ -84,7 +84,7 @@ fn promise_all_closes_iterator_and_rejects_on_abrupt_resolve() -> TestResult {
         "#,
     )?;
     let value = context.eval("closed + '|' + rejected")?;
-    if value != Value::String("1|marker".to_owned()) {
+    if value != Value::from("1|marker") {
         return Err(format!("unexpected close/rejection state: {value:?}").into());
     }
     Ok(())

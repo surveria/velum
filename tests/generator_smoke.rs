@@ -39,7 +39,7 @@ fn generator_declaration_yields_and_returns() -> TestResult {
         first.value + ":" + first.done + ":" + second.value + ":" + second.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("40:false:42:true".to_owned()))
+    ensure_value(&value, &Value::from("40:false:42:true"))
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn generator_return_runs_finally_and_can_yield_again() -> TestResult {
         cleanup.value + ":" + cleanup.done + ":" + completed.value + ":" + completed.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("2:false:40:true".to_owned()))
+    ensure_value(&value, &Value::from("2:false:40:true"))
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn generator_throw_enters_catch() -> TestResult {
         completed.value + ":" + completed.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("42:true".to_owned()))
+    ensure_value(&value, &Value::from("42:true"))
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn evaluates_parameters_on_call_but_defers_the_body() -> TestResult {
         parameterThrew + ":" + bodyCalls + ":" + iterator.next().value + ":" + bodyCalls
         "#,
     )?;
-    ensure_value(&value, &Value::String("true:0:42:1".to_owned()))
+    ensure_value(&value, &Value::from("true:0:42:1"))
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn direct_eval_reports_generator_scope_conflicts_as_syntax_errors() -> TestResul
         parameterThrew + ":" + lexicalThrew
         "#,
     )?;
-    ensure_value(&value, &Value::String("true:true".to_owned()))
+    ensure_value(&value, &Value::from("true:true"))
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn yield_delegate_forwards_next_and_completion_values() -> TestResult {
         first.value + ":" + first.done + ":" + completed.value + ":" + completed.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("1:false:42:true".to_owned()))
+    ensure_value(&value, &Value::from("1:false:42:true"))
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn yield_delegate_forwards_return_through_finally() -> TestResult {
         cleanup.value + ":" + cleanup.done + ":" + completed.value + ":" + completed.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("2:false:40:true".to_owned()))
+    ensure_value(&value, &Value::from("2:false:40:true"))
 }
 
 #[test]
@@ -319,7 +319,7 @@ fn yield_delegate_forwards_throw() -> TestResult {
         completed.value + ":" + completed.done
         "#,
     )?;
-    ensure_value(&value, &Value::String("42:true".to_owned()))
+    ensure_value(&value, &Value::from("42:true"))
 }
 
 #[test]
@@ -342,7 +342,7 @@ fn yield_delegate_preserves_protocol_iterator_result() -> TestResult {
         (actual === innerResult) + ":" + actual.done + ":" + actual.value
         "#,
     )?;
-    ensure_value(&value, &Value::String("true:undefined:42".to_owned()))
+    ensure_value(&value, &Value::from("true:undefined:42"))
 }
 
 #[test]
@@ -373,7 +373,7 @@ fn yield_delegate_propagates_return_when_method_is_absent() -> TestResult {
         completed.value + ":" + completed.done + ":" + returnGets
         "#,
     )?;
-    ensure_value(&value, &Value::String("42:true:1".to_owned()))
+    ensure_value(&value, &Value::from("42:true:1"))
 }
 
 #[test]
@@ -407,5 +407,5 @@ fn yield_delegate_closes_iterator_when_throw_method_is_absent() -> TestResult {
         closed + ":" + caught
         "#,
     )?;
-    ensure_value(&value, &Value::String("true:true".to_owned()))
+    ensure_value(&value, &Value::from("true:true"))
 }

@@ -51,8 +51,7 @@ pub fn get_property(
         Value::Object(id) => objects
             .get(*id, property)
             .map(|value| PropertyValue::from_object_value(value, object)),
-        Value::String(value) => string_property(value, property.name()),
-        Value::HeapString(value) => utf16_string_property(value.as_utf16(), property.name()),
+        Value::String(value) => utf16_string_property(value.as_utf16(), property.name()),
         value => Err(Error::type_error(format!(
             "member access '{}' is not supported for {}",
             property.name(),
@@ -111,8 +110,7 @@ pub fn has_property(
 ) -> Result<bool> {
     match object {
         Value::Object(id) => objects.has(*id, property),
-        Value::String(value) => string_has_property(value, property.name()),
-        Value::HeapString(value) => utf16_string_has_property(value.as_utf16(), property.name()),
+        Value::String(value) => utf16_string_has_property(value.as_utf16(), property.name()),
         value => Err(Error::runtime(format!(
             "operator 'in' is not supported for {}",
             value.type_name()
@@ -128,8 +126,7 @@ pub fn enumerable_property_keys(
     match object {
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
         Value::Object(id) => objects.keys(*id, atoms),
-        Value::String(value) => string_enumerable_keys(value),
-        Value::HeapString(value) => utf16_string_enumerable_keys(value.as_utf16()),
+        Value::String(value) => utf16_string_enumerable_keys(value.as_utf16()),
         Value::Bool(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -169,17 +166,11 @@ pub fn delete_property(
         | Value::Number(_)
         | Value::BigInt(_)
         | Value::String(_)
-        | Value::HeapString(_)
         | Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(true),
     }
-}
-
-fn string_property(value: &str, property: &str) -> Result<PropertyValue> {
-    let units = value.encode_utf16().collect::<Vec<_>>();
-    utf16_string_property(&units, property)
 }
 
 fn utf16_string_property(value: &[u16], property: &str) -> Result<PropertyValue> {
@@ -188,11 +179,6 @@ fn utf16_string_property(value: &[u16], property: &str) -> Result<PropertyValue>
         StringPropertyValue::CodeUnit(unit) => Ok(PropertyValue::CodeUnit(unit)),
         StringPropertyValue::Missing => Ok(PropertyValue::Value(Value::Undefined)),
     }
-}
-
-pub fn string_property_value(value: &str, property: &str) -> Result<StringPropertyValue> {
-    let units = value.encode_utf16().collect::<Vec<_>>();
-    utf16_string_property_value(&units, property)
 }
 
 pub fn utf16_string_property_value(value: &[u16], property: &str) -> Result<StringPropertyValue> {
@@ -211,18 +197,9 @@ pub(in crate::runtime) fn string_length_value_if_string(
         return Ok(None);
     }
     match object {
-        Value::String(value) => {
-            let units = value.encode_utf16().collect::<Vec<_>>();
-            string_length(&units).map(Value::Number).map(Some)
-        }
-        Value::HeapString(value) => string_length(value.as_utf16()).map(Value::Number).map(Some),
+        Value::String(value) => string_length(value.as_utf16()).map(Value::Number).map(Some),
         _ => Ok(None),
     }
-}
-
-fn string_has_property(value: &str, property: &str) -> Result<bool> {
-    let units = value.encode_utf16().collect::<Vec<_>>();
-    utf16_string_has_property(&units, property)
 }
 
 fn utf16_string_has_property(value: &[u16], property: &str) -> Result<bool> {
@@ -233,11 +210,6 @@ fn utf16_string_has_property(value: &[u16], property: &str) -> Result<bool> {
         return Ok(false);
     };
     Ok(index < string_len(value)?)
-}
-
-fn string_enumerable_keys(value: &str) -> Result<Vec<String>> {
-    let units = value.encode_utf16().collect::<Vec<_>>();
-    utf16_string_enumerable_keys(&units)
 }
 
 fn utf16_string_enumerable_keys(value: &[u16]) -> Result<Vec<String>> {

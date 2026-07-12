@@ -46,8 +46,7 @@ impl TryFrom<&Value> for OwnedValue {
             Value::Bool(value) => Ok(Self::Bool(*value)),
             Value::Number(value) => Ok(Self::Number(*value)),
             Value::BigInt(value) => Ok(Self::BigInt(value.clone())),
-            Value::String(value) => Ok(Self::String(value.clone())),
-            Value::HeapString(value) => value
+            Value::String(value) => value
                 .as_utf8()
                 .map(str::to_owned)
                 .map(Self::String)
@@ -71,8 +70,7 @@ impl TryFrom<Value> for OwnedValue {
             Value::Bool(value) => Ok(Self::Bool(value)),
             Value::Number(value) => Ok(Self::Number(value)),
             Value::BigInt(value) => Ok(Self::BigInt(value)),
-            Value::String(value) => Ok(Self::String(value)),
-            Value::HeapString(value) => value
+            Value::String(value) => value
                 .into_utf8()
                 .map(Self::String)
                 .ok_or_else(|| Error::runtime(ILL_FORMED_STRING_ERROR)),

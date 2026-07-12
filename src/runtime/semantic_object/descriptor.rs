@@ -145,7 +145,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => {
                 return Err(Error::type_error(
                     "property definition target must be an object",
@@ -193,9 +192,7 @@ impl Context {
     ) -> Result<Option<OwnPropertyDescriptor>> {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return match target {
-                Value::String(_) | Value::HeapString(_) => {
-                    self.primitive_own_property_descriptor(target, property)
-                }
+                Value::String(_) => self.primitive_own_property_descriptor(target, property),
                 Value::Undefined | Value::Null => Err(Error::type_error(
                     "property descriptor target cannot be converted to an object",
                 )),
@@ -242,7 +239,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Ok(None),
         }
     }

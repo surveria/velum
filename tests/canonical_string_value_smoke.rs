@@ -11,7 +11,7 @@ fn admits_portable_utf16_string_without_losing_surrogates() -> TestResult {
     })?;
 
     let value = context.eval("portableString().length + ':' + portableString().charCodeAt(0)")?;
-    if value == Value::String("1:55296".to_owned()) {
+    if value == Value::from("1:55296") {
         return Ok(());
     }
     Err(format!("unexpected portable string result: {value:?}").into())

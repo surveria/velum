@@ -1205,7 +1205,7 @@ AS-05 is split at ownership boundaries:
    capability identity plus an explicit storage generation for every Context.
    It does not claim that raw public `Value` is safe to transfer yet;
 2. AS-05a2a stamps the VM-derived primitive values already accepted by host
-   returns (`HeapString` and `Symbol`) and rejects a foreign owner before a
+   returns (`String(JsString)` and `Symbol`) and rejects a foreign owner before a
    colliding slot can be used;
 3. AS-05a2b introduces callback-borrowed `LocalValue`, binds public JavaScript
    errors to its VM owner, and rejects a foreign throw before it becomes

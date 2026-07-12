@@ -16,7 +16,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 }
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
-    ensure_value(&eval(source)?, &Value::String(expected.to_owned()))
+    ensure_value(&eval(source)?, &Value::from(expected))
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn escaped_arrows_capture_the_parent_arguments_binding() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(&context.eval("trace")?, &Value::String("40:1:2".to_owned()))
+    ensure_value(&context.eval("trace")?, &Value::from("40:1:2"))
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn arguments_helpers_preserve_cross_script_closure_bindings() -> TestResult {
         captured + ":" + probe(object, "value");
         "#,
     )?;
-    ensure_value(&value, &Value::String("data:data".to_owned()))
+    ensure_value(&value, &Value::from("data:data"))
 }
 
 #[test]

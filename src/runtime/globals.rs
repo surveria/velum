@@ -194,19 +194,19 @@ impl Context {
     }
 
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
-        self.intern_heap_string(text).map(Value::HeapString)
+        self.intern_heap_string(text).map(Value::String)
     }
 
     pub(crate) fn heap_string_owned_value(&mut self, text: String) -> Result<Value> {
-        self.intern_owned_heap_string(text).map(Value::HeapString)
+        self.intern_owned_heap_string(text).map(Value::String)
     }
 
     pub(crate) fn heap_js_string_value(&mut self, string: &JsString) -> Result<Value> {
-        self.intern_js_string(string).map(Value::HeapString)
+        self.intern_js_string(string).map(Value::String)
     }
 
     pub(crate) fn heap_utf16_string_value(&mut self, units: &[u16]) -> Result<Value> {
-        self.intern_utf16_heap_string(units).map(Value::HeapString)
+        self.intern_utf16_heap_string(units).map(Value::String)
     }
 
     pub(crate) fn create_symbol_value(&mut self, description: Option<&str>) -> Result<Value> {

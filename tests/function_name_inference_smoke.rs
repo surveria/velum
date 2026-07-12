@@ -6,7 +6,7 @@ fn expect_string(source: &str, expected: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let actual = context.eval(source)?;
-    if actual == Value::String(expected.to_owned()) {
+    if actual == Value::from(expected) {
         return Ok(());
     }
     Err(format!("expected {expected:?}, got {actual:?}").into())
@@ -127,7 +127,7 @@ fn named_async_functions_keep_their_private_self_binding() -> TestResult {
         "#,
     )?;
     let actual = context.eval("observed")?;
-    if actual == Value::String("same".to_owned()) {
+    if actual == Value::from("same") {
         return Ok(());
     }
     Err(format!("expected async self binding to resolve itself, got {actual:?}").into())
@@ -159,7 +159,7 @@ fn named_async_generators_keep_captured_private_self_binding() -> TestResult {
         "#,
     )?;
     let actual = context.eval("observed")?;
-    if actual == Value::String("same|1".to_owned()) {
+    if actual == Value::from("same|1") {
         return Ok(());
     }
     Err(format!("expected async generator self binding to resolve itself, got {actual:?}").into())

@@ -29,8 +29,7 @@ pub(in crate::runtime) fn abstract_equality(
         (_, Value::Bool(right)) => {
             abstract_equality(context, left, &Value::Number(bool_to_number(*right)))
         }
-        (Value::String(_) | Value::HeapString(_), Value::Number(_))
-        | (Value::Number(_), Value::String(_) | Value::HeapString(_)) => Ok(
+        (Value::String(_), Value::Number(_)) | (Value::Number(_), Value::String(_)) => Ok(
             number_strict_equality(context.to_number(left)?, context.to_number(right)?),
         ),
         (Value::BigInt(left), Value::Number(right)) => Ok(left.equals_number(*right)),

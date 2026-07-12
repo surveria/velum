@@ -27,7 +27,7 @@ fn registers_typed_host_functions() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
 
     let type_name = vm.context().eval("typeof hostAdd")?;
-    ensure_value(&type_name, &Value::String("function".to_owned()))
+    ensure_value(&type_name, &Value::from("function"))
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn supports_host_value_conversion_helpers() -> TestResult {
         .register_host_function_typed(HOST_NOOP_NAME, |_call| Ok(()))?;
 
     let formatted = vm.context().eval(r#"hostFormat(true, "front", 7)"#)?;
-    ensure_value(&formatted, &Value::String("front:7:true".to_owned()))?;
+    ensure_value(&formatted, &Value::from("front:7:true"))?;
 
     let score = vm.context().eval("hostScore()")?;
     ensure_value(&score, &Value::Number(42.0))?;
@@ -69,7 +69,7 @@ fn supports_host_value_conversion_helpers() -> TestResult {
     ensure_value(&ready, &Value::Bool(true))?;
 
     let noop_type = vm.context().eval("typeof hostNoop()")?;
-    ensure_value(&noop_type, &Value::String("undefined".to_owned()))
+    ensure_value(&noop_type, &Value::from("undefined"))
 }
 
 #[test]
@@ -85,21 +85,19 @@ fn interns_host_returned_strings_in_vm_heap() -> TestResult {
             Ok(CAMERA_LABEL.to_owned())
         })?;
     vm.context()
-        .register_host_function(HOST_ECHO_NAME, |_call| {
-            Ok(Value::String(CAMERA_LABEL.to_owned()))
-        })?;
+        .register_host_function(HOST_ECHO_NAME, |_call| Ok(Value::from(CAMERA_LABEL)))?;
 
     ensure_usize(vm.resource_usage().string_count, 0)?;
     ensure_usize(vm.resource_usage().string_bytes, 0)?;
 
     let static_label = vm.context().eval("hostLabel()")?;
-    ensure_value(&static_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    ensure_value(&static_label, &Value::from(CAMERA_LABEL))?;
     let after_static_label = vm.resource_usage();
     ensure_usize(after_static_label.string_count, 1)?;
     ensure_usize(after_static_label.string_bytes, CAMERA_LABEL.len())?;
 
     let owned_label = vm.context().eval("hostOwned()")?;
-    ensure_value(&owned_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    ensure_value(&owned_label, &Value::from(CAMERA_LABEL))?;
     let after_owned_label = vm.resource_usage();
     ensure_usize(
         after_owned_label.string_count,
@@ -111,7 +109,7 @@ fn interns_host_returned_strings_in_vm_heap() -> TestResult {
     )?;
 
     let legacy_label = vm.context().eval("hostEcho()")?;
-    ensure_value(&legacy_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    ensure_value(&legacy_label, &Value::from(CAMERA_LABEL))?;
     let after_legacy_label = vm.resource_usage();
     ensure_usize(
         after_legacy_label.string_count,
@@ -149,7 +147,7 @@ fn keeps_host_functions_vm_local() -> TestResult {
         .register_host_function(HOST_ECHO_NAME, host_echo)?;
 
     let value = first_vm.context().eval(r#"hostEcho("front")"#)?;
-    ensure_value(&value, &Value::String("front".to_owned()))?;
+    ensure_value(&value, &Value::from("front"))?;
 
     let Err(error) = second_vm.context().eval(r#"hostEcho("rear")"#) else {
         return Err("expected missing host function in second VM".into());
@@ -236,10 +234,10 @@ fn rejects_foreign_heap_strings_even_when_slots_collide() -> TestResult {
     let engine = Engine::new();
     let mut first_vm = engine.create_vm();
     let mut second_vm = engine.create_vm();
-    let Value::HeapString(foreign) = first_vm.context().eval(r#""camera""#)? else {
+    let Value::String(foreign) = first_vm.context().eval(r#""camera""#)? else {
         return Err("expected first VM to return a heap string".into());
     };
-    let Value::HeapString(local) = second_vm.context().eval(r#""camera""#)? else {
+    let Value::String(local) = second_vm.context().eval(r#""camera""#)? else {
         return Err("expected second VM to return a heap string".into());
     };
     if foreign.id() != local.id() {
@@ -252,7 +250,7 @@ fn rejects_foreign_heap_strings_even_when_slots_collide() -> TestResult {
     second_vm
         .context()
         .register_host_function(HOST_LOCAL_STRING_NAME, move |_call| {
-            Ok(Value::HeapString(foreign.clone()))
+            Ok(Value::String(foreign.clone()))
         })?;
     let Err(error) = second_vm.context().eval("hostLocalString()") else {
         return Err("expected a foreign heap string return to fail".into());
@@ -303,7 +301,7 @@ fn host_add(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
 
 fn host_echo(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
     let value = call.string(0, "value")?;
-    Ok(Value::String(value.to_owned()))
+    Ok(Value::from(value))
 }
 
 fn host_format(call: HostCall<'_>) -> rs_quickjs::Result<String> {

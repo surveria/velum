@@ -156,7 +156,7 @@ fn propagates_do_while_control_flow() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
 
@@ -258,7 +258,7 @@ fn supports_labeled_continue_statements() -> TestResult {
         }
         seen
         "#,
-        &Value::String("ac".to_owned()),
+        &Value::from("ac"),
     )
 }
 
@@ -293,7 +293,7 @@ fn propagates_while_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
 
@@ -433,7 +433,7 @@ fn propagates_for_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )
 }
 
@@ -492,7 +492,7 @@ fn supports_switch_statements() -> TestResult {
         }
         selected
         "#,
-        &Value::String("two".to_owned()),
+        &Value::from("two"),
     )?;
 
     expect_value(
@@ -555,7 +555,7 @@ fn propagates_switch_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("boom".to_owned()),
+        &Value::from("boom"),
     )?;
 
     expect_value(
@@ -699,7 +699,7 @@ fn propagates_try_finally_completion() -> TestResult {
         }
         caught
         "#,
-        &Value::String("finally".to_owned()),
+        &Value::from("finally"),
     )?;
 
     expect_value(

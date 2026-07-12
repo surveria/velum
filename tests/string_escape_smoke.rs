@@ -24,7 +24,11 @@ door";
 
     ensure_value(
         &value,
-        &Value::String("\u{0008}\u{000c}\n\r\t\u{000b}\0:ABC:\"'\\:ac-:frontdoor".to_owned()),
+        &Value::String(
+            "\u{0008}\u{000c}\n\r\t\u{000b}\0:ABC:\"'\\:ac-:frontdoor"
+                .to_owned()
+                .into(),
+        ),
     )
 }
 

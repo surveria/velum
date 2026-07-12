@@ -149,7 +149,7 @@ impl Context {
     /// and String while their built-in protocol methods remain uninstalled.
     pub(in crate::runtime) fn get_iterator(&mut self, iterable: &Value) -> Result<IteratorSource> {
         match iterable {
-            Value::String(_) | Value::HeapString(_) => {
+            Value::String(_) => {
                 if let Some(method) = self.iterator_method(iterable)? {
                     return self.get_iterator_from_method(iterable, &method);
                 }

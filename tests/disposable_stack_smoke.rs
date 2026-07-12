@@ -12,7 +12,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 fn ensure_string(source: &str, expected: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
-    ensure_value(&context.eval(source)?, &Value::String(expected.to_owned()))
+    ensure_value(&context.eval(source)?, &Value::from(expected))
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn disposable_resources_survive_gc_and_release_storage_on_dispose() -> TestResul
     context.collect_garbage()?;
     ensure_value(
         &context.eval("stack.dispose(); disposalLog.join(',')")?,
-        &Value::String("second,first".to_owned()),
+        &Value::from("second,first"),
     )?;
     let after_dispose = context
         .storage_snapshot()?

@@ -64,9 +64,6 @@ impl Context {
             };
         }
         if let Value::String(value) = object {
-            return self.get_string_property_value(object, value, property.as_str());
-        }
-        if let Value::HeapString(value) = object {
             return self.get_utf16_string_property_value(
                 object,
                 value.as_utf16(),
@@ -117,19 +114,12 @@ impl Context {
         if matches!(property.lookup().key(), Some(PropertyKey::Symbol(_)))
             && matches!(
                 object,
-                Value::Bool(_)
-                    | Value::Number(_)
-                    | Value::String(_)
-                    | Value::HeapString(_)
-                    | Value::Symbol(_)
+                Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Symbol(_)
             )
         {
             return self.get(object, property.lookup());
         }
         if let Value::String(value) = object {
-            return self.get_string_property_value(object, value, property.name());
-        }
-        if let Value::HeapString(value) = object {
             return self.get_utf16_string_property_value(object, value.as_utf16(), property.name());
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {

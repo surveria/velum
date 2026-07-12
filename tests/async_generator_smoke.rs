@@ -30,7 +30,7 @@ fn async_generator_yields_and_returns_through_promises() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("40:false:42:true".to_owned()))
+    ensure_value(&value, &Value::from("40:false:42:true"))
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn async_generator_resumes_after_await_and_preserves_request_order() -> TestResu
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("40:false:42:true".to_owned()))
+    ensure_value(&value, &Value::from("40:false:42:true"))
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn async_generator_awaits_yielded_and_returned_values() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("40:false:42:true".to_owned()))
+    ensure_value(&value, &Value::from("40:false:42:true"))
 }
 
 #[test]
@@ -143,10 +143,7 @@ fn exposes_async_generator_function_constructor() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(
-        &value,
-        &Value::String("AsyncGeneratorFunction:1:42:false".to_owned()),
-    )
+    ensure_value(&value, &Value::from("AsyncGeneratorFunction:1:42:false"))
 }
 
 #[test]
@@ -179,7 +176,7 @@ fn async_generator_awaits_generic_thenables() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("40:42".to_owned()))
+    ensure_value(&value, &Value::from("40:42"))
 }
 
 #[test]
@@ -210,7 +207,7 @@ fn async_generator_delegates_to_async_and_sync_iterables() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("20:22:42".to_owned()))
+    ensure_value(&value, &Value::from("20:22:42"))
 }
 
 #[test]
@@ -247,7 +244,7 @@ fn queued_requests_wait_for_the_current_yield_value() -> TestResult {
         "#,
     )?;
     let value = context.eval("trace")?;
-    ensure_value(&value, &Value::String("1:2:true:2".to_owned()))
+    ensure_value(&value, &Value::from("1:2:true:2"))
 }
 
 #[test]
@@ -275,8 +272,5 @@ fn return_resumption_observes_thenable_before_later_promise_jobs() -> TestResult
         "#,
     )?;
     let value = context.eval("events.join('|')")?;
-    ensure_value(
-        &value,
-        &Value::String("start|tick 1|get then|tick 2".to_owned()),
-    )
+    ensure_value(&value, &Value::from("start|tick 1|get then|tick 2"))
 }

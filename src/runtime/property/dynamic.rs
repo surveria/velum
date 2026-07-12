@@ -4,7 +4,7 @@ use crate::{
     runtime::object::{PropertyKey, PropertyLookup},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
-        has_property, string_property_value, utf16_string_property_value,
+        has_property, utf16_string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -29,24 +29,6 @@ impl Context {
             PropertyValue::Getter { getter, receiver } => {
                 let value = self.call_accessor_getter(&getter, receiver)?;
                 self.runtime_value(value)
-            }
-        }
-    }
-
-    pub(in crate::runtime) fn get_string_property_value(
-        &mut self,
-        receiver: &Value,
-        value: &str,
-        property: &str,
-    ) -> Result<Value> {
-        if property == STRING_CONSTRUCTOR_PROPERTY {
-            return self.string_constructor_value();
-        }
-        match string_property_value(value, property)? {
-            StringPropertyValue::Length(value) => Ok(Value::Number(value)),
-            StringPropertyValue::CodeUnit(unit) => self.heap_string_code_unit_value(unit),
-            StringPropertyValue::Missing => {
-                self.string_prototype_property_value(receiver, property)
             }
         }
     }

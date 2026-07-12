@@ -117,7 +117,7 @@ impl Context {
         let Some(key) = self.symbols.key_for(symbol.id())? else {
             return Ok(Value::Undefined);
         };
-        Ok(Value::HeapString(key))
+        Ok(Value::String(key))
     }
 
     pub(in crate::runtime::native) fn create_symbol_object_from_value(

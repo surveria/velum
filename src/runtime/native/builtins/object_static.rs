@@ -297,7 +297,6 @@ impl Context {
                 | Value::Number(_)
                 | Value::BigInt(_)
                 | Value::String(_)
-                | Value::HeapString(_)
                 | Value::Symbol(_) => Ok(target),
             },
         }
@@ -359,7 +358,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(
                 "Object.defineProperties target must be an object",
             )),
@@ -453,7 +451,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => {
                 let args = [value];
                 self.eval_direct_object_constructor(&args)
@@ -470,7 +467,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(
                 "Object.create prototype must be an object or null",
             )),
@@ -492,7 +488,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(
                 "Object.setPrototypeOf prototype must be an object or null",
             )),

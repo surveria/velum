@@ -20,10 +20,7 @@ impl Context {
     }
 
     pub(crate) fn runtime_value(&mut self, value: Value) -> Result<Value> {
-        if let Value::String(text) = value {
-            return self.heap_string_value(&text);
-        }
-        if let Value::HeapString(text) = &value
+        if let Value::String(text) = &value
             && !text.is_heap_owned()
         {
             return self.heap_js_string_value(text);
@@ -79,11 +76,7 @@ impl Context {
         }
 
         let mut text = match left {
-            Value::String(mut text) => {
-                self.push_primitive_string(&mut text, right)?;
-                text
-            }
-            Value::HeapString(text) if text.is_well_formed() => {
+            Value::String(text) if text.is_well_formed() => {
                 let mut text = text
                     .into_utf8_accumulator()
                     .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
@@ -97,7 +90,7 @@ impl Context {
             return self.heap_string_owned_value(text);
         }
         self.reserve_string_concat_tail(&mut text)?;
-        Ok(Value::HeapString(text.into()))
+        Ok(Value::String(text.into()))
     }
 
     pub(crate) fn string_concat_static_step(
@@ -112,14 +105,10 @@ impl Context {
             left
         };
         if !has_exact_utf8(&left) {
-            return self.add(&left, &Value::HeapString(right.into()));
+            return self.add(&left, &Value::String(right.into()));
         }
         let mut text = match left {
-            Value::String(mut text) => {
-                self.push_concat_text(&mut text, right)?;
-                text
-            }
-            Value::HeapString(text) if text.is_well_formed() => {
+            Value::String(text) if text.is_well_formed() => {
                 let mut text = text
                     .into_utf8_accumulator()
                     .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
@@ -133,7 +122,7 @@ impl Context {
             return self.heap_string_owned_value(text);
         }
         self.reserve_string_concat_tail(&mut text)?;
-        Ok(Value::HeapString(text.into()))
+        Ok(Value::String(text.into()))
     }
 
     fn reserve_string_concat_tail(&self, text: &mut String) -> Result<()> {
@@ -202,7 +191,7 @@ impl Context {
 
     fn concat_capacity_hint(value: &Value) -> usize {
         match value {
-            Value::String(_) | Value::HeapString(_) => value.string_text().map_or(0, str::len),
+            Value::String(_) => value.string_text().map_or(0, str::len),
             Value::Undefined => "undefined".len(),
             Value::Null => "null".len(),
             Value::Bool(value) => {
@@ -251,8 +240,7 @@ impl Context {
 
     pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
         match &value {
-            Value::String(text) => self.check_string_len(text)?,
-            Value::HeapString(text) => {
+            Value::String(text) => {
                 self.check_utf16_string_len(text.as_utf16())?;
                 if text.identity() != Some(self.identity()) {
                     return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
@@ -387,7 +375,7 @@ const fn requires_generic_add(value: &Value) -> bool {
 }
 
 fn has_exact_utf8(value: &Value) -> bool {
-    !matches!(value, Value::HeapString(text) if !text.is_well_formed())
+    !matches!(value, Value::String(text) if !text.is_well_formed())
 }
 
 fn primitive_utf16_units(value: &Value) -> Result<Cow<'_, [u16]>> {

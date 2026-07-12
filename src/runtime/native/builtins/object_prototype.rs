@@ -102,7 +102,7 @@ impl Context {
             Value::Bool(_) => TAG_BOOLEAN,
             Value::Number(_) => TAG_NUMBER,
             Value::BigInt(_) | Value::Symbol(_) => TAG_OBJECT,
-            Value::String(_) | Value::HeapString(_) => TAG_STRING,
+            Value::String(_) => TAG_STRING,
         };
         let object = self.object_to_object(this_value)?;
         let builtin = if self.semantic_is_array(&object)? {
@@ -432,9 +432,7 @@ impl Context {
             Value::Bool(value) => self.create_boolean_object_from_value(*value),
             Value::Number(value) => self.create_number_object_from_value(*value),
             Value::BigInt(value) => self.create_bigint_object_from_value(value.clone()),
-            Value::String(_) | Value::HeapString(_) => {
-                self.create_string_object_from_value(this_value)
-            }
+            Value::String(_) => self.create_string_object_from_value(this_value),
             Value::Symbol(value) => self.create_symbol_object_from_value(value.clone()),
             Value::Undefined | Value::Null => Err(Error::type_error(OBJECT_RECEIVER_ERROR)),
         }
@@ -487,8 +485,7 @@ impl Context {
         );
         let value = self.get(object, key.lookup())?;
         Ok(match value {
-            Value::String(text) => Some(text),
-            Value::HeapString(text) => Some(text.as_str().to_owned()),
+            Value::String(text) => Some(text.into_string()),
             _ => None,
         })
     }

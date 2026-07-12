@@ -16,7 +16,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 }
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
-    ensure_value(&eval(source)?, &Value::String(expected.to_owned()))
+    ensure_value(&eval(source)?, &Value::from(expected))
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn iterator_results_survive_garbage_collection() -> TestResult {
     context.collect_garbage()?;
     let value =
         context.eval("first + \":\" + helper.next().value + \":\" + helper.next().value")?;
-    ensure_value(&value, &Value::String("2:4:6".to_owned()))
+    ensure_value(&value, &Value::from("2:4:6"))
 }
 
 #[test]

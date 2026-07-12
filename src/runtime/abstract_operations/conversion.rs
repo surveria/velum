@@ -285,7 +285,6 @@ pub(in crate::runtime) const fn is_primitive(value: &Value) -> bool {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_)
     )
 }
@@ -297,7 +296,7 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         Value::Bool(value) => Ok(f64::from(u8::from(*value))),
         Value::Number(value) => Ok(*value),
         Value::BigInt(_) => Err(Error::type_error(CANNOT_CONVERT_BIGINT_ERROR)),
-        Value::String(_) | Value::HeapString(_) => value
+        Value::String(_) => value
             .string_text()
             .map(string_to_number)
             .ok_or_else(|| Error::runtime("string value lost its text")),
@@ -315,7 +314,7 @@ pub(in crate::runtime) fn to_bigint_primitive(value: &Value) -> Result<JsBigInt>
     match value {
         Value::BigInt(value) => Ok(value.clone()),
         Value::Bool(value) => Ok(JsBigInt::from_u64(u64::from(*value))),
-        Value::String(_) | Value::HeapString(_) => value
+        Value::String(_) => value
             .string_text()
             .and_then(JsBigInt::parse_string)
             .ok_or_else(|| {
@@ -339,9 +338,7 @@ pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
         Value::Bool(value) => *value,
         Value::Number(value) => *value != 0.0 && !value.is_nan(),
         Value::BigInt(value) => !value.is_zero(),
-        Value::String(_) | Value::HeapString(_) => {
-            value.string_text().is_some_and(|value| !value.is_empty())
-        }
+        Value::String(_) => value.string_text().is_some_and(|value| !value.is_empty()),
         Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
@@ -357,7 +354,7 @@ pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
         Value::Bool(value) => Ok(if *value { "true" } else { "false" }.to_owned()),
         Value::Number(value) => Ok(format_ecmascript_number(*value)),
         Value::BigInt(value) => Ok(value.to_string()),
-        Value::String(_) | Value::HeapString(_) => value
+        Value::String(_) => value
             .string_text()
             .map(str::to_owned)
             .ok_or_else(|| Error::runtime("string value lost its text")),

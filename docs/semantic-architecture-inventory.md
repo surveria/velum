@@ -45,7 +45,7 @@ operations.
 
 ## Value And Object Identity Map
 
-`Value` currently has twelve variants. Four variants are object-like in
+`Value` currently has eleven variants. Four variants are object-like in
 JavaScript terms and carry four unrelated numeric ids. Built-in Error instances
 now use the ordinary `Object(ObjectId)` representation.
 
@@ -62,11 +62,13 @@ mutation, key, extensibility, equality, and identity behavior uses the same
 ordinary object paths as other `ObjectId` values.
 
 Primitive variants are `Undefined`, `Null`, `Bool`, `Number`, `BigInt`,
-`String`, `HeapString`, and `Symbol`. `BigInt` is an immutable, ownerless,
+`String`, and `Symbol`. `BigInt` is an immutable, ownerless,
 arbitrary-precision mathematical value whose shared payload has no JavaScript
-identity. `HeapString` owns exact UTF-16 code units plus a cached UTF-8 or
-diagnostic rendering; `HeapString` and `Symbol` contain VM-owned ids or VM-owned
-shared data even though public `Value` does not encode a VM identity.
+identity. `String(JsString)` owns exact UTF-16 code units plus a cached UTF-8 or
+diagnostic rendering. Portable strings use the same payload without owner
+metadata until runtime admission; retained strings and Symbols carry VM-owned
+ids or VM-owned shared data even though public `Value` does not encode a VM
+identity directly.
 
 All current ids are slot indexes without a VM id or generation. A stale id or a
 value moved between VMs cannot be rejected from the id alone. This is the main
@@ -522,8 +524,9 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   active owner identity and the raw Value. Arbitrary host JavaScript throws
   are created from this local capability rather than an unowned Value;
 - host return validation rejects Function, NativeFunction, HostFunction, and
-  Object. Same-VM `HeapString` and `Symbol` values remain permitted, while
-  foreign owners are rejected with callback context;
+  Object. Same-VM `String(JsString)` and `Symbol` values remain permitted,
+  portable strings are admitted centrally, and foreign owners are rejected
+  with callback context;
 - every public evaluation `Error::JavaScript` carries its Context identity,
   and host throws retain the `LocalValue` identity. Throw conversion rejects a
   foreign owner before JavaScript can catch or inspect a colliding raw id;

@@ -14,7 +14,7 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
         status
         "#,
     )?;
-    ensure_value(&value, &Value::String("ready".to_owned()))?;
+    ensure_value(&value, &Value::from("ready"))?;
 
     let report = vm.teardown_report()?;
     ensure_positive(report.resources.runtime_steps, "runtime steps")?;

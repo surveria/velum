@@ -346,13 +346,12 @@ impl Reachability {
                 &mut self.queue,
             ),
             Value::Symbol(symbol) => Ok(self.mark_symbol(symbol.id())),
-            Value::HeapString(string) => Ok(self.mark_string(string)),
+            Value::String(string) => Ok(self.mark_string(string)),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::BigInt(_)
-            | Value::String(_) => Ok(false),
+            | Value::BigInt(_) => Ok(false),
         }
     }
 
@@ -487,7 +486,6 @@ impl Reachability {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_) => false,

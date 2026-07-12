@@ -706,7 +706,7 @@ impl Context {
     /// JavaScript iterator object always backs the result.
     fn iterator_flattenable_source(&mut self, input: &Value) -> Result<Value> {
         match input {
-            Value::String(_) | Value::HeapString(_) => self.iterator_string_source(input),
+            Value::String(_) => self.iterator_string_source(input),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

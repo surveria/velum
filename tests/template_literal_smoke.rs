@@ -21,10 +21,7 @@ south`;
         ",
     )?;
 
-    ensure_value(
-        &value,
-        &Value::String(":front:`$\\:north\nsouth".to_owned()),
-    )
+    ensure_value(&value, &Value::from(":front:`$\\:north\nsouth"))
 }
 
 #[test]
@@ -38,14 +35,18 @@ fn substitutes_expressions_with_to_string_semantics() -> TestResult {
 
     ensure_value(
         &value,
-        &Value::String("count=5, twice=10, flag=true, none=null:undefined".to_owned()),
+        &Value::String(
+            "count=5, twice=10, flag=true, none=null:undefined"
+                .to_owned()
+                .into(),
+        ),
     )
 }
 
 #[test]
 fn substitutes_adjacent_and_empty_parts() -> TestResult {
     let value = eval(r#"`${1}${""}${2}${3}`"#)?;
-    ensure_value(&value, &Value::String("123".to_owned()))
+    ensure_value(&value, &Value::from("123"))
 }
 
 #[test]
@@ -59,7 +60,11 @@ fn supports_nested_template_literals_and_braces() -> TestResult {
 
     ensure_value(
         &value,
-        &Value::String("outer inner 42 object [object Object] end".to_owned()),
+        &Value::String(
+            "outer inner 42 object [object Object] end"
+                .to_owned()
+                .into(),
+        ),
     )
 }
 
@@ -74,16 +79,13 @@ fn substitution_can_call_functions_and_conditionals() -> TestResult {
         "#,
     )?;
 
-    ensure_value(&value, &Value::String("call <x> pick yes".to_owned()))
+    ensure_value(&value, &Value::from("call <x> pick yes"))
 }
 
 #[test]
 fn template_line_terminators_and_escapes_stay_cooked() -> TestResult {
     let value = eval("`first\r\nsecond ${1} \\${literal} \\` done`")?;
-    ensure_value(
-        &value,
-        &Value::String("first\nsecond 1 ${literal} ` done".to_owned()),
-    )
+    ensure_value(&value, &Value::from("first\nsecond 1 ${literal} ` done"))
 }
 
 #[test]
@@ -100,13 +102,13 @@ fn symbol_substitution_throws_type_error() -> TestResult {
         "#,
     )?;
 
-    ensure_value(&value, &Value::String("true:TypeError".to_owned()))
+    ensure_value(&value, &Value::from("true:TypeError"))
 }
 
 #[test]
 fn regexp_literal_is_allowed_inside_substitution() -> TestResult {
     let value = eval("`re ${ /ab+c/.source } end`")?;
-    ensure_value(&value, &Value::String("re ab+c end".to_owned()))
+    ensure_value(&value, &Value::from("re ab+c end"))
 }
 
 #[test]

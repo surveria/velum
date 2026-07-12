@@ -69,7 +69,6 @@ impl SemanticObjectRef<'_> {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
@@ -100,7 +99,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         }
         Ok(Some(SemanticObjectRef { value }))
@@ -173,7 +171,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(read))
@@ -268,7 +265,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(presence))

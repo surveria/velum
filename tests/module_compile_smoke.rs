@@ -359,7 +359,7 @@ fn names_anonymous_default_export_functions() -> TestResult {
     )?;
 
     ensure(
-        value == Value::String("default:42".to_owned()),
+        value == Value::from("default:42"),
         "anonymous default export received the wrong function name",
     )
 }

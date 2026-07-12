@@ -29,10 +29,7 @@ fn supports_async_class_methods_and_super() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(
-        &context.eval("trace")?,
-        &Value::String("42:true".to_owned()),
-    )
+    ensure_value(&context.eval("trace")?, &Value::from("42:true"))
 }
 
 #[test]
@@ -70,10 +67,7 @@ fn supports_generator_and_async_generator_class_methods() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(
-        &context.eval("trace")?,
-        &Value::String("20:22:40:42:41".to_owned()),
-    )
+    ensure_value(&context.eval("trace")?, &Value::from("20:22:40:42:41"))
 }
 
 #[test]
@@ -103,10 +97,7 @@ fn supports_computed_and_private_async_class_methods() -> TestResult {
         });
         "#,
     )?;
-    ensure_value(
-        &context.eval("trace")?,
-        &Value::String("42:computed".to_owned()),
-    )
+    ensure_value(&context.eval("trace")?, &Value::from("42:computed"))
 }
 
 #[test]

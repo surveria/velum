@@ -354,7 +354,6 @@ impl Context {
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::HeapString(_)
             | Value::Symbol(_)
             | Value::HostFunction(_) => Ok(None),
         }

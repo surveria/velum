@@ -36,23 +36,23 @@ fn creates_isolated_vms_with_separate_globals_and_output() -> TestResult {
         "#,
     )?;
 
-    ensure_value(&front_value, &Value::String("front".to_owned()))?;
-    ensure_value(&rear_value, &Value::String("rear".to_owned()))?;
+    ensure_value(&front_value, &Value::from("front"))?;
+    ensure_value(&rear_value, &Value::from("rear"))?;
     ensure_optional_value(
         front_vm.context().get_global("camera").as_ref(),
-        &Value::String("front".to_owned()),
+        &Value::from("front"),
     )?;
     ensure_optional_value(
         rear_vm.context().get_global("camera").as_ref(),
-        &Value::String("rear".to_owned()),
+        &Value::from("rear"),
     )?;
     ensure_output(front_vm.context().output(), &["vm front".to_owned()])?;
     ensure_output(rear_vm.context().output(), &["vm rear".to_owned()])?;
 
     let front_again = front_vm.context().eval("camera")?;
     let rear_again = rear_vm.context().eval("camera")?;
-    ensure_value(&front_again, &Value::String("front".to_owned()))?;
-    ensure_value(&rear_again, &Value::String("rear".to_owned()))
+    ensure_value(&front_again, &Value::from("front"))?;
+    ensure_value(&rear_again, &Value::from("rear"))
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
             "#
         );
         let value = vm.context().eval(&source)?;
-        ensure_value(&value, &Value::String(label.to_owned()))?;
+        ensure_value(&value, &Value::from(label))?;
         cases.push(VmCase { label, vm });
     }
 
@@ -85,7 +85,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
     ensure_resource_limit(&error)?;
 
     for case in &mut cases {
-        let expected_value = Value::String(case.label.to_owned());
+        let expected_value = Value::from(case.label);
         let expected_output = [format!("ready {}", case.label)];
         ensure_optional_value(
             case.vm.context().get_global("camera").as_ref(),
@@ -204,7 +204,7 @@ fn tracks_atoms_for_object_property_keys_without_interning_missing_properties() 
         keys + (bag.beta + bag.gamma)
         "#,
     )?;
-    ensure_value(&value, &Value::String("alpha:beta:gamma:5".to_owned()))?;
+    ensure_value(&value, &Value::from("alpha:beta:gamma:5"))?;
     ensure_greater_than(
         vm.resource_usage().atom_count,
         object_atoms,
@@ -370,10 +370,7 @@ fn tracks_atoms_for_function_property_keys_without_interning_missing_properties(
         localKeys + "|" + nativeKeys + "|" + local.custom + ":" + abs.nativeCustom
         "#,
     )?;
-    ensure_value(
-        &value,
-        &Value::String("custom:|nativeCustom:|1:2".to_owned()),
-    )?;
+    ensure_value(&value, &Value::from("custom:|nativeCustom:|1:2"))?;
     ensure_greater_than(
         vm.resource_usage().atom_count,
         function_atoms,
@@ -436,19 +433,13 @@ fn tracks_atoms_for_function_names_without_repeated_name_reads() -> TestResult {
             (namedHolder(20) + anonymousHolder(22))
         "#,
     )?;
-    ensure_value(
-        &value,
-        &Value::String("UniqueCameraName|anonymousHolder|42".to_owned()),
-    )?;
+    ensure_value(&value, &Value::from("UniqueCameraName|anonymousHolder|42"))?;
     let name_read_atoms = vm.resource_usage().atom_count;
 
     let value = vm
         .context()
         .eval("namedHolder.name + anonymousHolder.name")?;
-    ensure_value(
-        &value,
-        &Value::String("UniqueCameraNameanonymousHolder".to_owned()),
-    )?;
+    ensure_value(&value, &Value::from("UniqueCameraNameanonymousHolder"))?;
     ensure_usize(vm.resource_usage().atom_count, name_read_atoms)
 }
 
@@ -574,10 +565,10 @@ fn exposes_vm_level_embedding_helpers() -> TestResult {
         camera
         "#,
     )?;
-    ensure_value(&camera, &Value::String("camera:front".to_owned()))?;
+    ensure_value(&camera, &Value::from("camera:front"))?;
     ensure_optional_value(
         vm.get_global("camera").as_ref(),
-        &Value::String("camera:front".to_owned()),
+        &Value::from("camera:front"),
     )?;
 
     let script = vm.compile("legacyAdd(20, 22)")?;
@@ -625,8 +616,8 @@ fn evaluates_one_compiled_script_in_isolated_vms() -> TestResult {
     let front = front_vm.eval_compiled(&script)?;
     let rear = rear_vm.eval_compiled(&script)?;
 
-    ensure_value(&front, &Value::String("front".to_owned()))?;
-    ensure_value(&rear, &Value::String("rear".to_owned()))?;
+    ensure_value(&front, &Value::from("front"))?;
+    ensure_value(&rear, &Value::from("rear"))?;
     ensure_output(front_vm.context().output(), &["compiled front".to_owned()])?;
     ensure_output(rear_vm.context().output(), &["compiled rear".to_owned()])
 }

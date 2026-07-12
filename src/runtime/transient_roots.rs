@@ -188,7 +188,7 @@ impl Drop for TransientRootScope {
 pub(in crate::runtime) const fn is_traceable(value: &Value) -> bool {
     matches!(
         value,
-        Value::HeapString(_)
+        Value::String(_)
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)

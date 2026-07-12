@@ -54,7 +54,7 @@ fn promise_all_preserves_order_and_rejects_on_input_failure() -> TestResult {
     )?;
 
     let value = context.eval("observed + '|' + rejected + '|' + empty")?;
-    ensure_value(&value, &Value::String("1,2,3|bad|empty".to_owned()))
+    ensure_value(&value, &Value::from("1,2,3|bad|empty"))
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn propagates_rejected_promise_to_catch_handler() -> TestResult {
     )?;
 
     let value = context.eval("reason")?;
-    ensure_value(&value, &Value::String("offline".to_owned()))
+    ensure_value(&value, &Value::from("offline"))
 }
 
 #[test]
@@ -253,10 +253,7 @@ fn rejected_await_rejects_the_async_function_promise() -> TestResult {
     )?;
 
     context.eval("rejectLater('offline')")?;
-    ensure_value(
-        &context.eval("reason")?,
-        &Value::String("offline".to_owned()),
-    )
+    ensure_value(&context.eval("reason")?, &Value::from("offline"))
 }
 
 #[test]
@@ -400,10 +397,7 @@ fn rejected_await_can_resume_catch_and_async_finally() -> TestResult {
         "#,
     )?;
 
-    ensure_value(
-        &context.eval("result")?,
-        &Value::String("offline-caught".to_owned()),
-    )
+    ensure_value(&context.eval("result")?, &Value::from("offline-caught"))
 }
 
 #[test]
@@ -522,8 +516,8 @@ fn await_resumes_in_a_later_promise_job() -> TestResult {
         "#,
     )?;
 
-    ensure_value(&completion, &Value::String("ab".to_owned()))?;
-    ensure_value(&context.eval("events")?, &Value::String("abc".to_owned()))
+    ensure_value(&completion, &Value::from("ab"))?;
+    ensure_value(&context.eval("events")?, &Value::from("abc"))
 }
 
 #[test]
