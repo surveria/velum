@@ -44,6 +44,7 @@ impl NativeFunctionKind {
             | Self::StringPrototypeIndexOf
             | Self::StringPrototypeLastIndexOf
             | Self::StringPrototypeMatch
+            | Self::StringPrototypeMatchAll
             | Self::StringPrototypePadEnd
             | Self::StringPrototypePadStart
             | Self::StringPrototypeRepeat
