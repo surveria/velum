@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T140427Z.md`
-- Task: PR #515: runtime: add SharedArrayBuffer and Atomics semantics
-- Performance: 9.03x (4/5 >1.00x) (from `rsqjs-test-report-20260712T140427Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T140427Z.md`)
+- `rsqjs-test-report-20260712T144532Z.md`
+- Task: PR #516: runner: add Test262 host detachment semantics
+- Performance: 9.05x (4/5 >1.00x) (from `rsqjs-test-report-20260712T144532Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T144532Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 77154 passed / 25424 failed (75.21%) (from `rsqjs-test-report-20260712T140427Z.md`)
+- Full Test262: 78256 passed / 24322 failed (76.29%) (from `rsqjs-test-report-20260712T144532Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -493,3 +493,4 @@ Latest report:
 | `20260712T122834Z` `0bb95cf` PR #512: runtime: implement AsyncDisposableStack semantics | 8.90x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 74513 passed / 28065 failed (72.64%) |
 | `20260712T131711Z` `03e95cc` PR #513: runtime: add BigInt buffer view semantics | 9.09x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 76254 passed / 26324 failed (74.34%) |
 | `20260712T140427Z` `1c7cf4c` PR #515: runtime: add SharedArrayBuffer and Atomics semantics | 9.03x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 77154 passed / 25424 failed (75.21%) |
+| `20260712T144532Z` `980567a` PR #516: runner: add Test262 host detachment semantics | 9.05x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 78256 passed / 24322 failed (76.29%) |
