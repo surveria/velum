@@ -75,25 +75,6 @@ impl RegExpFlags {
     pub(super) const fn unicode_sets(self) -> bool {
         self.bits & REGEXP_FLAG_UNICODE_SETS != 0
     }
-
-    pub(super) fn canonical_text(self) -> String {
-        let mut flags = String::new();
-        for (enabled, flag) in [
-            (self.has_indices(), 'd'),
-            (self.global(), 'g'),
-            (self.ignore_case(), 'i'),
-            (self.multiline(), 'm'),
-            (self.dot_all(), 's'),
-            (self.unicode(), 'u'),
-            (self.unicode_sets(), 'v'),
-            (self.sticky(), 'y'),
-        ] {
-            if enabled {
-                flags.push(flag);
-            }
-        }
-        flags
-    }
 }
 
 pub fn compile_regexp(pattern: &str, flags: RegExpFlags) -> Result<Regex, RegExpSyntaxError> {

@@ -14,7 +14,9 @@ use crate::{
 
 mod compile;
 mod engine;
+mod flags;
 mod match_result;
+mod replace;
 mod split;
 
 use engine::{
@@ -219,25 +221,6 @@ impl Context {
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp search result index is not numeric"))?;
         Ok(Value::Number(index))
-    }
-
-    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_replace(
-        &mut self,
-        args: RuntimeCallArgs<'_>,
-        this_value: &Value,
-    ) -> Result<Value> {
-        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        let replacement = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
-        let replacement = if self.semantic_is_callable(&replacement)? {
-            replacement
-        } else {
-            let replacement = self.to_string(&replacement)?;
-            self.heap_string_value(&replacement)?
-        };
-        if to_boolean(&self.get_named(this_value, REGEXP_GLOBAL_PROPERTY)?) {
-            return self.string_regexp_replace_global_value(&input, this_value, &replacement);
-        }
-        self.string_regexp_replace_first_value(&input, this_value, &replacement)
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
@@ -493,14 +476,13 @@ impl Context {
         kind: NativeFunctionKind,
         this_value: &Value,
     ) -> Result<Value> {
+        if kind == NativeFunctionKind::RegExpPrototypeFlagsGetter {
+            return self.eval_regexp_prototype_flags_getter(this_value);
+        }
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = parse_regexp_flags(regexp.flags())?;
         match kind {
             NativeFunctionKind::RegExpPrototypeDotAllGetter => Ok(Value::Bool(flags.dot_all())),
-            NativeFunctionKind::RegExpPrototypeFlagsGetter => {
-                let flags = flags.canonical_text();
-                self.heap_string_value(&flags)
-            }
             NativeFunctionKind::RegExpPrototypeGlobalGetter => Ok(Value::Bool(flags.global())),
             NativeFunctionKind::RegExpPrototypeHasIndicesGetter => {
                 Ok(Value::Bool(flags.has_indices()))
@@ -522,6 +504,31 @@ impl Context {
             }
             _ => Err(Error::runtime("native function is not a RegExp getter")),
         }
+    }
+
+    fn eval_regexp_prototype_flags_getter(&mut self, receiver: &Value) -> Result<Value> {
+        if self.semantic_object_ref(receiver)?.is_none() {
+            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        }
+        if let Some(flags) = self.intrinsic_regexp_flags(receiver)? {
+            return self.heap_string_value(&flags);
+        }
+        let mut flags = String::new();
+        for (property, marker) in [
+            (REGEXP_HAS_INDICES_PROPERTY, 'd'),
+            (REGEXP_GLOBAL_PROPERTY, 'g'),
+            (REGEXP_IGNORE_CASE_PROPERTY, 'i'),
+            (REGEXP_MULTILINE_PROPERTY, 'm'),
+            (REGEXP_DOT_ALL_PROPERTY, 's'),
+            (REGEXP_UNICODE_PROPERTY, 'u'),
+            (REGEXP_UNICODE_SETS_PROPERTY, 'v'),
+            (REGEXP_STICKY_PROPERTY, 'y'),
+        ] {
+            if to_boolean(&self.get_named(receiver, property)?) {
+                flags.push(marker);
+            }
+        }
+        self.heap_string_value(&flags)
     }
 
     fn regexp_receiver_data(&self, this_value: &Value) -> Result<RegExpValue> {

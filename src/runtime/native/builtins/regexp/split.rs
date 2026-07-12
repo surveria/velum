@@ -92,7 +92,7 @@ impl Context {
         let input_value = self.heap_utf16_string_value(input)?;
         if input.is_empty() {
             if self
-                .regexp_split_exec(splitter, &input_value, input)?
+                .regexp_exec_abstract(splitter, &input_value, input)?
                 .is_none()
             {
                 self.regexp_split_push_text(&mut values, input, limit)?;
@@ -104,7 +104,7 @@ impl Context {
         let mut search_index = 0usize;
         while search_index < input.len() {
             self.regexp_split_set_last_index(splitter, search_index)?;
-            let Some(result) = self.regexp_split_exec(splitter, &input_value, input)? else {
+            let Some(result) = self.regexp_exec_abstract(splitter, &input_value, input)? else {
                 search_index = advance_split_index(input, search_index, unicode_matching)?;
                 continue;
             };
@@ -138,7 +138,7 @@ impl Context {
         Ok(values)
     }
 
-    fn regexp_split_exec(
+    pub(super) fn regexp_exec_abstract(
         &mut self,
         splitter: &Value,
         input_value: &Value,

@@ -1,4 +1,4 @@
-use rs_quickjs::{Error, Runtime, Value};
+use rs_quickjs::{Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -191,6 +191,82 @@ fn supports_observable_string_and_regexp_split_protocols() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_observable_string_and_regexp_replace_protocols() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let order = [];
+        let receiver = { toString: function() { order.push("receiver"); return "abc"; } };
+        let search = {};
+        Object.defineProperty(search, Symbol.replace, {
+            get: function() {
+                order.push("method");
+                return function(value, replacement) {
+                    order.push(value === receiver && this === search ? "call" : "wrong");
+                    return replacement;
+                };
+            }
+        });
+        let dispatched = String.prototype.replace.call(receiver, search, "ok");
+
+        let regexp = /x/;
+        regexp.global = true;
+        let calls = 0;
+        regexp.exec = function() {
+            calls += 1;
+            return calls === 1 ? { 0: "x", 1: 7, length: 2, index: 1, groups: { n: "g" } } : null;
+        };
+        let callbackArgs = [];
+        let replaced = regexp[Symbol.replace]("axb", function() {
+            callbackArgs = Array.from(arguments);
+            return "R";
+        });
+
+        let unicode = /^|\udf06/g;
+        Object.defineProperty(unicode, "unicode", { writable: true });
+        unicode.unicode = false;
+        let splitPair = unicode[Symbol.replace]("\ud834\udf06", "X");
+        unicode.unicode = true;
+        let wholePair = unicode[Symbol.replace]("\ud834\udf06", "X");
+
+        order.join("|") === "method|call" &&
+            dispatched === "ok" &&
+            replaced === "aRb" &&
+            callbackArgs.length === 5 &&
+            callbackArgs[0] === "x" && callbackArgs[1] === "7" &&
+            callbackArgs[2] === 1 && callbackArgs[3] === "axb" &&
+            callbackArgs[4].n === "g" &&
+            /b(c)(z)?(.)/[Symbol.replace]("abcde", "[$01$02$03$00]") === "a[cd$00]e" &&
+            splitPair.length === 3 && splitPair.charCodeAt(1) === 0xD834 &&
+            wholePair.length === 3 && wholePair.charCodeAt(1) === 0xD834 &&
+            wholePair.charCodeAt(2) === 0xDF06 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_oversized_regexp_substitution_before_materialization() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_string_len: 256,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let source = r#"
+        let capture = "a".repeat(64);
+        let replacement = "$1".repeat(8);
+        capture.replace(/(.+)/g, replacement)
+    "#;
+    if context.eval(source).is_ok() {
+        return Err("expected RegExp replacement string limit to fail".into());
+    }
+    Ok(())
 }
 
 #[test]
