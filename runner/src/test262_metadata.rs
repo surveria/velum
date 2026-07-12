@@ -4,13 +4,12 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
 
-use super::timing;
+use super::{test262_compat_harness, timing};
 
 const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
 const HARNESS_DIR: &str = "harness";
 const HARNESS_ASSERT: &str = "assert.js";
-const HARNESS_DEEP_EQUAL: &str = "deepEqual.js";
 const HARNESS_DONEPRINT_HANDLE: &str = "doneprintHandle.js";
 const HARNESS_STA: &str = "sta.js";
 const STRICT_DIRECTIVE: &str = "\"use strict\";\n";
@@ -35,156 +34,10 @@ const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 1_048_576;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
 const TEST262_MAX_STRING_LEN: usize = 8_388_608;
-const COMPAT_STA_SOURCE: &str = r#"
-let Test262Error = function Test262Error(message) {
-    this.message = message || "";
-};
-Test262Error.prototype.toString = function () {
-    return "Test262Error: " + this.message;
-};
-Test262Error.thrower = function (message) {
-    throw new Test262Error(message);
-};
-let $DONOTEVALUATE = function () {
-    throw new Test262Error("This statement should not be evaluated.");
-};
-"#;
-const COMPAT_ASSERT_SOURCE: &str = r#"
-function isNegativeZero(value) {
-    return value === 0 && 1 / value === -Infinity;
-}
-function isPrimitive(value) {
-    return !value || (typeof value !== "object" && typeof value !== "function");
-}
-function formatIdentityFreeValue(value) {
-    if (typeof value === "string") {
-        return typeof JSON === "undefined" ? "\"" + value + "\"" : JSON.stringify(value);
-    }
-    if (typeof value === "number" && isNegativeZero(value)) {
-        return "-0";
-    }
-    if (isPrimitive(value)) {
-        return String(value);
-    }
-    return undefined;
-}
-function formatSimpleValue(value) {
-    let basic = formatIdentityFreeValue(value);
-    if (basic !== undefined) {
-        return basic;
-    }
-    try {
-        return String(value);
-    } catch (error) {
-        if (error.name === "TypeError") {
-            return Object.prototype.toString.call(value);
-        }
-        throw error;
-    }
-}
-let assert = function assert(mustBeTrue, message) {
-    if (mustBeTrue === true) {
-        return;
-    }
-    throw new Test262Error(message || "Expected true");
-};
-assert.sameValue = function (actual, expected, message) {
-    if (actual === expected) {
-        return;
-    }
-    if (actual !== actual && expected !== expected) {
-        return;
-    }
-    throw new Test262Error(message || "Expected SameValue");
-};
-assert.notSameValue = function (actual, unexpected, message) {
-    if (actual !== unexpected) {
-        return;
-    }
-    throw new Test262Error(message || "Expected different values");
-};
-function compareArray(actual, expected) {
-    if (actual.length !== expected.length) {
-        return false;
-    }
-    for (let index = 0; index < actual.length; index = index + 1) {
-        if (actual[index] === expected[index]) {
-            continue;
-        }
-        if (actual[index] !== actual[index] && expected[index] !== expected[index]) {
-            continue;
-        }
-        return false;
-    }
-    return true;
-}
-compareArray.format = function (arrayLike) {
-    return "[" + Array.prototype.map.call(arrayLike, String).join(", ") + "]";
-};
-assert.compareArray = function (actual, expected, message) {
-    if (isPrimitive(actual) || isPrimitive(expected)) {
-        throw new Test262Error(message || "Expected non-primitive array-like values");
-    }
-    if (compareArray(actual, expected)) {
-        return;
-    }
-    throw new Test262Error(message || "Expected arrays to contain the same values");
-};
-assert.throws = function (expectedErrorConstructor, func, message) {
-    let threw = false;
-    let error = undefined;
-    try {
-        func();
-    } catch (caught) {
-        threw = true;
-        error = caught;
-    }
-    if (threw !== true) {
-        throw new Test262Error(message || "Expected function to throw");
-    }
-    if (error.constructor === expectedErrorConstructor) {
-        return;
-    }
-    throw new Test262Error(message || "Unexpected thrown error type");
-};
-assert._formatIdentityFreeValue = formatIdentityFreeValue;
-assert._toString = formatSimpleValue;
-"#;
-const COMPAT_DEEP_EQUAL_SOURCE: &str = r#"
-function test262DeepEqual(actual, expected) {
-    if (actual === expected) {
-        return true;
-    }
-    if (actual !== actual && expected !== expected) {
-        return true;
-    }
-    if (actual === null || expected === null ||
-        typeof actual !== "object" || typeof expected !== "object") {
-        return false;
-    }
-    let actualKeys = Object.keys(actual);
-    let expectedKeys = Object.keys(expected);
-    if (actualKeys.length !== expectedKeys.length) {
-        return false;
-    }
-    for (let index = 0; index < actualKeys.length; index += 1) {
-        let key = actualKeys[index];
-        if (key !== expectedKeys[index] ||
-            !test262DeepEqual(actual[key], expected[key])) {
-            return false;
-        }
-    }
-    return true;
-}
-assert.deepEqual = function (actual, expected, message) {
-    if (test262DeepEqual(actual, expected)) {
-        return;
-    }
-    throw new Test262Error(message || "Expected structurally equal values");
-};
-assert.deepEqual._compare = test262DeepEqual;
-assert.deepEqual.format = String;
-"#;
+#[cfg(test)]
+const COMPAT_STA_SOURCE: &str = test262_compat_harness::STA_SOURCE;
+#[cfg(test)]
+const COMPAT_ASSERT_SOURCE: &str = test262_compat_harness::ASSERT_SOURCE;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Test262Outcome {
@@ -433,12 +286,7 @@ fn read_harness_source(test262_dir: &Path, name: &str) -> anyhow::Result<Harness
 }
 
 fn compat_harness_source(name: &str) -> Option<&'static str> {
-    match name {
-        HARNESS_STA => Some(COMPAT_STA_SOURCE),
-        HARNESS_ASSERT => Some(COMPAT_ASSERT_SOURCE),
-        HARNESS_DEEP_EQUAL => Some(COMPAT_DEEP_EQUAL_SOURCE),
-        _ => None,
-    }
+    test262_compat_harness::source(name)
 }
 
 fn variant_source(source: &str, strict: bool) -> Cow<'_, str> {
