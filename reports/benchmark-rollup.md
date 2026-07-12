@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T122834Z.md`
-- Task: PR #512: runtime: implement AsyncDisposableStack semantics
-- Performance: 8.90x (4/5 >1.00x) (from `rsqjs-test-report-20260712T122834Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T122834Z.md`)
+- `rsqjs-test-report-20260712T131711Z.md`
+- Task: PR #513: runtime: add BigInt buffer view semantics
+- Performance: 9.09x (4/5 >1.00x) (from `rsqjs-test-report-20260712T131711Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T131711Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 74513 passed / 28065 failed (72.64%) (from `rsqjs-test-report-20260712T122834Z.md`)
+- Full Test262: 76254 passed / 26324 failed (74.34%) (from `rsqjs-test-report-20260712T131711Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -491,3 +491,4 @@ Latest report:
 | `20260712T120106Z` `fb3277e` PR #511: runtime: implement DisposableStack semantics | 8.89x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 73420 passed / 29158 failed (71.57%) |
 | `20260712T121815Z` `80a6ddc` PR #509: runtime: add BigInt primitive and core semantics | 8.97x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 74277 passed / 28301 failed (72.41%) |
 | `20260712T122834Z` `0bb95cf` PR #512: runtime: implement AsyncDisposableStack semantics | 8.90x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 74513 passed / 28065 failed (72.64%) |
+| `20260712T131711Z` `03e95cc` PR #513: runtime: add BigInt buffer view semantics | 9.09x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 76254 passed / 26324 failed (74.34%) |
