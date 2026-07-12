@@ -202,7 +202,7 @@ impl<'a> HoistCollector<'a> {
                     ForInTarget::Binding { .. }
                     | ForInTarget::PatternBinding { .. }
                     | ForInTarget::PatternAssignment { .. }
-                    | ForInTarget::Assignment(_) => {}
+                    | ForInTarget::Assignment { .. } => {}
                 }
                 self.collect_statement(body)
             }

@@ -1,6 +1,6 @@
 use crate::ast::{DeclKind, Statement, Stmt};
 
-pub(super) fn for_init_needs_layout_scope(init: Option<&Statement>) -> bool {
+pub fn for_init_needs_lexical_scope(init: Option<&Statement>) -> bool {
     let Some(init) = init else {
         return false;
     };

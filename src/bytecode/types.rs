@@ -35,11 +35,9 @@ impl BytecodeProgram {
     pub(crate) const fn new(block: BytecodeBlock, hoist_plan: BytecodeHoistPlan) -> Self {
         Self { block, hoist_plan }
     }
-
     pub const fn block(&self) -> &BytecodeBlock {
         &self.block
     }
-
     pub const fn hoist_plan(&self) -> &BytecodeHoistPlan {
         &self.hoist_plan
     }
@@ -512,9 +510,11 @@ pub enum BytecodeInstruction {
     DeleteBinding(BytecodeBinding),
     DeleteStaticProperty {
         property: BytecodeProperty,
+        strict: bool,
     },
     DeleteComputedProperty {
         property: BytecodeDynamicProperty,
+        strict: bool,
     },
     DeleteValue,
     UpdateBinding {

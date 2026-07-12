@@ -32,6 +32,15 @@ use crate::{
 
 use state::BytecodeState;
 
+const STRICT_DELETE_FAILURE: &str = "Cannot delete non-configurable property";
+
+fn strict_delete_result(result: Value, strict: bool) -> Result<Value> {
+    if strict && result == Value::Bool(false) {
+        return Err(Error::type_error(STRICT_DELETE_FAILURE));
+    }
+    Ok(result)
+}
+
 impl Context {
     // Keeping the opcode families together makes the dispatcher exhaustive and
     // keeps every instruction routed through exactly one subsystem.
@@ -204,25 +213,27 @@ impl Context {
             BytecodeInstruction::DeleteBinding(binding) => {
                 self.eval_bytecode_delete_binding(state, binding, next)
             }
-            BytecodeInstruction::DeleteStaticProperty { property } => {
+            BytecodeInstruction::DeleteStaticProperty { property, strict } => {
                 let object = state.stack.pop()?;
-                state.stack.push(self.delete_static_property_value(
-                    &object,
-                    property.name(),
-                    property.access(),
-                )?);
+                let deleted =
+                    self.delete_static_property_value(&object, property.name(), property.access())?;
+                state.stack.push(strict_delete_result(deleted, *strict)?);
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::DeleteComputedProperty { property: operand } => {
+            BytecodeInstruction::DeleteComputedProperty {
+                property: operand,
+                strict,
+            } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 let property = self.dynamic_property_key(&property)?;
-                state.stack.push(self.delete_cached_dynamic_property_value(
+                let deleted = self.delete_cached_dynamic_property_value(
                     &object,
                     &property,
                     operand.access(),
-                )?);
+                )?;
+                state.stack.push(strict_delete_result(deleted, *strict)?);
                 state.pc = next;
                 Ok(None)
             }

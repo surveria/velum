@@ -139,7 +139,14 @@ impl Parser {
             return Err(self.parse_error("invalid for-in assignment target"));
         };
         let object = self.for_head_rhs(head)?;
-        Ok(Some((ForInTarget::Assignment(target), object, head)))
+        Ok(Some((
+            ForInTarget::Assignment {
+                target,
+                strict: self.is_strict_mode(),
+            },
+            object,
+            head,
+        )))
     }
 
     fn for_resource_binding_header(

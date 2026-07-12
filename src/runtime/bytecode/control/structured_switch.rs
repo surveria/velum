@@ -12,19 +12,24 @@ use crate::{
 
 use super::super::{
     control_continuation::{
-        BytecodeControlHandle, BytecodeControlRecord, BytecodeControlStateSlot,
+        BytecodeControlHandle, BytecodeControlRecord, BytecodeControlStateSlot, BytecodeSwitchPhase,
     },
     state::BytecodeState,
 };
 
-#[derive(Debug, Clone, PartialEq)]
-enum BytecodeSwitchStartIndex {
+#[derive(Debug)]
+enum BytecodeSwitchSelection {
+    Selected(BytecodeControlRecord),
+    NoMatch(BytecodeControlRecord),
+    Completion(BytecodeControlRecord, Completion),
+}
+
+enum BytecodeNumericSwitchStart {
     Resolved(Option<usize>),
-    Completion(Completion),
     Unsupported,
 }
 
-pub(super) fn numeric_switch_case_test(test: &BytecodeBlock) -> Option<f64> {
+fn numeric_switch_case_test(test: &BytecodeBlock) -> Option<f64> {
     let [
         BytecodeInstruction::PushLiteral(Value::Number(value)),
         BytecodeInstruction::StoreLast,
@@ -70,39 +75,64 @@ impl Context {
         scope_init: Option<&BytecodeBlock>,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let start = match self.bytecode_switch_start_index(discriminant, cases)? {
-            BytecodeSwitchStartIndex::Resolved(Some(start)) => start,
-            BytecodeSwitchStartIndex::Resolved(None) => {
+        let resumes = self.resumes_bytecode_control();
+        let numeric_start = if resumes {
+            BytecodeNumericSwitchStart::Unsupported
+        } else {
+            self.bytecode_numeric_switch_start(discriminant, cases)?
+        };
+        if let Some(completion) = self.prepare_bytecode_switch_scope(scoped, resumes, scope_init)? {
+            return Ok(Some(completion));
+        }
+        let initial_record = match numeric_start {
+            BytecodeNumericSwitchStart::Resolved(Some(start)) => {
+                BytecodeControlRecord::switch_at(start)
+            }
+            BytecodeNumericSwitchStart::Resolved(None) => {
+                if scoped {
+                    self.pop_bytecode_switch_scope()?;
+                }
                 state.last = Value::Undefined;
                 state.pc = next;
                 return Ok(None);
             }
-            BytecodeSwitchStartIndex::Completion(completion) => return Ok(Some(completion)),
-            BytecodeSwitchStartIndex::Unsupported => {
-                return Err(Error::runtime("bytecode switch start remained unresolved"));
-            }
+            BytecodeNumericSwitchStart::Unsupported => BytecodeControlRecord::switch(),
         };
-        let resumes = self.resumes_bytecode_control();
-        let handle = self.push_bytecode_control(BytecodeControlRecord::switch(start))?;
+        let handle = self.push_bytecode_control(initial_record)?;
         let control = self.checkout_bytecode_control(handle)?;
-        let result = if scoped {
-            if !resumes && let Err(error) = self.push_lexical_scope() {
-                return self.finish_bytecode_control_result(handle, Err(error));
-            }
-            let completion = if !resumes && let Some(scope_init) = scope_init {
-                match self.eval_bytecode_block(scope_init) {
-                    Ok(Completion::Normal(_)) => {
-                        self.eval_bytecode_switch_cases(handle, control, cases)
+        let control =
+            match self.eval_bytecode_switch_selection(handle, control, discriminant, cases) {
+                Ok(BytecodeSwitchSelection::Selected(control)) => control,
+                Ok(BytecodeSwitchSelection::NoMatch(_control)) => {
+                    if scoped {
+                        self.pop_bytecode_switch_scope()?;
                     }
-                    Ok(completion) => Ok((control, completion)),
-                    Err(error) => {
-                        self.finish_bytecode_control(handle)?;
-                        Err(error)
-                    }
+                    self.finish_bytecode_control(handle)?;
+                    state.last = Value::Undefined;
+                    state.pc = next;
+                    return Ok(None);
                 }
-            } else {
-                self.eval_bytecode_switch_cases(handle, control, cases)
+                Ok(BytecodeSwitchSelection::Completion(control, completion))
+                    if completion.suspends_execution() =>
+                {
+                    self.park_bytecode_control(handle, control)?;
+                    return Ok(Some(completion));
+                }
+                Ok(BytecodeSwitchSelection::Completion(_control, completion)) => {
+                    if scoped {
+                        self.pop_bytecode_switch_scope()?;
+                    }
+                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                }
+                Err(error) => {
+                    if scoped {
+                        self.pop_bytecode_switch_scope()?;
+                    }
+                    return Err(error);
+                }
             };
+        let result = if scoped {
+            let completion = self.eval_bytecode_switch_cases(handle, control, cases);
             if completion
                 .as_ref()
                 .is_ok_and(|(_, completion)| completion.suspends_execution())
@@ -143,39 +173,55 @@ impl Context {
         )
     }
 
-    fn bytecode_switch_start_index(
-        &mut self,
-        discriminant: &BytecodeBlock,
-        cases: &[BytecodeSwitchCase],
-    ) -> Result<BytecodeSwitchStartIndex> {
-        match self.bytecode_numeric_switch_start_index(discriminant, cases)? {
-            start @ (BytecodeSwitchStartIndex::Resolved(_)
-            | BytecodeSwitchStartIndex::Completion(_)) => return Ok(start),
-            BytecodeSwitchStartIndex::Unsupported => {}
+    fn pop_bytecode_switch_scope(&mut self) -> Result<()> {
+        if self.pop_lexical_scope()?.is_none() {
+            return Err(Error::runtime("bytecode switch lexical scope disappeared"));
         }
-        let discriminant = match self.eval_bytecode_block(discriminant)? {
-            Completion::Normal(value) => value,
-            completion => return Ok(BytecodeSwitchStartIndex::Completion(completion)),
-        };
-        self.bytecode_generic_switch_start_index(&discriminant, cases)
+        Ok(())
     }
 
-    fn bytecode_numeric_switch_start_index(
+    fn prepare_bytecode_switch_scope(
+        &mut self,
+        scoped: bool,
+        resumes: bool,
+        scope_init: Option<&BytecodeBlock>,
+    ) -> Result<Option<Completion>> {
+        if !scoped || resumes {
+            return Ok(None);
+        }
+        self.push_lexical_scope()?;
+        let Some(scope_init) = scope_init else {
+            return Ok(None);
+        };
+        match self.eval_bytecode_block(scope_init) {
+            Ok(Completion::Normal(_)) => Ok(None),
+            Ok(completion) => {
+                self.pop_bytecode_switch_scope()?;
+                Ok(Some(completion))
+            }
+            Err(error) => {
+                self.pop_bytecode_switch_scope()?;
+                Err(error)
+            }
+        }
+    }
+
+    fn bytecode_numeric_switch_start(
         &mut self,
         discriminant: &BytecodeBlock,
         cases: &[BytecodeSwitchCase],
-    ) -> Result<BytecodeSwitchStartIndex> {
+    ) -> Result<BytecodeNumericSwitchStart> {
         let mut default_index = None;
         for case in cases {
             let Some(test) = &case.test else {
                 continue;
             };
             if numeric_switch_case_test(test).is_none() {
-                return Ok(BytecodeSwitchStartIndex::Unsupported);
+                return Ok(BytecodeNumericSwitchStart::Unsupported);
             }
         }
         let Some(discriminant) = self.bytecode_numeric_switch_discriminant(discriminant)? else {
-            return Ok(BytecodeSwitchStartIndex::Unsupported);
+            return Ok(BytecodeNumericSwitchStart::Unsupported);
         };
         for (index, case) in cases.iter().enumerate() {
             let Some(test) = &case.test else {
@@ -183,13 +229,13 @@ impl Context {
                 continue;
             };
             let Some(test) = numeric_switch_case_test(test) else {
-                return Ok(BytecodeSwitchStartIndex::Unsupported);
+                return Ok(BytecodeNumericSwitchStart::Unsupported);
             };
             if number_strict_equality(test, discriminant) {
-                return Ok(BytecodeSwitchStartIndex::Resolved(Some(index)));
+                return Ok(BytecodeNumericSwitchStart::Resolved(Some(index)));
             }
         }
-        Ok(BytecodeSwitchStartIndex::Resolved(default_index))
+        Ok(BytecodeNumericSwitchStart::Resolved(default_index))
     }
 
     fn bytecode_numeric_switch_discriminant(
@@ -220,26 +266,81 @@ impl Context {
         Ok(Some(value))
     }
 
-    fn bytecode_generic_switch_start_index(
+    fn eval_bytecode_switch_selection(
         &mut self,
-        discriminant: &Value,
+        handle: BytecodeControlHandle,
+        mut control: BytecodeControlRecord,
+        discriminant: &BytecodeBlock,
         cases: &[BytecodeSwitchCase],
-    ) -> Result<BytecodeSwitchStartIndex> {
-        let mut default_index = None;
-        for (index, case) in cases.iter().enumerate() {
-            let Some(test) = &case.test else {
-                default_index = Some(index);
-                continue;
-            };
-            let value = match self.eval_bytecode_block(test)? {
-                Completion::Normal(value) => value,
-                completion => return Ok(BytecodeSwitchStartIndex::Completion(completion)),
-            };
-            if value == *discriminant {
-                return Ok(BytecodeSwitchStartIndex::Resolved(Some(index)));
+    ) -> Result<BytecodeSwitchSelection> {
+        if *control.switch_selection_mut()?.0 == BytecodeSwitchPhase::Discriminant {
+            let completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Body,
+                |context, selection_state| {
+                    context.eval_bytecode_block_with_state(discriminant, selection_state)
+                },
+            )?;
+            match completion {
+                Completion::Normal(value) => {
+                    let (phase, _, _, stored_discriminant) = control.switch_selection_mut()?;
+                    *stored_discriminant = Some(value);
+                    *phase = BytecodeSwitchPhase::CaseTest;
+                }
+                completion => {
+                    return Ok(BytecodeSwitchSelection::Completion(control, completion));
+                }
             }
         }
-        Ok(BytecodeSwitchStartIndex::Resolved(default_index))
+        loop {
+            let (phase, next_case, default_case, _) = control.switch_selection_mut()?;
+            if *phase == BytecodeSwitchPhase::Body {
+                return Ok(BytecodeSwitchSelection::Selected(control));
+            }
+            let Some(case) = cases.get(*next_case) else {
+                if let Some(default_case) = *default_case {
+                    *next_case = default_case;
+                    *phase = BytecodeSwitchPhase::Body;
+                    return Ok(BytecodeSwitchSelection::Selected(control));
+                }
+                return Ok(BytecodeSwitchSelection::NoMatch(control));
+            };
+            let case_index = *next_case;
+            let Some(test) = &case.test else {
+                *default_case = Some(case_index);
+                *next_case = next_case
+                    .checked_add(1)
+                    .ok_or_else(|| Error::runtime("bytecode switch case index overflowed"))?;
+                continue;
+            };
+            let completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Body,
+                |context, selection_state| {
+                    context.eval_bytecode_block_with_state(test, selection_state)
+                },
+            )?;
+            match completion {
+                Completion::Normal(value) => {
+                    let (phase, next_case, _, discriminant) = control.switch_selection_mut()?;
+                    let discriminant = discriminant.as_ref().ok_or_else(|| {
+                        Error::runtime("bytecode switch discriminant disappeared")
+                    })?;
+                    if value == *discriminant {
+                        *phase = BytecodeSwitchPhase::Body;
+                        return Ok(BytecodeSwitchSelection::Selected(control));
+                    }
+                    *next_case = next_case
+                        .checked_add(1)
+                        .ok_or_else(|| Error::runtime("bytecode switch case index overflowed"))?;
+                }
+                completion => {
+                    return Ok(BytecodeSwitchSelection::Completion(control, completion));
+                }
+            }
+        }
     }
 
     fn eval_bytecode_switch_cases(

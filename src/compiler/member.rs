@@ -108,9 +108,9 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    pub(super) fn compile_delete_expr(&mut self, expr: &Expression) -> Result<()> {
+    pub(super) fn compile_delete_expr(&mut self, expr: &Expression, strict: bool) -> Result<()> {
         match expr.kind() {
-            Expr::Parenthesized(expr) => self.compile_delete_expr(expr),
+            Expr::Parenthesized(expr) => self.compile_delete_expr(expr, strict),
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::DeleteBinding(
                     self.compile_binding(name)?,
@@ -125,6 +125,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(object)?;
                 self.emit(BytecodeInstruction::DeleteStaticProperty {
                     property: Self::compile_property(property, *access),
+                    strict,
                 });
                 Ok(())
             }
@@ -137,6 +138,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(property)?;
                 self.emit(BytecodeInstruction::DeleteComputedProperty {
                     property: Self::compile_dynamic_property(*access),
+                    strict,
                 });
                 Ok(())
             }

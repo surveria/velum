@@ -113,7 +113,10 @@ pub enum ForInTarget {
         pattern: Box<AssignmentPattern>,
         strict: bool,
     },
-    Assignment(Expression),
+    Assignment {
+        target: Expression,
+        strict: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

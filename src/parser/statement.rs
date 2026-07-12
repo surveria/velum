@@ -121,15 +121,18 @@ impl Parser {
     }
 
     fn let_starts_expression_statement(&self) -> bool {
-        !self.is_strict_mode()
-            && self.check(&TokenKind::Let)
-            && (self.peek_has_line_terminator_before(1)
-                || self.peek_kind_is(1, &TokenKind::Equal))
-            && !self.peek_kind_is(1, &TokenKind::Let)
-            && !self.peek_kind_is(1, &TokenKind::LBracket)
-            && !self.peek_kind_is(1, &TokenKind::Await)
-            && !self.peek_token(1).is_some_and(|token| {
-                matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
+        !self.is_strict_mode() && self.check(&TokenKind::Let) && !self.let_declaration_lookahead()
+    }
+
+    fn let_declaration_lookahead(&self) -> bool {
+        self.peek_kind_is(1, &TokenKind::LBrace)
+            || self.peek_kind_is(1, &TokenKind::LBracket)
+            || self.peek_kind_is(1, &TokenKind::Let)
+            || self.peek_token(1).is_some_and(|token| {
+                matches!(
+                    token.kind,
+                    TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Super
+                ) || (token.kind == TokenKind::Await && !self.await_identifier_is_reserved())
             })
     }
 
