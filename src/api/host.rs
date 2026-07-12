@@ -19,6 +19,14 @@ const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
 
 type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
 
+/// Engine-owned operations that an embedder can expose under a chosen global
+/// function name.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HostOperation {
+    /// Detaches an ordinary `ArrayBuffer` supplied as the first argument.
+    DetachArrayBuffer,
+}
+
 pub trait IntoJsValue {
     /// # Errors
     /// Fails when conversion cannot produce a JavaScript value.
@@ -122,7 +130,13 @@ impl FromJsValue<'_> for String {
 #[derive(Clone)]
 pub struct HostFunction {
     name: String,
-    callback: Rc<HostCallback>,
+    kind: HostFunctionKind,
+}
+
+#[derive(Clone)]
+enum HostFunctionKind {
+    Callback(Rc<HostCallback>),
+    Operation(HostOperation),
 }
 
 impl HostFunction {
@@ -132,7 +146,14 @@ impl HostFunction {
     {
         Self {
             name,
-            callback: Rc::new(callback),
+            kind: HostFunctionKind::Callback(Rc::new(callback)),
+        }
+    }
+
+    const fn operation(name: String, operation: HostOperation) -> Self {
+        Self {
+            name,
+            kind: HostFunctionKind::Operation(operation),
         }
     }
 
@@ -158,7 +179,10 @@ impl HostFunction {
             roots,
             args,
         };
-        (self.callback)(call).map_err(|error| error.with_context(self.context_message()))
+        let HostFunctionKind::Callback(callback) = &self.kind else {
+            return Err(Error::runtime("host operation was routed as a callback"));
+        };
+        callback(call).map_err(|error| error.with_context(self.context_message()))
     }
 
     fn context_message(&self) -> String {
@@ -167,6 +191,13 @@ impl HostFunction {
 
     pub(crate) const fn storage_name_bytes(&self) -> usize {
         self.name.len()
+    }
+
+    const fn operation_kind(&self) -> Option<HostOperation> {
+        match self.kind {
+            HostFunctionKind::Callback(_) => None,
+            HostFunctionKind::Operation(operation) => Some(operation),
+        }
     }
 }
 
@@ -348,6 +379,20 @@ impl Context {
         self.register_host_callback(name.into(), HostFunction::new_typed, callback)
     }
 
+    /// Registers an engine-owned host operation under an embedder-selected
+    /// global function name.
+    ///
+    /// # Errors
+    /// Fails when the name is empty, exceeds string limits, duplicates an
+    /// existing binding, or would exceed the binding limit.
+    pub fn register_host_operation(
+        &mut self,
+        name: impl Into<String>,
+        operation: HostOperation,
+    ) -> Result<()> {
+        self.register_host_function_value(HostFunction::operation(name.into(), operation))
+    }
+
     fn register_host_callback<F, C>(
         &mut self,
         name: String,
@@ -357,10 +402,14 @@ impl Context {
     where
         C: FnOnce(String, F) -> HostFunction,
     {
-        if name.is_empty() {
+        self.register_host_function_value(create_host_function(name, callback))
+    }
+
+    fn register_host_function_value(&mut self, function: HostFunction) -> Result<()> {
+        if function.name.is_empty() {
             return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
         }
-        self.check_string_len(&name)?;
+        self.check_string_len(&function.name)?;
 
         let projected_count = self
             .host_functions
@@ -369,7 +418,7 @@ impl Context {
             .ok_or_else(|| Error::limit("host callback count overflowed"))?;
         let projected_payload_bytes = self
             .host_callback_name_bytes()?
-            .checked_add(name.len())
+            .checked_add(function.name.len())
             .ok_or_else(|| Error::limit("host callback name bytes overflowed"))?;
         self.ensure_storage_totals(
             crate::runtime::VmStorageKind::HostCallback,
@@ -380,9 +429,8 @@ impl Context {
         self.host_functions.reserve_insert()?;
         self.host_functions.reserve_removals(1)?;
         let id = HostFunctionId::new(self.host_functions.next_index());
-        let binding_name = name.clone();
-        self.host_functions
-            .insert_at_next(id.index(), create_host_function(name, callback))?;
+        let binding_name = function.name.clone();
+        self.host_functions.insert_at_next(id.index(), function)?;
         let result = self.define(&binding_name, Value::HostFunction(id), DeclKind::Const);
         if let Err(error) = result {
             let removed = self.host_functions.remove_reserved(id.index())?;
@@ -403,6 +451,11 @@ impl Context {
         let _root_scope =
             self.transient_root_scope(crate::runtime::VmRootKind::TransientCall, values.iter())?;
         let function = self.host_function(id)?.clone();
+        if let Some(operation) = function.operation_kind() {
+            return self
+                .eval_host_operation(operation, &values)
+                .map_err(|error| error.with_context(function.context_message()));
+        }
         let roots = self.root_snapshot()?;
         let value = function.call(
             self.identity(),
@@ -412,6 +465,20 @@ impl Context {
         )?;
         self.checked_host_return_value(value)
             .map_err(|error| error.with_context(function.context_message()))
+    }
+
+    fn eval_host_operation(&mut self, operation: HostOperation, args: &[Value]) -> Result<Value> {
+        match operation {
+            HostOperation::DetachArrayBuffer => {
+                let Some(Value::Object(id)) = args.first() else {
+                    return Err(Error::type_error(
+                        "ArrayBuffer detachment requires an ArrayBuffer argument",
+                    ));
+                };
+                self.detach_host_array_buffer(*id)?;
+                Ok(Value::Undefined)
+            }
+        }
     }
 
     fn host_function(&self, id: HostFunctionId) -> Result<&HostFunction> {

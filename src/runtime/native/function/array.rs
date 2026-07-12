@@ -45,8 +45,12 @@ impl Context {
         match target {
             NativeCallTarget::Array => Some(self.eval_direct_array_constructor(args)),
             NativeCallTarget::ArrayConcat => Some(self.eval_direct_array_concat(args, this_value)),
-            NativeCallTarget::ArrayEvery => Some(self.eval_direct_array_every(args, this_value)),
-            NativeCallTarget::ArrayFilter => Some(self.eval_direct_array_filter(args, this_value)),
+            NativeCallTarget::ArrayEvery => {
+                Some(self.eval_direct_array_every(args, this_value, false))
+            }
+            NativeCallTarget::ArrayFilter => {
+                Some(self.eval_direct_array_filter(args, this_value, false))
+            }
             NativeCallTarget::ArrayFind => Some(self.eval_direct_array_find(args, this_value)),
             NativeCallTarget::ArrayFindIndex => {
                 Some(self.eval_direct_array_find_index(args, this_value))
@@ -56,7 +60,7 @@ impl Context {
                 Some(self.eval_direct_array_flat_map(args, this_value))
             }
             NativeCallTarget::ArrayForEach => {
-                Some(self.eval_direct_array_for_each(args, this_value))
+                Some(self.eval_direct_array_for_each(args, this_value, false))
             }
             NativeCallTarget::ArrayIncludes => {
                 Some(self.eval_direct_array_includes(args, this_value))
@@ -69,7 +73,7 @@ impl Context {
             NativeCallTarget::ArrayLastIndexOf => {
                 Some(self.eval_direct_array_last_index_of(args, this_value))
             }
-            NativeCallTarget::ArrayMap => Some(self.eval_direct_array_map(args, this_value)),
+            NativeCallTarget::ArrayMap => Some(self.eval_direct_array_map(args, this_value, false)),
             NativeCallTarget::ArrayPop => Some(self.eval_direct_array_pop(args, this_value)),
             NativeCallTarget::ArrayPush => Some(self.eval_direct_array_push(args, this_value)),
             NativeCallTarget::ArrayReduce => Some(self.eval_direct_array_reduce(args, this_value)),
@@ -81,7 +85,9 @@ impl Context {
             }
             NativeCallTarget::ArrayShift => Some(self.eval_direct_array_shift(args, this_value)),
             NativeCallTarget::ArraySlice => Some(self.eval_direct_array_slice(args, this_value)),
-            NativeCallTarget::ArraySome => Some(self.eval_direct_array_some(args, this_value)),
+            NativeCallTarget::ArraySome => {
+                Some(self.eval_direct_array_some(args, this_value, false))
+            }
             NativeCallTarget::ArrayUnshift => {
                 Some(self.eval_direct_array_unshift(args, this_value))
             }

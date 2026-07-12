@@ -1,3 +1,17 @@
+use rs_quickjs::{Context, HostOperation};
+
+const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
+
+const HOST_SOURCE: &str = r"
+var $262 = {
+    global: globalThis,
+    detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
+    evalScript: function evalScript(source) {
+        return (0, eval)(source);
+    }
+};
+";
+
 pub const STA_SOURCE: &str = r#"
 let Test262Error = function Test262Error(message) {
     this.message = message || "";
@@ -158,4 +172,12 @@ pub fn source(name: &str) -> Option<&'static str> {
         "deepEqual.js" => Some(DEEP_EQUAL_SOURCE),
         _ => None,
     }
+}
+
+pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
+    context.register_host_operation(
+        DETACH_ARRAY_BUFFER_HOST_NAME,
+        HostOperation::DetachArrayBuffer,
+    )?;
+    context.eval(HOST_SOURCE).map(|_| ())
 }

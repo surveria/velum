@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use crate::{
     error::{Error, Result},
     runtime::{
+        Context,
         abstract_operations::{to_bigint_primitive, to_number_primitive},
         numeric::number_to_uint32,
     },
@@ -122,7 +123,7 @@ impl ByteBuffer {
     }
 
     pub(in crate::runtime) fn is_resizable(&self) -> bool {
-        self.with_state(|state| state.bytes.is_some() && state.max_byte_length.is_some())
+        self.with_state(|state| state.max_byte_length.is_some())
     }
 
     pub(in crate::runtime) fn is_detached(&self) -> bool {
@@ -654,6 +655,9 @@ impl ObjectHeap {
         id: ObjectId,
         property: &str,
     ) -> Result<Option<TypedArrayPropertyIndex>> {
+        if typed_array_property_index(property, usize::MAX).is_none() {
+            return Ok(None);
+        }
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(None);
         };
@@ -665,6 +669,9 @@ impl ObjectHeap {
         id: ObjectId,
         property: &str,
     ) -> Result<bool> {
+        if typed_array_property_index(property, usize::MAX).is_none() {
+            return Ok(false);
+        }
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(false);
         };
@@ -701,6 +708,12 @@ impl ObjectHeap {
             return Ok(None);
         };
         Ok(Some(view.buffer.origin()))
+    }
+}
+
+impl Context {
+    pub(crate) fn detach_host_array_buffer(&mut self, id: ObjectId) -> Result<()> {
+        self.objects.detach_array_buffer(id).map(drop)
     }
 }
 

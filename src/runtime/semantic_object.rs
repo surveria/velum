@@ -2,7 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        object::{PROTOTYPE_PROPERTY, PropertyLookup},
+        object::{PROTOTYPE_PROPERTY, PropertyLookup, TypedArrayPropertyIndex},
         property::{get_property, get_property_with_receiver, has_property},
     },
     value::{ObjectId, Value},
@@ -141,6 +141,18 @@ impl Context {
                     SemanticPropertyRead::Resolved(value)
                 } else if let Some(value) = self.global_object_property_value(*id, property)? {
                     SemanticPropertyRead::Resolved(value)
+                } else if let Some(index) = self
+                    .objects
+                    .typed_array_property_index(*id, property.name())?
+                {
+                    let value = match index {
+                        TypedArrayPropertyIndex::Valid(index) => self
+                            .objects
+                            .typed_array_value(*id, index)?
+                            .unwrap_or(Value::Undefined),
+                        TypedArrayPropertyIndex::Invalid => Value::Undefined,
+                    };
+                    SemanticPropertyRead::Resolved(value)
                 } else {
                     SemanticPropertyRead::ObjectTail(*id)
                 }
@@ -226,6 +238,14 @@ impl Context {
                     SemanticPropertyPresence::Resolved(self.proxy_has(*id, property)?)
                 } else if let Some(value) = self.global_object_has_property(*id, property)? {
                     SemanticPropertyPresence::Resolved(value)
+                } else if let Some(index) = self
+                    .objects
+                    .typed_array_property_index(*id, property.name())?
+                {
+                    SemanticPropertyPresence::Resolved(matches!(
+                        index,
+                        TypedArrayPropertyIndex::Valid(_)
+                    ))
                 } else {
                     SemanticPropertyPresence::ObjectTail(*id)
                 }

@@ -27,16 +27,18 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_for_each(args.as_slice(), this_value)
+        self.eval_direct_array_for_each(args.as_slice(), this_value, false)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_for_each(
         &mut self,
         args: &[Value],
         this_value: &Value,
+        visit_every_index: bool,
     ) -> Result<Value> {
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
-        self.visit_array_like_present(this_value, |context, index, value| {
+        let mode = Self::array_callback_visit_mode(visit_every_index);
+        self.visit_array_like_indices(this_value, mode, |context, index, value| {
             context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -54,20 +56,22 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_map(args.as_slice(), this_value)
+        self.eval_direct_array_map(args.as_slice(), this_value, false)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_map(
         &mut self,
         args: &[Value],
         this_value: &Value,
+        visit_every_index: bool,
     ) -> Result<Value> {
         let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         let result = self.array_species_create(this_value, length)?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
-        self.visit_array_like_present_with_length(this_value, length, |context, index, value| {
+        let mode = Self::array_callback_visit_mode(visit_every_index);
+        self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             let mapped = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -86,13 +90,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_filter(args.as_slice(), this_value)
+        self.eval_direct_array_filter(args.as_slice(), this_value, false)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_filter(
         &mut self,
         args: &[Value],
         this_value: &Value,
+        visit_every_index: bool,
     ) -> Result<Value> {
         let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
@@ -100,7 +105,8 @@ impl Context {
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         let mut next_index = 0_usize;
-        self.visit_array_like_present_with_length(this_value, length, |context, index, value| {
+        let mode = Self::array_callback_visit_mode(visit_every_index);
+        self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             let keep = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -124,20 +130,22 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_some(args.as_slice(), this_value)
+        self.eval_direct_array_some(args.as_slice(), this_value, false)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_some(
         &mut self,
         args: &[Value],
         this_value: &Value,
+        visit_every_index: bool,
     ) -> Result<Value> {
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_some(callback, this_value)? {
             return Ok(value);
         }
         let mut matched = false;
-        self.visit_array_like_present(this_value, |context, index, value| {
+        let mode = Self::array_callback_visit_mode(visit_every_index);
+        self.visit_array_like_indices(this_value, mode, |context, index, value| {
             let result = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -159,20 +167,22 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_direct_array_every(args.as_slice(), this_value)
+        self.eval_direct_array_every(args.as_slice(), this_value, false)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_every(
         &mut self,
         args: &[Value],
         this_value: &Value,
+        visit_every_index: bool,
     ) -> Result<Value> {
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_every(callback, this_value)? {
             return Ok(value);
         }
         let mut matched = true;
-        self.visit_array_like_present(this_value, |context, index, value| {
+        let mode = Self::array_callback_visit_mode(visit_every_index);
+        self.visit_array_like_indices(this_value, mode, |context, index, value| {
             let result = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -473,17 +483,11 @@ impl Context {
         ])
     }
 
-    fn visit_array_like_present<F>(&mut self, object: &Value, visitor: F) -> Result<()>
-    where
-        F: FnMut(&mut Self, usize, &Value) -> Result<ArrayCallbackAction>,
-    {
-        self.visit_array_like_indices(object, CallbackVisitMode::PresentOnly, visitor)
-    }
-
-    fn visit_array_like_present_with_length<F>(
+    fn visit_array_like_with_length<F>(
         &mut self,
         object: &Value,
         length: usize,
+        mode: CallbackVisitMode,
         mut visitor: F,
     ) -> Result<()>
     where
@@ -491,15 +495,28 @@ impl Context {
     {
         for index in 0..length {
             self.step()?;
-            if !self.has_array_like_index(object, index)? {
+            let present = self.has_array_like_index(object, index)?;
+            if mode == CallbackVisitMode::PresentOnly && !present {
                 continue;
             }
-            let value = self.get_array_like_index(object, index)?;
+            let value = if present {
+                self.get_array_like_index(object, index)?
+            } else {
+                Value::Undefined
+            };
             if visitor(self, index, &value)? == ArrayCallbackAction::Stop {
                 return Ok(());
             }
         }
         Ok(())
+    }
+
+    const fn array_callback_visit_mode(visit_every_index: bool) -> CallbackVisitMode {
+        if visit_every_index {
+            CallbackVisitMode::EveryIndex
+        } else {
+            CallbackVisitMode::PresentOnly
+        }
     }
 
     fn visit_array_like_indices<F>(
