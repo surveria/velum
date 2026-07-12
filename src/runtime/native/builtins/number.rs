@@ -294,6 +294,11 @@ impl Context {
         let Some(value) = value else {
             return Ok(0.0);
         };
+        if let Value::BigInt(value) = value {
+            return value
+                .to_f64()
+                .ok_or_else(|| Error::limit("BigInt exceeded Number conversion range"));
+        }
         self.to_number(value)
     }
 
@@ -302,9 +307,12 @@ impl Context {
             Value::Number(value) => Ok(*value),
             Value::Object(id) => match self.objects.primitive_value(*id)? {
                 Some(ObjectPrimitiveValue::Number(value)) => Ok(*value),
-                Some(ObjectPrimitiveValue::Bool(_) | ObjectPrimitiveValue::Symbol(_)) | None => {
-                    Err(Error::type_error(NUMBER_VALUE_RECEIVER_ERROR))
-                }
+                Some(
+                    ObjectPrimitiveValue::Bool(_)
+                    | ObjectPrimitiveValue::BigInt(_)
+                    | ObjectPrimitiveValue::Symbol(_),
+                )
+                | None => Err(Error::type_error(NUMBER_VALUE_RECEIVER_ERROR)),
             },
             _ => Err(Error::type_error(NUMBER_VALUE_RECEIVER_ERROR)),
         }

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::storage::{string_heap::JsString, symbol::JsSymbol};
 
-use super::{FunctionId, HostFunctionId, NativeFunctionId, ObjectId};
+use super::{FunctionId, HostFunctionId, JsBigInt, NativeFunctionId, ObjectId};
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -10,6 +10,7 @@ pub enum Value {
     Null,
     Bool(bool),
     Number(f64),
+    BigInt(JsBigInt),
     String(String),
     HeapString(JsString),
     Symbol(JsSymbol),
@@ -27,6 +28,7 @@ impl Value {
             Self::Null | Self::Object(_) => "object",
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
+            Self::BigInt(_) => "bigint",
             Self::String(_) | Self::HeapString(_) => "string",
             Self::Symbol(_) => "symbol",
             Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => "function",
@@ -47,6 +49,7 @@ impl PartialEq for Value {
             (Self::Undefined, Self::Undefined) | (Self::Null, Self::Null) => true,
             (Self::Bool(left), Self::Bool(right)) => left == right,
             (Self::Number(left), Self::Number(right)) => left == right,
+            (Self::BigInt(left), Self::BigInt(right)) => left == right,
             (Self::String(left), Self::String(right)) => left == right,
             (Self::HeapString(left), Self::HeapString(right)) => left == right,
             (Self::String(left), Self::HeapString(right)) => {
@@ -65,6 +68,7 @@ impl PartialEq for Value {
                 | Self::Null
                 | Self::Bool(_)
                 | Self::Number(_)
+                | Self::BigInt(_)
                 | Self::String(_)
                 | Self::HeapString(_)
                 | Self::Symbol(_)
@@ -85,6 +89,7 @@ impl fmt::Display for Value {
             Self::Null => f.write_str("null"),
             Self::Bool(value) => write!(f, "{value}"),
             Self::Number(value) => f.write_str(&format_ecmascript_number(*value)),
+            Self::BigInt(value) => value.fmt(f),
             Self::String(value) => f.write_str(value),
             Self::HeapString(value) => f.write_str(value.as_str()),
             Self::Symbol(value) => f.write_str(&value.display_name()),

@@ -435,6 +435,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => self.runtime_value(value),
         }

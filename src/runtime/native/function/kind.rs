@@ -34,6 +34,10 @@ pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction"
 pub(in crate::runtime::native) const ASYNC_GENERATOR_FUNCTION_NAME: &str = "AsyncGeneratorFunction";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
+const BIGINT_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const BIGINT_NAME: &str = "BigInt";
+pub(in crate::runtime::native) const BIGINT_AS_INT_N_NAME: &str = "asIntN";
+pub(in crate::runtime::native) const BIGINT_AS_UINT_N_NAME: &str = "asUintN";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const EVAL_NAME: &str = "eval";
 const ERROR_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
@@ -275,6 +279,12 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
+    BigInt,
+    BigIntAsIntN,
+    BigIntAsUintN,
+    BigIntPrototypeToLocaleString,
+    BigIntPrototypeToString,
+    BigIntPrototypeValueOf,
     BoundFunction(BoundFunctionId),
     DataView(DataViewFunctionKind),
     Date(DateFunctionKind),
@@ -545,6 +555,7 @@ impl NativeFunctionKind {
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
                 | Self::Boolean
+                | Self::BigInt
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function

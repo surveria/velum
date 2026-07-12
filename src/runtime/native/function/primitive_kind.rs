@@ -3,6 +3,12 @@ use super::kind::NativeFunctionKind;
 const BOOLEAN_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime::native) const BOOLEAN_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime::native) const BOOLEAN_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
+const BIGINT_PROTOTYPE_FUNCTION_LENGTH_ONE: f64 = 1.0;
+const BIGINT_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
+pub(in crate::runtime::native) const BIGINT_PROTOTYPE_TO_LOCALE_STRING_NAME: &str =
+    "toLocaleString";
+pub(in crate::runtime::native) const BIGINT_PROTOTYPE_TO_STRING_NAME: &str = "toString";
+pub(in crate::runtime::native) const BIGINT_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 const NUMBER_PROTOTYPE_FUNCTION_LENGTH_ONE: f64 = 1.0;
 const NUMBER_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime::native) const NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME: &str =
@@ -32,6 +38,10 @@ impl NativeFunctionKind {
             Self::BooleanPrototypeToString | Self::BooleanPrototypeValueOf => {
                 Some(BOOLEAN_PROTOTYPE_FUNCTION_LENGTH_ZERO)
             }
+            Self::BigIntPrototypeToString => Some(BIGINT_PROTOTYPE_FUNCTION_LENGTH_ONE),
+            Self::BigIntPrototypeToLocaleString | Self::BigIntPrototypeValueOf => {
+                Some(BIGINT_PROTOTYPE_FUNCTION_LENGTH_ZERO)
+            }
             Self::NumberPrototypeToLocaleString | Self::NumberPrototypeValueOf => {
                 Some(NUMBER_PROTOTYPE_FUNCTION_LENGTH_ZERO)
             }
@@ -49,6 +59,9 @@ impl NativeFunctionKind {
         match self {
             Self::BooleanPrototypeToString => Some(BOOLEAN_PROTOTYPE_TO_STRING_NAME),
             Self::BooleanPrototypeValueOf => Some(BOOLEAN_PROTOTYPE_VALUE_OF_NAME),
+            Self::BigIntPrototypeToLocaleString => Some(BIGINT_PROTOTYPE_TO_LOCALE_STRING_NAME),
+            Self::BigIntPrototypeToString => Some(BIGINT_PROTOTYPE_TO_STRING_NAME),
+            Self::BigIntPrototypeValueOf => Some(BIGINT_PROTOTYPE_VALUE_OF_NAME),
             Self::NumberPrototypeToLocaleString => Some(NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME),
             Self::NumberPrototypeToString => Some(NUMBER_PROTOTYPE_TO_STRING_NAME),
             Self::NumberPrototypeValueOf => Some(NUMBER_PROTOTYPE_VALUE_OF_NAME),

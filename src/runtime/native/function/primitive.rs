@@ -54,6 +54,15 @@ impl Context {
             NativeFunctionKind::BooleanPrototypeValueOf => {
                 Some(self.eval_boolean_prototype_value_of(args, this_value))
             }
+            NativeFunctionKind::BigIntPrototypeToLocaleString => {
+                Some(self.eval_bigint_prototype_to_locale_string(args, this_value))
+            }
+            NativeFunctionKind::BigIntPrototypeToString => {
+                Some(self.eval_bigint_prototype_to_string(args, this_value))
+            }
+            NativeFunctionKind::BigIntPrototypeValueOf => {
+                Some(self.eval_bigint_prototype_value_of(args, this_value))
+            }
             NativeFunctionKind::NumberPrototypeToLocaleString
             | NativeFunctionKind::NumberPrototypeToString => {
                 Some(self.eval_number_prototype_to_string(args, this_value))

@@ -16,6 +16,7 @@ use crate::{
     },
     regexp_syntax::validate_regexp_literal,
     source::{SourceId, SourceSpan},
+    value::JsBigInt,
 };
 
 mod names;
@@ -205,7 +206,12 @@ impl<'a> Lexer<'a> {
         self.advance();
         self.advance();
         let digits = self.digit_sequence(radix, offset, description)?;
-        self.reject_bigint_suffix(description)?;
+        if self.consume_bigint_suffix() {
+            let value = JsBigInt::parse_digits(&digits, radix)
+                .ok_or_else(|| Error::lex(format!("invalid {description}"), offset))?;
+            self.push(TokenKind::BigInt(value), offset);
+            return Ok(());
+        }
         let value = digits_to_number(&digits, radix, offset, description)?;
         self.push(TokenKind::Number(value), offset);
         Ok(())
@@ -213,6 +219,13 @@ impl<'a> Lexer<'a> {
 
     fn decimal_number(&mut self, offset: usize) -> Result<()> {
         let mut text = self.digit_sequence(RADIX_DECIMAL, offset, "decimal numeric literal")?;
+
+        if self.consume_bigint_suffix() {
+            let value = JsBigInt::parse_digits(&text, RADIX_DECIMAL)
+                .ok_or_else(|| Error::lex("invalid decimal BigInt literal", offset))?;
+            self.push(TokenKind::BigInt(value), offset);
+            return Ok(());
+        }
 
         if self.peek_char() == Some(DECIMAL_POINT) {
             self.advance();
@@ -326,6 +339,14 @@ impl<'a> Lexer<'a> {
             ));
         }
         Ok(())
+    }
+
+    fn consume_bigint_suffix(&mut self) -> bool {
+        if self.peek_char() != Some(BIGINT_SUFFIX) {
+            return false;
+        }
+        self.advance();
+        true
     }
 
     fn string(&mut self, offset: usize, quote: char) -> Result<()> {

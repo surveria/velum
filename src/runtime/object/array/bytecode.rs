@@ -104,7 +104,7 @@ fn array_index_from_property_value(property: &Value) -> Option<ArrayIndex> {
     match property {
         Value::String(value) => ArrayIndex::parse(value),
         Value::HeapString(value) => ArrayIndex::parse(value.as_str()),
-        Value::Number(_) => ArrayIndex::parse(&property.to_string()),
+        Value::Number(_) | Value::BigInt(_) => ArrayIndex::parse(&property.to_string()),
         Value::Undefined
         | Value::Null
         | Value::Bool(_)

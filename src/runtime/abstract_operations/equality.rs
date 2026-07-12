@@ -33,6 +33,22 @@ pub(in crate::runtime) fn abstract_equality(
         | (Value::Number(_), Value::String(_) | Value::HeapString(_)) => Ok(
             number_strict_equality(context.to_number(left)?, context.to_number(right)?),
         ),
+        (Value::BigInt(left), Value::Number(right)) => Ok(left.equals_number(*right)),
+        (Value::Number(left), Value::BigInt(right)) => Ok(right.equals_number(*left)),
+        (Value::BigInt(left), Value::String(right)) => {
+            Ok(crate::value::JsBigInt::parse_string(right).is_some_and(|right| &right == left))
+        }
+        (Value::String(left), Value::BigInt(right)) => {
+            Ok(crate::value::JsBigInt::parse_string(left).is_some_and(|left| &left == right))
+        }
+        (Value::BigInt(left), Value::HeapString(right)) => {
+            Ok(crate::value::JsBigInt::parse_string(right.as_str())
+                .is_some_and(|right| &right == left))
+        }
+        (Value::HeapString(left), Value::BigInt(right)) => {
+            Ok(crate::value::JsBigInt::parse_string(left.as_str())
+                .is_some_and(|left| &left == right))
+        }
         (left, right) if !is_primitive(left) && is_primitive(right) => {
             let primitive = context.to_primitive(left, PreferredType::Default)?;
             abstract_equality(context, &primitive, right)

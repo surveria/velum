@@ -5,11 +5,13 @@ use crate::{
         object::{PropertyKey, PropertyLookup},
         property::DynamicPropertyKey,
     },
-    value::{ErrorName, Value, format_ecmascript_number},
+    value::{ErrorName, JsBigInt, Value, format_ecmascript_number},
 };
 
 const CANNOT_CONVERT_OBJECT_ERROR: &str = "Cannot convert object to primitive value";
 const CANNOT_CONVERT_SYMBOL_ERROR: &str = "Cannot convert a Symbol value to a number";
+const CANNOT_CONVERT_BIGINT_ERROR: &str = "Cannot convert a BigInt value to a number";
+const CANNOT_CONVERT_TO_BIGINT_ERROR: &str = "Cannot convert value to a BigInt";
 const CANNOT_CONVERT_SYMBOL_TO_STRING_ERROR: &str = "Cannot convert a Symbol value to a string";
 const SYMBOL_TO_PRIMITIVE_NAME: &str = "[Symbol.toPrimitive]";
 const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
@@ -28,6 +30,12 @@ pub(in crate::runtime) enum PreferredType {
     Default,
     Number,
     String,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::runtime) enum NumericValue {
+    Number(f64),
+    BigInt(JsBigInt),
 }
 
 impl PreferredType {
@@ -102,6 +110,41 @@ impl Context {
     pub(in crate::runtime) fn to_number(&mut self, value: &Value) -> Result<f64> {
         let primitive = self.to_primitive(value, PreferredType::Number)?;
         to_number_primitive(&primitive)
+    }
+
+    /// ECMAScript `ToNumeric`, preserving `BigInt` instead of routing it through
+    /// the binary64 Number domain.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_numeric(&mut self, value: &Value) -> Result<NumericValue> {
+        let primitive = self.to_primitive(value, PreferredType::Number)?;
+        if let Value::BigInt(value) = primitive {
+            return Ok(NumericValue::BigInt(value));
+        }
+        to_number_primitive(&primitive).map(NumericValue::Number)
+    }
+
+    /// ECMAScript `ToBigInt` used by BigInt-only operators and APIs.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_bigint(&mut self, value: &Value) -> Result<JsBigInt> {
+        let primitive = self.to_primitive(value, PreferredType::Number)?;
+        match primitive {
+            Value::BigInt(value) => Ok(value),
+            Value::Bool(value) => Ok(JsBigInt::from_u64(u64::from(value))),
+            Value::String(value) => JsBigInt::parse_string(&value).ok_or_else(|| {
+                Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
+            }),
+            Value::HeapString(value) => JsBigInt::parse_string(value.as_str()).ok_or_else(|| {
+                Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
+            }),
+            Value::Undefined
+            | Value::Null
+            | Value::Number(_)
+            | Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Object(_) => Err(Error::type_error(CANNOT_CONVERT_TO_BIGINT_ERROR)),
+        }
     }
 
     /// ECMAScript `ToIntegerOrInfinity`, including observable number conversion.
@@ -257,6 +300,7 @@ pub(in crate::runtime) const fn is_primitive(value: &Value) -> bool {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
@@ -269,6 +313,7 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         Value::Null => Ok(0.0),
         Value::Bool(value) => Ok(f64::from(u8::from(*value))),
         Value::Number(value) => Ok(*value),
+        Value::BigInt(_) => Err(Error::type_error(CANNOT_CONVERT_BIGINT_ERROR)),
         Value::String(value) => Ok(string_to_number(value)),
         Value::HeapString(value) => Ok(string_to_number(value.as_str())),
         Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_ERROR)),
@@ -287,6 +332,7 @@ pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
         Value::Undefined | Value::Null => false,
         Value::Bool(value) => *value,
         Value::Number(value) => *value != 0.0 && !value.is_nan(),
+        Value::BigInt(value) => !value.is_zero(),
         Value::String(value) => !value.is_empty(),
         Value::HeapString(value) => !value.as_str().is_empty(),
         Value::Symbol(_)
@@ -303,6 +349,7 @@ pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
         Value::Null => Ok("null".to_owned()),
         Value::Bool(value) => Ok(if *value { "true" } else { "false" }.to_owned()),
         Value::Number(value) => Ok(format_ecmascript_number(*value)),
+        Value::BigInt(value) => Ok(value.to_string()),
         Value::String(value) => Ok(value.clone()),
         Value::HeapString(value) => Ok(value.as_str().to_owned()),
         Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_TO_STRING_ERROR)),

@@ -312,6 +312,7 @@ impl Context {
             Value::Undefined | Value::Null => Err(Error::type_error(message)),
             Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Object(_)

@@ -1,6 +1,11 @@
+use std::cmp::Ordering;
+
 use crate::{
     error::Result,
-    runtime::{Context, abstract_operations::PreferredType},
+    runtime::{
+        Context,
+        abstract_operations::{NumericValue, PreferredType},
+    },
     syntax::BinaryOp,
     value::Value,
 };
@@ -16,7 +21,7 @@ pub(super) fn relational_compare(
     let result = if let (Some(left), Some(right)) = (string_value(&left), string_value(&right)) {
         string_relational_compare(op, left, right)
     } else {
-        number_relational_compare(op, context.to_number(&left)?, context.to_number(&right)?)
+        numeric_relational_compare(op, context.to_numeric(&left)?, context.to_numeric(&right)?)
     };
     Ok(Value::Bool(result))
 }
@@ -87,4 +92,44 @@ fn number_relational_compare(op: BinaryOp, left: f64, right: f64) -> bool {
         | BinaryOp::LogicalOr
         | BinaryOp::NullishCoalescing => false,
     }
+}
+
+fn numeric_relational_compare(op: BinaryOp, left: NumericValue, right: NumericValue) -> bool {
+    let ordering = match (left, right) {
+        (NumericValue::Number(left), NumericValue::Number(right)) => {
+            return number_relational_compare(op, left, right);
+        }
+        (NumericValue::BigInt(left), NumericValue::BigInt(right)) => Some(left.cmp(&right)),
+        (NumericValue::BigInt(left), NumericValue::Number(right)) => left.compare_number(right),
+        (NumericValue::Number(left), NumericValue::BigInt(right)) => {
+            right.compare_number(left).map(Ordering::reverse)
+        }
+    };
+    ordering.is_some_and(|ordering| match op {
+        BinaryOp::Less => ordering == Ordering::Less,
+        BinaryOp::LessEqual => ordering != Ordering::Greater,
+        BinaryOp::Greater => ordering == Ordering::Greater,
+        BinaryOp::GreaterEqual => ordering != Ordering::Less,
+        BinaryOp::Add
+        | BinaryOp::Sub
+        | BinaryOp::Mul
+        | BinaryOp::Div
+        | BinaryOp::Rem
+        | BinaryOp::Pow
+        | BinaryOp::Equal
+        | BinaryOp::NotEqual
+        | BinaryOp::StrictEqual
+        | BinaryOp::StrictNotEqual
+        | BinaryOp::In
+        | BinaryOp::InstanceOf
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
+        | BinaryOp::ShiftRightUnsigned
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => false,
+    })
 }

@@ -13,7 +13,7 @@ use crate::{
     runtime::property::DynamicPropertyKey,
     runtime::{
         Context,
-        abstract_operations::{SetFailureBehavior, to_boolean},
+        abstract_operations::{NumericValue, SetFailureBehavior, to_boolean},
         control::reference_error_undefined,
         object::PropertyLookup,
     },
@@ -337,12 +337,23 @@ impl Context {
         value: &Value,
         op: UpdateOp,
     ) -> Result<(Value, Value)> {
-        let number = self.to_number(value)?;
-        let updated = match op {
-            UpdateOp::Increment => number + 1.0,
-            UpdateOp::Decrement => number - 1.0,
-        };
-        Ok((Value::Number(number), Value::Number(updated)))
+        match self.to_numeric(value)? {
+            NumericValue::Number(number) => {
+                let updated = match op {
+                    UpdateOp::Increment => number + 1.0,
+                    UpdateOp::Decrement => number - 1.0,
+                };
+                Ok((Value::Number(number), Value::Number(updated)))
+            }
+            NumericValue::BigInt(integer) => {
+                let one = crate::value::JsBigInt::from_u64(1);
+                let updated = match op {
+                    UpdateOp::Increment => integer.add(&one),
+                    UpdateOp::Decrement => integer.sub(&one),
+                };
+                Ok((Value::BigInt(integer), Value::BigInt(updated)))
+            }
+        }
     }
 
     pub(in crate::runtime::bytecode) fn eval_bytecode_binding_compound_assignment(
@@ -453,11 +464,9 @@ impl Context {
         }
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
-            BinaryOp::Sub => numeric_binary(self, left, right, "-=", |left, right| left - right)?,
-            BinaryOp::Mul => numeric_binary(self, left, right, "*=", |left, right| left * right)?,
-            BinaryOp::Div => numeric_binary(self, left, right, "/=", |left, right| left / right)?,
-            BinaryOp::Rem => numeric_binary(self, left, right, "%=", |left, right| left % right)?,
-            BinaryOp::Pow => numeric_binary(self, left, right, "**=", f64::powf)?,
+            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem | BinaryOp::Pow => {
+                numeric_binary(self, left, right, op)?
+            }
             BinaryOp::BitAnd => bitwise_and(self, left, right)?,
             BinaryOp::BitOr => bitwise_or(self, left, right)?,
             BinaryOp::BitXor => bitwise_xor(self, left, right)?,

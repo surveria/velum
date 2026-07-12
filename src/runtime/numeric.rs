@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
-use crate::runtime::Context;
-use crate::value::Value;
+use crate::runtime::{Context, abstract_operations::NumericValue};
+use crate::syntax::BinaryOp;
+use crate::value::{ErrorName, JsBigInt, Value};
 
 const TO_INT32_MODULUS: f64 = 4_294_967_296.0;
 const TO_INT32_SIGN_BOUNDARY: u32 = 2_147_483_648;
@@ -12,70 +13,163 @@ const F64_EXPONENT_BIAS: i32 = 1023;
 const F64_SIGNIFICAND_BITS: i32 = 52;
 const F64_MANTISSA_MASK: u64 = (1_u64 << F64_EXPONENT_SHIFT) - 1;
 const F64_IMPLICIT_BIT: u64 = 1_u64 << F64_EXPONENT_SHIFT;
+const MIXED_NUMERIC_TYPES_ERROR: &str = "Cannot mix BigInt and other types";
+const BIGINT_DIVISION_BY_ZERO_ERROR: &str = "BigInt division by zero";
+const BIGINT_NEGATIVE_EXPONENT_ERROR: &str = "BigInt exponent must be non-negative";
+const BIGINT_UNSIGNED_SHIFT_ERROR: &str = "BigInt does not support unsigned right shift";
 
 pub fn numeric_binary(
     context: &mut Context,
     left: &Value,
     right: &Value,
-    _op: &str,
-    apply: impl FnOnce(f64, f64) -> f64,
+    op: BinaryOp,
 ) -> Result<Value> {
-    let left = context.to_number(left)?;
-    let right = context.to_number(right)?;
-    Ok(Value::Number(apply(left, right)))
+    let left = context.to_numeric(left)?;
+    let right = context.to_numeric(right)?;
+    match (left, right) {
+        (NumericValue::Number(left), NumericValue::Number(right)) => {
+            Ok(Value::Number(apply_number_binary(op, left, right)?))
+        }
+        (NumericValue::BigInt(left), NumericValue::BigInt(right)) => {
+            apply_bigint_binary(op, &left, &right).map(Value::BigInt)
+        }
+        (NumericValue::Number(_), NumericValue::BigInt(_))
+        | (NumericValue::BigInt(_), NumericValue::Number(_)) => {
+            Err(Error::type_error(MIXED_NUMERIC_TYPES_ERROR))
+        }
+    }
 }
 
 pub fn bitwise_and(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(context, left, "&")?;
-    let right = bitwise_i32(context, right, "&")?;
-    Ok(Value::Number(f64::from(left & right)))
+    numeric_binary(context, left, right, BinaryOp::BitAnd)
 }
 
 pub fn bitwise_or(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(context, left, "|")?;
-    let right = bitwise_i32(context, right, "|")?;
-    Ok(Value::Number(f64::from(left | right)))
+    numeric_binary(context, left, right, BinaryOp::BitOr)
 }
 
 pub fn bitwise_xor(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(context, left, "^")?;
-    let right = bitwise_i32(context, right, "^")?;
-    Ok(Value::Number(f64::from(left ^ right)))
+    numeric_binary(context, left, right, BinaryOp::BitXor)
 }
 
 pub fn bitwise_not(context: &mut Context, value: &Value) -> Result<Value> {
-    let value = bitwise_i32(context, value, "~")?;
-    Ok(Value::Number(f64::from(!value)))
+    match context.to_numeric(value)? {
+        NumericValue::Number(value) => Ok(Value::Number(f64::from(!number_to_i32(value, "~")?))),
+        NumericValue::BigInt(value) => Ok(Value::BigInt(value.bitwise_not())),
+    }
 }
 
 pub fn shift_left(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(context, left, "<<")?;
-    let right = shift_count(context, right, "<<")?;
-    Ok(Value::Number(f64::from(left.wrapping_shl(right))))
+    numeric_binary(context, left, right, BinaryOp::ShiftLeft)
 }
 
 pub fn shift_right(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(context, left, ">>")?;
-    let right = shift_count(context, right, ">>")?;
-    Ok(Value::Number(f64::from(left.wrapping_shr(right))))
+    numeric_binary(context, left, right, BinaryOp::ShiftRight)
 }
 
 pub fn shift_right_unsigned(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_u32(context, left, ">>>")?;
-    let right = shift_count(context, right, ">>>")?;
-    Ok(Value::Number(f64::from(left.wrapping_shr(right))))
+    numeric_binary(context, left, right, BinaryOp::ShiftRightUnsigned)
 }
 
-fn shift_count(context: &mut Context, value: &Value, op: &str) -> Result<u32> {
-    Ok(bitwise_u32(context, value, op)? & SHIFT_COUNT_MASK)
+fn apply_number_binary(op: BinaryOp, left: f64, right: f64) -> Result<f64> {
+    Ok(match op {
+        BinaryOp::Sub => left - right,
+        BinaryOp::Mul => left * right,
+        BinaryOp::Div => left / right,
+        BinaryOp::Rem => left % right,
+        BinaryOp::Pow => left.powf(right),
+        BinaryOp::BitAnd => f64::from(number_to_i32(left, "&")? & number_to_i32(right, "&")?),
+        BinaryOp::BitOr => f64::from(number_to_i32(left, "|")? | number_to_i32(right, "|")?),
+        BinaryOp::BitXor => f64::from(number_to_i32(left, "^")? ^ number_to_i32(right, "^")?),
+        BinaryOp::ShiftLeft => {
+            f64::from(number_to_i32(left, "<<")?.wrapping_shl(number_shift_count(right, "<<")?))
+        }
+        BinaryOp::ShiftRight => {
+            f64::from(number_to_i32(left, ">>")?.wrapping_shr(number_shift_count(right, ">>")?))
+        }
+        BinaryOp::ShiftRightUnsigned => f64::from(
+            number_to_uint32(left, ">>>")?.wrapping_shr(number_shift_count(right, ">>>")?),
+        ),
+        BinaryOp::Add
+        | BinaryOp::Equal
+        | BinaryOp::NotEqual
+        | BinaryOp::StrictEqual
+        | BinaryOp::StrictNotEqual
+        | BinaryOp::Less
+        | BinaryOp::LessEqual
+        | BinaryOp::Greater
+        | BinaryOp::GreaterEqual
+        | BinaryOp::In
+        | BinaryOp::InstanceOf
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => {
+            return Err(Error::runtime(
+                "non-numeric operator reached numeric binary owner",
+            ));
+        }
+    })
 }
 
-fn bitwise_i32(context: &mut Context, value: &Value, op: &str) -> Result<i32> {
-    number_to_i32(context.to_number(value)?, op)
+fn apply_bigint_binary(op: BinaryOp, left: &JsBigInt, right: &JsBigInt) -> Result<JsBigInt> {
+    match op {
+        BinaryOp::Sub => Ok(left.sub(right)),
+        BinaryOp::Mul => Ok(left.mul(right)),
+        BinaryOp::Div => left.div(right).ok_or_else(bigint_division_by_zero),
+        BinaryOp::Rem => left.rem(right).ok_or_else(bigint_division_by_zero),
+        BinaryOp::Pow => bigint_pow(left, right),
+        BinaryOp::BitAnd => Ok(left.bitand(right)),
+        BinaryOp::BitOr => Ok(left.bitor(right)),
+        BinaryOp::BitXor => Ok(left.bitxor(right)),
+        BinaryOp::ShiftLeft => bigint_shift(left, right, true),
+        BinaryOp::ShiftRight => bigint_shift(left, right, false),
+        BinaryOp::ShiftRightUnsigned => Err(Error::type_error(BIGINT_UNSIGNED_SHIFT_ERROR)),
+        BinaryOp::Add
+        | BinaryOp::Equal
+        | BinaryOp::NotEqual
+        | BinaryOp::StrictEqual
+        | BinaryOp::StrictNotEqual
+        | BinaryOp::Less
+        | BinaryOp::LessEqual
+        | BinaryOp::Greater
+        | BinaryOp::GreaterEqual
+        | BinaryOp::In
+        | BinaryOp::InstanceOf
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => Err(Error::runtime(
+            "non-numeric operator reached BigInt binary owner",
+        )),
+    }
 }
 
-fn bitwise_u32(context: &mut Context, value: &Value, op: &str) -> Result<u32> {
-    number_to_uint32(context.to_number(value)?, op)
+fn bigint_division_by_zero() -> Error {
+    Error::exception(ErrorName::RangeError, BIGINT_DIVISION_BY_ZERO_ERROR)
+}
+
+fn bigint_pow(base: &JsBigInt, exponent: &JsBigInt) -> Result<JsBigInt> {
+    if exponent.is_negative() {
+        return Err(Error::exception(
+            ErrorName::RangeError,
+            BIGINT_NEGATIVE_EXPONENT_ERROR,
+        ));
+    }
+    let exponent = exponent
+        .to_u32()
+        .ok_or_else(|| Error::limit("BigInt exponent exceeded supported resource range"))?;
+    Ok(base.pow(exponent))
+}
+
+fn bigint_shift(value: &JsBigInt, count: &JsBigInt, left: bool) -> Result<JsBigInt> {
+    let reverse = count.is_negative();
+    let magnitude = count
+        .abs()
+        .to_usize()
+        .ok_or_else(|| Error::limit("BigInt shift count exceeded supported resource range"))?;
+    Ok(match (left, reverse) {
+        (true, false) | (false, true) => value.shift_left(magnitude),
+        (false, false) | (true, true) => value.shift_right(magnitude),
+    })
 }
 
 pub fn number_to_uint32(value: f64, context: &str) -> Result<u32> {

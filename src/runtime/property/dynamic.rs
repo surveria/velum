@@ -108,6 +108,9 @@ impl Context {
             Value::Number(_) => self
                 .number_prototype_property_value(object, property)
                 .map(Some),
+            Value::BigInt(_) => self
+                .bigint_prototype_property_value(object, property)
+                .map(Some),
             Value::Symbol(_) => self
                 .symbol_prototype_property_value(object, property)
                 .map(Some),
@@ -126,6 +129,9 @@ impl Context {
                 .map(Some),
             Value::Number(_) => self
                 .number_prototype_property_value_with_lookup(object, property)
+                .map(Some),
+            Value::BigInt(_) => self
+                .bigint_prototype_property_value_with_lookup(object, property)
                 .map(Some),
             Value::Symbol(_) => self
                 .symbol_prototype_property_value_with_lookup(object, property)

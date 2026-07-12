@@ -261,7 +261,13 @@ const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
 const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
 const ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 273;
 const DISPOSABLE_STACK_SLOT_BASE: usize = 282;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 290;
+const BIGINT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(290);
+const BIGINT_AS_INT_N_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(291);
+const BIGINT_AS_UINT_N_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(292);
+const BIGINT_PROTOTYPE_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(293);
+const BIGINT_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(294);
+const BIGINT_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(295);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 296;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -394,6 +400,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = buffer_or_disposable_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = object_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
         NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
@@ -403,6 +412,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::AsyncGeneratorReturn => Some(ASYNC_GENERATOR_RETURN_SLOT),
         NativeFunctionKind::AsyncGeneratorThrow => Some(ASYNC_GENERATOR_THROW_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
+        NativeFunctionKind::BigInt => Some(BIGINT_SLOT),
+        NativeFunctionKind::BigIntAsIntN => Some(BIGINT_AS_INT_N_SLOT),
+        NativeFunctionKind::BigIntAsUintN => Some(BIGINT_AS_UINT_N_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(NativeFunctionSlot::error(name)),
         NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
@@ -416,30 +428,6 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::JsonRawJson => Some(JSON_RAW_JSON_SLOT),
         NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
         NativeFunctionKind::Number => Some(NUMBER_SLOT),
-        NativeFunctionKind::Object => Some(OBJECT_SLOT),
-        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
-        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
-        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
-        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
-        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
-        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
-        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
-        }
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
-        }
-        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
-        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
-        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
-        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
-        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
-        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
-        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
-        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
-        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::All) => Some(PROMISE_ALL_SLOT),
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::AllKeyed) => {
@@ -478,6 +466,36 @@ const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFun
         return None;
     };
     Some(NativeFunctionSlot::new(index))
+}
+
+const fn object_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::Object => Some(OBJECT_SLOT),
+        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
+        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
+        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
+        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
+        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
+        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
+        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
+        }
+        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
+        }
+        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
+        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
+        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
+        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
+        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
+        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
+        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
+        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
+        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
+        _ => None,
+    }
 }
 
 const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
@@ -735,6 +753,11 @@ const fn primitive_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunc
     match kind {
         NativeFunctionKind::BooleanPrototypeToString => Some(BOOLEAN_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::BooleanPrototypeValueOf => Some(BOOLEAN_PROTOTYPE_VALUE_OF_SLOT),
+        NativeFunctionKind::BigIntPrototypeToLocaleString => {
+            Some(BIGINT_PROTOTYPE_TO_LOCALE_STRING_SLOT)
+        }
+        NativeFunctionKind::BigIntPrototypeToString => Some(BIGINT_PROTOTYPE_TO_STRING_SLOT),
+        NativeFunctionKind::BigIntPrototypeValueOf => Some(BIGINT_PROTOTYPE_VALUE_OF_SLOT),
         NativeFunctionKind::NumberPrototypeToLocaleString => {
             Some(NUMBER_PROTOTYPE_TO_LOCALE_STRING_SLOT)
         }
