@@ -202,6 +202,7 @@ impl Context {
         };
         self.objects
             .array_buffer(*id)?
+            .filter(|buffer| !buffer.is_shared())
             .map(|buffer| (*id, buffer))
             .ok_or_else(|| Error::type_error(RECEIVER_TYPE_ERROR))
     }

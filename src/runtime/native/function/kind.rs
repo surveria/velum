@@ -1,6 +1,7 @@
 use super::{
-    array_buffer_kind::ArrayBufferFunctionKind, data_view_kind::DataViewFunctionKind,
-    date_kind::DateFunctionKind, iterator_kind::IteratorFunctionKind,
+    AtomicsFunctionKind, array_buffer_kind::ArrayBufferFunctionKind,
+    data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
+    iterator_kind::IteratorFunctionKind, shared_array_buffer_kind::SharedArrayBufferFunctionKind,
     typed_array_kind::TypedArrayFunctionKind,
 };
 use crate::runtime::{
@@ -272,6 +273,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayIteratorNext,
     ArrayBuffer,
     ArrayBufferPrototype(ArrayBufferFunctionKind),
+    Atomics(AtomicsFunctionKind),
+    SharedArrayBuffer,
+    SharedArrayBufferPrototype(SharedArrayBufferFunctionKind),
     AsyncFunction,
     AsyncGeneratorFunction,
     AsyncGeneratorNext,
@@ -566,6 +570,12 @@ impl NativeFunctionKind {
         if let Self::ArrayBufferPrototype(kind) = self {
             return kind.length();
         }
+        if let Self::Atomics(kind) = self {
+            return kind.length();
+        }
+        if let Self::SharedArrayBufferPrototype(kind) = self {
+            return kind.length();
+        }
         if let Self::Iterator(kind) = self {
             return kind.length();
         }
@@ -625,6 +635,12 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::ArrayBufferPrototype(kind) = self {
+            return kind.name();
+        }
+        if let Self::Atomics(kind) = self {
+            return kind.name();
+        }
+        if let Self::SharedArrayBufferPrototype(kind) = self {
             return kind.name();
         }
         if let Self::Iterator(kind) = self {

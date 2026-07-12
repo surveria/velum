@@ -491,13 +491,10 @@ impl Context {
         if let Some(result) = self.eval_promise_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_buffer_memory_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         match kind {
-            NativeFunctionKind::ArrayBuffer => {
-                Err(Error::type_error("ArrayBuffer constructor requires 'new'"))
-            }
-            NativeFunctionKind::ArrayBufferPrototype(kind) => {
-                self.eval_array_buffer_native_function_kind(kind, args, this_value)
-            }
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::AsyncGeneratorFunction => {
                 self.eval_async_generator_function_constructor(args)

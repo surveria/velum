@@ -109,7 +109,7 @@ impl Context {
         self.create_array_buffer_value(buffer)
     }
 
-    fn array_buffer_max_byte_length_option(
+    pub(super) fn array_buffer_max_byte_length_option(
         &mut self,
         options: Option<&Value>,
     ) -> Result<Option<usize>> {
@@ -394,7 +394,7 @@ impl Context {
             .map(Value::Object)
     }
 
-    fn typed_storage_prototype_with_constructor(
+    pub(super) fn typed_storage_prototype_with_constructor(
         &mut self,
         constructor: Value,
         parent: Option<ObjectId>,

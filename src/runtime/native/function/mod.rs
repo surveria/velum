@@ -12,6 +12,7 @@ mod array;
 mod array_buffer_kind;
 mod array_kind;
 mod async_disposable_stack_kind;
+mod atomics_kind;
 mod call_target;
 mod collection;
 mod collection_kind;
@@ -19,6 +20,7 @@ mod constructable;
 mod data_view_kind;
 mod date_kind;
 mod direct;
+mod direct_buffer_memory;
 mod disposable_stack_kind;
 mod iterator;
 mod iterator_kind;
@@ -30,6 +32,7 @@ mod primitive_kind;
 mod reflect_kind;
 mod registry;
 mod registry_error;
+mod shared_array_buffer_kind;
 mod string_annexb_kind;
 mod string_kind;
 mod typed_array_kind;
@@ -41,6 +44,8 @@ pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
 pub(in crate::runtime) use async_disposable_stack_kind::{
     ASYNC_DISPOSABLE_STACK_NAME, AsyncDisposableStackFunctionKind,
 };
+pub(in crate::runtime::native) use atomics_kind::ATOMICS_NAME;
+pub(in crate::runtime) use atomics_kind::AtomicsFunctionKind;
 pub(in crate::runtime) use data_view_kind::DATA_VIEW_NAME;
 pub(in crate::runtime) use data_view_kind::DataViewFunctionKind;
 pub(in crate::runtime) use date_kind::{
@@ -119,6 +124,8 @@ pub(in crate::runtime::native) use primitive_kind::{
 };
 pub(in crate::runtime::native) use reflect_kind::REFLECT_NAME;
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
+pub(in crate::runtime::native) use shared_array_buffer_kind::SHARED_ARRAY_BUFFER_NAME;
+pub(in crate::runtime) use shared_array_buffer_kind::SharedArrayBufferFunctionKind;
 pub(in crate::runtime::native) use string_annexb_kind::StringAnnexBFunctionKind;
 pub(in crate::runtime) use typed_array_kind::TypedArrayFunctionKind;
 

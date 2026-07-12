@@ -1,3 +1,4 @@
+use super::super::SHARED_ARRAY_BUFFER_NAME;
 use super::{
     ARRAY_BUFFER_FUNCTION_LENGTH, ARRAY_BUFFER_NAME, ASYNC_FUNCTION_FUNCTION_LENGTH,
     ASYNC_FUNCTION_NAME, ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH, ASYNC_GENERATOR_FUNCTION_NAME,
@@ -26,7 +27,8 @@ impl NativeFunctionKind {
         }
         match self {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
-            Self::AsyncGeneratorNext
+            Self::SharedArrayBuffer
+            | Self::AsyncGeneratorNext
             | Self::AsyncGeneratorReturn
             | Self::AsyncGeneratorThrow
             | Self::GeneratorNext
@@ -78,6 +80,7 @@ impl NativeFunctionKind {
             Self::AsyncGeneratorReturn | Self::GeneratorReturn => Some("return"),
             Self::AsyncGeneratorThrow | Self::GeneratorThrow => Some("throw"),
             Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
+            Self::SharedArrayBuffer => Some(SHARED_ARRAY_BUFFER_NAME),
             Self::Boolean => Some(BOOLEAN_NAME),
             Self::BigInt => Some(BIGINT_NAME),
             Self::BigIntAsIntN => Some(BIGINT_AS_INT_N_NAME),
