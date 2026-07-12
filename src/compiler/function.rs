@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
-    BytecodeInstruction, BytecodeNewTargetMode,
+    BytecodeInstruction, BytecodeNewTargetMode, FunctionCompileMode,
 };
 
 struct FunctionCompileSpec<'a> {
@@ -27,6 +27,7 @@ struct FunctionCompileSpec<'a> {
     parameter_prologue_count: usize,
     constructable: bool,
     kind: FunctionKind,
+    strict: bool,
     new_target_mode: BytecodeNewTargetMode,
 }
 
@@ -54,8 +55,8 @@ impl BytecodeCompiler<'_> {
                 spec.arguments_binding,
                 spec.params,
                 spec.body,
-                spec.kind,
                 spec.parameter_prologue_count,
+                FunctionCompileMode::new(spec.kind, spec.strict),
                 self.layout,
             )?,
             constructable: spec.constructable,
@@ -67,13 +68,13 @@ impl BytecodeCompiler<'_> {
 }
 
 impl BytecodeFunction {
-    pub fn compile(
+    pub(super) fn compile(
         self_binding: Option<StaticBinding>,
         arguments_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
-        kind: FunctionKind,
         parameter_prologue_count: usize,
+        mode: FunctionCompileMode,
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
@@ -84,13 +85,14 @@ impl BytecodeFunction {
             param_defaults: compile_param_defaults(params, layout)?,
             body: BytecodeBlock::compile_function_statements(
                 statements,
-                kind,
+                mode.kind,
                 parameter_prologue_count,
                 layout,
             )?,
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments: collected.uses_arguments,
+            strict: mode.strict,
         }))
     }
 }
@@ -138,6 +140,7 @@ fn function_compile_spec<'a>(
             body,
             parameter_prologue_count,
             kind,
+            strict,
             ..
         } => Ok(FunctionCompileSpec {
             id: *id,
@@ -152,6 +155,7 @@ fn function_compile_spec<'a>(
             parameter_prologue_count: *parameter_prologue_count,
             constructable: kind.is_constructable(),
             kind: *kind,
+            strict: *strict,
             new_target_mode: BytecodeNewTargetMode::Own,
         }),
         Expr::ArrowFunction {
@@ -160,6 +164,7 @@ fn function_compile_spec<'a>(
             body,
             parameter_prologue_count,
             kind,
+            strict,
             ..
         } => Ok(FunctionCompileSpec {
             id: *id,
@@ -171,6 +176,7 @@ fn function_compile_spec<'a>(
             parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
             kind: *kind,
+            strict: *strict,
             new_target_mode: BytecodeNewTargetMode::Lexical,
         }),
         Expr::MethodFunction {
@@ -181,6 +187,7 @@ fn function_compile_spec<'a>(
             body,
             parameter_prologue_count,
             kind,
+            strict,
             ..
         } => Ok(FunctionCompileSpec {
             id: *id,
@@ -192,6 +199,7 @@ fn function_compile_spec<'a>(
             parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
             kind: *kind,
+            strict: *strict,
             new_target_mode: BytecodeNewTargetMode::Own,
         }),
         _ => Err(Error::runtime("expected function expression")),

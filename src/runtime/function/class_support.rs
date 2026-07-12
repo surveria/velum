@@ -11,6 +11,17 @@ use crate::{
     value::{FunctionId, Value},
 };
 
+impl FunctionSuperBinding {
+    pub(super) fn fresh_activation(&self) -> Rc<Self> {
+        Rc::new(Self {
+            constructor: self.constructor.clone(),
+            home_prototype: self.home_prototype.clone(),
+            own_constructor: self.own_constructor,
+            this_initialized: std::cell::Cell::new(false),
+        })
+    }
+}
+
 /// One resolved instance field initialized during construction.
 #[derive(Debug)]
 pub(in crate::runtime) enum ResolvedClassField {

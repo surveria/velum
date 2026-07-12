@@ -5,6 +5,24 @@ use crate::{
 };
 
 impl Context {
+    pub(super) fn function_direct_call_this(
+        &mut self,
+        id: FunctionId,
+        call_this: Value,
+    ) -> Result<Value> {
+        let function = self.function(id)?;
+        if let Some(lexical_this) = &function.lexical_this {
+            return Ok(lexical_this.clone());
+        }
+        if function.bytecode.strict() {
+            return Ok(call_this);
+        }
+        if matches!(call_this, Value::Undefined | Value::Null) {
+            return self.global_this_value();
+        }
+        self.eval_direct_object_constructor(std::slice::from_ref(&call_this))
+    }
+
     pub(crate) fn eval_function_completion_with_this_and_new_target(
         &mut self,
         id: FunctionId,

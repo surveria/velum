@@ -157,6 +157,7 @@ pub enum Expr {
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: FunctionKind,
+        strict: bool,
     },
     ArrowFunction {
         id: StaticFunctionId,
@@ -164,6 +165,7 @@ pub enum Expr {
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: FunctionKind,
+        strict: bool,
     },
     MethodFunction {
         id: StaticFunctionId,
@@ -173,6 +175,7 @@ pub enum Expr {
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: FunctionKind,
+        strict: bool,
     },
     Object(Vec<ObjectProperty>),
     ArrayHole,

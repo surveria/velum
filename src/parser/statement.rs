@@ -522,7 +522,7 @@ impl Parser {
             })
         })?;
         self.validate_function_parameters(
-            &parameters.params,
+            &parameters.bound_names,
             parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
@@ -531,6 +531,7 @@ impl Parser {
             self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
         }
         let id = self.static_function()?;
+        let strict = inherited_strict || body.contains_use_strict;
         let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
         let arguments_binding = if uses_arguments {
             Some(self.implicit_arguments_binding()?)
@@ -547,6 +548,7 @@ impl Parser {
             body: statements.into(),
             parameter_prologue_count,
             kind,
+            strict,
         })
     }
 

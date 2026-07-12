@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, Expression, FunctionParam, Statement, Stmt},
+    ast::{Expr, Expression, FunctionParam, Statement, StaticBinding, Stmt},
     error::Result,
     lexer::TokenKind,
     syntax::DeclKind,
@@ -21,6 +21,7 @@ const REST_PATTERN_PARAM_NAME: &str = "%rest%";
 /// before the function body.
 pub(super) struct ParsedParameters {
     pub(super) params: Vec<FunctionParam>,
+    pub(super) bound_names: Vec<StaticBinding>,
     pub(super) pattern_prologue: Vec<Statement>,
     pub(super) is_simple: bool,
 }
@@ -44,11 +45,13 @@ impl ParsedParameters {
 impl Parser {
     pub(super) fn function_parameters(&mut self) -> Result<ParsedParameters> {
         let mut params = Vec::new();
+        let mut bound_names = Vec::new();
         let mut pattern_prologue = Vec::new();
         let mut is_simple = true;
         if self.check(&TokenKind::RParen) {
             return Ok(ParsedParameters {
                 params,
+                bound_names,
                 pattern_prologue,
                 is_simple,
             });
@@ -60,12 +63,12 @@ impl Parser {
             }
             if self.match_kind(&TokenKind::DotDotDot) {
                 is_simple = false;
-                self.rest_parameter(&mut params, &mut pattern_prologue)?;
+                self.rest_parameter(&mut params, &mut bound_names, &mut pattern_prologue)?;
                 break;
             }
             if self.next_is_binding_pattern() {
                 is_simple = false;
-                self.pattern_parameter(&mut params, &mut pattern_prologue)?;
+                self.pattern_parameter(&mut params, &mut bound_names, &mut pattern_prologue)?;
             } else {
                 let name = self.consume_binding_identifier("expected function parameter name")?;
                 let default = if self.match_kind(&TokenKind::Equal) {
@@ -74,6 +77,7 @@ impl Parser {
                 } else {
                     None
                 };
+                bound_names.push(name.clone());
                 params.push(FunctionParam::new(name, default));
             }
             if !self.match_kind(&TokenKind::Comma) {
@@ -81,9 +85,10 @@ impl Parser {
             }
         }
 
-        self.reject_duplicate_non_simple_parameters(&params, is_simple)?;
+        self.reject_duplicate_non_simple_parameters(&bound_names, is_simple)?;
         Ok(ParsedParameters {
             params,
+            bound_names,
             pattern_prologue,
             is_simple,
         })
@@ -95,11 +100,13 @@ impl Parser {
     fn rest_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
+        bound_names: &mut Vec<StaticBinding>,
         pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
         let start = self.previous_span();
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
+            Self::collect_parameter_pattern_names(&pattern, bound_names)?;
             let synthetic = self.static_binding_name(REST_PATTERN_PARAM_NAME.to_owned())?;
             params.push(FunctionParam::rest(synthetic.clone()));
             let span = self.span_since(start);
@@ -113,6 +120,7 @@ impl Parser {
             ));
         } else {
             let name = self.consume_binding_identifier("expected rest parameter name")?;
+            bound_names.push(name.clone());
             params.push(FunctionParam::rest(name));
         }
         if self.check(&TokenKind::Equal) {
@@ -129,10 +137,12 @@ impl Parser {
     fn pattern_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
+        bound_names: &mut Vec<StaticBinding>,
         pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
         let start = self.current_span();
         let pattern = self.binding_pattern()?;
+        Self::collect_parameter_pattern_names(&pattern, bound_names)?;
         let default = if self.match_kind(&TokenKind::Equal) {
             Some(self.assignment()?)
         } else {
@@ -154,5 +164,15 @@ impl Parser {
             span,
         ));
         Ok(())
+    }
+
+    fn collect_parameter_pattern_names(
+        pattern: &crate::ast::BindingPattern,
+        names: &mut Vec<StaticBinding>,
+    ) -> Result<()> {
+        pattern.for_each_binding(&mut |binding| {
+            names.push(binding.clone());
+            Ok(())
+        })
     }
 }

@@ -50,6 +50,7 @@ pub struct BytecodeFunction {
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
+    strict: bool,
 }
 
 pub struct BytecodeFunctionInit {
@@ -61,6 +62,7 @@ pub struct BytecodeFunctionInit {
     pub hoist_plan: BytecodeHoistPlan,
     pub capture_bindings: Rc<[StaticBinding]>,
     pub uses_arguments: bool,
+    pub strict: bool,
 }
 impl BytecodeFunction {
     pub(crate) fn new(init: BytecodeFunctionInit) -> Self {
@@ -73,32 +75,30 @@ impl BytecodeFunction {
             hoist_plan: init.hoist_plan,
             capture_bindings: init.capture_bindings,
             uses_arguments: init.uses_arguments,
+            strict: init.strict,
         }
     }
     pub const fn self_binding(&self) -> Option<&StaticBinding> {
         self.self_binding.as_ref()
     }
-
     pub const fn arguments_binding(&self) -> Option<&StaticBinding> {
         self.arguments_binding.as_ref()
     }
-
     pub const fn uses_arguments(&self) -> bool {
         self.uses_arguments
     }
-
+    pub const fn strict(&self) -> bool {
+        self.strict
+    }
     pub fn params(&self) -> &[BytecodeFunctionParam] {
         &self.params
     }
-
     pub fn param_defaults(&self) -> &[Option<BytecodeBlock>] {
         &self.param_defaults
     }
-
     pub fn has_parameter_defaults(&self) -> bool {
         self.param_defaults.iter().any(Option::is_some)
     }
-
     pub fn has_rest_parameter(&self) -> bool {
         self.params.last().is_some_and(BytecodeFunctionParam::rest)
     }

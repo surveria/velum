@@ -402,6 +402,12 @@ impl Function {
                 StrongEdgeReference::Value(value),
             )?;
         }
+        if let Some(value) = &self.lexical_this {
+            visitor.visit(
+                VmCallableEdgeKind::JavaScriptFunctionInternal,
+                StrongEdgeReference::Value(value),
+            )?;
+        }
         Ok(())
     }
 }

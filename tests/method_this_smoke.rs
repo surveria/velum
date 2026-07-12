@@ -35,23 +35,28 @@ fn supports_method_this_for_member_and_computed_calls() -> TestResult {
 }
 
 #[test]
-fn keeps_direct_call_this_undefined_in_baseline_runtime() -> TestResult {
+fn applies_callee_strictness_to_direct_call_this() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
     let value = context.eval(
-        r"
+        r#"
         let read = function() {
             return this;
         };
-        let direct = read() === undefined;
-        print(direct);
-        direct ? 42 : 0
-        ",
+        let strictRead = function() {
+            "use strict";
+            return this;
+        };
+        let sloppy = read() === globalThis;
+        let strict = strictRead() === undefined;
+        print(sloppy, strict);
+        sloppy && strict ? 42 : 0
+        "#,
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_output(context.output(), &["true".to_owned()])
+    ensure_output(context.output(), &["true true".to_owned()])
 }
 
 #[test]

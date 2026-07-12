@@ -392,7 +392,7 @@ impl Parser {
                 )
             })
         })?;
-        self.reject_duplicate_parameters(&parameters.params)?;
+        self.reject_duplicate_parameters(&parameters.bound_names)?;
         self.consume(
             &TokenKind::RParen,
             "expected ')' after class member parameters",
@@ -435,7 +435,7 @@ impl Parser {
             })
         })?;
         self.validate_function_parameters(
-            &parameters.params,
+            &parameters.bound_names,
             parameters.is_simple,
             true,
             body.contains_use_strict,
