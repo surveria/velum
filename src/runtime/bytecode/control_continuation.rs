@@ -43,6 +43,13 @@ pub(super) enum BytecodeTryPhase {
     Finally,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BytecodeSwitchPhase {
+    Discriminant,
+    CaseTest,
+    Body,
+}
+
 /// Durable state for one structured-control construct.
 ///
 /// The synchronous driver checks the record out while it is running. Its
@@ -73,8 +80,11 @@ pub(super) enum BytecodeControlRecord {
         resume: Option<Completion>,
     },
     Switch {
+        phase: BytecodeSwitchPhase,
         body_state: BytecodeState,
         next_case: usize,
+        default_case: Option<usize>,
+        discriminant: Option<Value>,
         last: Value,
     },
     Try {
@@ -148,10 +158,24 @@ impl BytecodeControlRecord {
         }
     }
 
-    pub(super) const fn switch(next_case: usize) -> Self {
+    pub(super) const fn switch() -> Self {
         Self::Switch {
+            phase: BytecodeSwitchPhase::Discriminant,
+            body_state: BytecodeState::new(),
+            next_case: 0,
+            default_case: None,
+            discriminant: None,
+            last: Value::Undefined,
+        }
+    }
+
+    pub(super) const fn switch_at(next_case: usize) -> Self {
+        Self::Switch {
+            phase: BytecodeSwitchPhase::Body,
             body_state: BytecodeState::new(),
             next_case,
+            default_case: None,
+            discriminant: None,
             last: Value::Undefined,
         }
     }
@@ -202,9 +226,18 @@ impl BytecodeControlRecord {
                 roots.push(last);
             }
             Self::Switch {
-                body_state, last, ..
+                body_state,
+                discriminant,
+                last,
+                ..
+            } => {
+                roots.extend(body_state.root_values());
+                if let Some(discriminant) = discriminant {
+                    roots.push(discriminant);
+                }
+                roots.push(last);
             }
-            | Self::ForIn {
+            Self::ForIn {
                 body_state, last, ..
             } => {
                 roots.extend(body_state.root_values());
@@ -279,6 +312,27 @@ impl BytecodeControlRecord {
         Ok((next_case, last))
     }
 
+    pub(super) fn switch_selection_mut(
+        &mut self,
+    ) -> Result<(
+        &mut BytecodeSwitchPhase,
+        &mut usize,
+        &mut Option<usize>,
+        &mut Option<Value>,
+    )> {
+        let Self::Switch {
+            phase,
+            next_case,
+            default_case,
+            discriminant,
+            ..
+        } = self
+        else {
+            return Err(Error::runtime("structured switch record mismatch"));
+        };
+        Ok((phase, next_case, default_case, discriminant))
+    }
+
     pub(super) fn for_in_state_mut(
         &mut self,
     ) -> Result<(
@@ -344,9 +398,10 @@ impl BytecodeControlRecord {
 
     fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
         let roots = match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } | Self::Switch { last, .. } => {
-                [Some(last), None, None, None]
-            }
+            Self::Loop { last, .. } | Self::ForIn { last, .. } => [Some(last), None, None, None],
+            Self::Switch {
+                discriminant, last, ..
+            } => [Some(last), discriminant.as_ref(), None, None],
             Self::ForOf {
                 iterator,
                 last,
@@ -378,8 +433,16 @@ impl BytecodeControlRecord {
 
     fn has_traceable_transient_roots(&self) -> bool {
         match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } | Self::Switch { last, .. } => {
+            Self::Loop { last, .. } | Self::ForIn { last, .. } => {
                 crate::runtime::transient_roots::is_traceable(last)
+            }
+            Self::Switch {
+                discriminant, last, ..
+            } => {
+                crate::runtime::transient_roots::is_traceable(last)
+                    || discriminant
+                        .as_ref()
+                        .is_some_and(crate::runtime::transient_roots::is_traceable)
             }
             Self::ForOf {
                 iterator,

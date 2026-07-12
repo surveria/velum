@@ -202,7 +202,7 @@ impl Parser {
             {
                 continue;
             }
-            let statement = self.statement()?;
+            let statement = self.statement_list_item()?;
             self.update_directive_prologue(&mut directive_prologue, &statement);
             statements.push(statement);
         }
@@ -236,7 +236,6 @@ impl Parser {
         let token = self.advance().ok_or_else(|| self.parse_error(message))?;
         let token_span = token.span;
         let token_offset = token.offset();
-        let identifier_escaped = token.identifier_escaped;
         match token.kind {
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
                 "super is not a valid identifier",
@@ -251,7 +250,7 @@ impl Parser {
             TokenKind::Await if !self.await_identifier_is_reserved() => {
                 self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, token_offset)
             }
-            TokenKind::Let if !identifier_escaped && !self.is_strict_mode() => {
+            TokenKind::Let if !self.is_strict_mode() => {
                 self.static_name_borrowed_at("let", token_offset)
             }
             _ => Err(Error::parse_at(message, token_span)),
@@ -397,6 +396,7 @@ impl Parser {
         self.peek().is_some_and(|token| {
             Self::is_identifier_name(&token.kind)
                 || (token.kind == TokenKind::Await && !self.await_identifier_is_reserved())
+                || (token.kind == TokenKind::Let && !self.is_strict_mode())
         })
     }
 
@@ -429,6 +429,7 @@ impl Parser {
         self.peek_kind(offset).is_some_and(|kind| {
             Self::is_identifier_name(kind)
                 || (*kind == TokenKind::Await && !self.await_identifier_is_reserved())
+                || (*kind == TokenKind::Let && !self.is_strict_mode())
         })
     }
 

@@ -10,7 +10,7 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::scope_rules::for_init_needs_layout_scope;
+use super::for_init_needs_lexical_scope;
 
 mod annex_b;
 mod function;
@@ -158,7 +158,7 @@ impl LayoutBuilder {
                     ForInTarget::Binding { .. }
                     | ForInTarget::PatternBinding { .. }
                     | ForInTarget::PatternAssignment { .. }
-                    | ForInTarget::Assignment(_) => {}
+                    | ForInTarget::Assignment { .. } => {}
                 }
                 self.collect_hoisted_vars(body, var_scope)
             }
@@ -328,7 +328,7 @@ impl LayoutBuilder {
         body: &Statement,
         context: ScopeContext,
     ) -> Result<()> {
-        let loop_scope = if for_init_needs_layout_scope(init) {
+        let loop_scope = if for_init_needs_lexical_scope(init) {
             let loop_scope =
                 self.add_scope(Some(context.scope), context.function, ScopeKind::Local);
             if let Some(init) = init {
@@ -401,7 +401,7 @@ impl LayoutBuilder {
                 self.analyze_pattern_exprs(pattern, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
-            ForInTarget::Assignment(target) => {
+            ForInTarget::Assignment { target, .. } => {
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
@@ -488,7 +488,7 @@ impl LayoutBuilder {
         let switch_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
         for case in cases {
             if let Some(test) = &case.test {
-                self.analyze_expr(test, scope, function)?;
+                self.analyze_expr(test, switch_scope, function)?;
             }
             self.collect_scope_declarations(&case.statements, switch_scope, var_scope)?;
         }

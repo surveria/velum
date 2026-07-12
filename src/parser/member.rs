@@ -99,6 +99,17 @@ impl Parser {
         }
     }
 
+    pub(super) fn is_identifier_reference(expr: &Expression) -> bool {
+        let mut current = expr;
+        loop {
+            match current.kind() {
+                Expr::Parenthesized(inner) => current = inner,
+                Expr::Identifier(_) => return true,
+                _ => return false,
+            }
+        }
+    }
+
     pub(super) fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
         let token = self.advance().ok_or_else(|| self.parse_error(message))?;
         let token_span = token.span;

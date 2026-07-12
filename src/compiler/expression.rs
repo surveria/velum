@@ -68,7 +68,9 @@ impl BytecodeCompiler<'_> {
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
             Expr::Sequence(expressions) => return self.compile_sequence_expr(expressions),
             Expr::Await(_) | Expr::Yield { .. } => return self.compile_suspend_expr(expr),
-            Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
+            Expr::Unary { op, strict, expr } => {
+                return self.compile_unary_expr(*op, *strict, expr);
+            }
             Expr::Binary {
                 op,
                 left,
@@ -330,7 +332,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_unary_expr(&mut self, op: UnaryOp, expr: &Expression) -> Result<()> {
+    fn compile_unary_expr(&mut self, op: UnaryOp, strict: bool, expr: &Expression) -> Result<()> {
         match op {
             UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::BitNot | UnaryOp::Void => {
                 self.compile_expr(expr)?;
@@ -341,7 +343,7 @@ impl BytecodeCompiler<'_> {
                 }
             }
             UnaryOp::Typeof => self.compile_typeof_expr(expr)?,
-            UnaryOp::Delete => self.compile_delete_expr(expr)?,
+            UnaryOp::Delete => self.compile_delete_expr(expr, strict)?,
         }
         Ok(())
     }

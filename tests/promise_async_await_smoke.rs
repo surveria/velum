@@ -314,9 +314,10 @@ fn await_resumes_across_structured_control_kinds() -> TestResult {
             for (let key in { left: 1 }) {
                 total = total + await Promise.resolve(key === 'left' ? 3 : 0);
             }
-            switch (await Promise.resolve(1)) {
-                case 1:
-                    total = total + await Promise.resolve(4);
+            switch (1) {
+                case await Promise.resolve(1):
+                    let switchScoped = 4;
+                    total = total + await Promise.resolve(switchScoped);
                     break;
                 default:
                     total = -100;

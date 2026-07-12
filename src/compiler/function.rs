@@ -528,7 +528,7 @@ impl CaptureBindingCollector {
             ForInTarget::PatternAssignment { pattern, .. } => {
                 self.collect_assignment_pattern(pattern);
             }
-            ForInTarget::Assignment(expr) => self.collect_expr(expr),
+            ForInTarget::Assignment { target, .. } => self.collect_expr(target),
         }
     }
 

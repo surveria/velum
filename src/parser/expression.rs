@@ -48,6 +48,7 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::Typeof,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
@@ -58,20 +59,13 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::Void,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
         }
         if self.match_kind(&TokenKind::Delete) {
-            let expr = self.unary()?;
-            Self::reject_private_delete_target(&expr)?;
-            return Ok(self.expression_node(
-                start,
-                Expr::Unary {
-                    op: UnaryOp::Delete,
-                    expr: Box::new(expr),
-                },
-            ));
+            return self.delete_unary(start);
         }
         if self.match_kind(&TokenKind::Bang) {
             let expr = self.unary()?;
@@ -79,6 +73,7 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::Not,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
@@ -89,6 +84,7 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::BitNot,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
@@ -99,6 +95,7 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::Negate,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
@@ -109,11 +106,31 @@ impl Parser {
                 start,
                 Expr::Unary {
                     op: UnaryOp::Plus,
+                    strict: self.is_strict_mode(),
                     expr: Box::new(expr),
                 },
             ));
         }
         self.call()
+    }
+
+    fn delete_unary(&mut self, start: crate::SourceSpan) -> Result<Expression> {
+        let expr = self.unary()?;
+        Self::reject_private_delete_target(&expr)?;
+        if self.is_strict_mode() && Self::is_identifier_reference(&expr) {
+            return Err(Error::parse_at(
+                "delete of an unqualified identifier is not allowed in strict mode",
+                expr.span(),
+            ));
+        }
+        Ok(self.expression_node(
+            start,
+            Expr::Unary {
+                op: UnaryOp::Delete,
+                strict: self.is_strict_mode(),
+                expr: Box::new(expr),
+            },
+        ))
     }
 
     pub(super) fn call(&mut self) -> Result<Expression> {
@@ -472,7 +489,7 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
-            TokenKind::Let => self.contextual_let(token_span, token.identifier_escaped)?,
+            TokenKind::Let => self.contextual_let(token_span)?,
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -516,12 +533,8 @@ impl Parser {
         Ok(expr)
     }
 
-    fn contextual_let(
-        &mut self,
-        span: crate::SourceSpan,
-        identifier_escaped: bool,
-    ) -> Result<Expression> {
-        if identifier_escaped || self.is_strict_mode() {
+    fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
+        if self.is_strict_mode() {
             return Err(Error::parse_at("expected expression", span));
         }
         let name = self.static_name_borrowed_at("let", span.start())?;

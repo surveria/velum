@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{CatchClause, DeclKind, Expr, Expression, ForInTarget, Statement, Stmt, SwitchCase},
+    ast::{CatchClause, Expr, Expression, ForInTarget, Statement, Stmt, SwitchCase},
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
         BytecodeDirectThrow, BytecodeForInTarget, BytecodeInstruction, BytecodeSwitchCase,
@@ -10,7 +10,6 @@ use crate::{
     syntax::StaticName,
 };
 
-use super::statements_have_block_functions;
 use super::{BytecodeCompiler, StatementValue, statements_need_lexical_scope};
 
 impl BytecodeCompiler<'_> {
@@ -190,7 +189,7 @@ impl BytecodeCompiler<'_> {
                 .map(|update| BytecodeBlock::compile_expression(update, self.layout))
                 .transpose()?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
-            scoped: for_init_needs_lexical_scope(init),
+            scoped: crate::binding_layout::for_init_needs_lexical_scope(init),
         });
         Ok(())
     }
@@ -273,7 +272,7 @@ impl BytecodeCompiler<'_> {
             .iter()
             .flat_map(|case| case.statements.iter().cloned())
             .collect::<Vec<_>>();
-        let scope_init = if scoped && statements_have_block_functions(&scope_statements) {
+        let scope_init = if scoped {
             Some(BytecodeBlock::compile_block_function_init(
                 &scope_statements,
                 self.layout,
@@ -406,17 +405,10 @@ impl BytecodeCompiler<'_> {
                     self.compile_assignment_pattern(pattern, *strict)?,
                 )))
             }
-            ForInTarget::Assignment(expr) => self
-                .compile_assignment_target(expr)
+            ForInTarget::Assignment { target, strict } => self
+                .compile_assignment_target_with_strict(target, *strict)
                 .map(BytecodeForInTarget::Assignment),
         }
-    }
-
-    pub(super) fn compile_assignment_target(
-        &self,
-        expr: &Expression,
-    ) -> Result<BytecodeAssignmentTarget> {
-        self.compile_assignment_target_with_strict(expr, false)
     }
 
     pub(super) fn compile_assignment_target_with_strict(
@@ -483,28 +475,6 @@ fn collect_label_chain<'a>(
         body = nested_body;
     }
     (Rc::from(labels.into_boxed_slice()), body)
-}
-
-fn for_init_needs_lexical_scope(init: Option<&Statement>) -> bool {
-    let Some(init) = init else {
-        return false;
-    };
-    match init.kind() {
-        Stmt::VarDecl {
-            kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
-            ..
-        } => true,
-        Stmt::DeclList(statements) => statements.iter().any(|statement| {
-            matches!(
-                statement.kind(),
-                Stmt::VarDecl {
-                    kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
-                    ..
-                }
-            )
-        }),
-        _ => false,
-    }
 }
 
 fn switch_needs_lexical_scope(cases: &[SwitchCase]) -> bool {

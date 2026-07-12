@@ -29,7 +29,7 @@ impl Parser {
             ForInTarget::Binding { .. }
             | ForInTarget::PatternBinding { .. }
             | ForInTarget::PatternAssignment { .. }
-            | ForInTarget::Assignment(_) => {}
+            | ForInTarget::Assignment { .. } => {}
         }
         let mut var_names = Vec::new();
         Self::collect_var_names(body, &mut var_names)?;
@@ -328,7 +328,7 @@ impl Parser {
                     crate::ast::ForInTarget::Binding { .. }
                     | crate::ast::ForInTarget::PatternBinding { .. }
                     | crate::ast::ForInTarget::PatternAssignment { .. }
-                    | crate::ast::ForInTarget::Assignment(_) => {}
+                    | crate::ast::ForInTarget::Assignment { .. } => {}
                 }
                 Self::collect_var_names(body, names)?;
             }

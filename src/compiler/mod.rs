@@ -630,18 +630,6 @@ fn statements_have_value_completion(statements: &[Statement]) -> bool {
     })
 }
 
-fn statements_have_block_functions(statements: &[Statement]) -> bool {
-    statements.iter().any(|statement| {
-        matches!(
-            statement.kind(),
-            Stmt::FunctionDecl {
-                block_scoped: true,
-                ..
-            }
-        )
-    })
-}
-
 fn statement_needs_lexical_scope(statement: &Statement) -> bool {
     match statement.kind() {
         Stmt::DeclList(statements) => statements_need_lexical_scope(statements),

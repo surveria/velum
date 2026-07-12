@@ -68,6 +68,7 @@ pub enum Expr {
     Sequence(Vec<Expression>),
     Unary {
         op: UnaryOp,
+        strict: bool,
         expr: Box<Expression>,
     },
     Await(Box<Expression>),
