@@ -254,6 +254,9 @@ impl DetachedFunctionExecution {
             .try_fold(local_count, |count, frame| {
                 count
                     .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                    .and_then(|count| {
+                        count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
+                    })
                     .ok_or_else(|| Error::limit("suspended binding count overflowed"))
             })
     }
@@ -282,6 +285,11 @@ impl DetachedFunctionExecution {
             }
         }
         for frame in &self.activations {
+            if let Some(environments) = frame.with_environments() {
+                for object in environments {
+                    visitor.visit_value(kind, object)?;
+                }
+            }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     if let Some(result) =
@@ -337,6 +345,11 @@ impl DetachedFunctionExecution {
             }
         }
         for frame in &self.activations {
+            if let Some(environments) = frame.with_environments() {
+                for object in environments {
+                    visitor.visit(kind, StrongEdgeReference::Value(object))?;
+                }
+            }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     if let Some(result) = cell.with_initialized_value(|value| {
@@ -381,6 +394,9 @@ impl DetachedFunctionExecution {
         let upvalue_count = self.activations.iter().try_fold(0_usize, |count, frame| {
             count
                 .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                .and_then(|count| {
+                    count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
+                })
                 .ok_or_else(|| Error::limit("suspended upvalue count overflowed"))
         })?;
         for scope in &mut self.locals {

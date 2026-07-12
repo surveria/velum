@@ -409,8 +409,9 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
+        | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

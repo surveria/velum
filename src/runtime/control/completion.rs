@@ -15,7 +15,10 @@ pub enum Completion {
         label: Option<StaticName>,
         value: Value,
     },
-    Continue(Option<StaticName>),
+    Continue {
+        label: Option<StaticName>,
+        value: Value,
+    },
     Suspended(PromiseId),
     GeneratorStart,
     Yielded(Value),
@@ -41,7 +44,7 @@ impl Completion {
                 "return statement outside function returned {value}"
             ))),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its execution owner",
             )),
@@ -60,7 +63,7 @@ impl Completion {
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its function owner",
             )),
@@ -79,7 +82,7 @@ impl Completion {
             Self::Throw(value) => Ok(Self::Throw(value)),
             Self::Return(value) | Self::ReturnDirect(value) => Ok(Self::Normal(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
             Self::Yielded(_) | Self::YieldedIteratorResult(_) => {
                 Err(Error::runtime("yielded bytecode escaped its call owner"))
@@ -93,7 +96,7 @@ impl Completion {
             Self::Normal(value) | Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+            Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its native-call owner",
             )),

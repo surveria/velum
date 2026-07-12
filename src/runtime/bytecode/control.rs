@@ -90,6 +90,7 @@ impl Context {
                 body,
                 condition,
             } => self.eval_bytecode_do_while(state, labels.as_deref(), body, condition, next),
+            BytecodeInstruction::With { body } => self.eval_bytecode_with(state, body, next),
             BytecodeInstruction::For {
                 labels,
                 init,
@@ -205,6 +206,27 @@ impl Context {
         Ok(Self::store_or_return_completion(state, completion, next))
     }
 
+    fn eval_bytecode_with(
+        &mut self,
+        state: &mut BytecodeState,
+        body: &BytecodeBlock,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        if let Some(completion) = self.take_resumed_bytecode_child(body)? {
+            self.pop_with_environment()?;
+            return Ok(Self::store_or_return_completion(state, completion, next));
+        }
+        let value = state.stack.pop()?;
+        let object = self.object_to_object(&value)?;
+        self.push_with_environment(object)?;
+        let result = self.eval_bytecode_block(body);
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
+            return result.map(Some);
+        }
+        self.pop_with_environment()?;
+        result.map(|completion| Self::store_or_return_completion(state, completion, next))
+    }
+
     pub(super) fn store_or_return_completion(
         state: &mut BytecodeState,
         completion: Completion,
@@ -302,9 +324,13 @@ impl Context {
             )?;
             let (_, last) = control.loop_state_mut(BytecodeLoopKind::While)?;
             match body_completion {
-                Completion::Normal(value) => *last = value,
-                Completion::Continue(None) => {}
-                Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
+                Completion::Normal(value) | Completion::Continue { label: None, value } => {
+                    *last = value;
+                }
+                Completion::Continue {
+                    label: Some(target),
+                    value,
+                } if loop_label_matches(labels, &target) => *last = value,
                 Completion::Break { label: None, value } => {
                     *last = value;
                     break;
@@ -317,7 +343,7 @@ impl Context {
                     break;
                 }
                 completion @ (Completion::Break { .. }
-                | Completion::Continue(Some(_))
+                | Completion::Continue { label: Some(_), .. }
                 | Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)) => {
@@ -594,7 +620,7 @@ impl Context {
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
-                | Completion::Continue(_)
+                | Completion::Continue { .. }
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
@@ -609,7 +635,7 @@ impl Context {
             | Completion::Return(_)
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
-            | Completion::Continue(_)
+            | Completion::Continue { .. }
             | Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)

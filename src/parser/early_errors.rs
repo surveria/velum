@@ -163,6 +163,7 @@ impl Parser {
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::DoWhile { .. }
+            | Stmt::With { .. }
             | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
@@ -198,7 +199,10 @@ impl Parser {
                     Self::collect_var_names(alternate, names)?;
                 }
             }
-            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { body, .. } => {
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::With { body, .. }
+            | Stmt::Label { body, .. } => {
                 Self::collect_var_names(body, names)?;
             }
             Stmt::For { init, body, .. } => {

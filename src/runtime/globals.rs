@@ -367,10 +367,16 @@ impl Context {
         name: &str,
         value: Value,
     ) -> Result<()> {
+        let value = self.runtime_value(value)?;
+        if let Some(atom) = self.atom(name)
+            && let Some(cell) = self.globals.get(atom)
+            && cell.kind() == crate::syntax::DeclKind::Var
+        {
+            return cell.assign(name, value);
+        }
         if name != GLOBAL_THIS_NAME {
             return Ok(());
         }
-        let value = self.runtime_value(value)?;
         if let Some(cell) = self.builtin_global_cell(name) {
             return cell.assign(name, value);
         }
@@ -378,7 +384,10 @@ impl Context {
     }
 
     fn global_binding_property_value(&mut self, name: &str) -> Result<Option<Value>> {
-        if let Some(binding) = self.get_binding(name) {
+        if let Some(atom) = self.atom(name)
+            && let Some(binding) = self.globals.get(atom)
+            && binding.kind() == crate::syntax::DeclKind::Var
+        {
             return binding.value(name).map(Some);
         }
         self.builtin_value(name)

@@ -19,6 +19,9 @@ impl Context {
         binding: &BytecodeBinding,
         value: Value,
     ) -> Result<()> {
+        if let Some(reference) = self.resolve_with_binding(binding)? {
+            return reference.set(self, binding, value);
+        }
         if let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? {
             return self.assign_bytecode_cell(binding, &cell, value);
         }

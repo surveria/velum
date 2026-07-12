@@ -351,7 +351,7 @@ impl Context {
             }
             Some(
                 Completion::Break { .. }
-                | Completion::Continue(_)
+                | Completion::Continue { .. }
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
@@ -538,7 +538,7 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
-            | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
+            | Completion::Continue { .. }) => completion.into_result().map(Completion::Normal),
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)
@@ -679,8 +679,9 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
+        | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

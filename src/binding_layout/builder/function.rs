@@ -28,6 +28,45 @@ impl<'a> FunctionBindings<'a> {
 }
 
 impl LayoutBuilder {
+    pub(super) fn analyze_function_declaration(
+        &mut self,
+        statement: &crate::ast::Stmt,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        let crate::ast::Stmt::FunctionDecl {
+            name,
+            id,
+            arguments_binding,
+            params,
+            body,
+            ..
+        } = statement
+        else {
+            return Err(crate::Error::runtime(
+                "expected function declaration during binding analysis",
+            ));
+        };
+        self.resolve_declaration_if_with_sensitive(name, scope, function)?;
+        self.analyze_function(
+            *id,
+            FunctionBindings::new(None, arguments_binding.as_ref()),
+            params,
+            body,
+            scope,
+            function,
+        )
+    }
+
+    pub(in crate::binding_layout) fn function_mut(
+        &mut self,
+        id: FunctionScopeId,
+    ) -> Result<&mut crate::binding_metadata::types::FunctionScope> {
+        self.functions
+            .get_mut(id.index())
+            .ok_or_else(|| crate::error::Error::runtime("binding layout function is not defined"))
+    }
+
     pub(super) fn analyze_exprs(
         &mut self,
         exprs: &[Expression],

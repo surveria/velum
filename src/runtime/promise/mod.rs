@@ -236,7 +236,7 @@ impl Context {
                 self.resolve_promise(promise, value)?;
             }
             Completion::Throw(value) => self.reject_promise(promise, value)?,
-            Completion::Break { .. } | Completion::Continue(_) => {
+            Completion::Break { .. } | Completion::Continue { .. } => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::SyntaxError,
@@ -682,7 +682,7 @@ impl Context {
             Completion::GeneratorStart => Err(Error::runtime(
                 "async function resumed into generator start",
             )),
-            Completion::Break { .. } | Completion::Continue(_) => {
+            Completion::Break { .. } | Completion::Continue { .. } => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::SyntaxError,

@@ -58,6 +58,8 @@ impl Context {
             | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
+            | BytecodeInstruction::ResolveBinding(_)
+            | BytecodeInstruction::StoreResolvedBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
@@ -124,6 +126,7 @@ impl Context {
             }
             BytecodeInstruction::While { .. }
             | BytecodeInstruction::DoWhile { .. }
+            | BytecodeInstruction::With { .. }
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::ForOf { .. }
@@ -191,15 +194,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::DeleteBinding(binding) => {
-                let exists = self.binding_exists_or_materialize_bytecode(binding)?;
-                let deleted = if exists {
-                    false
-                } else {
-                    self.delete_unresolved_global_property(binding.name().name())?
-                };
-                state.stack.push(Value::Bool(deleted));
-                state.pc = next;
-                Ok(None)
+                self.eval_bytecode_delete_binding(state, binding, next)
             }
             BytecodeInstruction::DeleteStaticProperty { property } => {
                 let object = state.stack.pop()?;
@@ -289,6 +284,24 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode mutation instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_delete_binding(
+        &mut self,
+        state: &mut BytecodeState,
+        binding: &crate::bytecode::BytecodeBinding,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let deleted = if let Some(reference) = self.resolve_with_binding(binding)? {
+            reference.delete(self, binding)?
+        } else if self.binding_exists_or_materialize_bytecode(binding)? {
+            false
+        } else {
+            self.delete_unresolved_global_property(binding.name().name())?
+        };
+        state.stack.push(Value::Bool(deleted));
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_binary_instruction(

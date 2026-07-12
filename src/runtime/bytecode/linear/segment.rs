@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::{BytecodeAddress, BytecodeBlock},
+    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
     error::{Error, Result},
     runtime::{Context, control::Completion},
 };
@@ -29,6 +29,9 @@ impl Context {
             return Ok(None);
         }
         let instructions = block.instructions();
+        if instructions.iter().any(instruction_uses_with_environment) {
+            return Ok(None);
+        }
         let mut builder = BytecodeLinearPlanBuilder::new(instructions.len());
         let mut ops = Vec::new();
         let mut spans = Vec::new();
@@ -153,6 +156,29 @@ impl Context {
         }
         state.pc = BytecodeAddress::new(segment.end);
         Ok(None)
+    }
+}
+
+const fn instruction_uses_with_environment(instruction: &BytecodeInstruction) -> bool {
+    match instruction {
+        BytecodeInstruction::LoadBinding(binding)
+        | BytecodeInstruction::StoreBinding(binding)
+        | BytecodeInstruction::ResolveBinding(binding)
+        | BytecodeInstruction::StoreResolvedBinding(binding)
+        | BytecodeInstruction::TypeOfBinding(binding)
+        | BytecodeInstruction::DeleteBinding(binding) => binding.with_environment_count() > 0,
+        BytecodeInstruction::DeclareBinding { name, .. }
+        | BytecodeInstruction::UpdateBinding { name, .. }
+        | BytecodeInstruction::CompoundStoreBinding { name, .. } => {
+            name.with_environment_count() > 0
+        }
+        BytecodeInstruction::CallBinding { callee, .. }
+        | BytecodeInstruction::CallBindingSpread { callee }
+        | BytecodeInstruction::Construct {
+            constructor: callee,
+            ..
+        } => callee.with_environment_count() > 0,
+        _ => false,
     }
 }
 

@@ -55,9 +55,13 @@ impl Context {
                 )?;
                 let (_, last) = control.loop_state_mut(BytecodeLoopKind::DoWhile)?;
                 match body_completion {
-                    Completion::Normal(value) => *last = value,
-                    Completion::Continue(None) => {}
-                    Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
+                    Completion::Normal(value) | Completion::Continue { label: None, value } => {
+                        *last = value;
+                    }
+                    Completion::Continue {
+                        label: Some(target),
+                        value,
+                    } if loop_label_matches(labels, &target) => *last = value,
                     Completion::Break { label: None, value } => {
                         *last = value;
                         break;
@@ -70,7 +74,7 @@ impl Context {
                         break;
                     }
                     completion @ (Completion::Break { .. }
-                    | Completion::Continue(Some(_))
+                    | Completion::Continue { label: Some(_), .. }
                     | Completion::Throw(_)
                     | Completion::Return(_)
                     | Completion::ReturnDirect(_)) => {

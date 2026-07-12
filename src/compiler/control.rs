@@ -13,6 +13,19 @@ use crate::{
 use super::{BytecodeCompiler, StatementValue, statements_need_lexical_scope};
 
 impl BytecodeCompiler<'_> {
+    pub(super) fn compile_with(
+        &mut self,
+        object: &Expression,
+        body: &Statement,
+        value: StatementValue,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        self.emit(BytecodeInstruction::With {
+            body: self.compile_statement_block(body, value)?,
+        });
+        Ok(())
+    }
+
     pub(super) fn compile_if(
         &mut self,
         condition: &Expression,
@@ -125,6 +138,7 @@ impl BytecodeCompiler<'_> {
             | Stmt::DeclList(_)
             | Stmt::Empty
             | Stmt::If { .. }
+            | Stmt::With { .. }
             | Stmt::Label { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }

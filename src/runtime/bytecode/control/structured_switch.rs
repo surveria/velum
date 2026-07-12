@@ -238,7 +238,7 @@ impl Context {
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
-                | Completion::Continue(_)
+                | Completion::Continue { .. }
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)

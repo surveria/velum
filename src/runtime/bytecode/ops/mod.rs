@@ -66,6 +66,10 @@ impl Context {
     }
 
     pub(super) fn eval_bytecode_identifier(&mut self, name: &BytecodeBinding) -> Result<Value> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            let value = reference.get(self, name)?;
+            return self.checked_value(value);
+        }
         if let Some(value) = self.unresolved_builtin_numeric_constant(name) {
             return Ok(value);
         }
@@ -80,6 +84,11 @@ impl Context {
     }
 
     pub(super) fn eval_bytecode_typeof_binding(&mut self, name: &BytecodeBinding) -> Result<Value> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            let value = reference.get(self, name)?;
+            let type_name = self.semantic_type_name(&value)?;
+            return self.heap_string_value(type_name);
+        }
         if self.unresolved_builtin_numeric_constant(name).is_some() {
             return self.heap_string_value(Value::Number(0.0).type_name());
         }

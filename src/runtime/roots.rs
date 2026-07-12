@@ -186,6 +186,11 @@ impl Context {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
         for frame in &self.activation_frames {
+            if let Some(environments) = frame.with_environments() {
+                for object in environments {
+                    visitor.visit_value(VmRootKind::CapturedBinding, object)?;
+                }
+            }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     visit_cell(cell, VmRootKind::CapturedBinding, visitor)?;

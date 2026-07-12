@@ -229,14 +229,20 @@ impl BytecodeCompiler<'_> {
         infer_name: bool,
         expr: &Expression,
     ) -> Result<()> {
+        let binding = BytecodeBinding::compile_write(name, self.layout, strict)?;
+        if binding.with_environment_count() > 0 {
+            self.emit(BytecodeInstruction::ResolveBinding(binding.clone()));
+        }
         if infer_name {
             self.compile_expr_with_inferred_name(expr, name.name())?;
         } else {
             self.compile_expr(expr)?;
         }
-        self.emit(BytecodeInstruction::StoreBinding(
-            BytecodeBinding::compile_write(name, self.layout, strict)?,
-        ));
+        self.emit(if binding.with_environment_count() > 0 {
+            BytecodeInstruction::StoreResolvedBinding(binding)
+        } else {
+            BytecodeInstruction::StoreBinding(binding)
+        });
         Ok(())
     }
 

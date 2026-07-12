@@ -89,6 +89,8 @@ impl BytecodeInstruction {
         match self {
             Self::LoadBinding(binding)
             | Self::StoreBinding(binding)
+            | Self::ResolveBinding(binding)
+            | Self::StoreResolvedBinding(binding)
             | Self::TypeOfBinding(binding)
             | Self::DeleteBinding(binding) => binding.direct_operand_count(),
             Self::DeclareBinding { name, .. } => name.direct_operand_count(),
