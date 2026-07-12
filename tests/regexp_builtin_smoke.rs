@@ -77,6 +77,7 @@ fn scopes_regexp_modifier_flags_to_their_groups() -> TestResult {
         let dotAll = /(?s:^.$)/.test("\n") &&
             !/(?-s:^.$)/s.test("\n") &&
             !/(?s:^.$)/.test(String.fromCodePoint(0x10300));
+        let astralLiteral = /𐌀/.test(String.fromCodePoint(0x10300));
         let multiline = /(?m:^b)/.test("a\nb") && !/(?-m:^b)/m.test("a\nb");
         let backreferences = /(a)(?i:\1)/.test("aA") &&
             !/(a)(?-i:\1)/i.test("aA");
@@ -86,7 +87,7 @@ fn scopes_regexp_modifier_flags_to_their_groups() -> TestResult {
             /(?i:\P{Lu})/u.test("A") &&
             !/(?-i:\p{Lu})/ui.test("a");
 
-        dotAll && multiline && backreferences && boundaries && properties ? 42 : 0
+        dotAll && astralLiteral && multiline && backreferences && boundaries && properties ? 42 : 0
         "#,
     )?;
 
