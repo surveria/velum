@@ -149,17 +149,14 @@ impl Context {
     /// and String while their built-in protocol methods remain uninstalled.
     pub(in crate::runtime) fn get_iterator(&mut self, iterable: &Value) -> Result<IteratorSource> {
         match iterable {
-            Value::String(text) => {
+            Value::String(_) | Value::HeapString(_) => {
                 if let Some(method) = self.iterator_method(iterable)? {
                     return self.get_iterator_from_method(iterable, &method);
                 }
-                Ok(utf16_source(text.encode_utf16()))
-            }
-            Value::HeapString(text) => {
-                if let Some(method) = self.iterator_method(iterable)? {
-                    return self.get_iterator_from_method(iterable, &method);
-                }
-                Ok(utf16_source(text.as_utf16().iter().copied()))
+                let units = iterable
+                    .string_units()
+                    .ok_or_else(|| Error::runtime("string iterator lost its source"))?;
+                Ok(utf16_source(units.into_owned().into_iter()))
             }
             Value::Object(id) => {
                 if let Some(method) = self.iterator_method(iterable)? {

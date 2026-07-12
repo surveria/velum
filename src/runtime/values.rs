@@ -43,9 +43,7 @@ impl Context {
             right,
             crate::runtime::abstract_operations::PreferredType::Default,
         )?;
-        if matches!(left, Value::String(_) | Value::HeapString(_))
-            || matches!(right, Value::String(_) | Value::HeapString(_))
-        {
+        if left.is_string() || right.is_string() {
             let value = self.concat_utf16_values(&left, &right)?;
             return self.heap_utf16_string_value(&value);
         }
@@ -75,8 +73,7 @@ impl Context {
             || requires_generic_add(right)
             || !has_exact_utf8(&left)
             || !has_exact_utf8(right)
-            || (!matches!(left, Value::String(_) | Value::HeapString(_))
-                && !matches!(right, Value::String(_) | Value::HeapString(_)))
+            || (!left.is_string() && !right.is_string())
         {
             return self.add(&left, right);
         }
@@ -205,8 +202,7 @@ impl Context {
 
     fn concat_capacity_hint(value: &Value) -> usize {
         match value {
-            Value::String(value) => value.len(),
-            Value::HeapString(value) => value.as_str().len(),
+            Value::String(_) | Value::HeapString(_) => value.string_text().map_or(0, str::len),
             Value::Undefined => "undefined".len(),
             Value::Null => "null".len(),
             Value::Bool(value) => {
@@ -395,9 +391,8 @@ fn has_exact_utf8(value: &Value) -> bool {
 }
 
 fn primitive_utf16_units(value: &Value) -> Result<Cow<'_, [u16]>> {
-    match value {
-        Value::String(text) => Ok(Cow::Owned(text.encode_utf16().collect())),
-        Value::HeapString(text) => Ok(Cow::Borrowed(text.as_utf16())),
-        value => to_string_primitive(value).map(|text| Cow::Owned(text.encode_utf16().collect())),
+    if let Some(units) = value.string_units() {
+        return Ok(units);
     }
+    to_string_primitive(value).map(|text| Cow::Owned(text.encode_utf16().collect()))
 }
