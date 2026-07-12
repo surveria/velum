@@ -1,4 +1,4 @@
-use rs_quickjs::{Error, Runtime, Value};
+use rs_quickjs::{Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -249,6 +249,24 @@ fn supports_observable_string_and_regexp_replace_protocols() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_oversized_regexp_substitution_before_materialization() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_string_len: 256,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let source = r#"
+        let capture = "a".repeat(64);
+        let replacement = "$1".repeat(8);
+        capture.replace(/(.+)/g, replacement)
+    "#;
+    if context.eval(source).is_ok() {
+        return Err("expected RegExp replacement string limit to fail".into());
+    }
+    Ok(())
 }
 
 #[test]

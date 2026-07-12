@@ -118,24 +118,20 @@ impl Context {
             if matched.position < next_source_position {
                 continue;
             }
-            output.extend_from_slice(
-                input
-                    .get(next_source_position..matched.position)
-                    .ok_or_else(|| Error::runtime("RegExp replacement prefix is invalid"))?,
-            );
-            output.extend_from_slice(&substitution);
+            let prefix = input
+                .get(next_source_position..matched.position)
+                .ok_or_else(|| Error::runtime("RegExp replacement prefix is invalid"))?;
+            extend_replace_output(&mut output, prefix, self.limits.max_string_len)?;
+            extend_replace_output(&mut output, &substitution, self.limits.max_string_len)?;
             next_source_position = matched
                 .position
                 .saturating_add(matched.matched.len())
                 .min(input.len());
-            self.check_utf16_string_len(&output)?;
         }
-        output.extend_from_slice(
-            input
-                .get(next_source_position..)
-                .ok_or_else(|| Error::runtime("RegExp replacement tail is invalid"))?,
-        );
-        self.check_utf16_string_len(&output)?;
+        let tail = input
+            .get(next_source_position..)
+            .ok_or_else(|| Error::runtime("RegExp replacement tail is invalid"))?;
+        extend_replace_output(&mut output, tail, self.limits.max_string_len)?;
         self.heap_utf16_string_value(&output)
     }
 
@@ -230,49 +226,60 @@ impl Context {
         let mut index = 0usize;
         while let Some(unit) = template.get(index).copied() {
             if unit != DOLLAR {
-                output.push(unit);
+                push_replace_output(&mut output, unit, self.limits.max_string_len)?;
                 index = index.saturating_add(1);
                 continue;
             }
             let Some(next) = template.get(index.saturating_add(1)).copied() else {
-                output.push(unit);
+                push_replace_output(&mut output, unit, self.limits.max_string_len)?;
                 break;
             };
-            let consumed =
-                match next {
-                    0x24 => {
-                        output.push(DOLLAR);
-                        2
-                    }
-                    0x26 => {
-                        output.extend_from_slice(&matched.matched);
-                        2
-                    }
-                    0x60 => {
-                        output.extend_from_slice(input.get(..matched.position).ok_or_else(
-                            || Error::runtime("RegExp replacement prefix is invalid"),
-                        )?);
-                        2
-                    }
-                    0x27 => {
-                        let end = matched
-                            .position
-                            .saturating_add(matched.matched.len())
-                            .min(input.len());
-                        output.extend_from_slice(input.get(end..).ok_or_else(|| {
-                            Error::runtime("RegExp replacement suffix is invalid")
-                        })?);
-                        2
-                    }
-                    0x30..=0x39 => append_capture(&mut output, template, index, &matched.captures),
-                    0x3C if !matches!(matched.groups, Value::Undefined) => {
-                        self.append_named_capture(&mut output, template, index, &matched.groups)?
-                    }
-                    _ => {
-                        output.push(DOLLAR);
-                        1
-                    }
-                };
+            let consumed = match next {
+                0x24 => {
+                    push_replace_output(&mut output, DOLLAR, self.limits.max_string_len)?;
+                    2
+                }
+                0x26 => {
+                    extend_replace_output(
+                        &mut output,
+                        &matched.matched,
+                        self.limits.max_string_len,
+                    )?;
+                    2
+                }
+                0x60 => {
+                    let prefix = input
+                        .get(..matched.position)
+                        .ok_or_else(|| Error::runtime("RegExp replacement prefix is invalid"))?;
+                    extend_replace_output(&mut output, prefix, self.limits.max_string_len)?;
+                    2
+                }
+                0x27 => {
+                    let end = matched
+                        .position
+                        .saturating_add(matched.matched.len())
+                        .min(input.len());
+                    let suffix = input
+                        .get(end..)
+                        .ok_or_else(|| Error::runtime("RegExp replacement suffix is invalid"))?;
+                    extend_replace_output(&mut output, suffix, self.limits.max_string_len)?;
+                    2
+                }
+                0x30..=0x39 => append_capture(
+                    &mut output,
+                    template,
+                    index,
+                    &matched.captures,
+                    self.limits.max_string_len,
+                )?,
+                0x3C if !matches!(matched.groups, Value::Undefined) => {
+                    self.append_named_capture(&mut output, template, index, &matched.groups)?
+                }
+                _ => {
+                    push_replace_output(&mut output, DOLLAR, self.limits.max_string_len)?;
+                    1
+                }
+            };
             index = index.saturating_add(consumed);
         }
         Ok(output)
@@ -290,7 +297,7 @@ impl Context {
             .get(name_start..)
             .and_then(|tail| tail.iter().position(|unit| *unit == 0x3E))
         else {
-            output.extend_from_slice(&[DOLLAR, 0x3C]);
+            extend_replace_output(output, &[DOLLAR, 0x3C], self.limits.max_string_len)?;
             return Ok(2);
         };
         let name_end = name_start.saturating_add(relative_end);
@@ -302,7 +309,8 @@ impl Context {
         .map_err(|_| Error::runtime("RegExp capture name is not well-formed UTF-16"))?;
         let capture = self.get_named(groups, &name)?;
         if !matches!(capture, Value::Undefined) {
-            output.extend_from_slice(&self.to_utf16_string(&capture)?);
+            let capture = self.to_utf16_string(&capture)?;
+            extend_replace_output(output, &capture, self.limits.max_string_len)?;
         }
         Ok(relative_end.saturating_add(3))
     }
@@ -313,7 +321,8 @@ fn append_capture(
     template: &[u16],
     dollar_index: usize,
     captures: &[Option<Vec<u16>>],
-) -> usize {
+    max_string_len: usize,
+) -> Result<usize> {
     let first = template
         .get(dollar_index.saturating_add(1))
         .map_or(0, |unit| usize::from(unit.saturating_sub(0x30)));
@@ -329,13 +338,35 @@ fn append_capture(
         } else if first >= 1 && first <= captures.len() {
             (first, 2)
         } else {
-            output.push(DOLLAR);
-            return 1;
+            push_replace_output(output, DOLLAR, max_string_len)?;
+            return Ok(1);
         };
     if let Some(Some(capture)) = captures.get(capture.saturating_sub(1)) {
-        output.extend_from_slice(capture);
+        extend_replace_output(output, capture, max_string_len)?;
     }
-    consumed
+    Ok(consumed)
+}
+
+fn push_replace_output(output: &mut Vec<u16>, unit: u16, max_string_len: usize) -> Result<()> {
+    extend_replace_output(output, &[unit], max_string_len)
+}
+
+fn extend_replace_output(
+    output: &mut Vec<u16>,
+    value: &[u16],
+    max_string_len: usize,
+) -> Result<()> {
+    let length = output
+        .len()
+        .checked_add(value.len())
+        .ok_or_else(|| Error::limit("RegExp replacement length overflowed"))?;
+    if length > max_string_len {
+        return Err(Error::limit(format!(
+            "RegExp replacement length {length} exceeded {max_string_len}"
+        )));
+    }
+    output.extend_from_slice(value);
+    Ok(())
 }
 
 fn advance_replace_index(input: &[u16], index: u64, unicode: bool) -> Result<u64> {

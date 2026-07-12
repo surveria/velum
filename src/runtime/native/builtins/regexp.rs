@@ -14,6 +14,7 @@ use crate::{
 
 mod compile;
 mod engine;
+mod flags;
 mod match_result;
 mod replace;
 mod split;
@@ -508,6 +509,9 @@ impl Context {
     fn eval_regexp_prototype_flags_getter(&mut self, receiver: &Value) -> Result<Value> {
         if self.semantic_object_ref(receiver)?.is_none() {
             return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        }
+        if let Some(flags) = self.intrinsic_regexp_flags(receiver)? {
+            return self.heap_string_value(&flags);
         }
         let mut flags = String::new();
         for (property, marker) in [
