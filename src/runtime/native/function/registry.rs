@@ -267,7 +267,8 @@ const BIGINT_AS_UINT_N_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(292);
 const BIGINT_PROTOTYPE_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(293);
 const BIGINT_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(294);
 const BIGINT_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(295);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 296;
+const ARRAY_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(296);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 297;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -715,6 +716,7 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
         NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
+        NativeFunctionKind::ArrayToString => Some(ARRAY_TO_STRING_SLOT),
         NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayMap => Some(ARRAY_MAP_SLOT),
         NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),

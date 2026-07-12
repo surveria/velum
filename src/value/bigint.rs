@@ -73,6 +73,37 @@ impl JsBigInt {
     }
 
     #[must_use]
+    pub fn is_one(&self) -> bool {
+        self.0.as_ref() == &BigInt::from(1_u8)
+    }
+
+    #[must_use]
+    pub fn is_negative_one(&self) -> bool {
+        self.0.as_ref() == &BigInt::from(-1_i8)
+    }
+
+    #[must_use]
+    pub fn is_odd(&self) -> bool {
+        (self.0.as_ref() & BigInt::from(1_u8)) == BigInt::from(1_u8)
+    }
+
+    #[must_use]
+    pub fn bit_len(&self) -> u64 {
+        self.0.bits()
+    }
+
+    #[must_use]
+    pub fn unchanged_by_as_uint_n(&self, bits: usize) -> bool {
+        !self.is_negative()
+            && u64::try_from(bits).is_ok_and(|bits| self.is_zero() || self.bit_len() <= bits)
+    }
+
+    #[must_use]
+    pub fn unchanged_by_as_int_n(&self, bits: usize) -> bool {
+        u64::try_from(bits).is_ok_and(|bits| self.is_zero() || self.bit_len() < bits)
+    }
+
+    #[must_use]
     pub fn to_f64(&self) -> Option<f64> {
         self.0.to_f64()
     }
@@ -80,6 +111,11 @@ impl JsBigInt {
     #[must_use]
     pub fn to_u32(&self) -> Option<u32> {
         self.0.to_u32()
+    }
+
+    #[must_use]
+    pub fn to_u64(&self) -> Option<u64> {
+        self.0.to_u64()
     }
 
     #[must_use]
@@ -172,6 +208,9 @@ impl JsBigInt {
         if bits == 0 {
             return Self::zero();
         }
+        if self.unchanged_by_as_uint_n(bits) {
+            return self.clone();
+        }
         let modulus = BigInt::from(1_u8) << bits;
         let mut value = self.0.as_ref() % &modulus;
         if value.is_negative() {
@@ -184,6 +223,9 @@ impl JsBigInt {
     pub fn as_int_n(&self, bits: usize) -> Self {
         if bits == 0 {
             return Self::zero();
+        }
+        if self.unchanged_by_as_int_n(bits) {
+            return self.clone();
         }
         let unsigned = self.as_uint_n(bits);
         let boundary = BigInt::from(1_u8) << bits.saturating_sub(1);

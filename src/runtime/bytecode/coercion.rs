@@ -21,9 +21,45 @@ pub(super) fn relational_compare(
     let result = if let (Some(left), Some(right)) = (string_value(&left), string_value(&right)) {
         string_relational_compare(op, left, right)
     } else {
-        numeric_relational_compare(op, context.to_numeric(&left)?, context.to_numeric(&right)?)
+        match bigint_string_ordering(&left, &right) {
+            BigIntStringOrdering::Ordered(ordering) => ordering_matches(op, ordering),
+            BigIntStringOrdering::Unordered => false,
+            BigIntStringOrdering::NotApplicable => numeric_relational_compare(
+                op,
+                context.to_numeric(&left)?,
+                context.to_numeric(&right)?,
+            ),
+        }
     };
     Ok(Value::Bool(result))
+}
+
+enum BigIntStringOrdering {
+    NotApplicable,
+    Unordered,
+    Ordered(Ordering),
+}
+
+fn bigint_string_ordering(left: &Value, right: &Value) -> BigIntStringOrdering {
+    let ordering = match (left, right) {
+        (Value::BigInt(left), Value::String(right)) => {
+            crate::value::JsBigInt::parse_string(right).map(|right| left.cmp(&right))
+        }
+        (Value::BigInt(left), Value::HeapString(right)) => {
+            crate::value::JsBigInt::parse_string(right.as_str()).map(|right| left.cmp(&right))
+        }
+        (Value::String(left), Value::BigInt(right)) => {
+            crate::value::JsBigInt::parse_string(left).map(|left| left.cmp(right))
+        }
+        (Value::HeapString(left), Value::BigInt(right)) => {
+            crate::value::JsBigInt::parse_string(left.as_str()).map(|left| left.cmp(right))
+        }
+        _ => return BigIntStringOrdering::NotApplicable,
+    };
+    ordering.map_or(
+        BigIntStringOrdering::Unordered,
+        BigIntStringOrdering::Ordered,
+    )
 }
 
 fn string_value(value: &Value) -> Option<&str> {
@@ -105,7 +141,11 @@ fn numeric_relational_compare(op: BinaryOp, left: NumericValue, right: NumericVa
             right.compare_number(left).map(Ordering::reverse)
         }
     };
-    ordering.is_some_and(|ordering| match op {
+    ordering.is_some_and(|ordering| ordering_matches(op, ordering))
+}
+
+fn ordering_matches(op: BinaryOp, ordering: Ordering) -> bool {
+    match op {
         BinaryOp::Less => ordering == Ordering::Less,
         BinaryOp::LessEqual => ordering != Ordering::Greater,
         BinaryOp::Greater => ordering == Ordering::Greater,
@@ -131,5 +171,5 @@ fn numeric_relational_compare(op: BinaryOp, left: NumericValue, right: NumericVa
         | BinaryOp::LogicalAnd
         | BinaryOp::LogicalOr
         | BinaryOp::NullishCoalescing => false,
-    })
+    }
 }

@@ -351,7 +351,7 @@ impl Context {
                     UpdateOp::Increment => integer.add(&one),
                     UpdateOp::Decrement => integer.sub(&one),
                 };
-                Ok((Value::BigInt(integer), Value::BigInt(updated)))
+                Ok((Value::BigInt(integer), self.bigint_value(updated)?))
             }
         }
     }

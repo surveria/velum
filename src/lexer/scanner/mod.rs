@@ -221,6 +221,12 @@ impl<'a> Lexer<'a> {
         let mut text = self.digit_sequence(RADIX_DECIMAL, offset, "decimal numeric literal")?;
 
         if self.consume_bigint_suffix() {
+            if text.len() > 1 && text.starts_with('0') {
+                return Err(Error::lex(
+                    "decimal BigInt literal cannot have a leading zero",
+                    offset,
+                ));
+            }
             let value = JsBigInt::parse_digits(&text, RADIX_DECIMAL)
                 .ok_or_else(|| Error::lex("invalid decimal BigInt literal", offset))?;
             self.push(TokenKind::BigInt(value), offset);

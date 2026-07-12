@@ -243,6 +243,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayIndexOf,
     ArrayIsArray,
     ArrayJoin,
+    ArrayToString,
     ArrayLastIndexOf,
     ArrayMap,
     ArrayPop,

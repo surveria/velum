@@ -3,7 +3,6 @@ use super::kind::NativeFunctionKind;
 const BOOLEAN_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime::native) const BOOLEAN_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime::native) const BOOLEAN_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
-const BIGINT_PROTOTYPE_FUNCTION_LENGTH_ONE: f64 = 1.0;
 const BIGINT_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime::native) const BIGINT_PROTOTYPE_TO_LOCALE_STRING_NAME: &str =
     "toLocaleString";
@@ -38,10 +37,9 @@ impl NativeFunctionKind {
             Self::BooleanPrototypeToString | Self::BooleanPrototypeValueOf => {
                 Some(BOOLEAN_PROTOTYPE_FUNCTION_LENGTH_ZERO)
             }
-            Self::BigIntPrototypeToString => Some(BIGINT_PROTOTYPE_FUNCTION_LENGTH_ONE),
-            Self::BigIntPrototypeToLocaleString | Self::BigIntPrototypeValueOf => {
-                Some(BIGINT_PROTOTYPE_FUNCTION_LENGTH_ZERO)
-            }
+            Self::BigIntPrototypeToLocaleString
+            | Self::BigIntPrototypeToString
+            | Self::BigIntPrototypeValueOf => Some(BIGINT_PROTOTYPE_FUNCTION_LENGTH_ZERO),
             Self::NumberPrototypeToLocaleString | Self::NumberPrototypeValueOf => {
                 Some(NUMBER_PROTOTYPE_FUNCTION_LENGTH_ZERO)
             }

@@ -12,6 +12,7 @@ impl NativeFunctionKind {
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
                 | Self::Boolean
+                | Self::BigInt
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function

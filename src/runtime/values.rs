@@ -12,6 +12,7 @@ use crate::{
 
 const STRING_CONCAT_INTERMEDIATE_EXTRA_CAPACITY: usize = 24;
 const FOREIGN_VM_VALUE_ERROR: &str = "value belongs to another VM";
+const BIGINT_BIT_LIMIT_ERROR: &str = "BigInt bit length exceeded the configured limit";
 
 impl Context {
     pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
@@ -50,7 +51,7 @@ impl Context {
                 Ok(Value::Number(left + right))
             }
             (NumericValue::BigInt(left), NumericValue::BigInt(right)) => {
-                Ok(Value::BigInt(left.add(&right)))
+                self.bigint_value(left.add(&right))
             }
             (NumericValue::Number(_), NumericValue::BigInt(_))
             | (NumericValue::BigInt(_), NumericValue::Number(_)) => {
@@ -250,17 +251,34 @@ impl Context {
                 }
                 self.symbols.get(symbol.id())?;
             }
+            Value::BigInt(value) => self.check_bigint_len(value)?,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::BigInt(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Object(_) => {}
         }
         Ok(value)
+    }
+
+    pub(in crate::runtime) fn bigint_value(&self, value: crate::value::JsBigInt) -> Result<Value> {
+        self.check_bigint_len(&value)?;
+        Ok(Value::BigInt(value))
+    }
+
+    fn check_bigint_len(&self, value: &crate::value::JsBigInt) -> Result<()> {
+        let bits =
+            usize::try_from(value.bit_len()).map_err(|_| Error::limit(BIGINT_BIT_LIMIT_ERROR))?;
+        if bits > self.limits.max_bigint_bits {
+            return Err(Error::limit(format!(
+                "BigInt bit length {bits} exceeded {}",
+                self.limits.max_bigint_bits
+            )));
+        }
+        Ok(())
     }
 
     pub(crate) fn current_this(&mut self) -> Result<Value> {

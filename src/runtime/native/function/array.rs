@@ -143,6 +143,7 @@ impl Context {
             NativeFunctionKind::ArrayIndexOf => Some(self.eval_array_index_of(args, this_value)),
             NativeFunctionKind::ArrayIsArray => Some(self.eval_array_is_array(args)),
             NativeFunctionKind::ArrayJoin => Some(self.eval_array_join(args, this_value)),
+            NativeFunctionKind::ArrayToString => Some(self.eval_array_to_string(args, this_value)),
             NativeFunctionKind::ArrayLastIndexOf => {
                 Some(self.eval_array_last_index_of(args, this_value))
             }

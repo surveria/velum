@@ -31,7 +31,8 @@ pub fn numeric_binary(
             Ok(Value::Number(apply_number_binary(op, left, right)?))
         }
         (NumericValue::BigInt(left), NumericValue::BigInt(right)) => {
-            apply_bigint_binary(op, &left, &right).map(Value::BigInt)
+            let value = apply_bigint_binary(op, &left, &right, context.limits.max_bigint_bits)?;
+            context.bigint_value(value)
         }
         (NumericValue::Number(_), NumericValue::BigInt(_))
         | (NumericValue::BigInt(_), NumericValue::Number(_)) => {
@@ -55,7 +56,7 @@ pub fn bitwise_xor(context: &mut Context, left: &Value, right: &Value) -> Result
 pub fn bitwise_not(context: &mut Context, value: &Value) -> Result<Value> {
     match context.to_numeric(value)? {
         NumericValue::Number(value) => Ok(Value::Number(f64::from(!number_to_i32(value, "~")?))),
-        NumericValue::BigInt(value) => Ok(Value::BigInt(value.bitwise_not())),
+        NumericValue::BigInt(value) => context.bigint_value(value.bitwise_not()),
     }
 }
 
@@ -111,18 +112,23 @@ fn apply_number_binary(op: BinaryOp, left: f64, right: f64) -> Result<f64> {
     })
 }
 
-fn apply_bigint_binary(op: BinaryOp, left: &JsBigInt, right: &JsBigInt) -> Result<JsBigInt> {
+fn apply_bigint_binary(
+    op: BinaryOp,
+    left: &JsBigInt,
+    right: &JsBigInt,
+    max_bits: usize,
+) -> Result<JsBigInt> {
     match op {
         BinaryOp::Sub => Ok(left.sub(right)),
-        BinaryOp::Mul => Ok(left.mul(right)),
+        BinaryOp::Mul => Ok(bigint_multiply(left, right)),
         BinaryOp::Div => left.div(right).ok_or_else(bigint_division_by_zero),
         BinaryOp::Rem => left.rem(right).ok_or_else(bigint_division_by_zero),
-        BinaryOp::Pow => bigint_pow(left, right),
+        BinaryOp::Pow => bigint_pow(left, right, max_bits),
         BinaryOp::BitAnd => Ok(left.bitand(right)),
         BinaryOp::BitOr => Ok(left.bitor(right)),
         BinaryOp::BitXor => Ok(left.bitxor(right)),
-        BinaryOp::ShiftLeft => bigint_shift(left, right, true),
-        BinaryOp::ShiftRight => bigint_shift(left, right, false),
+        BinaryOp::ShiftLeft => bigint_shift(left, right, true, max_bits),
+        BinaryOp::ShiftRight => bigint_shift(left, right, false, max_bits),
         BinaryOp::ShiftRightUnsigned => Err(Error::type_error(BIGINT_UNSIGNED_SHIFT_ERROR)),
         BinaryOp::Add
         | BinaryOp::Equal
@@ -147,29 +153,93 @@ fn bigint_division_by_zero() -> Error {
     Error::exception(ErrorName::RangeError, BIGINT_DIVISION_BY_ZERO_ERROR)
 }
 
-fn bigint_pow(base: &JsBigInt, exponent: &JsBigInt) -> Result<JsBigInt> {
+fn bigint_multiply(left: &JsBigInt, right: &JsBigInt) -> JsBigInt {
+    if left.is_zero() || right.is_zero() {
+        return JsBigInt::zero();
+    }
+    left.mul(right)
+}
+
+fn bigint_pow(base: &JsBigInt, exponent: &JsBigInt, max_bits: usize) -> Result<JsBigInt> {
     if exponent.is_negative() {
         return Err(Error::exception(
             ErrorName::RangeError,
             BIGINT_NEGATIVE_EXPONENT_ERROR,
         ));
     }
-    let exponent = exponent
-        .to_u32()
+    if exponent.is_zero() {
+        return Ok(JsBigInt::from_u64(1));
+    }
+    if base.is_zero() {
+        return Ok(JsBigInt::zero());
+    }
+    if base.is_one() {
+        return Ok(base.clone());
+    }
+    if base.is_negative_one() {
+        return Ok(if exponent.is_odd() {
+            base.clone()
+        } else {
+            JsBigInt::from_u64(1)
+        });
+    }
+    let exponent_u64 = exponent
+        .to_u64()
         .ok_or_else(|| Error::limit("BigInt exponent exceeded supported resource range"))?;
+    let minimum_result_bits = base
+        .bit_len()
+        .saturating_sub(1)
+        .checked_mul(exponent_u64)
+        .and_then(|bits| bits.checked_add(1))
+        .ok_or_else(|| Error::limit("BigInt exponentiation size overflowed"))?;
+    let max_bits = u64::try_from(max_bits)
+        .map_err(|_| Error::limit("BigInt bit limit exceeded supported range"))?;
+    if minimum_result_bits > max_bits {
+        return Err(Error::limit(
+            "BigInt exponentiation exceeded the configured bit limit",
+        ));
+    }
+    let exponent = u32::try_from(exponent_u64)
+        .map_err(|_| Error::limit("BigInt exponent exceeded supported resource range"))?;
     Ok(base.pow(exponent))
 }
 
-fn bigint_shift(value: &JsBigInt, count: &JsBigInt, left: bool) -> Result<JsBigInt> {
+fn bigint_shift(
+    value: &JsBigInt,
+    count: &JsBigInt,
+    left: bool,
+    max_bits: usize,
+) -> Result<JsBigInt> {
     let reverse = count.is_negative();
-    let magnitude = count
-        .abs()
-        .to_usize()
+    let shifts_left = matches!((left, reverse), (true, false) | (false, true));
+    let magnitude = count.abs().to_usize();
+    if !shifts_left {
+        return Ok(magnitude.map_or_else(
+            || {
+                if value.is_negative() {
+                    JsBigInt::from_i64(-1)
+                } else {
+                    JsBigInt::zero()
+                }
+            },
+            |magnitude| value.shift_right(magnitude),
+        ));
+    }
+    if value.is_zero() {
+        return Ok(JsBigInt::zero());
+    }
+    let magnitude = magnitude
         .ok_or_else(|| Error::limit("BigInt shift count exceeded supported resource range"))?;
-    Ok(match (left, reverse) {
-        (true, false) | (false, true) => value.shift_left(magnitude),
-        (false, false) | (true, true) => value.shift_right(magnitude),
-    })
+    let result_bits = usize::try_from(value.bit_len())
+        .ok()
+        .and_then(|bits| bits.checked_add(magnitude))
+        .ok_or_else(|| Error::limit("BigInt shift size overflowed"))?;
+    if result_bits > max_bits {
+        return Err(Error::limit(
+            "BigInt shift exceeded the configured bit limit",
+        ));
+    }
+    Ok(value.shift_left(magnitude))
 }
 
 pub fn number_to_uint32(value: f64, context: &str) -> Result<u32> {

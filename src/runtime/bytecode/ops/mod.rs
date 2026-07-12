@@ -115,7 +115,7 @@ impl Context {
                     Ok(Value::Number(-value))
                 }
                 crate::runtime::abstract_operations::NumericValue::BigInt(value) => {
-                    Ok(Value::BigInt(value.negated()))
+                    self.bigint_value(value.negated())
                 }
             },
             UnaryOp::Plus => self.to_number(value).map(Value::Number),

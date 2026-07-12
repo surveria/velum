@@ -206,6 +206,7 @@ impl Context {
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
+            NativeFunctionKind::BigInt => Err(Error::type_error("BigInt is not a constructor")),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),

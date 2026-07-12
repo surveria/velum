@@ -2,8 +2,12 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::PreferredType,
         call::RuntimeCallArgs,
-        object::{ObjectPrimitiveValue, PropertyEnumerable, PropertyLookup},
+        object::{
+            DataPropertyUpdate, ObjectPrimitiveValue, ObjectPropertyInit, PropertyConfigurable,
+            PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
+        },
     },
     value::{ErrorName, JsBigInt, NativeFunctionId, ObjectId, Value},
 };
@@ -18,6 +22,9 @@ const BIGINT_RECEIVER_ERROR: &str = "BigInt.prototype method requires a BigInt v
 const BIGINT_NUMBER_RANGE_ERROR: &str =
     "The number cannot be converted to a BigInt because it is not an integer";
 const BIGINT_RADIX_RANGE_ERROR: &str = "BigInt.prototype.toString radix must be between 2 and 36";
+const BIGINT_BIT_LIMIT_ERROR: &str = "BigInt result exceeded the configured bit limit";
+const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+const SYMBOL_TO_STRING_TAG_DISPLAY: &str = "[Symbol.toStringTag]";
 
 impl Context {
     pub(in crate::runtime::native) fn bigint_constructor_value(&mut self) -> Result<Value> {
@@ -46,13 +53,15 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = Self::argument_or_undefined(args.as_slice().first());
-        if let Value::Number(number) = value {
+        let primitive = self.to_primitive(&value, PreferredType::Number)?;
+        if let Value::Number(number) = primitive {
             let value = JsBigInt::from_f64_integer(number).ok_or_else(|| {
                 Error::exception(ErrorName::RangeError, BIGINT_NUMBER_RANGE_ERROR)
             })?;
-            return Ok(Value::BigInt(value));
+            return self.bigint_value(value);
         }
-        self.to_bigint(&value).map(Value::BigInt)
+        let value = self.to_bigint(&primitive)?;
+        self.bigint_value(value)
     }
 
     pub(in crate::runtime::native) fn eval_bigint_as_int_n(
@@ -75,11 +84,22 @@ impl Context {
             .map_err(|_| Error::limit("BigInt width exceeded supported resource range"))?;
         let value = Self::argument_or_undefined(args.get(1));
         let value = self.to_bigint(&value)?;
-        Ok(Value::BigInt(if signed {
+        let unchanged = if signed {
+            value.unchanged_by_as_int_n(bits)
+        } else {
+            value.unchanged_by_as_uint_n(bits)
+        };
+        if bits > self.limits.max_bigint_bits && !unchanged {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                BIGINT_BIT_LIMIT_ERROR,
+            ));
+        }
+        self.bigint_value(if signed {
             value.as_int_n(bits)
         } else {
             value.as_uint_n(bits)
-        }))
+        })
     }
 
     pub(in crate::runtime::native) fn eval_bigint_prototype_to_string(
@@ -185,25 +205,18 @@ impl Context {
 
     fn bigint_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
-        let object_prototype = self.objects.object_prototype_id(
+        self.objects.create_with_prototype_property(
+            None,
+            ObjectPropertyInit::new(
+                constructor_key,
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor,
+                PropertyEnumerable::No,
+            ),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
-        )?;
-        let Value::Object(prototype) = self.objects.create_boxed_primitive(
-            ObjectPrimitiveValue::BigInt(JsBigInt::zero()),
-            object_prototype,
-            self.limits.max_objects,
-        )?
-        else {
-            return Err(Error::runtime("BigInt prototype is not an object"));
-        };
-        self.define_non_enumerable_object_property(
-            prototype,
-            OBJECT_CONSTRUCTOR_PROPERTY,
-            constructor,
-        )?;
-        Ok(prototype)
+        )
     }
 
     fn bigint_constructor_prototype(&mut self) -> Result<ObjectId> {
@@ -261,6 +274,27 @@ impl Context {
             let function = self.create_native_function(kind, Value::Undefined)?;
             self.define_non_enumerable_object_property(prototype, name, function)?;
         }
-        Ok(())
+        self.install_bigint_to_string_tag(prototype)
+    }
+
+    fn install_bigint_to_string_tag(&mut self, prototype: ObjectId) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let tag = self.get_named(&symbol_constructor, SYMBOL_TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(tag) = tag else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let value = self.heap_string_value(BIGINT_NAME)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(tag.id()),
+            SYMBOL_TO_STRING_TAG_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 }
