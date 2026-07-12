@@ -490,15 +490,6 @@ impl Context {
         Ok(true)
     }
 
-    pub(in crate::runtime::native) fn regexp_exec(
-        &mut self,
-        this_value: &Value,
-        input: &str,
-    ) -> Result<Value> {
-        let input = input.encode_utf16().collect::<Vec<_>>();
-        self.regexp_exec_code_units(this_value, &input)
-    }
-
     fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = parse_regexp_flags(regexp.flags())?;

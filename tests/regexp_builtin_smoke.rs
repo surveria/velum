@@ -351,6 +351,99 @@ fn supports_observable_regexp_match_search_and_match_all_protocols() -> TestResu
 }
 
 #[test]
+fn supports_string_match_and_search_protocol_dispatch() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let receiverStringCalls = 0;
+        let receiver = {
+            toString: function() {
+                receiverStringCalls += 1;
+                return "receiver";
+            }
+        };
+        let protocolCalls = [];
+        let matchResult = { kind: "match" };
+        let searchResult = { kind: "search" };
+        let matcher = {};
+        Object.defineProperty(matcher, Symbol.match, {
+            get: function() {
+                protocolCalls.push("match:get");
+                return function(value) {
+                    protocolCalls.push(this === matcher && value === receiver ? "match:call" : "match:bad");
+                    return matchResult;
+                };
+            }
+        });
+        let searcher = {};
+        Object.defineProperty(searcher, Symbol.search, {
+            get: function() {
+                protocolCalls.push("search:get");
+                return function(value) {
+                    protocolCalls.push(this === searcher && value === receiver ? "search:call" : "search:bad");
+                    return searchResult;
+                };
+            }
+        });
+        let protocolMatch = String.prototype.match.call(receiver, matcher);
+        let protocolSearch = String.prototype.search.call(receiver, searcher);
+
+        let primitiveLookups = 0;
+        Object.defineProperty(Number.prototype, Symbol.match, {
+            configurable: true,
+            get: function() {
+                primitiveLookups += 1;
+                throw new Error("primitive Symbol.match lookup");
+            }
+        });
+        Object.defineProperty(Number.prototype, Symbol.search, {
+            configurable: true,
+            get: function() {
+                primitiveLookups += 1;
+                throw new Error("primitive Symbol.search lookup");
+            }
+        });
+        let originalMatch = RegExp.prototype[Symbol.match];
+        let originalSearch = RegExp.prototype[Symbol.search];
+        let fallbackCalls = [];
+        let fallbackMatch;
+        let fallbackSearch;
+        try {
+            RegExp.prototype[Symbol.match] = function(value) {
+                fallbackCalls.push("match:" + this.source + ":" + value);
+                return matchResult;
+            };
+            RegExp.prototype[Symbol.search] = function(value) {
+                fallbackCalls.push("search:" + this.source + ":" + value);
+                return searchResult;
+            };
+            fallbackMatch = String.prototype.match.call(receiver, 12);
+            fallbackSearch = String.prototype.search.call(receiver, 12);
+        } finally {
+            RegExp.prototype[Symbol.match] = originalMatch;
+            RegExp.prototype[Symbol.search] = originalSearch;
+            delete Number.prototype[Symbol.match];
+            delete Number.prototype[Symbol.search];
+        }
+
+        let actualMatch = "a1b".match(1);
+        let actualSearch = "a1b".search(1);
+        protocolMatch === matchResult && protocolSearch === searchResult &&
+            protocolCalls.join("|") === "match:get|match:call|search:get|search:call" &&
+            fallbackMatch === matchResult && fallbackSearch === searchResult &&
+            fallbackCalls.join("|") === "match:12:receiver|search:12:receiver" &&
+            receiverStringCalls === 2 && primitiveLookups === 0 &&
+            actualMatch[0] === "1" && actualMatch.index === 1 && actualMatch.input === "a1b" &&
+            actualSearch === 1 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_string_match_all_protocol_and_primitive_fallback() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
