@@ -159,7 +159,7 @@ impl Context {
         collection: CollectionId,
         iterable: &Value,
     ) -> Result<()> {
-        let mut source = self.get_iterator(iterable.clone())?;
+        let mut source = self.get_iterator(iterable)?;
         loop {
             match self.iterator_step(&mut source)? {
                 crate::runtime::abstract_operations::IteratorStep::Value(item) => {

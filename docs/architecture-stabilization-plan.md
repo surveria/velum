@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09r applies shared construct, call, Promise-job, and iterator owners to the standard `Promise.all` contract, leaving only one BigInt-blocked focused file. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09s applies shared construct, call, iterator, descriptor, and conversion owners to `Array.from`, leaving only realm-harness and non-strict-this prerequisites in the focused profile. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2717,6 +2717,30 @@ AS-09r profile evidence in draft PR #478:
   baseline adds 142 variants / 71 conforming files with no removals, producing
   a 58,824-variant / 30,241-file pass candidate. Canonical publication remains
   required before AS-09r can close.
+
+AS-09s profile evidence in draft PR #480:
+
+- `Array.from` is installed as a writable, configurable, non-enumerable static
+  method with the standard name and length metadata;
+- mapper validation precedes iterator lookup, and iterable versus array-like
+  selection uses the shared `GetMethod`, iterator, `ToLength`, call, and
+  construct owners in observable specification order;
+- generic constructor results receive configurable, enumerable, writable data
+  properties through the shared `[[DefineOwnProperty]]` boundary. Iterator
+  failures, mapper throws, and property-definition failures close non-exhausted
+  iterators, while final length uses the ordinary throwing `Set` path;
+- `GetIteratorFromMethod` now preserves the guarded live Array index source
+  when the already-captured method is the default Array iterator. This removes
+  the stale snapshot without performing a second observable method lookup;
+- four direct engine cases cover array-like construction and mapping, live
+  Array mutation, abrupt iterator closing, and configurable result-slot
+  replacement;
+- the exact `built-ins/Array/from/` profile advances from 8/92 to 87/92
+  variants and from 4/48 to 45/48 conforming files. Two residual sources depend
+  on the unavailable `$262.createRealm` harness, while one depends on carrying
+  function strictness into the shared call-time `this` normalization owner;
+- complete exact-tree CI and canonical publication remain required before
+  AS-09s can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

@@ -63,13 +63,13 @@ impl Context {
         } else {
             let iterable = self.eval_bytecode_expression(object)?;
             if asynchronous {
-                let (source, await_yielded_values) = self.get_async_iterator(iterable)?;
+                let (source, await_yielded_values) = self.get_async_iterator(&iterable)?;
                 Some(ForOfIterator::Asynchronous(AsyncIteratorContinuation::new(
                     source,
                     await_yielded_values,
                 )))
             } else {
-                Some(ForOfIterator::Synchronous(self.get_iterator(iterable)?))
+                Some(ForOfIterator::Synchronous(self.get_iterator(&iterable)?))
             }
         };
         let completion = match target {

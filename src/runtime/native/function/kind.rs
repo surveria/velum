@@ -237,6 +237,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayFlat,
     ArrayFlatMap,
     ArrayForEach,
+    ArrayFrom,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayIsArray,

@@ -191,9 +191,9 @@ impl Context {
             let iterable = state.stack.pop()?;
             let asynchronous = self.current_function_is_async_generator()?;
             let (source, await_yielded_values) = if asynchronous {
-                self.get_async_iterator(iterable)?
+                self.get_async_iterator(&iterable)?
             } else {
-                (self.get_iterator(iterable)?, false)
+                (self.get_iterator(&iterable)?, false)
             };
             (
                 YieldDelegateContinuation::new(source, asynchronous, await_yielded_values),

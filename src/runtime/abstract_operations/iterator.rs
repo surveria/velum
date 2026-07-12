@@ -140,39 +140,31 @@ enum YieldDelegateDone {
 impl Context {
     /// ECMAScript `GetIterator` with guarded direct implementations for Array
     /// and String while their built-in protocol methods remain uninstalled.
-    pub(in crate::runtime) fn get_iterator(&mut self, iterable: Value) -> Result<IteratorSource> {
-        match &iterable {
+    pub(in crate::runtime) fn get_iterator(&mut self, iterable: &Value) -> Result<IteratorSource> {
+        match iterable {
             Value::String(text) => {
-                if let Some(method) = self.iterator_method(&iterable)? {
-                    return self.get_iterator_from_method(&iterable, &method);
+                if let Some(method) = self.iterator_method(iterable)? {
+                    return self.get_iterator_from_method(iterable, &method);
                 }
                 Ok(utf16_source(text.encode_utf16()))
             }
             Value::HeapString(text) => {
-                if let Some(method) = self.iterator_method(&iterable)? {
-                    return self.get_iterator_from_method(&iterable, &method);
+                if let Some(method) = self.iterator_method(iterable)? {
+                    return self.get_iterator_from_method(iterable, &method);
                 }
                 Ok(utf16_source(text.as_utf16().iter().copied()))
             }
             Value::Object(id) => {
-                if let Some(method) = self.iterator_method(&iterable)? {
-                    if self.objects.array_len_if_array(*id)?.is_some()
-                        && self.is_default_array_iterator_method(&method)?
-                    {
-                        return Ok(IteratorSource::ArrayIndex {
-                            array: iterable,
-                            index: 0,
-                        });
-                    }
-                    return self.get_iterator_from_method(&iterable, &method);
+                if let Some(method) = self.iterator_method(iterable)? {
+                    return self.get_iterator_from_method(iterable, &method);
                 }
                 if self.objects.array_len_if_array(*id)?.is_some() {
-                    return Err(not_iterable_error(&iterable));
+                    return Err(not_iterable_error(iterable));
                 }
                 if let Some(text) = self.string_object_utf16_primitive_value(*id)? {
                     return Ok(utf16_source(text.iter().copied()));
                 }
-                Err(not_iterable_error(&iterable))
+                Err(not_iterable_error(iterable))
             }
             Value::Function(_)
             | Value::NativeFunction(_)
@@ -180,27 +172,27 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::Symbol(_) => {
-                let Some(method) = self.iterator_method(&iterable)? else {
-                    return Err(not_iterable_error(&iterable));
+                let Some(method) = self.iterator_method(iterable)? else {
+                    return Err(not_iterable_error(iterable));
                 };
-                self.get_iterator_from_method(&iterable, &method)
+                self.get_iterator_from_method(iterable, &method)
             }
-            Value::Undefined | Value::Null => Err(not_iterable_error(&iterable)),
+            Value::Undefined | Value::Null => Err(not_iterable_error(iterable)),
         }
     }
 
     pub(in crate::runtime) fn get_async_iterator(
         &mut self,
-        iterable: Value,
+        iterable: &Value,
     ) -> Result<(IteratorSource, bool)> {
-        if let Some(method) = self.async_iterator_method(&iterable)? {
+        if let Some(method) = self.async_iterator_method(iterable)? {
             return self
-                .get_iterator_from_method(&iterable, &method)
+                .get_iterator_from_method(iterable, &method)
                 .map(|source| (source, false));
         }
-        if let Some(method) = self.iterator_method(&iterable)? {
+        if let Some(method) = self.iterator_method(iterable)? {
             return self
-                .get_iterator_from_method(&iterable, &method)
+                .get_iterator_from_method(iterable, &method)
                 .map(|source| (source, true));
         }
         self.get_iterator(iterable).map(|source| (source, true))
@@ -213,6 +205,15 @@ impl Context {
         iterable: &Value,
         method: &Value,
     ) -> Result<IteratorSource> {
+        if let Value::Object(id) = iterable
+            && self.objects.array_len_if_array(*id)?.is_some()
+            && self.is_default_array_iterator_method(method)?
+        {
+            return Ok(IteratorSource::ArrayIndex {
+                array: iterable.clone(),
+                index: 0,
+            });
+        }
         let iterator = self.call_value(method, &[], iterable.clone())?;
         if self.semantic_object_ref(&iterator)?.is_none() {
             return Err(Error::type_error(format!(

@@ -10,6 +10,7 @@ mod callbacks;
 mod copy;
 mod find_last;
 mod flatten;
+mod from;
 mod generic;
 mod mutate;
 mod prototype_registry;
@@ -17,6 +18,7 @@ mod sort;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
+const ARRAY_FROM_PROPERTY: &str = "from";
 const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
@@ -535,6 +537,11 @@ impl Context {
     }
 
     fn install_array_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
+        let from = self.create_native_function(NativeFunctionKind::ArrayFrom, Value::Undefined)?;
+        let key = self.intern_property_key(ARRAY_FROM_PROPERTY)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, from, PropertyEnumerable::No)?;
         let is_array =
             self.create_native_function(NativeFunctionKind::ArrayIsArray, Value::Undefined)?;
         let key = self.intern_property_key(ARRAY_IS_ARRAY_PROPERTY)?;

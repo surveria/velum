@@ -316,7 +316,7 @@ impl Context {
                 .into_iter()
                 .chain(std::iter::once(&iterable)),
         )?;
-        let setup = self.setup_promise_all(&capability, this_value, iterable);
+        let setup = self.setup_promise_all(&capability, this_value, &iterable);
         if let Err(error) = setup {
             self.reject_promise_all_capability(&capability, error)?;
         }
@@ -430,7 +430,7 @@ impl Context {
         &mut self,
         capability: &PromiseCapability,
         constructor: &Value,
-        iterable: Value,
+        iterable: &Value,
     ) -> Result<()> {
         let promise_resolve = self.get_named(constructor, PROMISE_RESOLVE_NAME)?;
         if !self.semantic_is_callable(&promise_resolve)? {

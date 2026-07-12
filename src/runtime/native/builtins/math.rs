@@ -399,7 +399,7 @@ impl Context {
         let Some(iterable) = args.first() else {
             return Err(Error::type_error("Math.sumPrecise requires an iterable"));
         };
-        let mut source = self.get_iterator(iterable.clone())?;
+        let mut source = self.get_iterator(iterable)?;
         let mut sum = PreciseFiniteSum::new();
         loop {
             self.step()?;
