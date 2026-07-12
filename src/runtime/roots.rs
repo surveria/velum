@@ -190,6 +190,7 @@ impl Context {
         }
         for module in &self.modules {
             visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;
+            visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
         }
         for frame in &self.activation_frames {
             if let Some(environments) = frame.with_environments() {

@@ -213,7 +213,7 @@ check_storage_accounting_boundary() {
     'usize::from(self.global_object.is_some()),' \
     'usize::from(self.promise_prototype.is_some()),' \
     'usize::from(self.iterator_symbol.is_some()),' \
-    'counter.record(VmStorageKind::Module, 0)'; do
+    'counter.record(VmStorageKind::Module, self.modules.len())'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
       fail "storage accounting boundary changed; required owner source '${source}' is missing"
     fi
@@ -422,9 +422,11 @@ check_storage_limit_boundary() {
 
   if ! grep -F -q 'VmStorageKind::Association, 1' \
       "${repo_root}/src/runtime/globals.rs" \
-    || ! grep -F -q 'counter.record(VmStorageKind::Module, 0)' \
-      "${repo_root}/src/runtime/accounting.rs"; then
-    fail "storage limit boundary changed; VM associations require checked anchors and Module must remain explicit zero storage"
+    || ! grep -F -q 'counter.record(VmStorageKind::Module, self.modules.len())' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'reserve_count(VmStorageKind::Module, graph.len())?' \
+      "${repo_root}/src/runtime/module.rs"; then
+    fail "storage limit boundary changed; VM associations and persistent Module records require checked owners"
   fi
 }
 
@@ -1148,7 +1150,7 @@ check_direct_root_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/roots.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,BytecodeFrame,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
+  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,ModuleBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,BytecodeFrame,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
     fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
   fi
 
@@ -1156,6 +1158,9 @@ check_direct_root_boundary() {
     'visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;' \
     'visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
     'for scope in &self.locals {' \
+    'for module in &self.modules {' \
+    'visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;' \
+    'visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;' \
     'for frame in &self.activation_frames {' \
     'if let Some(upvalues) = frame.upvalues() {' \
     'if let Some(value) = frame.this_value() {' \
@@ -1749,6 +1754,7 @@ static_binding_layouts
 globals
 builtin_globals
 locals
+modules
 activation_frames
 functions
 native_functions

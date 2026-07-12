@@ -62,6 +62,12 @@ fn enforces_module_specific_early_errors() -> TestResult {
 
     let await_binding = runtime.compile_module_named("await.js", "let await = 1;");
     ensure(await_binding.is_err(), "await module binding must fail")?;
+
+    let missing_export = runtime.compile_module_named("missing.js", "export { missing };");
+    ensure(
+        missing_export.is_err(),
+        "unbound local exports must fail during compilation",
+    )?;
     Ok(())
 }
 
@@ -122,6 +128,112 @@ fn namespace_import_properties_read_live_export_cells() -> TestResult {
     ensure(
         value == Value::Number(2.0),
         "namespace export did not stay live",
+    )
+}
+
+#[test]
+fn namespace_re_exports_share_sealed_null_prototype_objects() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("dep.js", "export let value = 7;".to_owned()),
+        (
+            "bridge.js",
+            "export * as dependency from 'dep.js';".to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        r"
+            import { dependency } from 'bridge.js';
+            import * as direct from 'dep.js';
+            const descriptor = Object.getOwnPropertyDescriptor(dependency, 'value');
+            dependency === direct &&
+                Object.getPrototypeOf(dependency) === null &&
+                !Object.isExtensible(dependency) &&
+                descriptor.enumerable &&
+                !descriptor.configurable &&
+                dependency.value === 7;
+        ",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Bool(true),
+        "module namespace exotic invariants mismatch",
+    )
+}
+
+#[test]
+fn evaluates_cycles_without_replaying_module_bodies() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        (
+            "a.js",
+            "import { b } from 'b.js'; export let a = 1; export function total() { return a + b; }"
+                .to_owned(),
+        ),
+        (
+            "b.js",
+            "import { a } from 'a.js'; export let b = 2; export function readA() { return a; }"
+                .to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { total } from 'a.js'; import { readA } from 'b.js'; total() + readA();",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(4.0),
+        "cyclic module graph produced the wrong bindings",
+    )
+}
+
+#[test]
+fn accepts_diamond_star_exports_that_resolve_to_one_binding() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("base.js", "export const value = 9;".to_owned()),
+        ("left.js", "export * from 'base.js';".to_owned()),
+        ("right.js", "export * from 'base.js';".to_owned()),
+        (
+            "diamond.js",
+            "export * from 'left.js'; export * from 'right.js';".to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { value } from 'diamond.js'; value;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(9.0),
+        "diamond star export was treated as ambiguous",
+    )
+}
+
+#[test]
+fn calls_exported_functions_after_module_evaluation() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([(
+        "dep.js",
+        "export let value = 40; export function answer() { return value + 2; }".to_owned(),
+    )]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { answer } from 'dep.js'; answer();",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(42.0),
+        "exported module function did not retain its environment",
     )
 }
 

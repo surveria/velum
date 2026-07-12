@@ -207,7 +207,7 @@ impl Parser {
             statements.push(statement);
         }
         if let Some(module) = module.as_ref() {
-            Self::validate_module_syntax(module)?;
+            Self::validate_module_syntax(module, &statements)?;
         }
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),

@@ -347,8 +347,17 @@ impl Parser {
         }
     }
 
-    pub(super) fn validate_module_syntax(module: &ModuleSyntax) -> Result<()> {
+    pub(super) fn validate_module_syntax(
+        module: &ModuleSyntax,
+        statements: &[Statement],
+    ) -> Result<()> {
         let mut exported = BTreeSet::new();
+        let mut declared = BTreeSet::new();
+        for statement in statements {
+            let mut names = Vec::new();
+            Self::module_statement_bound_names(statement.kind(), &mut names)?;
+            declared.extend(names);
+        }
         for entry in &module.exports {
             let name = match entry {
                 ModuleExportEntry::Local { export_name, .. }
@@ -360,6 +369,14 @@ impl Parser {
                 && !exported.insert(name)
             {
                 return Err(Error::parse("duplicate module export", 0));
+            }
+            if let ModuleExportEntry::Local { local_name, .. } = entry
+                && !declared.contains(local_name)
+            {
+                return Err(Error::parse(
+                    format!("module export '{local_name}' is not declared"),
+                    0,
+                ));
             }
         }
         Ok(())

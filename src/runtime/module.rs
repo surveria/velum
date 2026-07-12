@@ -12,7 +12,10 @@ use crate::{
         },
         bytecode::BytecodeOutcome,
         control::Completion,
-        object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit},
+        object::{
+            AccessorPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, PropertyConfigurable,
+            PropertyEnumerable, PropertyUpdate,
+        },
         property::static_names::StaticNameAtomCacheHandle,
     },
     value::Value,
@@ -22,11 +25,16 @@ use crate::{
 pub(super) struct ModuleRecord {
     name: String,
     scope: BindingScope,
+    namespace: Value,
 }
 
 impl ModuleRecord {
     pub(super) const fn scope(&self) -> &BindingScope {
         &self.scope
+    }
+
+    pub(super) const fn namespace(&self) -> &Value {
+        &self.namespace
     }
 }
 
@@ -43,6 +51,7 @@ struct PendingModule {
     module: CompiledModule,
     dependencies: BTreeMap<String, usize>,
     scope: Option<BindingScope>,
+    namespace: Option<Value>,
     state: EvaluationState,
 }
 
@@ -53,6 +62,7 @@ impl PendingModule {
             module,
             dependencies: BTreeMap::new(),
             scope: None,
+            namespace: None,
             state: EvaluationState::Pending,
         }
     }
@@ -159,6 +169,8 @@ impl Context {
     }
 
     fn link_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
+        self.initialize_module_namespaces(graph)?;
+        self.populate_module_namespaces(graph)?;
         for module_index in 0..graph.len() {
             let imports = graph
                 .get(module_index)
@@ -178,7 +190,10 @@ impl Context {
                         self.resolve_export_cell(graph, dependency, name, &mut BTreeSet::new())?
                     }
                     ModuleImportName::Namespace => {
-                        let namespace = self.create_module_namespace(graph, dependency)?;
+                        let namespace = graph
+                            .get(dependency)
+                            .and_then(|module| module.namespace.clone())
+                            .ok_or_else(|| Error::runtime("module namespace is missing"))?;
                         BindingCell::new(namespace, false, crate::syntax::DeclKind::Const)
                     }
                 };
@@ -190,41 +205,69 @@ impl Context {
                     .get_mut(module_index)
                     .and_then(|module| module.scope.as_mut())
                     .ok_or_else(|| Error::runtime("module scope is not instantiated"))?;
-                scope.insert_or_replace(atom, cell)?;
+                let import_cell = scope
+                    .get(atom)
+                    .ok_or_else(|| Error::runtime("module import binding is not declared"))?;
+                import_cell.alias_to(cell)?;
             }
         }
         Ok(())
     }
 
-    fn create_module_namespace(
-        &mut self,
-        graph: &[PendingModule],
-        module_index: usize,
-    ) -> Result<Value> {
-        let names = Self::module_export_names(graph, module_index, &mut BTreeSet::new())?;
-        let mut properties = Vec::with_capacity(names.len());
-        for name in &names {
-            let cell = self.resolve_export_cell(graph, module_index, name, &mut BTreeSet::new())?;
-            let getter_name = format!("%module-namespace:{module_index}:{name}%");
-            let binding_name = name.clone();
-            let getter = self.create_internal_host_function(getter_name, move |_call| {
-                cell.value(&binding_name)
-            })?;
-            let key = self.intern_property_key(name)?;
-            properties.push(ObjectPropertyInit::new_accessor(
-                key,
-                name,
-                getter,
-                crate::syntax::AccessorKind::Getter,
-            ));
-        }
+    fn initialize_module_namespaces(&mut self, graph: &mut [PendingModule]) -> Result<()> {
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
-        self.objects.create(
-            properties,
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        for pending in graph {
+            let namespace = self.objects.create(
+                Vec::new(),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )?;
+            let Value::Object(namespace_id) = namespace else {
+                return Err(Error::runtime("module namespace is not an object"));
+            };
+            self.objects
+                .set_prototype_value(namespace_id, &Value::Null)?;
+            pending.namespace = Some(Value::Object(namespace_id));
+        }
+        Ok(())
+    }
+
+    fn populate_module_namespaces(&mut self, graph: &[PendingModule]) -> Result<()> {
+        for module_index in 0..graph.len() {
+            let names = Self::module_export_names(graph, module_index, &mut BTreeSet::new())?;
+            let namespace = graph
+                .get(module_index)
+                .and_then(|module| module.namespace.as_ref())
+                .ok_or_else(|| Error::runtime("module namespace object is missing"))?;
+            let Value::Object(namespace_id) = namespace else {
+                return Err(Error::runtime("module namespace value is not an object"));
+            };
+            for name in &names {
+                let cell =
+                    self.resolve_export_cell(graph, module_index, name, &mut BTreeSet::new())?;
+                let getter_name = format!("%module-namespace:{module_index}:{name}%");
+                let binding_name = name.clone();
+                let getter = self.create_internal_host_function(getter_name, move |_call| {
+                    cell.value(&binding_name)
+                })?;
+                let key = self.intern_property_key(name)?;
+                self.objects.define_property(
+                    *namespace_id,
+                    key,
+                    name,
+                    PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                        Some(getter),
+                        None,
+                        Some(PropertyEnumerable::Yes),
+                        Some(PropertyConfigurable::No),
+                    )),
+                    self.limits.max_object_properties,
+                )?;
+            }
+            self.objects.prevent_extensions(*namespace_id)?;
+        }
+        Ok(())
     }
 
     fn module_export_names(
@@ -308,6 +351,25 @@ impl Context {
                     resolving.remove(&key);
                     return result;
                 }
+                ModuleExport::Namespace {
+                    export_name: candidate,
+                    request,
+                } if candidate == export_name => {
+                    let dependency =
+                        module.dependencies.get(request).copied().ok_or_else(|| {
+                            Error::runtime("namespace export dependency is missing")
+                        })?;
+                    let namespace = graph
+                        .get(dependency)
+                        .and_then(|pending| pending.namespace.clone())
+                        .ok_or_else(|| Error::runtime("exported module namespace is missing"))?;
+                    resolving.remove(&key);
+                    return Ok(BindingCell::new(
+                        namespace,
+                        false,
+                        crate::syntax::DeclKind::Const,
+                    ));
+                }
                 ModuleExport::Star { request } if export_name != "default" => {
                     let dependency = module
                         .dependencies
@@ -317,7 +379,10 @@ impl Context {
                     if let Ok(cell) =
                         self.resolve_export_cell(graph, dependency, export_name, resolving)
                     {
-                        if star_result.is_some() {
+                        if star_result
+                            .as_ref()
+                            .is_some_and(|existing: &BindingCell| !existing.same_cell(&cell))
+                        {
                             resolving.remove(&key);
                             return Err(Error::runtime("ambiguous star module export"));
                         }
@@ -433,22 +498,41 @@ impl Context {
     }
 
     fn persist_module_graph(&mut self, graph: Vec<PendingModule>) -> Result<()> {
+        let reservation = self
+            .storage_ledger
+            .reserve_count(VmStorageKind::Module, graph.len())?;
         let mut records = Vec::with_capacity(graph.len());
         for mut pending in graph {
             let Some(mut scope) = pending.scope.take() else {
+                Self::deactivate_module_records(&mut records)?;
                 return Err(Error::runtime("persisted module scope is missing"));
             };
-            scope.activate_storage(self.storage_ledger.clone())?;
+            let Some(namespace) = pending.namespace.take() else {
+                Self::deactivate_module_records(&mut records)?;
+                return Err(Error::runtime("persisted module namespace is missing"));
+            };
+            if let Err(error) = scope.activate_storage(self.storage_ledger.clone()) {
+                Self::deactivate_module_records(&mut records)?;
+                return Err(error);
+            }
             records.push(ModuleRecord {
                 name: pending.name,
                 scope,
+                namespace,
             });
         }
-        let reservation = self
-            .storage_ledger
-            .reserve_count(VmStorageKind::Module, records.len())?;
-        reservation.commit()?;
+        if let Err(error) = reservation.commit() {
+            Self::deactivate_module_records(&mut records)?;
+            return Err(error);
+        }
         self.modules.extend(records);
+        Ok(())
+    }
+
+    fn deactivate_module_records(records: &mut [ModuleRecord]) -> Result<()> {
+        for record in records.iter_mut().rev() {
+            record.scope.deactivate_storage()?;
+        }
         Ok(())
     }
 }

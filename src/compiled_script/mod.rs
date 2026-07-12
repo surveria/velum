@@ -212,19 +212,23 @@ impl CompiledScript {
         .map_err(|error| error.with_source(source_id, source))?;
         let module = parsed.module;
         let program = parsed.program;
-        let binding_layout = if matches!(mode, CompileMode::Eval { .. }) {
-            BindingLayout::build_eval(
+        let binding_layout = match mode {
+            CompileMode::Eval { .. } => BindingLayout::build_eval(
                 &program,
                 parsed.usage.static_binding_count,
                 parsed.usage.static_function_count,
                 parsed.strict,
-            )?
-        } else {
-            BindingLayout::build(
+            )?,
+            CompileMode::Module => BindingLayout::build_module(
                 &program,
                 parsed.usage.static_binding_count,
                 parsed.usage.static_function_count,
-            )?
+            )?,
+            CompileMode::Script => BindingLayout::build(
+                &program,
+                parsed.usage.static_binding_count,
+                parsed.usage.static_function_count,
+            )?,
         };
         let bytecode = if let Some(module) = module.as_ref() {
             let import_local_names = module
