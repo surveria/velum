@@ -381,42 +381,19 @@ impl Context {
         value: &Value,
         target: crate::value::ObjectId,
     ) -> Result<bool> {
-        match value {
-            Value::Object(id) => self.objects.prototype_chain_has_object(*id, target),
-            Value::Function(id) => {
-                let prototype = self.function_inheritance_prototype_value(*id)?;
-                self.prototype_value_chain_has_object(&prototype, target)
+        let mut current = value.clone();
+        loop {
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
+                return Ok(false);
+            };
+            if matches!(prototype, Value::Object(id) if id == target) {
+                return Ok(true);
             }
-            Value::NativeFunction(id) => {
-                let prototype = self.native_function_object_prototype_value(*id)?;
-                self.prototype_value_chain_has_object(&prototype, target)
+            if matches!(prototype, Value::Null) {
+                return Ok(false);
             }
-            Value::HostFunction(_) => {
-                let prototype = self.function_constructor_prototype_value()?;
-                self.prototype_value_chain_has_object(&prototype, target)
-            }
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::BigInt(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => Ok(false),
+            self.step()?;
+            current = prototype;
         }
-    }
-
-    fn prototype_value_chain_has_object(
-        &self,
-        prototype: &Value,
-        target: crate::value::ObjectId,
-    ) -> Result<bool> {
-        let Value::Object(id) = prototype else {
-            return Ok(false);
-        };
-        if *id == target {
-            return Ok(true);
-        }
-        self.objects.prototype_chain_has_object(*id, target)
     }
 }

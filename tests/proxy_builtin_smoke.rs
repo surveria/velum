@@ -112,6 +112,77 @@ fn preserves_proxy_dispatch_across_fallbacks_and_prototype_chains() -> TestResul
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn enforces_proxy_internal_method_invariants() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+            function throwsTypeError(operation) {
+                try { operation(); } catch (error) { return error instanceof TypeError ? 1 : -100; }
+                return 0;
+            }
+
+            var frozen = {};
+            Object.defineProperty(frozen, "value", {
+                value: 1, writable: false, configurable: false
+            });
+            var score = 0;
+            score += throwsTypeError(function () {
+                return new Proxy(frozen, { get: function () { return 2; } }).value;
+            });
+            score += throwsTypeError(function () {
+                new Proxy(frozen, { set: function () { return true; } }).value = 2;
+            });
+            score += throwsTypeError(function () {
+                return "value" in new Proxy(frozen, { has: function () { return false; } });
+            });
+            score += throwsTypeError(function () {
+                delete new Proxy(frozen, { deleteProperty: function () { return true; } }).value;
+            });
+
+            var fixedPrototype = Object.preventExtensions({});
+            score += throwsTypeError(function () {
+                Object.getPrototypeOf(new Proxy(fixedPrototype, {
+                    getPrototypeOf: function () { return {}; }
+                }));
+            });
+            score += throwsTypeError(function () {
+                Object.setPrototypeOf(new Proxy(fixedPrototype, {
+                    setPrototypeOf: function () { return true; }
+                }), {});
+            });
+            score += throwsTypeError(function () {
+                Object.isExtensible(new Proxy({}, { isExtensible: function () { return false; } }));
+            });
+            score += throwsTypeError(function () {
+                Object.preventExtensions(new Proxy({}, {
+                    preventExtensions: function () { return true; }
+                }));
+            });
+
+            var configurable = {};
+            Object.defineProperty(configurable, "value", { configurable: true });
+            score += throwsTypeError(function () {
+                Object.defineProperty(new Proxy(configurable, {
+                    defineProperty: function () { return true; }
+                }), "value", { configurable: false });
+            });
+            score += throwsTypeError(function () {
+                Object.getOwnPropertyDescriptor(new Proxy(Object.preventExtensions({}), {
+                    getOwnPropertyDescriptor: function () {
+                        return { value: 1, configurable: true };
+                    }
+                }), "value");
+            });
+
+            score === 10 ? 42 : score
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 // The active Test262 fixtures are executed by the runner with a raw
 // `context.eval(source)` (no Test262 harness) and must evaluate to 42 while
 // producing no output. Mirror that here so the fixtures stay runner-compatible.

@@ -9,7 +9,12 @@ use super::{
     ShapePropertyAttributes, ShapeTable,
 };
 
+mod compatibility;
 mod validation;
+
+pub(in crate::runtime) use compatibility::{
+    is_compatible_own_property_descriptor, is_compatible_property_update,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PropertyEnumerable {

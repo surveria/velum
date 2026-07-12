@@ -27,6 +27,7 @@ mod object_static;
 mod performance;
 mod promise;
 mod proxy;
+mod proxy_invariants;
 mod reflect;
 mod regexp;
 mod set_operations;
