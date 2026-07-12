@@ -88,22 +88,10 @@ impl Context {
         &self,
         args: &[Value],
     ) -> Result<Value> {
-        let is_array = match args.first() {
-            Some(Value::Object(id)) => self.objects.array_len_if_array(*id)?.is_some(),
-            Some(
-                Value::Undefined
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Number(_)
-                | Value::BigInt(_)
-                | Value::String(_)
-                | Value::HeapString(_)
-                | Value::Symbol(_)
-                | Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_),
-            )
-            | None => false,
+        let is_array = if let Some(value) = args.first() {
+            self.semantic_is_array(value)?
+        } else {
+            false
         };
         Ok(Value::Bool(is_array))
     }

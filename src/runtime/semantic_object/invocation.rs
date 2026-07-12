@@ -12,6 +12,30 @@ use crate::{
 };
 
 impl Context {
+    pub(in crate::runtime) fn semantic_is_array(&self, value: &Value) -> Result<bool> {
+        let mut current = value.clone();
+        let mut depth = 0_usize;
+        loop {
+            let Value::Object(id) = current else {
+                return Ok(false);
+            };
+            if !self.objects.is_proxy(id) {
+                return self
+                    .objects
+                    .array_len_if_array(id)
+                    .map(|length| length.is_some());
+            }
+            depth = depth
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("proxy array test depth overflowed"))?;
+            if depth > self.objects.object_count() {
+                return Err(Error::runtime("proxy array target chain is cyclic"));
+            }
+            let (target, _handler) = self.proxy_target_handler(id)?;
+            current = target;
+        }
+    }
+
     pub(in crate::runtime) fn semantic_type_name(&self, value: &Value) -> Result<&'static str> {
         if self.semantic_is_callable(value)? {
             return Ok("function");

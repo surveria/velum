@@ -50,7 +50,7 @@ fn uses_object_prototype_as_default_object_root() -> TestResult {
             ("constructor" in Camera.prototype) &&
             ("constructor" in primitiveProto) &&
             !("constructor" in nullProto) &&
-            nullProto.__proto__ === null &&
+            nullProto.__proto__ === undefined &&
             rootKeys === "" &&
             objectKeys === "" &&
             cameraKeys === "" ? 42 : 0
@@ -79,7 +79,7 @@ fn preserves_null_prototype_literal_without_allocating_default_root() -> TestRes
     let value = context.eval(
         r"
         let object = { __proto__: null };
-        object.__proto__ === null && !('constructor' in object) ? 42 : 0
+        object.__proto__ === undefined && !('constructor' in object) ? 42 : 0
         ",
     )?;
 

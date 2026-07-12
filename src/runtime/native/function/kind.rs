@@ -164,8 +164,14 @@ pub(in crate::runtime::native) const OBJECT_KEYS_NAME: &str = "keys";
 pub(in crate::runtime::native) const OBJECT_NAME: &str = "Object";
 pub(in crate::runtime::native) const OBJECT_PREVENT_EXTENSIONS_NAME: &str = "preventExtensions";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_DEFINE_GETTER_NAME: &str = "__defineGetter__";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_DEFINE_SETTER_NAME: &str = "__defineSetter__";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str =
     "propertyIsEnumerable";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME: &str = "__lookupGetter__";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME: &str = "__lookupSetter__";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_PROTO_GETTER_NAME: &str = "get __proto__";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_PROTO_SETTER_NAME: &str = "set __proto__";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME: &str = "toLocaleString";
@@ -408,8 +414,14 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectIsSealed,
     ObjectKeys,
     ObjectPreventExtensions,
+    ObjectPrototypeDefineGetter,
+    ObjectPrototypeDefineSetter,
     ObjectPrototypeHasOwnProperty,
+    ObjectPrototypeLookupGetter,
+    ObjectPrototypeLookupSetter,
     ObjectPrototypePropertyIsEnumerable,
+    ObjectPrototypeProtoGetter,
+    ObjectPrototypeProtoSetter,
     ObjectPrototypeToString,
     ObjectPrototypeValueOf,
     ObjectPrototypeToLocaleString,
@@ -715,10 +727,16 @@ impl NativeFunctionKind {
             Self::ObjectIsSealed => Some(OBJECT_IS_SEALED_NAME),
             Self::ObjectKeys => Some(OBJECT_KEYS_NAME),
             Self::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_NAME),
+            Self::ObjectPrototypeDefineGetter => Some(OBJECT_PROTOTYPE_DEFINE_GETTER_NAME),
+            Self::ObjectPrototypeDefineSetter => Some(OBJECT_PROTOTYPE_DEFINE_SETTER_NAME),
             Self::ObjectPrototypeHasOwnProperty => Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME),
+            Self::ObjectPrototypeLookupGetter => Some(OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME),
+            Self::ObjectPrototypeLookupSetter => Some(OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME),
             Self::ObjectPrototypePropertyIsEnumerable => {
                 Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME)
             }
+            Self::ObjectPrototypeProtoGetter => Some(OBJECT_PROTOTYPE_PROTO_GETTER_NAME),
+            Self::ObjectPrototypeProtoSetter => Some(OBJECT_PROTOTYPE_PROTO_SETTER_NAME),
             Self::ObjectPrototypeToString => Some(OBJECT_PROTOTYPE_TO_STRING_NAME),
             Self::ObjectPrototypeValueOf => Some(OBJECT_PROTOTYPE_VALUE_OF_NAME),
             Self::ObjectPrototypeToLocaleString => Some(OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME),

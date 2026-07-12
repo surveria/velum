@@ -64,13 +64,13 @@ fn supports_prototype_assignment_shadowing_and_null() -> TestResult {
         child.__proto__ = null;
         let cleared = child.value;
 
-        print(inherited, own, restored, cleared, child.__proto__ === null);
+        print(inherited, own, restored, cleared, child.__proto__ === undefined);
 
         inherited === 40 &&
             own === 41 &&
             restored === 40 &&
             cleared === undefined &&
-            child.__proto__ === null ? 42 : 0
+            child.__proto__ === undefined ? 42 : 0
         ",
     )?;
 
@@ -108,16 +108,21 @@ fn rejects_prototype_cycles() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
+    let value = context.eval(
         r"
         let left = {};
         let right = { __proto__: left };
-        left.__proto__ = right;
+        let rejected = false;
+        try {
+            left.__proto__ = right;
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        rejected && Object.getPrototypeOf(left) === Object.prototype ? 42 : 0
         ",
-    ) else {
-        return Err("expected prototype cycle assignment to fail".into());
-    };
-    ensure_error_contains(&error, "prototype cycle")
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -134,13 +139,4 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, expected: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(expected) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{expected}', got '{message}'").into())
 }

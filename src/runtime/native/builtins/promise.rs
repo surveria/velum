@@ -713,7 +713,8 @@ impl Context {
         self.define_non_enumerable_object_property(prototype, PROMISE_CATCH_NAME, catch)?;
         let finally =
             self.create_native_function(NativeFunctionKind::PromiseFinally, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, PROMISE_FINALLY_NAME, finally)
+        self.define_non_enumerable_object_property(prototype, PROMISE_FINALLY_NAME, finally)?;
+        self.define_builtin_to_string_tag(prototype, "Promise")
     }
 
     fn promise_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<Value> {

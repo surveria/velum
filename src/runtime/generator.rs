@@ -410,6 +410,7 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        self.define_builtin_to_string_tag(prototype, "GeneratorFunction")?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
         self.realm.generator_function_prototype = Some(prototype);

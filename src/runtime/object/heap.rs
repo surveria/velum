@@ -394,10 +394,6 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
-        let lookup = PropertyLookup::from_key(property_name, property);
-        if property_name == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(lookup, &self.shapes)? {
-            return self.set_prototype(id, &value);
-        }
         let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         object.set(property, property_name, value, shapes, max_properties)?;
@@ -405,16 +401,6 @@ impl ObjectHeap {
     }
 
     pub fn delete(&mut self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
-        if property.name() == PROTOTYPE_PROPERTY {
-            if self.object(id)?.has_own(property, &self.shapes)? {
-                let before = self.object(id)?.structure_snapshot();
-                let (object, shapes) = self.object_mut_with_shapes(id)?;
-                let deleted = object.delete(property, shapes)?;
-                self.bump_if_structure_changed(id, before)?;
-                return Ok(deleted);
-            }
-            return Ok(true);
-        }
         let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         let deleted = object.delete(property, shapes)?;
@@ -432,10 +418,6 @@ impl ObjectHeap {
 
     fn has_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         self.prototype_has_in_chain(id, property)
-    }
-
-    fn set_prototype(&mut self, id: ObjectId, value: &Value) -> Result<()> {
-        self.set_prototype_value(id, value)
     }
 
     pub(super) fn object(&self, id: ObjectId) -> Result<&Object> {

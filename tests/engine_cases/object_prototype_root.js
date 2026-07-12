@@ -39,7 +39,7 @@ object.__proto__ !== null &&
     ("constructor" in Camera.prototype) &&
     ("constructor" in primitiveProto) &&
     !("constructor" in nullProto) &&
-    nullProto.__proto__ === null &&
+    nullProto.__proto__ === undefined &&
     rootKeys === "" &&
     objectKeys === "" &&
     cameraKeys === "" ? 42 : 0

@@ -18,8 +18,10 @@ use super::{
     OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME,
     OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_IS_EXTENSIBLE_NAME,
     OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
-    OBJECT_PREVENT_EXTENSIONS_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PREVENT_EXTENSIONS_NAME, OBJECT_PROTOTYPE_DEFINE_GETTER_NAME,
+    OBJECT_PROTOTYPE_DEFINE_SETTER_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME,
+    OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
     OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_TO_STRING_NAME,
     OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME, OBJECT_SET_PROTOTYPE_OF_NAME,
     OBJECT_VALUES_NAME,
@@ -34,6 +36,7 @@ const DESCRIPTOR_SET_PROPERTY: &str = "set";
 const DESCRIPTOR_VALUE_PROPERTY: &str = "value";
 const DESCRIPTOR_WRITABLE_PROPERTY: &str = "writable";
 const OBJECT_PROTOTYPE_PROPERTY: &str = "prototype";
+const OBJECT_PROTOTYPE_PROTO_PROPERTY: &str = "__proto__";
 
 impl Context {
     pub(in crate::runtime) fn object_constructor_value(&mut self) -> Result<Value> {
@@ -215,7 +218,8 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let property = self.object_property_key(args.as_slice().first())?;
-        self.has_own_property_value(this_value, &property)
+        let object = self.object_to_object(this_value)?;
+        self.has_own_property_value(&object, &property)
             .map(Value::Bool)
     }
 
@@ -225,7 +229,8 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let property = self.object_property_key(args.as_slice().first())?;
-        self.property_is_enumerable_value(this_value, &property)
+        let object = self.object_to_object(this_value)?;
+        self.property_is_enumerable_value(&object, &property)
             .map(Value::Bool)
     }
 
@@ -297,35 +302,74 @@ impl Context {
         else {
             return Err(Error::runtime("Object prototype is not an object"));
         };
-        self.define_object_prototype_method(
-            prototype,
-            OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-            NativeFunctionKind::ObjectPrototypeHasOwnProperty,
+        for (name, kind) in [
+            (
+                OBJECT_PROTOTYPE_DEFINE_GETTER_NAME,
+                NativeFunctionKind::ObjectPrototypeDefineGetter,
+            ),
+            (
+                OBJECT_PROTOTYPE_DEFINE_SETTER_NAME,
+                NativeFunctionKind::ObjectPrototypeDefineSetter,
+            ),
+            (
+                OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+                NativeFunctionKind::ObjectPrototypeHasOwnProperty,
+            ),
+            (
+                OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
+                NativeFunctionKind::ObjectPrototypeIsPrototypeOf,
+            ),
+            (
+                OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME,
+                NativeFunctionKind::ObjectPrototypeLookupGetter,
+            ),
+            (
+                OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME,
+                NativeFunctionKind::ObjectPrototypeLookupSetter,
+            ),
+            (
+                OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+                NativeFunctionKind::ObjectPrototypePropertyIsEnumerable,
+            ),
+            (
+                OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
+                NativeFunctionKind::ObjectPrototypeToLocaleString,
+            ),
+            (
+                OBJECT_PROTOTYPE_TO_STRING_NAME,
+                NativeFunctionKind::ObjectPrototypeToString,
+            ),
+            (
+                OBJECT_PROTOTYPE_VALUE_OF_NAME,
+                NativeFunctionKind::ObjectPrototypeValueOf,
+            ),
+        ] {
+            self.define_object_prototype_method(prototype, name, kind)?;
+        }
+        self.define_object_prototype_proto_accessor(prototype)
+    }
+
+    fn define_object_prototype_proto_accessor(&mut self, prototype: ObjectId) -> Result<()> {
+        let getter = self.create_ephemeral_native_function(
+            NativeFunctionKind::ObjectPrototypeProtoGetter,
+            Value::Undefined,
         )?;
-        self.define_object_prototype_method(
-            prototype,
-            OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
-            NativeFunctionKind::ObjectPrototypePropertyIsEnumerable,
+        let setter = self.create_ephemeral_native_function(
+            NativeFunctionKind::ObjectPrototypeProtoSetter,
+            Value::Undefined,
         )?;
-        self.define_object_prototype_method(
+        let key = self.intern_property_key(OBJECT_PROTOTYPE_PROTO_PROPERTY)?;
+        self.objects.define_property(
             prototype,
-            OBJECT_PROTOTYPE_TO_STRING_NAME,
-            NativeFunctionKind::ObjectPrototypeToString,
-        )?;
-        self.define_object_prototype_method(
-            prototype,
-            OBJECT_PROTOTYPE_VALUE_OF_NAME,
-            NativeFunctionKind::ObjectPrototypeValueOf,
-        )?;
-        self.define_object_prototype_method(
-            prototype,
-            OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
-            NativeFunctionKind::ObjectPrototypeToLocaleString,
-        )?;
-        self.define_object_prototype_method(
-            prototype,
-            OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
-            NativeFunctionKind::ObjectPrototypeIsPrototypeOf,
+            key,
+            OBJECT_PROTOTYPE_PROTO_PROPERTY,
+            PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                Some(getter),
+                Some(setter),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
         )
     }
 

@@ -8,7 +8,7 @@ use super::property::{
 };
 use super::{
     AccessorWriteDisposition, ObjectHeap, ObjectPropertyValue, OwnPropertyDescriptor,
-    PROTOTYPE_PROPERTY, PropertyLookup,
+    PropertyLookup,
 };
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
@@ -22,18 +22,12 @@ impl ObjectHeap {
         match self.cacheable_property_value(id, property)? {
             CacheablePropertyValue::Hit(value) => return Ok(ObjectPropertyValue::Value(value)),
             CacheablePropertyValue::Missing => {
-                if property.name() == PROTOTYPE_PROPERTY {
-                    return self.prototype_value(id).map(ObjectPropertyValue::Value);
-                }
                 return Ok(ObjectPropertyValue::Value(Value::Undefined));
             }
             CacheablePropertyValue::Uncacheable => {}
         }
         if let Some(value) = self.prototype_property_value_in_chain(id, property)? {
             return Ok(value);
-        }
-        if property.name() == PROTOTYPE_PROPERTY {
-            return self.prototype_value(id).map(ObjectPropertyValue::Value);
         }
         Ok(ObjectPropertyValue::Value(Value::Undefined))
     }
@@ -72,6 +66,11 @@ impl ObjectHeap {
             Value::Null => None,
             _ => return Ok(()),
         };
+        if self.object_prototype == Some(id) && prototype.is_some() {
+            return Err(Error::type_error(
+                "Object.prototype has an immutable prototype",
+            ));
+        }
         if let Some(prototype) = prototype
             && self.prototype_chain_contains(prototype, id)?
         {
@@ -97,6 +96,9 @@ impl ObjectHeap {
             Value::Null => None,
             _ => return Ok(true),
         };
+        if self.object_prototype == Some(id) && prototype.is_some() {
+            return Ok(false);
+        }
         if let Some(prototype) = prototype
             && self.prototype_chain_contains(prototype, id)?
         {

@@ -2,7 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        object::{PROTOTYPE_PROPERTY, PropertyLookup, TypedArrayPropertyIndex},
+        object::{PropertyLookup, TypedArrayPropertyIndex},
         property::{get_property, get_property_with_receiver, has_property},
     },
     value::{ObjectId, Value},
@@ -205,9 +205,12 @@ impl Context {
             let value = get_property_with_receiver(&self.objects, id, receiver, property)?;
             return self.runtime_property_value(value);
         }
-        if property.name() == PROTOTYPE_PROPERTY {
-            return self.objects.prototype_value(id);
-        }
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(id, property.name())?;
+        let property = if property.key().is_none() {
+            self.property_lookup(property.name())
+        } else {
+            property
+        };
         let prototype = self.objects.prototype_value(id)?;
         if matches!(prototype, Value::Null) {
             return Ok(Value::Undefined);
@@ -294,6 +297,12 @@ impl Context {
         if self.objects.has_own(id, property)? {
             return Ok(true);
         }
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(id, property.name())?;
+        let property = if property.key().is_none() {
+            self.property_lookup(property.name())
+        } else {
+            property
+        };
         let prototype = self.objects.prototype_value(id)?;
         if matches!(prototype, Value::Null) {
             return Ok(false);

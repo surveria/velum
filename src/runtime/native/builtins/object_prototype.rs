@@ -4,10 +4,23 @@ use crate::{
         Context,
         call::RuntimeCallArgs,
         control::Completion,
-        object::{ObjectPrimitiveValue, PropertyKey},
+        object::{
+            AccessorPropertyDescriptor, AccessorPropertyUpdate, ObjectPrimitiveValue,
+            ObjectPropertyInit, OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable,
+            PropertyKey, PropertyUpdate,
+        },
         property::DynamicPropertyKey,
+        roots::VmRootKind,
     },
     value::{ObjectId, Value},
+};
+
+use super::{
+    OBJECT_PROTOTYPE_DEFINE_GETTER_NAME, OBJECT_PROTOTYPE_DEFINE_SETTER_NAME,
+    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
+    OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME, OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME,
+    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
+    OBJECT_PROTOTYPE_TO_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME,
 };
 
 const OBJECT_UNDEFINED_TAG: &str = "[object Undefined]";
@@ -29,34 +42,77 @@ const ENTRY_KEY_PROPERTY: &str = "0";
 const ENTRY_VALUE_PROPERTY: &str = "1";
 const ENTRY_NOT_OBJECT_ERROR: &str = "Object.fromEntries iterator value must be an object";
 const OBJECT_RECEIVER_ERROR: &str = "Object.prototype method called on null or undefined";
-const TAG_BIGINT: &str = "BigInt";
+const LEGACY_PROTO_PROPERTY: &str = "__proto__";
+
+#[derive(Clone, Copy)]
+enum LegacyAccessorKind {
+    Getter,
+    Setter,
+}
 
 impl Context {
+    pub(in crate::runtime) fn ensure_object_prototype_intrinsic_for_ordinary_lookup(
+        &mut self,
+        object: ObjectId,
+        property: &str,
+    ) -> Result<()> {
+        if !Self::object_prototype_intrinsic_property(property)
+            || self
+                .native_function_id(crate::runtime::native::NativeFunctionKind::Object)
+                .is_some()
+        {
+            return Ok(());
+        }
+        let Some(root) = self.objects.object_prototype else {
+            return Ok(());
+        };
+        if object != root && !self.objects.prototype_chain_has_object(object, root)? {
+            return Ok(());
+        }
+        self.object_constructor_value().map(|_| ())
+    }
+
+    fn object_prototype_intrinsic_property(property: &str) -> bool {
+        matches!(
+            property,
+            LEGACY_PROTO_PROPERTY
+                | OBJECT_PROTOTYPE_DEFINE_GETTER_NAME
+                | OBJECT_PROTOTYPE_DEFINE_SETTER_NAME
+                | OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
+                | OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME
+                | OBJECT_PROTOTYPE_LOOKUP_GETTER_NAME
+                | OBJECT_PROTOTYPE_LOOKUP_SETTER_NAME
+                | OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
+                | OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME
+                | OBJECT_PROTOTYPE_TO_STRING_NAME
+                | OBJECT_PROTOTYPE_VALUE_OF_NAME
+        )
+    }
+
     pub(in crate::runtime::native) fn eval_object_prototype_to_string(
         &mut self,
         _args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let tag = match this_value {
+        let builtin = match this_value {
             Value::Undefined => return self.heap_string_value(OBJECT_UNDEFINED_TAG),
             Value::Null => return self.heap_string_value(OBJECT_NULL_TAG),
-            Value::Object(id) => {
-                let builtin = if self.semantic_is_callable(this_value)? {
-                    TAG_FUNCTION
-                } else {
-                    self.object_builtin_class(*id)?
-                };
-                self.object_builtin_tag(*id, builtin)?
-            }
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
-                TAG_FUNCTION.to_owned()
-            }
-            Value::Bool(_) => TAG_BOOLEAN.to_owned(),
-            Value::Number(_) => TAG_NUMBER.to_owned(),
-            Value::BigInt(_) => TAG_BIGINT.to_owned(),
-            Value::String(_) | Value::HeapString(_) => TAG_STRING.to_owned(),
-            Value::Symbol(_) => TAG_OBJECT.to_owned(),
+            Value::Object(id) => self.object_builtin_class(*id)?,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => TAG_FUNCTION,
+            Value::Bool(_) => TAG_BOOLEAN,
+            Value::Number(_) => TAG_NUMBER,
+            Value::BigInt(_) | Value::Symbol(_) => TAG_OBJECT,
+            Value::String(_) | Value::HeapString(_) => TAG_STRING,
         };
+        let object = self.object_to_object(this_value)?;
+        let builtin = if self.semantic_is_array(&object)? {
+            TAG_ARRAY
+        } else if self.semantic_is_callable(&object)? {
+            TAG_FUNCTION
+        } else {
+            builtin
+        };
+        let tag = self.object_builtin_tag(&object, builtin)?;
         self.heap_string_value(&format!("[object {tag}]"))
     }
 
@@ -66,6 +122,209 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         self.object_to_object(this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_define_getter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_object_prototype_define_accessor(args, this_value, LegacyAccessorKind::Getter)
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_define_setter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_object_prototype_define_accessor(args, this_value, LegacyAccessorKind::Setter)
+    }
+
+    fn eval_object_prototype_define_accessor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        kind: LegacyAccessorKind,
+    ) -> Result<Value> {
+        let object = self.object_to_object(this_value)?;
+        let accessor = Self::argument_or_undefined(args.as_slice().get(1));
+        if !self.semantic_is_callable(&accessor)? {
+            return Err(Error::type_error(
+                "legacy property accessor must be callable",
+            ));
+        }
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values([&object, &accessor])?;
+        let property_value = Self::argument_or_undefined(args.as_slice().first());
+        let mut property = self.dynamic_property_key(&property_value)?;
+        let (get, set, update) = match kind {
+            LegacyAccessorKind::Getter => (
+                accessor.clone(),
+                Value::Undefined,
+                AccessorPropertyUpdate::new(
+                    Some(accessor),
+                    None,
+                    Some(PropertyEnumerable::Yes),
+                    Some(PropertyConfigurable::Yes),
+                ),
+            ),
+            LegacyAccessorKind::Setter => (
+                Value::Undefined,
+                accessor.clone(),
+                AccessorPropertyUpdate::new(
+                    None,
+                    Some(accessor),
+                    Some(PropertyEnumerable::Yes),
+                    Some(PropertyConfigurable::Yes),
+                ),
+            ),
+        };
+        let descriptor = OwnPropertyDescriptor::Accessor(AccessorPropertyDescriptor::new(
+            get,
+            set,
+            PropertyEnumerable::Yes,
+            PropertyConfigurable::Yes,
+        ));
+        let descriptor_value = self.create_legacy_accessor_descriptor_object(&descriptor, kind)?;
+        roots.add_values(std::iter::once(&descriptor_value))?;
+        if !self.semantic_define_own_property_update_with_descriptor(
+            &object,
+            &mut property,
+            PropertyUpdate::Accessor(update),
+            &descriptor_value,
+        )? {
+            return Err(Error::type_error(
+                "legacy accessor property definition failed",
+            ));
+        }
+        Ok(Value::Undefined)
+    }
+
+    fn create_legacy_accessor_descriptor_object(
+        &mut self,
+        descriptor: &OwnPropertyDescriptor,
+        kind: LegacyAccessorKind,
+    ) -> Result<Value> {
+        let OwnPropertyDescriptor::Accessor(descriptor) = descriptor else {
+            return Err(Error::runtime(
+                "legacy accessor descriptor must be an accessor",
+            ));
+        };
+        let (accessor_name, accessor_value) = match kind {
+            LegacyAccessorKind::Getter => ("get", descriptor.get()),
+            LegacyAccessorKind::Setter => ("set", descriptor.set()),
+        };
+        let properties = vec![
+            ObjectPropertyInit::new(
+                self.intern_property_key(accessor_name)?,
+                accessor_name,
+                accessor_value,
+                PropertyEnumerable::Yes,
+            ),
+            ObjectPropertyInit::new(
+                self.intern_property_key("enumerable")?,
+                "enumerable",
+                Value::Bool(true),
+                PropertyEnumerable::Yes,
+            ),
+            ObjectPropertyInit::new(
+                self.intern_property_key("configurable")?,
+                "configurable",
+                Value::Bool(true),
+                PropertyEnumerable::Yes,
+            ),
+        ];
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_data_object(
+            properties,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_lookup_getter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_object_prototype_lookup_accessor(args, this_value, LegacyAccessorKind::Getter)
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_lookup_setter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_object_prototype_lookup_accessor(args, this_value, LegacyAccessorKind::Setter)
+    }
+
+    fn eval_object_prototype_lookup_accessor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        kind: LegacyAccessorKind,
+    ) -> Result<Value> {
+        let mut current = self.object_to_object(this_value)?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&current))?;
+        let property_value = Self::argument_or_undefined(args.as_slice().first());
+        let property = self.dynamic_property_key(&property_value)?;
+        loop {
+            self.step()?;
+            if let Some(descriptor) = self.semantic_own_property_descriptor(&current, &property)? {
+                return Ok(match (kind, descriptor) {
+                    (LegacyAccessorKind::Getter, OwnPropertyDescriptor::Accessor(descriptor)) => {
+                        descriptor.get()
+                    }
+                    (LegacyAccessorKind::Setter, OwnPropertyDescriptor::Accessor(descriptor)) => {
+                        descriptor.set()
+                    }
+                    (_, OwnPropertyDescriptor::Data(_)) => Value::Undefined,
+                });
+            }
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
+                return Ok(Value::Undefined);
+            };
+            if matches!(prototype, Value::Null) {
+                return Ok(Value::Undefined);
+            }
+            current = prototype;
+            roots.add_values(std::iter::once(&current))?;
+        }
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_proto_getter(
+        &mut self,
+        _args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let object = self.object_to_object(this_value)?;
+        self.semantic_get_prototype(&object)?
+            .ok_or_else(|| Error::runtime("Object prototype getter requires an object"))
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_proto_setter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "Object prototype setter called on null or undefined",
+            ));
+        }
+        let prototype = Self::argument_or_undefined(args.as_slice().first());
+        if !matches!(prototype, Value::Null) && self.semantic_object_ref(&prototype)?.is_none() {
+            return Ok(Value::Undefined);
+        }
+        let Some(updated) = self.semantic_try_set_prototype(this_value, prototype)? else {
+            return Ok(Value::Undefined);
+        };
+        if !updated {
+            return Err(Error::type_error("Object prototype mutation was rejected"));
+        }
+        Ok(Value::Undefined)
     }
 
     pub(in crate::runtime::native) fn eval_object_prototype_to_locale_string(
@@ -87,13 +346,13 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let receiver = self.object_to_object(this_value)?;
         let Some(mut current) = args.as_slice().first().cloned() else {
             return Ok(Value::Bool(false));
         };
         if self.semantic_object_ref(&current)?.is_none() {
             return Ok(Value::Bool(false));
         }
+        let receiver = self.object_to_object(this_value)?;
         loop {
             self.step()?;
             let Some(prototype) = self.semantic_get_prototype(&current)? else {
@@ -170,8 +429,8 @@ impl Context {
 
     /// Determine the `Object.prototype.toString` tag for an object, honoring a
     /// string-valued `Symbol.toStringTag` over the builtin class tag.
-    fn object_builtin_tag(&mut self, id: ObjectId, builtin: &str) -> Result<String> {
-        if let Some(tag) = self.object_to_string_tag(id)? {
+    fn object_builtin_tag(&mut self, object: &Value, builtin: &str) -> Result<String> {
+        if let Some(tag) = self.object_to_string_tag(object)? {
             return Ok(tag);
         }
         Ok(builtin.to_owned())
@@ -199,12 +458,13 @@ impl Context {
         match self.objects.primitive_value(id)? {
             Some(ObjectPrimitiveValue::Bool(_)) => Ok(TAG_BOOLEAN),
             Some(ObjectPrimitiveValue::Number(_)) => Ok(TAG_NUMBER),
-            Some(ObjectPrimitiveValue::BigInt(_)) => Ok(TAG_BIGINT),
-            Some(ObjectPrimitiveValue::Symbol(_)) | None => Ok(TAG_OBJECT),
+            Some(ObjectPrimitiveValue::BigInt(_) | ObjectPrimitiveValue::Symbol(_)) | None => {
+                Ok(TAG_OBJECT)
+            }
         }
     }
 
-    fn object_to_string_tag(&mut self, id: ObjectId) -> Result<Option<String>> {
+    fn object_to_string_tag(&mut self, object: &Value) -> Result<Option<String>> {
         let Some(symbol) = self.resolve_to_string_tag_symbol()? else {
             return Ok(None);
         };
@@ -212,8 +472,7 @@ impl Context {
             TO_STRING_TAG_DISPLAY.to_owned(),
             Some(PropertyKey::symbol(symbol)),
         );
-        let receiver = Value::Object(id);
-        let value = self.get(&receiver, key.lookup())?;
+        let value = self.get(object, key.lookup())?;
         Ok(match value {
             Value::String(text) => Some(text),
             Value::HeapString(text) => Some(text.as_str().to_owned()),
@@ -228,5 +487,28 @@ impl Context {
             Value::Symbol(symbol) => Some(symbol.id()),
             _ => None,
         })
+    }
+
+    pub(in crate::runtime) fn define_builtin_to_string_tag(
+        &mut self,
+        object: ObjectId,
+        tag: &str,
+    ) -> Result<()> {
+        let symbol = self
+            .resolve_to_string_tag_symbol()?
+            .ok_or_else(|| Error::runtime("Symbol.toStringTag is not initialized"))?;
+        let value = self.heap_string_value(tag)?;
+        self.objects.define_property(
+            object,
+            PropertyKey::symbol(symbol),
+            TO_STRING_TAG_DISPLAY,
+            PropertyUpdate::Data(crate::runtime::object::DataPropertyUpdate::new(
+                Some(value),
+                Some(crate::runtime::object::PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 }
