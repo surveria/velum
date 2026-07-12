@@ -48,7 +48,7 @@ var constructors = [
 var sizes = [1, 1, 1, 2, 2, 4, 4, 4, 8];
 for (var index = 0; index < constructors.length; index = index + 1) {
   var constructor = constructors[index];
-  if (constructor.length !== 1 || constructor.BYTES_PER_ELEMENT !== sizes[index] ||
+  if (constructor.length !== 3 || constructor.BYTES_PER_ELEMENT !== sizes[index] ||
       constructor.prototype.BYTES_PER_ELEMENT !== sizes[index]) {
     throw new Test262Error("typed array constructor metadata mismatch");
   }

@@ -7,7 +7,11 @@ use crate::{
         abstract_operations::IteratorStep,
         call::RuntimeCallArgs,
         native::TypedArrayFunctionKind,
-        object::{PropertyKey, PropertyLookup, TypedArrayElementKind, TypedArrayView},
+        object::{
+            PropertyKey, PropertyLookup, TypedArrayContentType, TypedArrayElementKind,
+            TypedArrayView,
+        },
+        roots::VmRootKind,
     },
     value::{ErrorName, ObjectId, Value},
 };
@@ -21,6 +25,8 @@ const TYPED_ARRAY_LENGTH_ERROR: &str = "typed array length exceeded supported ra
 const TYPED_ARRAY_SET_RANGE_ERROR: &str = "source array exceeds target typed array";
 const TYPED_ARRAY_OFFSET_RANGE_ERROR: &str = "typed array offset is out of range";
 const TYPED_ARRAY_SPECIES_ERROR: &str = "TypedArray species is not a constructor";
+const TYPED_ARRAY_CONTENT_TYPE_ERROR: &str =
+    "typed array source and target must use the same numeric content type";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum IterationTarget {
@@ -109,19 +115,19 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             TypedArrayFunctionKind::BufferGetter => Some(
-                self.typed_array_receiver(this_value)
+                self.typed_array_branded_receiver(this_value)
                     .map(|(_, view)| Value::Object(view.buffer_object())),
             ),
             TypedArrayFunctionKind::ByteLengthGetter => Some((|| {
-                let (_, view) = self.typed_array_receiver(this_value)?;
+                let (_, view) = self.typed_array_branded_receiver(this_value)?;
                 Self::typed_array_usize_value(view.byte_length()?)
             })()),
             TypedArrayFunctionKind::ByteOffsetGetter => Some((|| {
-                let (_, view) = self.typed_array_receiver(this_value)?;
+                let (_, view) = self.typed_array_branded_receiver(this_value)?;
                 Self::typed_array_usize_value(view.byte_offset())
             })()),
             TypedArrayFunctionKind::LengthGetter => Some((|| {
-                let (_, view) = self.typed_array_receiver(this_value)?;
+                let (_, view) = self.typed_array_branded_receiver(this_value)?;
                 Self::typed_array_usize_value(view.length())
             })()),
             TypedArrayFunctionKind::ToStringTagGetter => {
@@ -172,7 +178,7 @@ impl Context {
                 self.eval_direct_array_copy_within(args, this_value)
             }
             TypedArrayFunctionKind::Every => self.eval_direct_array_every(args, this_value),
-            TypedArrayFunctionKind::Fill => self.eval_direct_array_fill(args, this_value),
+            TypedArrayFunctionKind::Fill => self.eval_typed_array_fill(args, this_value),
             TypedArrayFunctionKind::Find => self.eval_direct_array_find(args, this_value),
             TypedArrayFunctionKind::FindIndex => {
                 self.eval_direct_array_find_index(args, this_value)
@@ -245,6 +251,14 @@ impl Context {
     }
 
     fn typed_array_receiver(&self, value: &Value) -> Result<(ObjectId, TypedArrayView)> {
+        let (id, view) = self.typed_array_branded_receiver(value)?;
+        if view.is_out_of_bounds() {
+            return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
+        }
+        Ok((id, view))
+    }
+
+    fn typed_array_branded_receiver(&self, value: &Value) -> Result<(ObjectId, TypedArrayView)> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
         };
@@ -273,10 +287,9 @@ impl Context {
         let mut items = Vec::with_capacity(view.length());
         for index in 0..view.length() {
             self.step()?;
-            let value =
-                Value::Number(view.read(index)?.ok_or_else(|| {
-                    Error::runtime("typed array iterator index is out of bounds")
-                })?);
+            let value = view
+                .read(index)?
+                .ok_or_else(|| Error::runtime("typed array iterator index is out of bounds"))?;
             items.push(match target {
                 IterationTarget::Keys => Self::typed_array_usize_value(index)?,
                 IterationTarget::Values => value,
@@ -353,22 +366,43 @@ impl Context {
                 TYPED_ARRAY_SET_RANGE_ERROR,
             ));
         }
-        let mut numbers = Vec::with_capacity(values.len());
-        for value in values {
-            numbers.push(self.to_number(&value)?);
+        if let Value::Object(source_id) = source
+            && let Some(source_view) = self.objects.typed_array(source_id)?
+            && source_view.element_kind().content_type() != target.element_kind().content_type()
+        {
+            return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
-        for (source_index, number) in numbers.into_iter().enumerate() {
+        let mut elements = Vec::with_capacity(values.len());
+        for value in values {
+            elements.push(self.convert_typed_array_element_value(target.element_kind(), &value)?);
+        }
+        for (source_index, element) in elements.into_iter().enumerate() {
             let target_index = offset
                 .checked_add(source_index)
                 .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
             if !self
                 .objects
-                .set_typed_array_number(target_id, target_index, number)?
+                .set_typed_array_value(target_id, target_index, &element)?
             {
                 return Err(Error::runtime("typed array set index is out of bounds"));
             }
         }
         Ok(Value::Undefined)
+    }
+
+    fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
+        let (id, view) = self.typed_array_receiver(this_value)?;
+        let value = args.first().unwrap_or(&Value::Undefined);
+        let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
+        let start = self.typed_array_relative_index(args.get(1), view.length(), 0)?;
+        let end = self.typed_array_relative_index(args.get(2), view.length(), view.length())?;
+        for index in start..end {
+            self.step()?;
+            if !self.objects.set_typed_array_value(id, index, &element)? {
+                return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
+            }
+        }
+        Ok(this_value.clone())
     }
 
     fn eval_typed_array_subarray(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
@@ -394,7 +428,8 @@ impl Context {
             Self::typed_array_usize_value(length)?,
         ];
         let result = self.semantic_construct(&constructor, &call_args, constructor.clone())?;
-        self.typed_array_receiver(&result)?;
+        let (_, result_view) = self.typed_array_receiver(&result)?;
+        Self::ensure_typed_array_content_type(view.element_kind(), result_view.element_kind())?;
         Ok(result)
     }
 
@@ -404,7 +439,7 @@ impl Context {
         length: usize,
         default: usize,
     ) -> Result<usize> {
-        let Some(value) = value else {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(default);
         };
         let relative = self.to_integer_or_infinity(value)?;
@@ -432,18 +467,14 @@ impl Context {
             return self.eval_direct_array_sort(args, this_value);
         }
         let mut values = self.typed_array_view_values(&view)?;
-        values.sort_by(|left, right| typed_array_numeric_order(*left, *right));
+        values.sort_by(typed_array_element_order);
         self.write_typed_array_values(this_value, &values)?;
         Ok(this_value.clone())
     }
 
     fn eval_typed_array_to_sorted(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (_, view) = self.typed_array_receiver(this_value)?;
-        let values = self
-            .typed_array_view_values(&view)?
-            .into_iter()
-            .map(Value::Number)
-            .collect();
+        let values = self.typed_array_view_values(&view)?;
         let result = self.create_typed_array_from_values(view.element_kind(), values)?;
         if args
             .first()
@@ -453,9 +484,9 @@ impl Context {
             return Ok(result);
         }
         let (_, result_view) = self.typed_array_receiver(&result)?;
-        let mut numbers = self.typed_array_view_values(&result_view)?;
-        numbers.sort_by(|left, right| typed_array_numeric_order(*left, *right));
-        self.write_typed_array_values(&result, &numbers)?;
+        let mut elements = self.typed_array_view_values(&result_view)?;
+        elements.sort_by(typed_array_element_order);
+        self.write_typed_array_values(&result, &elements)?;
         Ok(result)
     }
 
@@ -472,24 +503,24 @@ impl Context {
                 "TypedArray.from map function is not callable",
             ));
         }
-        let mut values = if let Some(values) = self.typed_array_iterable_values(&source)? {
+        let values = if let Some(values) = self.typed_array_iterable_values(&source)? {
             values
         } else {
             self.typed_array_collect_array_like(&source)?
         };
-        if let Some(callback) = mapping {
-            let callback_this = args.get(2).cloned().unwrap_or(Value::Undefined);
-            for (index, value) in values.iter_mut().enumerate() {
-                let call_args = [value.clone(), Self::typed_array_usize_value(index)?];
-                *value = self.call_value(callback, &call_args, callback_this.clone())?;
-            }
-        }
-        self.typed_array_create_from_values_with_constructor(this_value, values)
+        let callback_this = args.get(2).cloned().unwrap_or(Value::Undefined);
+        self.typed_array_create_from_values_with_constructor_mapped(
+            this_value,
+            values,
+            None,
+            mapping,
+            &callback_this,
+        )
     }
 
     fn eval_typed_array_of(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         self.ensure_typed_array_constructor(this_value)?;
-        self.typed_array_create_from_values_with_constructor(this_value, args.to_vec())
+        self.typed_array_create_from_values_with_constructor(this_value, args.to_vec(), None)
     }
 
     fn ensure_typed_array_constructor(&self, constructor: &Value) -> Result<()> {
@@ -506,7 +537,11 @@ impl Context {
     ) -> Result<Value> {
         let (_, view) = self.typed_array_receiver(source)?;
         let constructor = self.typed_array_species_constructor(source, view.element_kind())?;
-        self.typed_array_create_from_values_with_constructor(&constructor, values)
+        self.typed_array_create_from_values_with_constructor(
+            &constructor,
+            values,
+            Some(view.element_kind().content_type()),
+        )
     }
 
     fn typed_array_species_constructor(
@@ -543,6 +578,24 @@ impl Context {
         &mut self,
         constructor: &Value,
         values: Vec<Value>,
+        expected_content_type: Option<TypedArrayContentType>,
+    ) -> Result<Value> {
+        self.typed_array_create_from_values_with_constructor_mapped(
+            constructor,
+            values,
+            expected_content_type,
+            None,
+            &Value::Undefined,
+        )
+    }
+
+    fn typed_array_create_from_values_with_constructor_mapped(
+        &mut self,
+        constructor: &Value,
+        values: Vec<Value>,
+        expected_content_type: Option<TypedArrayContentType>,
+        mapping: Option<&Value>,
+        callback_this: &Value,
     ) -> Result<Value> {
         let length = Self::typed_array_usize_value(values.len())?;
         let result = self.semantic_construct(
@@ -550,18 +603,28 @@ impl Context {
             std::slice::from_ref(&length),
             constructor.clone(),
         )?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         let (id, view) = self
             .typed_array_receiver(&result)
             .map_err(|_| Error::type_error(TYPED_ARRAY_RESULT_ERROR))?;
         if view.length() < values.len() {
             return Err(Error::type_error(TYPED_ARRAY_RESULT_ERROR));
         }
-        let mut numbers = Vec::with_capacity(values.len());
-        for value in values {
-            numbers.push(self.to_number(&value)?);
+        if expected_content_type
+            .is_some_and(|expected| expected != view.element_kind().content_type())
+        {
+            return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
-        for (index, number) in numbers.into_iter().enumerate() {
-            if !self.objects.set_typed_array_number(id, index, number)? {
+        for (index, value) in values.into_iter().enumerate() {
+            let value = if let Some(callback) = mapping {
+                let call_args = [value, Self::typed_array_usize_value(index)?];
+                self.call_value(callback, &call_args, callback_this.clone())?
+            } else {
+                value
+            };
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
+            if !self.objects.set_typed_array_value(id, index, &element)? {
                 return Err(Error::runtime("typed array result index is out of bounds"));
             }
         }
@@ -583,23 +646,11 @@ impl Context {
         Ok(values)
     }
 
-    fn typed_array_view_values(&mut self, view: &TypedArrayView) -> Result<Vec<f64>> {
-        let mut values = Vec::with_capacity(view.length());
-        for index in 0..view.length() {
-            self.step()?;
-            values.push(
-                view.read(index)?
-                    .ok_or_else(|| Error::runtime("typed array index is out of bounds"))?,
-            );
-        }
-        Ok(values)
-    }
-
-    fn write_typed_array_values(&mut self, target: &Value, values: &[f64]) -> Result<()> {
+    fn write_typed_array_values(&mut self, target: &Value, values: &[Value]) -> Result<()> {
         let (id, _) = self.typed_array_receiver(target)?;
         for (index, value) in values.iter().enumerate() {
             self.step()?;
-            if !self.objects.set_typed_array_number(id, index, *value)? {
+            if !self.objects.set_typed_array_value(id, index, value)? {
                 return Err(Error::runtime("typed array write index is out of bounds"));
             }
         }
@@ -613,6 +664,16 @@ impl Context {
     fn typed_array_usize_number(value: usize) -> Result<f64> {
         let value = u32::try_from(value).map_err(|_| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
         Ok(f64::from(value))
+    }
+
+    fn ensure_typed_array_content_type(
+        expected: TypedArrayElementKind,
+        actual: TypedArrayElementKind,
+    ) -> Result<()> {
+        if expected.content_type() == actual.content_type() {
+            return Ok(());
+        }
+        Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR))
     }
 }
 
@@ -631,5 +692,13 @@ fn typed_array_numeric_order(left: f64, right: f64) -> Ordering {
             right.is_sign_negative().cmp(&left.is_sign_negative())
         }
         (false, false) => left.partial_cmp(&right).unwrap_or(Ordering::Equal),
+    }
+}
+
+fn typed_array_element_order(left: &Value, right: &Value) -> Ordering {
+    match (left, right) {
+        (Value::Number(left), Value::Number(right)) => typed_array_numeric_order(*left, *right),
+        (Value::BigInt(left), Value::BigInt(right)) => left.cmp(right),
+        _ => Ordering::Equal,
     }
 }

@@ -77,12 +77,7 @@ impl Context {
         if self.optional_optimizations_enabled()
             && (!strict || self.bytecode_target_is_typed_array(object)?)
             && let Value::Object(id) = object
-            && self.objects.set_array_index_if_array(
-                *id,
-                index.index()?,
-                value.clone(),
-                self.limits.max_object_properties,
-            )?
+            && self.set_array_or_typed_array_index(*id, index.index()?, value.clone())?
         {
             return Ok(());
         }
@@ -115,8 +110,7 @@ impl Context {
             return Ok(false);
         };
         let value = self.runtime_value(value)?;
-        self.objects
-            .set_array_index_if_array(*id, index, value, self.limits.max_object_properties)
+        self.set_array_or_typed_array_index(*id, index, value)
     }
 
     pub(super) fn eval_bytecode_array_index_update(
@@ -282,12 +276,7 @@ impl Context {
         let old_value = self.runtime_value(old_value)?;
         let (old_value, new_value) = update(self, &old_value)?;
         let new_value = self.runtime_value(new_value)?;
-        if self.objects.set_array_index_if_array(
-            *id,
-            index,
-            new_value.clone(),
-            self.limits.max_object_properties,
-        )? {
+        if self.set_array_or_typed_array_index(*id, index, new_value.clone())? {
             return Ok(Some(ArrayIndexMutation::Updated {
                 old_value,
                 new_value,

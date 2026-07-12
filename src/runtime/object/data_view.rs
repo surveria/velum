@@ -1,11 +1,12 @@
 use crate::{
     error::{Error, Result},
+    runtime::abstract_operations::{to_bigint_primitive, to_number_primitive},
     runtime::numeric::number_to_uint32,
-    value::{ErrorName, ObjectId},
+    value::{ErrorName, JsBigInt, ObjectId, Value},
 };
 
 use super::{
-    ByteBuffer, Object, ObjectHeap,
+    ByteBuffer, Object, ObjectHeap, TypedArrayContentType,
     typed_array::{to_float32, to_int8, to_int16, to_int32, to_uint8, to_uint16},
 };
 
@@ -24,10 +25,12 @@ pub(in crate::runtime) enum DataViewElementKind {
     Float16,
     Float32,
     Float64,
+    BigInt64,
+    BigUint64,
 }
 
 impl DataViewElementKind {
-    pub(in crate::runtime) const ALL: [Self; 9] = [
+    pub(in crate::runtime) const ALL: [Self; 11] = [
         Self::Int8,
         Self::Uint8,
         Self::Int16,
@@ -37,6 +40,8 @@ impl DataViewElementKind {
         Self::Float16,
         Self::Float32,
         Self::Float64,
+        Self::BigInt64,
+        Self::BigUint64,
     ];
 
     pub(in crate::runtime) const fn index(self) -> usize {
@@ -50,6 +55,8 @@ impl DataViewElementKind {
             Self::Float16 => 6,
             Self::Float32 => 7,
             Self::Float64 => 8,
+            Self::BigInt64 => 9,
+            Self::BigUint64 => 10,
         }
     }
 
@@ -64,6 +71,8 @@ impl DataViewElementKind {
             Self::Float16 => "getFloat16",
             Self::Float32 => "getFloat32",
             Self::Float64 => "getFloat64",
+            Self::BigInt64 => "getBigInt64",
+            Self::BigUint64 => "getBigUint64",
         }
     }
 
@@ -78,6 +87,8 @@ impl DataViewElementKind {
             Self::Float16 => "setFloat16",
             Self::Float32 => "setFloat32",
             Self::Float64 => "setFloat64",
+            Self::BigInt64 => "setBigInt64",
+            Self::BigUint64 => "setBigUint64",
         }
     }
 
@@ -86,65 +97,155 @@ impl DataViewElementKind {
             Self::Int8 | Self::Uint8 => 1,
             Self::Int16 | Self::Uint16 | Self::Float16 => 2,
             Self::Int32 | Self::Uint32 | Self::Float32 => 4,
-            Self::Float64 => 8,
+            Self::Float64 | Self::BigInt64 | Self::BigUint64 => 8,
         }
     }
 
-    fn read(self, buffer: &ByteBuffer, offset: usize, little_endian: bool) -> Result<f64> {
-        let number = match self {
-            Self::Int8 => f64::from(i8::from_ne_bytes(buffer.read::<1>(offset)?)),
-            Self::Uint8 => f64::from(u8::from_ne_bytes(buffer.read::<1>(offset)?)),
-            Self::Int16 => f64::from(if little_endian {
+    pub(in crate::runtime) const fn content_type(self) -> TypedArrayContentType {
+        match self {
+            Self::BigInt64 | Self::BigUint64 => TypedArrayContentType::BigInt,
+            Self::Int8
+            | Self::Uint8
+            | Self::Int16
+            | Self::Uint16
+            | Self::Int32
+            | Self::Uint32
+            | Self::Float16
+            | Self::Float32
+            | Self::Float64 => TypedArrayContentType::Number,
+        }
+    }
+
+    fn read(self, buffer: &ByteBuffer, offset: usize, little_endian: bool) -> Result<Value> {
+        let value = match self {
+            Self::Int8 => Value::Number(f64::from(i8::from_ne_bytes(buffer.read::<1>(offset)?))),
+            Self::Uint8 => Value::Number(f64::from(u8::from_ne_bytes(buffer.read::<1>(offset)?))),
+            Self::Int16 => Value::Number(f64::from(if little_endian {
                 i16::from_le_bytes(buffer.read::<2>(offset)?)
             } else {
                 i16::from_be_bytes(buffer.read::<2>(offset)?)
-            }),
-            Self::Uint16 => f64::from(if little_endian {
+            })),
+            Self::Uint16 => Value::Number(f64::from(if little_endian {
                 u16::from_le_bytes(buffer.read::<2>(offset)?)
             } else {
                 u16::from_be_bytes(buffer.read::<2>(offset)?)
-            }),
-            Self::Int32 => f64::from(if little_endian {
+            })),
+            Self::Int32 => Value::Number(f64::from(if little_endian {
                 i32::from_le_bytes(buffer.read::<4>(offset)?)
             } else {
                 i32::from_be_bytes(buffer.read::<4>(offset)?)
-            }),
-            Self::Uint32 => f64::from(if little_endian {
+            })),
+            Self::Uint32 => Value::Number(f64::from(if little_endian {
                 u32::from_le_bytes(buffer.read::<4>(offset)?)
             } else {
                 u32::from_be_bytes(buffer.read::<4>(offset)?)
-            }),
+            })),
             Self::Float16 => {
                 let bits = if little_endian {
                     u16::from_le_bytes(buffer.read::<2>(offset)?)
                 } else {
                     u16::from_be_bytes(buffer.read::<2>(offset)?)
                 };
-                binary16_to_f64(bits)
+                Value::Number(binary16_to_f64(bits))
             }
-            Self::Float32 => f64::from(if little_endian {
+            Self::Float32 => Value::Number(f64::from(if little_endian {
                 f32::from_le_bytes(buffer.read::<4>(offset)?)
             } else {
                 f32::from_be_bytes(buffer.read::<4>(offset)?)
+            })),
+            Self::Float64 => Value::Number(if little_endian {
+                f64::from_le_bytes(buffer.read::<8>(offset)?)
+            } else {
+                f64::from_be_bytes(buffer.read::<8>(offset)?)
             }),
-            Self::Float64 => {
-                if little_endian {
-                    f64::from_le_bytes(buffer.read::<8>(offset)?)
+            Self::BigInt64 => {
+                let integer = if little_endian {
+                    i64::from_le_bytes(buffer.read::<8>(offset)?)
                 } else {
-                    f64::from_be_bytes(buffer.read::<8>(offset)?)
-                }
+                    i64::from_be_bytes(buffer.read::<8>(offset)?)
+                };
+                Value::BigInt(JsBigInt::from_i64(integer))
+            }
+            Self::BigUint64 => {
+                let integer = if little_endian {
+                    u64::from_le_bytes(buffer.read::<8>(offset)?)
+                } else {
+                    u64::from_be_bytes(buffer.read::<8>(offset)?)
+                };
+                Value::BigInt(JsBigInt::from_u64(integer))
             }
         };
-        Ok(number)
+        Ok(value)
     }
 
     fn write(
         self,
         buffer: &ByteBuffer,
         offset: usize,
-        number: f64,
+        value: &Value,
         little_endian: bool,
     ) -> Result<()> {
+        if self.content_type() == TypedArrayContentType::BigInt {
+            return self.write_bigint(buffer, offset, value, little_endian);
+        }
+        self.write_number(buffer, offset, value, little_endian)
+    }
+
+    fn write_bigint(
+        self,
+        buffer: &ByteBuffer,
+        offset: usize,
+        value: &Value,
+        little_endian: bool,
+    ) -> Result<()> {
+        let bigint = to_bigint_primitive(value)?;
+        match self {
+            Self::BigInt64 => {
+                let Some(integer) = bigint.as_int_n(64).to_i64() else {
+                    return Err(Error::runtime("DataView BigInt64 conversion overflowed"));
+                };
+                write_endian(
+                    buffer,
+                    offset,
+                    little_endian,
+                    integer.to_le_bytes(),
+                    integer.to_be_bytes(),
+                )
+            }
+            Self::BigUint64 => {
+                let Some(integer) = bigint.as_uint_n(64).to_u64() else {
+                    return Err(Error::runtime("DataView BigUint64 conversion overflowed"));
+                };
+                write_endian(
+                    buffer,
+                    offset,
+                    little_endian,
+                    integer.to_le_bytes(),
+                    integer.to_be_bytes(),
+                )
+            }
+            Self::Int8
+            | Self::Uint8
+            | Self::Int16
+            | Self::Uint16
+            | Self::Int32
+            | Self::Uint32
+            | Self::Float16
+            | Self::Float32
+            | Self::Float64 => Err(Error::runtime(
+                "BigInt DataView content type did not match its element kind",
+            )),
+        }
+    }
+
+    fn write_number(
+        self,
+        buffer: &ByteBuffer,
+        offset: usize,
+        value: &Value,
+        little_endian: bool,
+    ) -> Result<()> {
+        let number = to_number_primitive(value)?;
         match self {
             Self::Int8 => buffer.write(offset, &to_int8(number)?.to_ne_bytes()),
             Self::Uint8 => buffer.write(offset, &to_uint8(number)?.to_ne_bytes()),
@@ -215,6 +316,9 @@ impl DataViewElementKind {
                 number.to_le_bytes(),
                 number.to_be_bytes(),
             ),
+            Self::BigInt64 | Self::BigUint64 => Err(Error::runtime(
+                "Number DataView content type did not match its element kind",
+            )),
         }
     }
 }
@@ -261,7 +365,7 @@ impl DataViewView {
         kind: DataViewElementKind,
         offset: usize,
         little_endian: bool,
-    ) -> Result<f64> {
+    ) -> Result<Value> {
         let absolute = self.element_offset(offset, kind.byte_width())?;
         kind.read(&self.buffer, absolute, little_endian)
     }
@@ -270,11 +374,11 @@ impl DataViewView {
         &self,
         kind: DataViewElementKind,
         offset: usize,
-        number: f64,
+        value: &Value,
         little_endian: bool,
     ) -> Result<()> {
         let absolute = self.element_offset(offset, kind.byte_width())?;
-        kind.write(&self.buffer, absolute, number, little_endian)
+        kind.write(&self.buffer, absolute, value, little_endian)
     }
 
     fn element_offset(&self, offset: usize, width: usize) -> Result<usize> {

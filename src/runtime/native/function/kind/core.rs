@@ -26,8 +26,7 @@ impl NativeFunctionKind {
         }
         match self {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
-            Self::TypedArray(_)
-            | Self::AsyncGeneratorNext
+            Self::AsyncGeneratorNext
             | Self::AsyncGeneratorReturn
             | Self::AsyncGeneratorThrow
             | Self::GeneratorNext
@@ -37,6 +36,7 @@ impl NativeFunctionKind {
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
+            Self::TypedArray(_) => Some(3.0),
             Self::BigInt => Some(BIGINT_FUNCTION_LENGTH),
             Self::BigIntAsIntN | Self::BigIntAsUintN => Some(2.0),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),

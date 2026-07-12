@@ -127,24 +127,7 @@ impl Context {
     #[allow(clippy::wrong_self_convention)]
     pub(in crate::runtime) fn to_bigint(&mut self, value: &Value) -> Result<JsBigInt> {
         let primitive = self.to_primitive(value, PreferredType::Number)?;
-        match primitive {
-            Value::BigInt(value) => Ok(value),
-            Value::Bool(value) => Ok(JsBigInt::from_u64(u64::from(value))),
-            Value::String(value) => JsBigInt::parse_string(&value).ok_or_else(|| {
-                Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
-            }),
-            Value::HeapString(value) => JsBigInt::parse_string(value.as_str()).ok_or_else(|| {
-                Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
-            }),
-            Value::Undefined
-            | Value::Null
-            | Value::Number(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_) => Err(Error::type_error(CANNOT_CONVERT_TO_BIGINT_ERROR)),
-        }
+        to_bigint_primitive(&primitive)
     }
 
     /// ECMAScript `ToIntegerOrInfinity`, including observable number conversion.
@@ -323,6 +306,27 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         | Value::Object(_) => Err(Error::runtime(
             "ToNumber received a non-primitive after ToPrimitive",
         )),
+    }
+}
+
+pub(in crate::runtime) fn to_bigint_primitive(value: &Value) -> Result<JsBigInt> {
+    match value {
+        Value::BigInt(value) => Ok(value.clone()),
+        Value::Bool(value) => Ok(JsBigInt::from_u64(u64::from(*value))),
+        Value::String(value) => JsBigInt::parse_string(value).ok_or_else(|| {
+            Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
+        }),
+        Value::HeapString(value) => JsBigInt::parse_string(value.as_str()).ok_or_else(|| {
+            Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
+        }),
+        Value::Undefined
+        | Value::Null
+        | Value::Number(_)
+        | Value::Symbol(_)
+        | Value::Function(_)
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_)
+        | Value::Object(_) => Err(Error::type_error(CANNOT_CONVERT_TO_BIGINT_ERROR)),
     }
 }
 

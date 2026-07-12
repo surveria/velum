@@ -5,8 +5,9 @@ use crate::{
         call::RuntimeCallArgs,
         native::{ARRAY_BUFFER_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY},
         object::{
-            ByteBuffer, ByteBufferOrigin, ObjectPropertyInit, PropertyEnumerable,
-            TypedArrayElementKind, TypedArrayView,
+            ByteBuffer, ByteBufferOrigin, DataPropertyUpdate, ObjectPropertyInit,
+            PropertyConfigurable, PropertyEnumerable, PropertyUpdate, PropertyWritable,
+            TypedArrayContentType, TypedArrayElementKind, TypedArrayView,
         },
         roots::VmRootKind,
     },
@@ -23,6 +24,9 @@ const TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR: &str =
 const TYPED_ARRAY_BUFFER_RANGE_ERROR: &str = "typed array view exceeds its ArrayBuffer";
 const TYPED_ARRAY_OFFSET_ALIGNMENT_ERROR: &str =
     "typed array byteOffset must align to the element size";
+const TYPED_ARRAY_CONTENT_TYPE_ERROR: &str =
+    "typed array source and target must use the same numeric content type";
+const TYPED_ARRAY_SOURCE_ERROR: &str = "typed array source is out of bounds";
 
 impl Context {
     pub(in crate::runtime::native) fn array_buffer_constructor_value(&mut self) -> Result<Value> {
@@ -64,10 +68,18 @@ impl Context {
         )?;
         let name = self.native_function_name_value(function_kind)?;
         self.push_native_function_with_id(id, function_kind, Value::Object(prototype), name)?;
-        self.define_non_enumerable_object_property(
+        let bytes_key = self.intern_property_key(BYTES_PER_ELEMENT_PROPERTY)?;
+        self.objects.define_property(
             prototype,
+            bytes_key,
             BYTES_PER_ELEMENT_PROPERTY,
-            Value::Number(Self::element_size_number(element_kind)?),
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Number(Self::element_size_number(element_kind)?)),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
         )?;
         self.insert_global_builtin(element_kind.name(), constructor.clone())?;
         Ok(constructor)
@@ -138,6 +150,18 @@ impl Context {
                 values.get(2),
             );
         }
+        if let Value::Object(source_id) = source
+            && let Some(source_view) = self.objects.typed_array(source_id)?
+        {
+            if source_view.is_out_of_bounds() {
+                return Err(Error::type_error(TYPED_ARRAY_SOURCE_ERROR));
+            }
+            if source_view.element_kind().content_type() != element_kind.content_type() {
+                return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
+            }
+            let values = self.typed_array_view_values(&source_view)?;
+            return self.create_typed_array_from_values(element_kind, values);
+        }
         if self.semantic_object_ref(&source)?.is_some() {
             if let Some(values) = self.typed_array_iterable_values(&source)? {
                 return self.create_typed_array_from_values(element_kind, values);
@@ -196,11 +220,11 @@ impl Context {
             TYPED_ARRAY_LENGTH_LIMIT_ERROR,
         )?;
         self.check_typed_array_length(element_kind, length)?;
-        let mut numbers = Vec::with_capacity(length);
+        let mut elements = Vec::with_capacity(length);
         for index in 0..length {
             self.step()?;
             let value = self.get_named(source, &index.to_string())?;
-            numbers.push(self.to_number(&value)?);
+            elements.push(self.convert_typed_array_element_value(element_kind, &value)?);
         }
         let value = self.create_typed_array_with_length(element_kind, length)?;
         let Value::Object(id) = value else {
@@ -208,8 +232,8 @@ impl Context {
                 "typed array allocation did not return an object",
             ));
         };
-        for (index, number) in numbers.into_iter().enumerate() {
-            if !self.objects.set_typed_array_number(id, index, number)? {
+        for (index, element) in elements.into_iter().enumerate() {
+            if !self.objects.set_typed_array_value(id, index, &element)? {
                 return Err(Error::runtime(
                     "typed array initialization index is out of bounds",
                 ));
@@ -224,18 +248,18 @@ impl Context {
         values: Vec<Value>,
     ) -> Result<Value> {
         self.check_typed_array_length(element_kind, values.len())?;
-        let mut numbers = Vec::with_capacity(values.len());
+        let mut elements = Vec::with_capacity(values.len());
         for value in values {
-            numbers.push(self.to_number(&value)?);
+            elements.push(self.convert_typed_array_element_value(element_kind, &value)?);
         }
-        let result = self.create_typed_array_with_length(element_kind, numbers.len())?;
+        let result = self.create_typed_array_with_length(element_kind, elements.len())?;
         let Value::Object(id) = result else {
             return Err(Error::runtime(
                 "typed array allocation did not return an object",
             ));
         };
-        for (index, number) in numbers.into_iter().enumerate() {
-            if !self.objects.set_typed_array_number(id, index, number)? {
+        for (index, element) in elements.into_iter().enumerate() {
+            if !self.objects.set_typed_array_value(id, index, &element)? {
                 return Err(Error::runtime(
                     "typed array initialization index is out of bounds",
                 ));
@@ -451,5 +475,46 @@ impl Context {
         let size = u32::try_from(element_kind.bytes_per_element())
             .map_err(|_| Error::limit(TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR))?;
         Ok(f64::from(size))
+    }
+
+    pub(in crate::runtime) fn convert_typed_array_element_value(
+        &mut self,
+        element_kind: TypedArrayElementKind,
+        value: &Value,
+    ) -> Result<Value> {
+        match element_kind.content_type() {
+            TypedArrayContentType::Number => self.to_number(value).map(Value::Number),
+            TypedArrayContentType::BigInt => self.to_bigint(value).map(Value::BigInt),
+        }
+    }
+
+    pub(in crate::runtime) fn set_array_or_typed_array_index(
+        &mut self,
+        id: ObjectId,
+        index: usize,
+        value: Value,
+    ) -> Result<bool> {
+        if let Some(view) = self.objects.typed_array(id)? {
+            if index >= view.length() {
+                return Ok(true);
+            }
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
+            self.objects.set_typed_array_value(id, index, &element)?;
+            return Ok(true);
+        }
+        self.objects
+            .set_array_index_if_array(id, index, value, self.limits.max_object_properties)
+    }
+
+    pub(super) fn typed_array_view_values(&mut self, view: &TypedArrayView) -> Result<Vec<Value>> {
+        let mut values = Vec::with_capacity(view.length());
+        for index in 0..view.length() {
+            self.step()?;
+            values.push(
+                view.read(index)?
+                    .ok_or_else(|| Error::runtime("typed array index is out of bounds"))?,
+            );
+        }
+        Ok(values)
     }
 }

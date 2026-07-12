@@ -38,9 +38,10 @@ pub use property::{
 pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
+use typed_array::typed_array_property_index;
 pub use typed_array::{ByteBuffer, ByteBufferOrigin};
 pub(in crate::runtime) use typed_array::{
-    TypedArrayElementKind, TypedArrayView, typed_array_number,
+    TypedArrayContentType, TypedArrayElementKind, TypedArrayPropertyIndex, TypedArrayView,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -354,7 +355,7 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(true);
         }
-        if self.has_typed_array_property(property.name())? {
+        if self.has_typed_array_property(property.name()) {
             return Ok(true);
         }
         if self.array_length.is_some()
@@ -381,9 +382,7 @@ impl Object {
             return Err(Error::runtime("array length assignment is not supported"));
         }
         let index = ArrayIndex::parse(property_name);
-        if let Some(index) = index
-            && self.set_typed_array_index(index, &value)?
-        {
+        if self.set_typed_array_property(property_name, &value)? {
             return Ok(());
         }
         if self.has_virtual_string_property_name(property_name)? {
@@ -582,7 +581,7 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(false);
         }
-        if self.has_typed_array_property(property.name())? {
+        if self.has_typed_array_property(property.name()) {
             return Ok(false);
         }
         if self.array_length.is_some()
@@ -638,30 +637,31 @@ impl Object {
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(None);
         };
-        let Some(index) = ArrayIndex::parse(property) else {
-            return Ok(None);
-        };
-        let Some(number) = view.read(index.position()?)? else {
-            return Ok(None);
-        };
-        Ok(Some(Value::Number(number)))
+        match typed_array_property_index(property, view.length()) {
+            Some(TypedArrayPropertyIndex::Valid(index)) => view.read(index),
+            Some(TypedArrayPropertyIndex::Invalid) | None => Ok(None),
+        }
     }
 
-    fn has_typed_array_property(&self, property: &str) -> Result<bool> {
+    fn has_typed_array_property(&self, property: &str) -> bool {
+        let Some(view) = self.typed_array.as_ref() else {
+            return false;
+        };
+        matches!(
+            typed_array_property_index(property, view.length()),
+            Some(TypedArrayPropertyIndex::Valid(_))
+        )
+    }
+
+    fn set_typed_array_property(&self, property: &str, value: &Value) -> Result<bool> {
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(false);
         };
-        let Some(index) = ArrayIndex::parse(property) else {
-            return Ok(false);
-        };
-        Ok(index.position()? < view.length())
-    }
-
-    fn set_typed_array_index(&self, index: ArrayIndex, value: &Value) -> Result<bool> {
-        let Some(view) = self.typed_array.as_ref() else {
-            return Ok(false);
-        };
-        view.write(index.position()?, typed_array_number(value)?)
+        match typed_array_property_index(property, view.length()) {
+            Some(TypedArrayPropertyIndex::Valid(index)) => view.write(index, value),
+            Some(TypedArrayPropertyIndex::Invalid) => Ok(true),
+            None => Ok(false),
+        }
     }
 
     fn delete_array_element(&mut self, index: ArrayIndex) -> Result<bool> {
@@ -682,7 +682,12 @@ impl Object {
     }
 
     fn has_enumerable_own_keys(&self) -> bool {
-        self.enumerable_property_count > 0 || self.has_virtual_string_keys()
+        self.enumerable_property_count > 0
+            || self.has_virtual_string_keys()
+            || self
+                .typed_array
+                .as_ref()
+                .is_some_and(|view| view.length() > 0)
     }
 
     const fn update_enumerable_property_count(

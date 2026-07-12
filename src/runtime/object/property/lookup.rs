@@ -545,7 +545,7 @@ impl Object {
         if self.has_virtual_string_property(property)? {
             return Ok(true);
         }
-        if self.has_typed_array_property(property.name())? {
+        if self.has_typed_array_property(property.name()) {
             return Ok(true);
         }
         if self.array_length.is_none() {

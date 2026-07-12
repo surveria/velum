@@ -10,7 +10,7 @@ use crate::{
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, DataViewElementKind, DataViewView,
             ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable, PropertyKey,
-            PropertyUpdate, PropertyWritable,
+            PropertyUpdate, PropertyWritable, TypedArrayContentType,
         },
     },
     value::{ErrorName, ObjectId, Value},
@@ -127,7 +127,6 @@ impl Context {
             Self::length_to_usize(self.to_index(values.first())?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;
         let little_endian = values.get(1).is_some_and(to_boolean);
         view.read(element_kind, byte_offset, little_endian)
-            .map(Value::Number)
     }
 
     fn eval_data_view_set(
@@ -140,13 +139,13 @@ impl Context {
         let values = args.as_slice();
         let byte_offset =
             Self::length_to_usize(self.to_index(values.first())?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;
-        let number = if let Some(value) = values.get(1) {
-            self.to_number(value)?
-        } else {
-            f64::NAN
+        let value = values.get(1).unwrap_or(&Value::Undefined);
+        let element = match element_kind.content_type() {
+            TypedArrayContentType::Number => Value::Number(self.to_number(value)?),
+            TypedArrayContentType::BigInt => Value::BigInt(self.to_bigint(value)?),
         };
         let little_endian = values.get(2).is_some_and(to_boolean);
-        view.write(element_kind, byte_offset, number, little_endian)?;
+        view.write(element_kind, byte_offset, &element, little_endian)?;
         Ok(Value::Undefined)
     }
 

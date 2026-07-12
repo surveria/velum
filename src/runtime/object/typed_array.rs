@@ -2,8 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::{Error, Result},
-    runtime::{abstract_operations::to_number_primitive, numeric::number_to_uint32},
-    value::{ObjectId, Value},
+    runtime::{
+        abstract_operations::{to_bigint_primitive, to_number_primitive},
+        numeric::number_to_uint32,
+    },
+    value::{JsBigInt, ObjectId, Value, format_ecmascript_number},
 };
 
 use super::{Object, ObjectHeap};
@@ -182,10 +185,24 @@ pub(in crate::runtime) enum TypedArrayElementKind {
     Uint32,
     Float32,
     Float64,
+    BigInt64,
+    BigUint64,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum TypedArrayContentType {
+    Number,
+    BigInt,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum TypedArrayPropertyIndex {
+    Valid(usize),
+    Invalid,
 }
 
 impl TypedArrayElementKind {
-    pub(in crate::runtime) const ALL: [Self; 9] = [
+    pub(in crate::runtime) const ALL: [Self; 11] = [
         Self::Int8,
         Self::Uint8,
         Self::Uint8Clamped,
@@ -195,6 +212,8 @@ impl TypedArrayElementKind {
         Self::Uint32,
         Self::Float32,
         Self::Float64,
+        Self::BigInt64,
+        Self::BigUint64,
     ];
 
     pub(in crate::runtime) const fn name(self) -> &'static str {
@@ -208,6 +227,8 @@ impl TypedArrayElementKind {
             Self::Uint32 => "Uint32Array",
             Self::Float32 => "Float32Array",
             Self::Float64 => "Float64Array",
+            Self::BigInt64 => "BigInt64Array",
+            Self::BigUint64 => "BigUint64Array",
         }
     }
 
@@ -216,22 +237,45 @@ impl TypedArrayElementKind {
             Self::Int8 | Self::Uint8 | Self::Uint8Clamped => 1,
             Self::Int16 | Self::Uint16 => 2,
             Self::Int32 | Self::Uint32 | Self::Float32 => 4,
-            Self::Float64 => 8,
+            Self::Float64 | Self::BigInt64 | Self::BigUint64 => 8,
         }
     }
 
-    pub(in crate::runtime) fn read(self, buffer: &ByteBuffer, offset: usize) -> Result<f64> {
+    pub(in crate::runtime) const fn content_type(self) -> TypedArrayContentType {
+        match self {
+            Self::BigInt64 | Self::BigUint64 => TypedArrayContentType::BigInt,
+            Self::Int8
+            | Self::Uint8
+            | Self::Uint8Clamped
+            | Self::Int16
+            | Self::Uint16
+            | Self::Int32
+            | Self::Uint32
+            | Self::Float32
+            | Self::Float64 => TypedArrayContentType::Number,
+        }
+    }
+
+    pub(in crate::runtime) fn read(self, buffer: &ByteBuffer, offset: usize) -> Result<Value> {
         let value = match self {
-            Self::Int8 => f64::from(i8::from_ne_bytes(buffer.read::<1>(offset)?)),
+            Self::Int8 => Value::Number(f64::from(i8::from_ne_bytes(buffer.read::<1>(offset)?))),
             Self::Uint8 | Self::Uint8Clamped => {
-                f64::from(u8::from_ne_bytes(buffer.read::<1>(offset)?))
+                Value::Number(f64::from(u8::from_ne_bytes(buffer.read::<1>(offset)?)))
             }
-            Self::Int16 => f64::from(i16::from_ne_bytes(buffer.read::<2>(offset)?)),
-            Self::Uint16 => f64::from(u16::from_ne_bytes(buffer.read::<2>(offset)?)),
-            Self::Int32 => f64::from(i32::from_ne_bytes(buffer.read::<4>(offset)?)),
-            Self::Uint32 => f64::from(u32::from_ne_bytes(buffer.read::<4>(offset)?)),
-            Self::Float32 => f64::from(f32::from_ne_bytes(buffer.read::<4>(offset)?)),
-            Self::Float64 => f64::from_ne_bytes(buffer.read::<8>(offset)?),
+            Self::Int16 => Value::Number(f64::from(i16::from_ne_bytes(buffer.read::<2>(offset)?))),
+            Self::Uint16 => Value::Number(f64::from(u16::from_ne_bytes(buffer.read::<2>(offset)?))),
+            Self::Int32 => Value::Number(f64::from(i32::from_ne_bytes(buffer.read::<4>(offset)?))),
+            Self::Uint32 => Value::Number(f64::from(u32::from_ne_bytes(buffer.read::<4>(offset)?))),
+            Self::Float32 => {
+                Value::Number(f64::from(f32::from_ne_bytes(buffer.read::<4>(offset)?)))
+            }
+            Self::Float64 => Value::Number(f64::from_ne_bytes(buffer.read::<8>(offset)?)),
+            Self::BigInt64 => Value::BigInt(JsBigInt::from_i64(i64::from_ne_bytes(
+                buffer.read::<8>(offset)?,
+            ))),
+            Self::BigUint64 => Value::BigInt(JsBigInt::from_u64(u64::from_ne_bytes(
+                buffer.read::<8>(offset)?,
+            ))),
         };
         Ok(value)
     }
@@ -240,8 +284,37 @@ impl TypedArrayElementKind {
         self,
         buffer: &ByteBuffer,
         offset: usize,
-        number: f64,
+        value: &Value,
     ) -> Result<()> {
+        if self.content_type() == TypedArrayContentType::BigInt {
+            let bigint = to_bigint_primitive(value)?;
+            return match self {
+                Self::BigInt64 => {
+                    let Some(value) = bigint.as_int_n(64).to_i64() else {
+                        return Err(Error::runtime("BigInt64 conversion overflowed"));
+                    };
+                    buffer.write(offset, &value.to_ne_bytes())
+                }
+                Self::BigUint64 => {
+                    let Some(value) = bigint.as_uint_n(64).to_u64() else {
+                        return Err(Error::runtime("BigUint64 conversion overflowed"));
+                    };
+                    buffer.write(offset, &value.to_ne_bytes())
+                }
+                Self::Int8
+                | Self::Uint8
+                | Self::Uint8Clamped
+                | Self::Int16
+                | Self::Uint16
+                | Self::Int32
+                | Self::Uint32
+                | Self::Float32
+                | Self::Float64 => Err(Error::runtime(
+                    "BigInt typed array content type did not match its element kind",
+                )),
+            };
+        }
+        let number = to_number_primitive(value)?;
         match self {
             Self::Int8 => buffer.write(offset, &to_int8(number)?.to_ne_bytes()),
             Self::Uint8 => buffer.write(offset, &to_uint8(number)?.to_ne_bytes()),
@@ -255,6 +328,9 @@ impl TypedArrayElementKind {
             ),
             Self::Float32 => buffer.write(offset, &to_float32(number).to_ne_bytes()),
             Self::Float64 => buffer.write(offset, &number.to_ne_bytes()),
+            Self::BigInt64 | Self::BigUint64 => Err(Error::runtime(
+                "Number typed array content type did not match its element kind",
+            )),
         }
     }
 }
@@ -335,18 +411,18 @@ impl TypedArrayView {
         self.element_kind
     }
 
-    pub fn read(&self, index: usize) -> Result<Option<f64>> {
+    pub fn read(&self, index: usize) -> Result<Option<Value>> {
         let Some(absolute) = self.element_offset(index)? else {
             return Ok(None);
         };
         self.element_kind.read(&self.buffer, absolute).map(Some)
     }
 
-    pub fn write(&self, index: usize, number: f64) -> Result<bool> {
+    pub fn write(&self, index: usize, value: &Value) -> Result<bool> {
         let Some(absolute) = self.element_offset(index)? else {
             return Ok(false);
         };
-        self.element_kind.write(&self.buffer, absolute, number)?;
+        self.element_kind.write(&self.buffer, absolute, value)?;
         Ok(true)
     }
 
@@ -363,7 +439,7 @@ impl TypedArrayView {
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))
     }
 
-    fn is_out_of_bounds(&self) -> bool {
+    pub(in crate::runtime) fn is_out_of_bounds(&self) -> bool {
         if self.buffer.is_detached() {
             return true;
         }
@@ -475,6 +551,17 @@ impl ObjectHeap {
         Ok(self.object(id)?.typed_array.clone())
     }
 
+    pub(in crate::runtime) fn typed_array_property_index(
+        &self,
+        id: ObjectId,
+        property: &str,
+    ) -> Result<Option<TypedArrayPropertyIndex>> {
+        let Some(view) = self.object(id)?.typed_array.as_ref() else {
+            return Ok(None);
+        };
+        Ok(typed_array_property_index(property, view.length()))
+    }
+
     pub(crate) fn typed_array_rejects_numeric_property(
         &self,
         id: ObjectId,
@@ -483,32 +570,29 @@ impl ObjectHeap {
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(false);
         };
-        if matches!(property, "NaN" | "Infinity" | "-Infinity" | "-0") {
-            return Ok(true);
-        }
-        let Some(index) = super::array::ArrayIndex::parse(property) else {
-            return Ok(false);
-        };
-        Ok(index.position()? >= view.length())
+        Ok(matches!(
+            typed_array_property_index(property, view.length()),
+            Some(TypedArrayPropertyIndex::Invalid)
+        ))
     }
 
-    pub(crate) fn typed_array_number(&self, id: ObjectId, index: usize) -> Result<Option<f64>> {
+    pub(crate) fn typed_array_value(&self, id: ObjectId, index: usize) -> Result<Option<Value>> {
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(None);
         };
         view.read(index)
     }
 
-    pub(crate) fn set_typed_array_number(
+    pub(crate) fn set_typed_array_value(
         &self,
         id: ObjectId,
         index: usize,
-        number: f64,
+        value: &Value,
     ) -> Result<bool> {
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(false);
         };
-        view.write(index, number)
+        view.write(index, value)
     }
 
     pub(crate) fn typed_array_debug_origin(
@@ -522,8 +606,33 @@ impl ObjectHeap {
     }
 }
 
-pub fn typed_array_number(value: &Value) -> Result<f64> {
-    to_number_primitive(value)
+pub(in crate::runtime::object) fn typed_array_property_index(
+    property: &str,
+    length: usize,
+) -> Option<TypedArrayPropertyIndex> {
+    if property == "-0" {
+        return Some(TypedArrayPropertyIndex::Invalid);
+    }
+    let number = match property {
+        "NaN" => f64::NAN,
+        "Infinity" => f64::INFINITY,
+        "-Infinity" => f64::NEG_INFINITY,
+        _ => property.parse::<f64>().ok()?,
+    };
+    if format_ecmascript_number(number) != property {
+        return None;
+    }
+    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 {
+        return Some(TypedArrayPropertyIndex::Invalid);
+    }
+    let Ok(index) = property.parse::<usize>() else {
+        return Some(TypedArrayPropertyIndex::Invalid);
+    };
+    Some(if index < length {
+        TypedArrayPropertyIndex::Valid(index)
+    } else {
+        TypedArrayPropertyIndex::Invalid
+    })
 }
 
 pub(super) fn to_int8(value: f64) -> Result<i8> {

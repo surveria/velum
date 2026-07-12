@@ -56,12 +56,7 @@ impl Context {
             return Ok(None);
         };
         let value = self.checked_value(Value::Number(apply_number_binary(op, left, *right)?))?;
-        if !self.objects.set_array_index_if_array(
-            *id,
-            index,
-            value.clone(),
-            self.limits.max_object_properties,
-        )? {
+        if !self.set_array_or_typed_array_index(*id, index, value.clone())? {
             return Ok(None);
         }
         Ok(Some(value))

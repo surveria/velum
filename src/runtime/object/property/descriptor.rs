@@ -621,6 +621,16 @@ impl Object {
         property: PropertyLookup<'_>,
         shapes: &ShapeTable,
     ) -> Result<Option<OwnPropertyDescriptor>> {
+        if let Some(value) = self.typed_array_property(property.name())? {
+            return Ok(Some(OwnPropertyDescriptor::Data(
+                DataPropertyDescriptor::new(
+                    value,
+                    PropertyWritable::Yes,
+                    PropertyEnumerable::Yes,
+                    PropertyConfigurable::Yes,
+                ),
+            )));
+        }
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
