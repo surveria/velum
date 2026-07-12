@@ -1482,6 +1482,7 @@ CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
 capability_state:ObjectId,
 promise:crate::runtime::promise::PromiseId,
 ProxyRevoke(ObjectId),
+state:ObjectId,
 state:ObjectId,'
 
   if ! grep -F -q 'pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot>' \

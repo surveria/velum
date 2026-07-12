@@ -4,14 +4,20 @@ use super::{
 };
 use crate::runtime::{
     object::TypedArrayElementKind,
-    promise::{PromiseCombinatorElementKind, PromiseCombinatorKind},
+    promise::{PromiseCombinatorElementKind, PromiseCombinatorKind, PromiseFinallyFunctionKind},
 };
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
 mod math;
+mod promise;
 mod regexp;
 mod string;
 mod utility;
+
+pub(in crate::runtime::native) use promise::{
+    PROMISE_CATCH_NAME, PROMISE_FINALLY_NAME, PROMISE_NAME, PROMISE_REJECT_NAME,
+    PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+};
 
 pub(in crate::runtime::native) use regexp::{
     REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME, REGEXP_PROTOTYPE_TEST_NAME,
@@ -158,27 +164,12 @@ pub(in crate::runtime::native) const OBJECT_FROM_ENTRIES_NAME: &str = "fromEntri
 pub(in crate::runtime::native) const OBJECT_SET_PROTOTYPE_OF_NAME: &str = "setPrototypeOf";
 pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
-const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
-const PROMISE_CAPABILITY_EXECUTOR_FUNCTION_LENGTH: f64 = 2.0;
-const PROMISE_CAPABILITY_EXECUTOR_NAME: &str = "";
-const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const PROMISE_NAME: &str = "Promise";
 pub(in crate::runtime::native) const PROXY_NAME: &str = "Proxy";
 const PROXY_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROXY_REVOCABLE_NAME: &str = "revocable";
 const PROXY_REVOCABLE_FUNCTION_LENGTH: f64 = 2.0;
 const PROXY_REVOKE_NAME: &str = "";
 const PROXY_REVOKE_FUNCTION_LENGTH: f64 = 0.0;
-const PROMISE_REJECT_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const PROMISE_REJECT_NAME: &str = "reject";
-const PROMISE_RESOLVE_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const PROMISE_RESOLVE_NAME: &str = "resolve";
-const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
-const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
-pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
-const REJECT_NAME: &str = "";
-const RESOLVE_NAME: &str = "";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const STRING_FROM_CHAR_CODE_NAME: &str = "fromCharCode";
 pub(in crate::runtime::native) const STRING_FROM_CODE_POINT_NAME: &str = "fromCodePoint";
@@ -408,6 +399,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     PromiseReject,
     PromiseThen,
     PromiseCatch,
+    PromiseFinally,
+    PromiseFinallyFunction {
+        state: ObjectId,
+        kind: PromiseFinallyFunctionKind,
+    },
     PromiseResolver {
         promise: crate::runtime::promise::PromiseId,
         kind: crate::runtime::promise::PromiseResolverKind,
@@ -600,6 +596,9 @@ impl NativeFunctionKind {
     }
 
     const fn core_length(self) -> Option<f64> {
+        if let Some(length) = self.promise_length() {
+            return Some(length);
+        }
         match self {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
             Self::TypedArray(_)
@@ -609,7 +608,6 @@ impl NativeFunctionKind {
             | Self::GeneratorNext
             | Self::GeneratorReturn
             | Self::GeneratorThrow
-            | Self::PromiseCombinator(_)
             | Self::PromiseCombinatorElement { .. } => Some(1.0),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
@@ -630,15 +628,6 @@ impl NativeFunctionKind {
             Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
             Self::Print | Self::ThrowTypeError | Self::TypedArrayIntrinsic => Some(0.0),
-            Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
-            Self::PromiseCapabilityExecutor { .. } => {
-                Some(PROMISE_CAPABILITY_EXECUTOR_FUNCTION_LENGTH)
-            }
-            Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
-            Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
-            Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
-            Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
-            Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
             Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
             Self::ProxyRevocable => Some(PROXY_REVOCABLE_FUNCTION_LENGTH),
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
@@ -741,6 +730,9 @@ impl NativeFunctionKind {
     }
 
     const fn core_name(self) -> Option<&'static str> {
+        if let Some(name) = self.promise_name() {
+            return Some(name);
+        }
         match self {
             Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_NAME),
@@ -766,21 +758,6 @@ impl NativeFunctionKind {
             Self::JsonStringify => Some(JSON_STRINGIFY_NAME),
             Self::Number => Some(NUMBER_NAME),
             Self::Print => Some("print"),
-            Self::Promise => Some(PROMISE_NAME),
-            Self::PromiseCombinator(kind) => Some(kind.name()),
-            Self::PromiseCapabilityExecutor { .. } => Some(PROMISE_CAPABILITY_EXECUTOR_NAME),
-            Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
-            Self::PromiseReject => Some(PROMISE_REJECT_NAME),
-            Self::PromiseThen => Some(PROMISE_THEN_NAME),
-            Self::PromiseCatch => Some(PROMISE_CATCH_NAME),
-            Self::PromiseResolver {
-                kind: crate::runtime::promise::PromiseResolverKind::Resolve,
-                ..
-            } => Some(RESOLVE_NAME),
-            Self::PromiseResolver {
-                kind: crate::runtime::promise::PromiseResolverKind::Reject,
-                ..
-            } => Some(REJECT_NAME),
             Self::Proxy => Some(PROXY_NAME),
             Self::ProxyRevocable => Some(PROXY_REVOCABLE_NAME),
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_NAME),

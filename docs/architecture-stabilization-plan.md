@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09u unifies the standard Promise settlement combinators over shared capability, iterator, element-state, and AggregateError owners. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09v completes `Promise.prototype.finally` over shared species, capability, reaction, and thenable-job owners. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2782,7 +2782,7 @@ AS-09t profile evidence in draft PR #481:
   `9031c93`, and report commit `1d18f16` published canonical report
   `20260712T035912Z`; AS-09t is complete.
 
-AS-09u profile evidence in draft PR #483:
+AS-09u canonical evidence from PR #483:
 
 - one `PromiseCombinatorKind` owns the static `all`, `allSettled`, `any`, and
   `race` metadata and registry slots. One element-function representation
@@ -2809,8 +2809,34 @@ AS-09u profile evidence in draft PR #483:
   require unavailable BigInt syntax, four require the separately owned
   `Promise.prototype.finally`, and two require the unavailable cross-realm
   `$262` harness;
+- exact-tree run `29179973809` certifies the branch tree with 661 added
+  variants and no removals. PR #483 merged as `ca0f073`; post-merge run
+  `29180057863` published canonical report `20260712T044049Z` in report commit
+  `7f200dd`, reaching 68,553 passing variants and 35,357 conforming files;
+  AS-09u is complete.
+
+AS-09v profile evidence in draft PR #485:
+
+- `Promise.prototype.finally` uses the shared `SpeciesConstructor`,
+  `NewPromiseCapability`, observable `then`, and Promise reaction paths. One
+  traced native-function state owner retains the selected constructor and
+  handler for Then/Catch Finally functions, and a short-lived state of the
+  same category retains the original settlement for value-thunk/thrower
+  forwarding;
+- Promise reactions can settle either an intrinsic Promise id or a generic
+  capability's resolve/reject functions, so subclass species results remain
+  observable without a second reaction representation;
+- `Promise.prototype.catch` now performs its specified observable `then`
+  invocation, and Promise resolution no longer bypasses observable `then`
+  calls when adopting an already-branded Promise;
+- five direct engine cases cover settlement preservation, dynamic `then`,
+  non-callable handlers, species results, and observable `catch` forwarding;
+- the exact `Promise/prototype/finally/` profile advances from 4/58 to 58/58
+  variants and from 2/29 to 29/29 conforming files. The dependent standard
+  `allSettled/` and `race/` profiles gain their four previously blocked
+  variants; only separately owned BigInt syntax cases remain there;
 - exact-tree correctness and canonical publication remain required before
-  AS-09u can close.
+  AS-09v can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

@@ -18,11 +18,12 @@ use crate::{
 };
 
 use super::{
-    OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_CATCH_NAME, PROMISE_NAME, PROMISE_REJECT_NAME,
-    PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+    OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_CATCH_NAME, PROMISE_FINALLY_NAME, PROMISE_NAME,
+    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
 };
 
 mod combinators;
+mod finally_method;
 
 const PROMISE_CAPABILITY_REJECT_PROPERTY: &str = "[[PromiseCapabilityReject]]";
 const PROMISE_CAPABILITY_RESOLVE_PROPERTY: &str = "[[PromiseCapabilityResolve]]";
@@ -178,6 +179,14 @@ impl Context {
         constructor: &Value,
     ) -> Result<Value> {
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        self.promise_resolve_with_constructor(constructor, value)
+    }
+
+    fn promise_resolve_with_constructor(
+        &mut self,
+        constructor: &Value,
+        value: Value,
+    ) -> Result<Value> {
         if !self.semantic_is_constructor(constructor)? {
             return Err(Error::type_error(
                 "Promise.resolve receiver must be a constructor",
@@ -267,7 +276,18 @@ impl Context {
         let promise = self.promise_id_from_value(this_value)?;
         let on_fulfilled = self.promise_reaction_handler(args.first())?;
         let on_rejected = self.promise_reaction_handler(args.get(1))?;
-        self.promise_then(promise, on_fulfilled, on_rejected)
+        let constructor = self.promise_species_constructor(this_value)?;
+        let capability = self.new_promise_capability(&constructor)?;
+        let _root_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, capability.root_values())?;
+        let reaction = crate::runtime::promise::PromiseReaction::with_capability(
+            capability.resolve,
+            capability.reject,
+            on_fulfilled,
+            on_rejected,
+        );
+        self.add_promise_reaction(promise, reaction)?;
+        Ok(capability.promise)
     }
 
     pub(in crate::runtime::native) fn eval_promise_catch(
@@ -283,9 +303,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let promise = self.promise_id_from_value(this_value)?;
-        let on_rejected = self.promise_reaction_handler(args.first())?;
-        self.promise_then(promise, None, on_rejected)
+        let on_rejected = args.first().cloned().unwrap_or(Value::Undefined);
+        let then = self.get_named(this_value, PROMISE_THEN_NAME)?;
+        self.call_value(&then, &[Value::Undefined, on_rejected], this_value.clone())
     }
 
     pub(in crate::runtime::native) fn eval_promise_native_function_kind(
@@ -309,6 +329,10 @@ impl Context {
             NativeFunctionKind::PromiseReject => Some(self.eval_promise_reject(args, this_value)),
             NativeFunctionKind::PromiseThen => Some(self.eval_promise_then(args, this_value)),
             NativeFunctionKind::PromiseCatch => Some(self.eval_promise_catch(args, this_value)),
+            NativeFunctionKind::PromiseFinally => Some(self.eval_promise_finally(args, this_value)),
+            NativeFunctionKind::PromiseFinallyFunction { state, kind } => {
+                Some(self.eval_promise_finally_function(state, kind, args))
+            }
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 Some(self.eval_promise_resolver(promise, kind, args))
             }
@@ -705,7 +729,10 @@ impl Context {
         self.define_non_enumerable_object_property(prototype, PROMISE_THEN_NAME, then)?;
         let catch =
             self.create_native_function(NativeFunctionKind::PromiseCatch, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, PROMISE_CATCH_NAME, catch)
+        self.define_non_enumerable_object_property(prototype, PROMISE_CATCH_NAME, catch)?;
+        let finally =
+            self.create_native_function(NativeFunctionKind::PromiseFinally, Value::Undefined)?;
+        self.define_non_enumerable_object_property(prototype, PROMISE_FINALLY_NAME, finally)
     }
 
     fn promise_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<Value> {
