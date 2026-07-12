@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T102015Z.md`
-- Task: PR #504: runtime: consolidate Number prototype formatting
-- Performance: 8.86x (4/5 >1.00x) (from `rsqjs-test-report-20260712T102015Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T102015Z.md`)
+- `rsqjs-test-report-20260712T104709Z.md`
+- Task: PR #507: runtime: implement live Array iterator protocol semantics
+- Performance: 11.40x (4/5 >1.00x) (from `rsqjs-test-report-20260712T104709Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T104709Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 72655 passed / 29923 failed (70.83%) (from `rsqjs-test-report-20260712T102015Z.md`)
+- Full Test262: 72775 passed / 29803 failed (70.95%) (from `rsqjs-test-report-20260712T104709Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -484,3 +484,4 @@ Latest report:
 | `20260712T094804Z` `29ed669` PR #502: runtime: implement generic Array concat semantics | 8.95x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72333 passed / 30245 failed (70.52%) |
 | `20260712T095437Z` `af014a2` PR #501: runtime: centralize update numeric coercion | 8.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72467 passed / 30111 failed (70.65%) |
 | `20260712T102015Z` `4d7a472` PR #504: runtime: consolidate Number prototype formatting | 8.86x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72655 passed / 29923 failed (70.83%) |
+| `20260712T104709Z` `886f92c` PR #507: runtime: implement live Array iterator protocol semantics | 11.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72775 passed / 29803 failed (70.95%) |
