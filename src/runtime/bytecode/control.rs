@@ -7,7 +7,7 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
     error::{Error, Result},
     runtime::control::Completion,
-    runtime::{Context, abstract_operations::to_boolean},
+    runtime::{Context, abstract_operations::to_boolean, resource_scope::ScopeDisposal},
     syntax::StaticName,
     value::Value,
 };
@@ -18,7 +18,9 @@ use super::{
     },
     for_of::BytecodeForOfParts,
     linear::BytecodeLinearPlan,
-    state::{BytecodeState, bytecode_loop_completion, loop_label_matches},
+    state::{
+        BytecodeState, ScopeDisposalResumeBehavior, bytecode_loop_completion, loop_label_matches,
+    },
 };
 use try_catch::BytecodeTryParts;
 
@@ -200,12 +202,37 @@ impl Context {
         preserve_last: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let completion = self.eval_bytecode_scoped_block(block)?;
-        if preserve_last && matches!(completion, Completion::Normal(_)) {
-            state.pc = next;
-            return Ok(None);
+        let completion = if let Some(completion) = self.take_resumed_bytecode_child(block)? {
+            completion
+        } else {
+            self.push_lexical_scope()?;
+            let result = self.eval_bytecode_block(block);
+            if result.as_ref().is_ok_and(Completion::suspends_execution) {
+                return result.map(Some);
+            }
+            result?
+        };
+        let Some(removed) = self.pop_lexical_scope()? else {
+            return Err(Error::runtime("bytecode lexical scope disappeared"));
+        };
+        match self.begin_dispose_binding_scope(removed, completion.clone())? {
+            ScopeDisposal::Complete(completion) => {
+                if preserve_last && matches!(completion, Completion::Normal(_)) {
+                    state.pc = next;
+                    return Ok(None);
+                }
+                Ok(Self::store_or_return_completion(state, completion, next))
+            }
+            ScopeDisposal::Await(awaited) => {
+                state.pc = next;
+                state.store_scope_disposal(
+                    completion,
+                    ScopeDisposalResumeBehavior::Continue { preserve_last },
+                )?;
+                state.mark_await_suspended();
+                Ok(Some(Completion::Suspended(awaited)))
+            }
         }
-        Ok(Self::store_or_return_completion(state, completion, next))
     }
 
     fn eval_bytecode_with(
@@ -242,24 +269,6 @@ impl Context {
             }
             completion => Some(completion),
         }
-    }
-
-    fn eval_bytecode_scoped_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
-        if let Some(completion) = self.take_resumed_bytecode_child(block)? {
-            let Some(removed) = self.pop_lexical_scope()? else {
-                return Err(Error::runtime("resumed bytecode lexical scope disappeared"));
-            };
-            return self.dispose_binding_scope(removed, completion);
-        }
-        self.push_lexical_scope()?;
-        let result = self.eval_bytecode_block(block);
-        if result.as_ref().is_ok_and(Completion::suspends_execution) {
-            return result;
-        }
-        let Some(removed) = self.pop_lexical_scope()? else {
-            return Err(Error::runtime("bytecode lexical scope disappeared"));
-        };
-        self.dispose_binding_scope(removed, result?)
     }
 
     fn eval_bytecode_while(
@@ -390,16 +399,28 @@ impl Context {
             return match result {
                 Ok(completion) => {
                     let was_normal = completion.is_none();
-                    let completion =
+                    let original =
                         completion.unwrap_or_else(|| Completion::Normal(state.last.clone()));
-                    let completion = self.dispose_binding_scope(removed, completion)?;
-                    if was_normal {
-                        if let Completion::Normal(value) = completion {
-                            state.last = value;
-                            return Ok(None);
+                    match self.begin_dispose_binding_scope(removed, original.clone())? {
+                        ScopeDisposal::Complete(completion) => {
+                            if was_normal && let Completion::Normal(value) = completion {
+                                state.last = value;
+                                return Ok(None);
+                            }
+                            Ok(Some(completion))
+                        }
+                        ScopeDisposal::Await(awaited) => {
+                            state.pc = next;
+                            state.store_scope_disposal(
+                                original,
+                                ScopeDisposalResumeBehavior::Continue {
+                                    preserve_last: false,
+                                },
+                            )?;
+                            state.mark_await_suspended();
+                            Ok(Some(Completion::Suspended(awaited)))
                         }
                     }
-                    Ok(Some(completion))
                 }
                 Err(error) => Err(error),
             };

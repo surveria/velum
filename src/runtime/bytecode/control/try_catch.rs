@@ -7,9 +7,10 @@ use crate::{
             control_continuation::{
                 BytecodeControlRecord, BytecodeControlStateSlot, BytecodeTryPhase,
             },
-            state::BytecodeState,
+            state::{BytecodeState, ScopeDisposalResumeBehavior},
         },
         control::Completion,
+        resource_scope::ScopeDisposal,
     },
     syntax::DeclKind,
     value::Value,
@@ -272,6 +273,9 @@ impl Context {
         if !scoped {
             return self.eval_bytecode_block_with_state(block, state);
         }
+        if state.has_scope_disposal() {
+            return self.eval_bytecode_block_with_state(block, state);
+        }
         let resumes = state.is_resuming();
         if !resumes {
             self.push_lexical_scope()?;
@@ -284,7 +288,19 @@ impl Context {
             return Err(Error::runtime("bytecode try lexical scope disappeared"));
         };
         match result {
-            Ok(completion) => self.dispose_binding_scope(removed, completion),
+            Ok(completion) => {
+                match self.begin_dispose_binding_scope(removed, completion.clone())? {
+                    ScopeDisposal::Complete(completion) => Ok(completion),
+                    ScopeDisposal::Await(awaited) => {
+                        state.store_scope_disposal(
+                            completion,
+                            ScopeDisposalResumeBehavior::Complete,
+                        )?;
+                        state.mark_await_suspended();
+                        Ok(Completion::Suspended(awaited))
+                    }
+                }
+            }
             Err(error) => Err(error),
         }
     }

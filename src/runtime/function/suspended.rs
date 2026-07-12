@@ -287,8 +287,8 @@ impl DetachedFunctionExecution {
                     result?;
                 }
             }
-            if let Some(stack) = scope.disposable_stack() {
-                visitor.visit_value(kind, stack)?;
+            for stack in scope.resource_stacks() {
+                visitor.visit_value(kind, stack.value())?;
             }
         }
         for frame in &self.activations {
@@ -353,8 +353,8 @@ impl DetachedFunctionExecution {
                     result?;
                 }
             }
-            if let Some(stack) = scope.disposable_stack() {
-                visitor.visit(kind, StrongEdgeReference::Value(stack))?;
+            for stack in scope.resource_stacks() {
+                visitor.visit(kind, StrongEdgeReference::Value(stack.value()))?;
             }
         }
         for frame in &self.activations {

@@ -91,7 +91,7 @@ impl Context {
             match kind {
                 DeclKind::Var => self.hoist_var(binding)?,
                 DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing => {
-                    self.hoist_lexical(binding, kind)?
+                    self.hoist_lexical(binding, kind)?;
                 }
             }
         }

@@ -105,7 +105,21 @@ pub struct BindingScope {
     index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
     storage_ledger: Option<VmStorageLedger>,
-    disposable_stack: Option<Value>,
+    resource_stacks: Vec<BindingResourceStack>,
+}
+
+#[derive(Debug)]
+pub(in crate::runtime) enum BindingResourceStack {
+    Sync(Value),
+    Async(Value),
+}
+
+impl BindingResourceStack {
+    pub(crate) const fn value(&self) -> &Value {
+        match self {
+            Self::Sync(value) | Self::Async(value) => value,
+        }
+    }
 }
 
 impl Default for ScopeIndex {
@@ -121,7 +135,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: None,
-            disposable_stack: None,
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -131,7 +145,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: Some(storage_ledger),
-            disposable_stack: None,
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -147,7 +161,7 @@ impl BindingScope {
             index: ScopeIndex::Shared(template),
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
-            disposable_stack: None,
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -182,26 +196,22 @@ impl BindingScope {
             },
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
-            disposable_stack: None,
+            resource_stacks: Vec::new(),
         })
     }
 
-    pub(crate) const fn disposable_stack(&self) -> Option<&Value> {
-        self.disposable_stack.as_ref()
+    pub(in crate::runtime) fn resource_stacks(
+        &self,
+    ) -> impl Iterator<Item = &BindingResourceStack> {
+        self.resource_stacks.iter()
     }
 
-    pub(crate) fn set_disposable_stack(&mut self, stack: Value) -> Result<()> {
-        if self.disposable_stack.is_some() {
-            return Err(Error::runtime(
-                "binding scope disposable stack is already initialized",
-            ));
-        }
-        self.disposable_stack = Some(stack);
-        Ok(())
+    pub(in crate::runtime) fn push_resource_stack(&mut self, stack: BindingResourceStack) {
+        self.resource_stacks.push(stack);
     }
 
-    pub(crate) fn take_disposable_stack(&mut self) -> Option<Value> {
-        self.disposable_stack.take()
+    pub(in crate::runtime) fn take_resource_stacks(&mut self) -> Vec<BindingResourceStack> {
+        std::mem::take(&mut self.resource_stacks)
     }
 
     pub(crate) fn contains(&self, atom: AtomId) -> bool {

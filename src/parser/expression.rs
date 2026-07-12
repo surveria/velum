@@ -131,6 +131,36 @@ impl Parser {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;
             }
+            if matches!(self.peek_kind(0), Some(TokenKind::TemplateHead(_))) {
+                let token = self
+                    .advance()
+                    .ok_or_else(|| self.parse_error("expected tagged template literal"))?;
+                let TokenKind::TemplateHead(head) = token.kind else {
+                    return Err(Error::parse_at(
+                        "expected tagged template literal",
+                        token.span,
+                    ));
+                };
+                let (quasis, expressions) = self.template_parts(head)?;
+                let strings = quasis
+                    .into_iter()
+                    .map(|value| Expression::new(Expr::StringLiteral(value), token.span))
+                    .collect();
+                let mut args = vec![Expression::new(Expr::Array(strings), token.span)];
+                args.extend(expressions);
+                let site = self.static_call_site()?;
+                let start = expr.span();
+                expr = self.expression_node(
+                    start,
+                    Expr::Call {
+                        callee: Box::new(expr),
+                        site,
+                        strict: self.is_strict_mode(),
+                        args,
+                    },
+                );
+                continue;
+            }
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }
@@ -295,6 +325,20 @@ impl Parser {
     }
 
     fn template_literal(&mut self, head: Vec<u16>, start: crate::SourceSpan) -> Result<Expression> {
+        let (quasis, expressions) = self.template_parts(head)?;
+        Ok(self.expression_node(
+            start,
+            Expr::TemplateLiteral {
+                quasis,
+                expressions,
+            },
+        ))
+    }
+
+    fn template_parts(
+        &mut self,
+        head: Vec<u16>,
+    ) -> Result<(Vec<crate::ast::StaticString>, Vec<Expression>)> {
         let mut quasis = vec![self.static_string(head)?];
         let mut expressions = Vec::new();
         loop {
@@ -317,13 +361,7 @@ impl Parser {
                 }
             }
         }
-        Ok(self.expression_node(
-            start,
-            Expr::TemplateLiteral {
-                quasis,
-                expressions,
-            },
-        ))
+        Ok((quasis, expressions))
     }
 
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
@@ -464,10 +502,7 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
-            TokenKind::Let if !self.is_strict_mode() => {
-                let name = self.static_name_borrowed_at("let", token_span.start())?;
-                Expression::new(Expr::Identifier(self.static_binding(name)?), token_span)
-            }
+            TokenKind::Let if !self.is_strict_mode() => self.contextual_let(token_span)?,
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -509,6 +544,14 @@ impl Parser {
             _ => return Err(Error::parse_at("expected expression", token_span)),
         };
         Ok(expr)
+    }
+
+    fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
+        let name = self.static_name_borrowed_at("let", span.start())?;
+        Ok(Expression::new(
+            Expr::Identifier(self.static_binding(name)?),
+            span,
+        ))
     }
 
     pub(super) fn arrow_function(&mut self) -> Result<Option<Expression>> {

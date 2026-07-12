@@ -9,8 +9,7 @@ use crate::{
 use super::{ParsedFunctionBody, Parser};
 
 mod for_statement;
-
-const USING_IDENTIFIER_NAME: &str = "using";
+mod resource_declaration;
 
 struct ParsedLabel {
     name: crate::ast::StaticName,
@@ -131,42 +130,6 @@ impl Parser {
             && !self.peek_token(1).is_some_and(|token| {
                 matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
             })
-    }
-
-    fn using_declaration_start(&self) -> bool {
-        self.contextual_using_at(0)
-            && !self.peek_has_line_terminator_before(1)
-            && self.peek_token(1).is_some_and(|token| {
-                matches!(
-                    &token.kind,
-                    TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Await
-                )
-            })
-    }
-
-    fn await_using_declaration_start(&self) -> bool {
-        self.await_identifier_is_reserved()
-            && self.check(&TokenKind::Await)
-            && !self.peek_has_line_terminator_before(1)
-            && self.contextual_using_at(1)
-            && !self.peek_has_line_terminator_before(2)
-    }
-
-    fn contextual_using_at(&self, offset: usize) -> bool {
-        self.peek_token(offset).is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == USING_IDENTIFIER_NAME)
-        })
-    }
-
-    fn consume_contextual_using(&mut self) -> Result<()> {
-        if !self.contextual_using_at(0) {
-            return Err(self.parse_error("expected contextual 'using' keyword"));
-        }
-        let _token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected contextual 'using' keyword"))?;
-        Ok(())
     }
 
     fn let_expression_statement(&mut self) -> Result<Stmt> {
@@ -736,44 +699,6 @@ impl Parser {
             "expected statement terminator after variable declaration",
         )?;
         self.declarations_stmt(declarations)
-    }
-
-    fn resource_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
-        if self.statement_depth <= 1 {
-            return Err(self.parse_error(
-                "resource declarations are not allowed at the top level of a script",
-            ));
-        }
-        let declarations = self.resource_declarations(kind)?;
-        self.consume_statement_terminator(
-            "expected statement terminator after resource declaration",
-        )?;
-        self.declarations_stmt(declarations)
-    }
-
-    fn resource_declarations(&mut self, kind: DeclKind) -> Result<Vec<Statement>> {
-        let mut declarations = Vec::new();
-        loop {
-            let start = self.current_span();
-            let name = self.consume_binding_identifier("expected resource binding name")?;
-            self.consume(
-                &TokenKind::Equal,
-                "resource declaration requires an initializer",
-            )?;
-            let init = self.assignment_expression()?;
-            declarations.push(self.statement_node(
-                start,
-                Stmt::VarDecl {
-                    name,
-                    kind,
-                    init: Some(init),
-                },
-            ));
-            if !self.match_kind(&TokenKind::Comma) {
-                break;
-            }
-        }
-        Ok(declarations)
     }
 
     fn for_var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {

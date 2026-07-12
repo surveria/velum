@@ -12,6 +12,17 @@ fn ensure_string(source: &str, expected: &str) -> TestResult {
     Err(format!("expected string {expected:?}, got {actual:?}").into())
 }
 
+fn ensure_string_after_jobs(source: &str, expected: &str) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(source)?;
+    let actual = context.eval("result")?;
+    if actual == Value::String(expected.to_owned()) {
+        return Ok(());
+    }
+    Err(format!("expected string {expected:?}, got {actual:?}").into())
+}
+
 #[test]
 fn using_declarations_dispose_resources_at_each_lexical_scope_exit() -> TestResult {
     ensure_string(
@@ -74,5 +85,54 @@ fn using_for_initializer_disposes_before_propagating_initializer_error() -> Test
         }
         "#,
         "stop:true",
+    )
+}
+
+#[test]
+fn await_using_suspends_function_completion_and_preserves_mixed_order() -> TestResult {
+    ensure_string_after_jobs(
+        r#"
+        const seen = [];
+        let result = "pending";
+        async function run() {
+            using first = { [Symbol.dispose]() { seen.push("first"); } };
+            await using second = {
+                [Symbol.asyncDispose]() {
+                    seen.push("second");
+                    return Promise.resolve();
+                }
+            };
+            using third = { [Symbol.dispose]() { seen.push("third"); } };
+            return 7;
+        }
+        run().then(value => { result = value + ":" + seen.join(","); });
+        "#,
+        "7:third,second,first",
+    )
+}
+
+#[test]
+fn await_using_disposes_nested_blocks_and_for_of_iterations_before_advancing() -> TestResult {
+    ensure_string_after_jobs(
+        r#"
+        const seen = [];
+        let result = "pending";
+        async function run() {
+            {
+                await using block = {
+                    [Symbol.asyncDispose]() { seen.push("block"); }
+                };
+                seen.push("inside");
+            }
+            for (await using item of [
+                { id: 1, [Symbol.asyncDispose]() { seen.push("dispose-1"); } },
+                { id: 2, [Symbol.asyncDispose]() { seen.push("dispose-2"); } }
+            ]) {
+                seen.push("body-" + item.id);
+            }
+        }
+        run().then(() => { result = seen.join(","); });
+        "#,
+        "inside,block,body-1,dispose-1,body-2,dispose-2",
     )
 }

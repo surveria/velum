@@ -2,11 +2,14 @@ use crate::{
     SourceSpan,
     bytecode::{BytecodeBlock, BytecodeProgram},
     error::{Error, Result},
-    runtime::{Context, control::Completion, control::runtime_exception_value, roots::VmRootKind},
+    runtime::{
+        Context, control::Completion, control::runtime_exception_value,
+        resource_scope::ScopeDisposal, roots::VmRootKind,
+    },
     value::{FunctionId, Value},
 };
 
-use super::BytecodeState;
+use super::{BytecodeState, state::ScopeDisposalResumeBehavior};
 
 pub(in crate::runtime) enum BytecodeOutcome {
     Completed {
@@ -134,8 +137,18 @@ impl Context {
         let outcome = self.run_bytecode_state(block, &mut state)?;
         if outcome.is_suspended() {
             self.park_bytecode_state_at(activation_index, state)?;
+            return Ok(outcome.completion());
         }
-        Ok(outcome.completion())
+        let completion = outcome.completion();
+        match self.begin_dispose_active_binding_scope(completion.clone())? {
+            ScopeDisposal::Complete(completion) => Ok(completion),
+            ScopeDisposal::Await(awaited) => {
+                state.store_scope_disposal(completion, ScopeDisposalResumeBehavior::Complete)?;
+                state.mark_await_suspended();
+                self.park_bytecode_state_at(activation_index, state)?;
+                Ok(Completion::Suspended(awaited))
+            }
+        }
     }
 
     pub(in crate::runtime) fn resume_bytecode_activation(
@@ -180,7 +193,18 @@ impl Context {
             }
             let completion = outcome.completion();
             if block.is_none() {
-                return Ok(completion);
+                return match self.begin_dispose_active_binding_scope(completion.clone())? {
+                    ScopeDisposal::Complete(completion) => Ok(completion),
+                    ScopeDisposal::Await(awaited) => {
+                        state.store_scope_disposal(
+                            completion,
+                            ScopeDisposalResumeBehavior::Complete,
+                        )?;
+                        state.mark_await_suspended();
+                        self.park_bytecode_state_at(activation_index, state)?;
+                        Ok(Completion::Suspended(awaited))
+                    }
+                };
             }
             self.finish_resumed_bytecode_child(run_block.clone(), completion)?;
         }

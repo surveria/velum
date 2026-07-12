@@ -68,11 +68,10 @@ impl Context {
                     ));
                 };
                 if kind.is_async_resource() {
-                    return Err(Error::runtime(
-                        "await using runtime registration is not initialized",
-                    ));
+                    self.register_await_using_resource(&value)?;
+                } else {
+                    self.register_using_resource(&value)?;
                 }
-                self.register_using_resource(value.clone())?;
                 self.initialize_bytecode_lexical(name, value, kind)?;
             }
         }
