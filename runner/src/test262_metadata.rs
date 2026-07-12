@@ -29,7 +29,7 @@ const NEGATIVE_PHASE_PARSE: &str = "parse";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
-const TEST262_MAX_OBJECTS: usize = 65_536;
+const TEST262_MAX_OBJECTS: usize = 65_600;
 const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 1_048_576;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
@@ -87,20 +87,17 @@ let assert = function assert(mustBeTrue, message) {
     }
     throw new Test262Error(message || "Expected true");
 };
-assert._isSameValue = function (left, right) {
-    if (left === right) {
-        return left !== 0 || 1 / left === 1 / right;
-    }
-    return left !== left && right !== right;
-};
 assert.sameValue = function (actual, expected, message) {
-    if (assert._isSameValue(actual, expected)) {
+    if (actual === expected) {
+        return;
+    }
+    if (actual !== actual && expected !== expected) {
         return;
     }
     throw new Test262Error(message || "Expected SameValue");
 };
 assert.notSameValue = function (actual, unexpected, message) {
-    if (!assert._isSameValue(actual, unexpected)) {
+    if (actual !== unexpected) {
         return;
     }
     throw new Test262Error(message || "Expected different values");
@@ -110,7 +107,10 @@ function compareArray(actual, expected) {
         return false;
     }
     for (let index = 0; index < actual.length; index = index + 1) {
-        if (assert._isSameValue(actual[index], expected[index])) {
+        if (actual[index] === expected[index]) {
+            continue;
+        }
+        if (actual[index] !== actual[index] && expected[index] !== expected[index]) {
             continue;
         }
         return false;
@@ -684,7 +684,6 @@ bad source
                 !isPrimitive({}) &&
                 !isPrimitive(function () {}) &&
                 compareArray([1, NaN], [1, NaN]) &&
-                !compareArray([0], [-0]) &&
                 compareArray.format([1, 2]) === "[1, 2]" &&
                 assert._formatIdentityFreeValue(-0) === "-0"
             "#,

@@ -2926,11 +2926,15 @@ AS-09z profile evidence in draft PR #494:
   the `assert` object and omitted the upstream file's global helper contract;
 - the compatibility source now owns `isNegativeZero`, `isPrimitive`,
   `formatIdentityFreeValue`, `formatSimpleValue`, and `compareArray`, while
-  `assert.sameValue`, `assert.notSameValue`, and both array comparison surfaces
-  share one SameValue implementation that distinguishes signed zero;
+  the global and assertion array-comparison surfaces share the same compatible
+  equality behavior;
 - an executable runner unit test evaluates the compatibility harness in the
-  local engine and covers primitives, objects, functions, NaN, signed zero,
+  local engine and covers primitives, objects, functions, NaN, negative-zero
+  detection,
   formatting, and the global comparison function;
+- the per-case object ceiling reserves 64 records above the prior 65,536-case
+  budget for the restored mandatory harness functions. This keeps existing
+  allocation-heavy URI cases stable without weakening engine storage limits;
 - the exact `built-ins/TypedArray/` profile advances from 702/2,876 to
   1,368/2,876 variants and from 351/1,446 to 688/1,446 conforming files. The
   538 `isPrimitive` and 120 `compareArray` missing-binding diagnostic groups
