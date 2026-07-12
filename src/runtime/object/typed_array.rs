@@ -285,17 +285,23 @@ impl TypedArrayView {
         }
     }
 
-    pub const fn length(&self) -> usize {
+    pub fn length(&self) -> usize {
+        if self.is_out_of_bounds() {
+            return 0;
+        }
         self.length
     }
 
     pub fn byte_length(&self) -> Result<usize> {
-        self.length
+        self.length()
             .checked_mul(self.element_kind.bytes_per_element())
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))
     }
 
-    pub const fn byte_offset(&self) -> usize {
+    pub fn byte_offset(&self) -> usize {
+        if self.is_out_of_bounds() {
+            return 0;
+        }
         self.byte_offset
     }
 
@@ -323,7 +329,7 @@ impl TypedArrayView {
     }
 
     fn element_offset(&self, index: usize) -> Result<Option<usize>> {
-        if index >= self.length {
+        if index >= self.length() {
             return Ok(None);
         }
         let relative = index
@@ -333,6 +339,21 @@ impl TypedArrayView {
             .checked_add(relative)
             .map(Some)
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))
+    }
+
+    fn is_out_of_bounds(&self) -> bool {
+        if self.buffer.is_detached() {
+            return true;
+        }
+        let Some(byte_length) = self
+            .length
+            .checked_mul(self.element_kind.bytes_per_element())
+        else {
+            return true;
+        };
+        self.byte_offset
+            .checked_add(byte_length)
+            .is_none_or(|end| end > self.buffer.byte_length())
     }
 }
 

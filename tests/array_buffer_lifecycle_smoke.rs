@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -48,7 +48,9 @@ fn resizes_shared_backing_storage_and_zero_fills_growth() -> TestResult {
             buffer.resizable === true &&
             bytes[0] === 7 && bytes[3] === 9;
         buffer.resize(2);
-        const shrank = buffer.byteLength === 2 && bytes[0] === 7;
+        const current = new Uint8Array(buffer);
+        const shrank = buffer.byteLength === 2 && bytes.length === 0 &&
+            bytes[0] === undefined && current[0] === 7;
         grew && shrank ? 42 : 0
         ",
     )?;
@@ -63,6 +65,7 @@ fn slices_and_transfers_array_buffers() -> TestResult {
         r"
         const source = new ArrayBuffer(6, { maxByteLength: 10 });
         const bytes = new Uint8Array(source);
+        const dataView = new DataView(source);
         bytes[1] = 11;
         bytes[2] = 22;
         bytes[3] = 33;
@@ -70,10 +73,18 @@ fn slices_and_transfers_array_buffers() -> TestResult {
         const slicedBytes = new Uint8Array(sliced);
         const transferred = source.transfer(8);
         const transferredBytes = new Uint8Array(transferred);
+        let dataViewDetached = false;
+        try {
+            dataView.byteLength;
+        } catch (error) {
+            dataViewDetached = error instanceof TypeError;
+        }
 
         sliced.byteLength === 3 &&
             slicedBytes[0] === 11 && slicedBytes[1] === 22 && slicedBytes[2] === 33 &&
             source.detached === true && source.byteLength === 0 &&
+            bytes.length === 0 && bytes.byteLength === 0 && bytes.byteOffset === 0 &&
+            bytes[0] === undefined && dataViewDetached === true &&
             transferred.byteLength === 8 && transferred.maxByteLength === 10 &&
             transferred.resizable === true && transferredBytes[1] === 11 &&
             transferredBytes[2] === 22 && transferredBytes[6] === 0
@@ -83,9 +94,43 @@ fn slices_and_transfers_array_buffers() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn reconciles_live_buffer_payload_after_resize_and_transfer() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval("var buffer = new ArrayBuffer(4, { maxByteLength: 12 });")?;
+    ensure_usize(
+        vm.storage_snapshot()?
+            .payload_bytes(VmStorageKind::ByteBuffer),
+        4,
+        "initial byte payload",
+    )?;
+    vm.eval("buffer.resize(10);")?;
+    ensure_usize(
+        vm.storage_snapshot()?
+            .payload_bytes(VmStorageKind::ByteBuffer),
+        10,
+        "resized byte payload",
+    )?;
+    vm.eval("buffer = buffer.transferToFixedLength(3);")?;
+    ensure_usize(
+        vm.storage_snapshot()?
+            .payload_bytes(VmStorageKind::ByteBuffer),
+        3,
+        "transferred byte payload",
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
     }
     Err(format!("expected {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_usize(actual: usize, expected: usize, label: &str) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("{label}: expected {expected}, got {actual}").into())
 }

@@ -12,6 +12,20 @@ pub(in crate::runtime) enum ArrayBufferFunctionKind {
 }
 
 impl ArrayBufferFunctionKind {
+    pub(in crate::runtime::native) const fn index(self) -> usize {
+        match self {
+            Self::IsView => 0,
+            Self::ByteLengthGetter => 1,
+            Self::MaxByteLengthGetter => 2,
+            Self::ResizableGetter => 3,
+            Self::DetachedGetter => 4,
+            Self::Resize => 5,
+            Self::Slice => 6,
+            Self::Transfer => 7,
+            Self::TransferToFixedLength => 8,
+        }
+    }
+
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         match self {
             Self::IsView | Self::Resize => 1.0,
