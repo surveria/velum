@@ -115,14 +115,15 @@ impl Context {
                 ),
             };
         }
-        if let Value::String(value) = object {
-            return self.get_string_property_value(object, value, property.name());
-        }
-        if let Value::HeapString(value) = object {
-            return self.get_utf16_string_property_value(object, value.as_utf16(), property.name());
-        }
-        if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
-            return Ok(value);
+        if matches!(
+            object,
+            Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_)
+        ) {
+            return self.get(object, property.lookup());
         }
         let value = get_property(&self.objects, object, property.lookup())?;
         self.runtime_property_value(value)
