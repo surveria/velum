@@ -87,7 +87,8 @@ fn return_obeys_the_line_terminator_restriction() -> TestResult {
         &Value::Undefined,
     )?;
 
-    ensure_parse_error("function invalid() { return 1 2; }")
+    ensure_parse_error("function invalid() { return 1 2; }")?;
+    ensure_parse_error("return 42;")
 }
 
 #[test]

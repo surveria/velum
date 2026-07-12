@@ -205,6 +205,10 @@ impl Parser {
     }
 
     pub(super) fn function_body(&mut self, inherited_strict: bool) -> Result<ParsedFunctionBody> {
+        self.function_body_depth = self
+            .function_body_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("function body nesting overflowed"))?;
         let previous_strict = self.is_strict_mode();
         let previous_function_scope = self.function_declaration_context;
         self.set_strict_mode(inherited_strict);
@@ -212,6 +216,7 @@ impl Parser {
         let result = self.function_body_inner();
         self.function_declaration_context = previous_function_scope;
         self.set_strict_mode(previous_strict);
+        self.function_body_depth = self.function_body_depth.saturating_sub(1);
         result
     }
 
@@ -608,6 +613,9 @@ impl Parser {
     }
 
     fn return_statement(&mut self) -> Result<Stmt> {
+        if self.function_body_depth == 0 {
+            return Err(self.parse_error("return statement is only valid inside a function body"));
+        }
         let value = if self.peek_has_line_terminator_before(0)
             || self.check(&TokenKind::Semicolon)
             || self.check(&TokenKind::RBrace)
