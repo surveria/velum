@@ -279,6 +279,9 @@ fn visit_scope<V: DirectRootVisitor>(
     for cell in scope.cells() {
         visit_cell(cell, kind, visitor)?;
     }
+    if let Some(stack) = scope.disposable_stack() {
+        visitor.visit_value(kind, stack)?;
+    }
     Ok(())
 }
 

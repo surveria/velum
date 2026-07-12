@@ -778,7 +778,10 @@ pub enum BytecodeInstruction {
         label: StaticName,
         body: BytecodeBlock,
     },
-    ScopedBlock(BytecodeBlock),
+    ScopedBlock {
+        block: BytecodeBlock,
+        preserve_last: bool,
+    },
     Jump(BytecodeAddress),
     JumpIfFalse(BytecodeAddress),
     JumpIfFalseKeep(BytecodeAddress),

@@ -58,6 +58,26 @@ pub enum DeclKind {
     Var,
     Let,
     Const,
+    Using,
+    AwaitUsing,
+}
+
+impl DeclKind {
+    pub const fn is_mutable(self) -> bool {
+        matches!(self, Self::Var | Self::Let)
+    }
+
+    pub const fn is_resource(self) -> bool {
+        matches!(self, Self::Using | Self::AwaitUsing)
+    }
+
+    pub const fn is_async_resource(self) -> bool {
+        matches!(self, Self::AwaitUsing)
+    }
+
+    pub const fn requires_initializer(self) -> bool {
+        matches!(self, Self::Const | Self::Using | Self::AwaitUsing)
+    }
 }
 
 /// Execution semantics attached to a JavaScript function definition.

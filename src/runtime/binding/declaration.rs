@@ -90,7 +90,9 @@ impl Context {
         for (_, binding, kind) in declarations {
             match kind {
                 DeclKind::Var => self.hoist_var(binding)?,
-                DeclKind::Let | DeclKind::Const => self.hoist_lexical(binding, kind)?,
+                DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing => {
+                    self.hoist_lexical(binding, kind)?
+                }
             }
         }
         for declaration in plan.function_declarations() {
@@ -162,7 +164,7 @@ impl Context {
             .active_bindings_mut()
             .insert_or_replace_at_optional_slot(
                 atom,
-                BindingCell::uninitialized(kind != DeclKind::Const, kind),
+                BindingCell::uninitialized(kind.is_mutable(), kind),
                 frame.map(CompiledBindingFrame::slot),
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
@@ -281,7 +283,7 @@ impl Context {
         self.ensure_binding_capacity_for_atom(atom)?;
 
         let value = self.runtime_value(value)?;
-        let mutable = kind != DeclKind::Const;
+        let mutable = kind.is_mutable();
         let inserted = self
             .active_bindings_mut()
             .insert_or_replace_at_optional_slot(

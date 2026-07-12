@@ -464,6 +464,10 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
+            TokenKind::Let if !self.is_strict_mode() => {
+                let name = self.static_name_borrowed_at("let", token_span.start())?;
+                Expression::new(Expr::Identifier(self.static_binding(name)?), token_span)
+            }
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator

@@ -105,6 +105,7 @@ pub struct BindingScope {
     index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
     storage_ledger: Option<VmStorageLedger>,
+    disposable_stack: Option<Value>,
 }
 
 impl Default for ScopeIndex {
@@ -120,6 +121,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: None,
+            disposable_stack: None,
         }
     }
 
@@ -129,6 +131,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: Some(storage_ledger),
+            disposable_stack: None,
         }
     }
 
@@ -144,6 +147,7 @@ impl BindingScope {
             index: ScopeIndex::Shared(template),
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
+            disposable_stack: None,
         }
     }
 
@@ -178,7 +182,26 @@ impl BindingScope {
             },
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
+            disposable_stack: None,
         })
+    }
+
+    pub(crate) const fn disposable_stack(&self) -> Option<&Value> {
+        self.disposable_stack.as_ref()
+    }
+
+    pub(crate) fn set_disposable_stack(&mut self, stack: Value) -> Result<()> {
+        if self.disposable_stack.is_some() {
+            return Err(Error::runtime(
+                "binding scope disposable stack is already initialized",
+            ));
+        }
+        self.disposable_stack = Some(stack);
+        Ok(())
+    }
+
+    pub(crate) fn take_disposable_stack(&mut self) -> Option<Value> {
+        self.disposable_stack.take()
     }
 
     pub(crate) fn contains(&self, atom: AtomId) -> bool {

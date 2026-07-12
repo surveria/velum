@@ -212,6 +212,9 @@ impl Parser {
             TokenKind::Await if !self.await_identifier_is_reserved() => {
                 self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, token_offset)
             }
+            TokenKind::Let if !self.is_strict_mode() => {
+                self.static_name_borrowed_at("let", token_offset)
+            }
             _ => Err(Error::parse_at(message, token_span)),
         }
     }

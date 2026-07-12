@@ -142,7 +142,7 @@ impl Context {
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }
-            | BytecodeInstruction::ScopedBlock(_)
+            | BytecodeInstruction::ScopedBlock { .. }
             | BytecodeInstruction::Jump(_)
             | BytecodeInstruction::JumpIfFalse(_)
             | BytecodeInstruction::JumpIfFalseKeep(_)

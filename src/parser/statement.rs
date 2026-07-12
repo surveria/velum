@@ -10,6 +10,8 @@ use super::{ParsedFunctionBody, Parser};
 
 mod for_statement;
 
+const USING_IDENTIFIER_NAME: &str = "using";
+
 struct ParsedLabel {
     name: crate::ast::StaticName,
     start: crate::SourceSpan,
@@ -95,6 +97,15 @@ impl Parser {
         if self.let_starts_expression_statement() {
             return self.let_expression_statement();
         }
+        if self.await_using_declaration_start() {
+            self.consume(&TokenKind::Await, "expected 'await'")?;
+            self.consume_contextual_using()?;
+            return self.resource_decl(DeclKind::AwaitUsing);
+        }
+        if self.using_declaration_start() {
+            self.consume_contextual_using()?;
+            return self.resource_decl(DeclKind::Using);
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -113,12 +124,49 @@ impl Parser {
     fn let_starts_expression_statement(&self) -> bool {
         !self.is_strict_mode()
             && self.check(&TokenKind::Let)
-            && self.peek_has_line_terminator_before(1)
+            && (self.peek_has_line_terminator_before(1)
+                || self.peek_kind_is(1, &TokenKind::Equal))
             && !self.peek_kind_is(1, &TokenKind::LBracket)
             && !self.peek_kind_is(1, &TokenKind::Await)
             && !self.peek_token(1).is_some_and(|token| {
                 matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
             })
+    }
+
+    fn using_declaration_start(&self) -> bool {
+        self.contextual_using_at(0)
+            && !self.peek_has_line_terminator_before(1)
+            && self.peek_token(1).is_some_and(|token| {
+                matches!(
+                    &token.kind,
+                    TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Await
+                )
+            })
+    }
+
+    fn await_using_declaration_start(&self) -> bool {
+        self.await_identifier_is_reserved()
+            && self.check(&TokenKind::Await)
+            && !self.peek_has_line_terminator_before(1)
+            && self.contextual_using_at(1)
+            && !self.peek_has_line_terminator_before(2)
+    }
+
+    fn contextual_using_at(&self, offset: usize) -> bool {
+        self.peek_token(offset).is_some_and(|token| {
+            !token.identifier_escaped
+                && matches!(&token.kind, TokenKind::Identifier(name) if name == USING_IDENTIFIER_NAME)
+        })
+    }
+
+    fn consume_contextual_using(&mut self) -> Result<()> {
+        if !self.contextual_using_at(0) {
+            return Err(self.parse_error("expected contextual 'using' keyword"));
+        }
+        let _token = self
+            .advance()
+            .ok_or_else(|| self.parse_error("expected contextual 'using' keyword"))?;
+        Ok(())
     }
 
     fn let_expression_statement(&mut self) -> Result<Stmt> {
@@ -127,7 +175,20 @@ impl Parser {
             .ok_or_else(|| self.parse_error("expected 'let' identifier"))?;
         let name = self.static_name_borrowed_at("let", token.offset())?;
         let binding = self.static_binding(name)?;
-        let expression = Expression::new(Expr::Identifier(binding), token.span);
+        let expression = if self.match_kind(&TokenKind::Equal) {
+            let value = self.assignment()?;
+            self.expression_node(
+                token.span,
+                Expr::Assignment {
+                    name: binding,
+                    strict: false,
+                    infer_name: true,
+                    expr: Box::new(value),
+                },
+            )
+        } else {
+            Expression::new(Expr::Identifier(binding), token.span)
+        };
         self.consume_statement_terminator("expected statement terminator after 'let'")?;
         Ok(Stmt::Expr(expression))
     }
@@ -277,11 +338,11 @@ impl Parser {
             Stmt::FunctionDecl { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::VarDecl {
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
             | Stmt::PatternDecl {
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             } => true,
             Stmt::Label { body, .. } => Self::invalid_with_body(body),
@@ -316,7 +377,7 @@ impl Parser {
     fn invalid_do_while_body(statement: &Statement) -> bool {
         match statement.kind() {
             Stmt::VarDecl {
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
             | Stmt::FunctionDecl { .. } => true,
@@ -495,9 +556,25 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after switch body"));
             }
-            statements.push(self.with_lexical_function_declarations(Self::statement)?);
+            let statement = self.with_lexical_function_declarations(Self::statement)?;
+            if Self::direct_resource_declaration(&statement) {
+                return Err(self.parse_error(
+                    "resource declaration is not allowed directly in a switch clause",
+                ));
+            }
+            statements.push(statement);
         }
         Ok(SwitchCase { test, statements })
+    }
+
+    fn direct_resource_declaration(statement: &Statement) -> bool {
+        match statement.kind() {
+            Stmt::DeclList(declarations) => {
+                declarations.iter().any(Self::direct_resource_declaration)
+            }
+            Stmt::VarDecl { kind, .. } | Stmt::PatternDecl { kind, .. } => kind.is_resource(),
+            _ => false,
+        }
     }
 
     fn try_statement(&mut self) -> Result<Stmt> {
@@ -661,6 +738,44 @@ impl Parser {
         self.declarations_stmt(declarations)
     }
 
+    fn resource_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
+        if self.statement_depth <= 1 {
+            return Err(self.parse_error(
+                "resource declarations are not allowed at the top level of a script",
+            ));
+        }
+        let declarations = self.resource_declarations(kind)?;
+        self.consume_statement_terminator(
+            "expected statement terminator after resource declaration",
+        )?;
+        self.declarations_stmt(declarations)
+    }
+
+    fn resource_declarations(&mut self, kind: DeclKind) -> Result<Vec<Statement>> {
+        let mut declarations = Vec::new();
+        loop {
+            let start = self.current_span();
+            let name = self.consume_binding_identifier("expected resource binding name")?;
+            self.consume(
+                &TokenKind::Equal,
+                "resource declaration requires an initializer",
+            )?;
+            let init = self.assignment_expression()?;
+            declarations.push(self.statement_node(
+                start,
+                Stmt::VarDecl {
+                    name,
+                    kind,
+                    init: Some(init),
+                },
+            ));
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(declarations)
+    }
+
     fn for_var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
         let declarations = self.var_declarations(kind)?;
         self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
@@ -699,7 +814,7 @@ impl Parser {
         let name = self.consume_binding_identifier("expected binding name")?;
         let init = if self.match_kind(&TokenKind::Equal) {
             Some(self.assignment_expression()?)
-        } else if kind == DeclKind::Const {
+        } else if kind.requires_initializer() {
             return Err(self.parse_error("const declaration requires an initializer"));
         } else {
             None

@@ -98,7 +98,10 @@ impl BytecodeBlock {
             .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
         let inner = Self::compile_lexical_statements(statements, StatementValue::Store, layout)?;
         let mut compiler = BytecodeCompiler::new(layout, fallback_span);
-        compiler.emit(BytecodeInstruction::ScopedBlock(inner));
+        compiler.emit(BytecodeInstruction::ScopedBlock {
+            block: inner,
+            preserve_last: !statements_have_value_completion(statements),
+        });
         compiler.finish()
     }
 
@@ -541,7 +544,10 @@ impl<'a> BytecodeCompiler<'a> {
     ) -> Result<()> {
         if statements_need_lexical_scope(statements) {
             let block = BytecodeBlock::compile_lexical_statements(statements, value, self.layout)?;
-            self.emit(BytecodeInstruction::ScopedBlock(block));
+            self.emit(BytecodeInstruction::ScopedBlock {
+                block,
+                preserve_last: !statements_have_value_completion(statements),
+            });
             return Ok(());
         }
 
@@ -570,6 +576,34 @@ fn statements_need_lexical_scope(statements: &[Statement]) -> bool {
     statements.iter().any(statement_needs_lexical_scope)
 }
 
+fn statements_have_value_completion(statements: &[Statement]) -> bool {
+    statements.iter().any(|statement| match statement.kind() {
+        Stmt::Empty
+        | Stmt::VarDecl { .. }
+        | Stmt::PatternDecl { .. }
+        | Stmt::ClassDecl { .. }
+        | Stmt::FunctionDecl { .. } => false,
+        Stmt::DeclList(declarations) | Stmt::Block(declarations) => {
+            statements_have_value_completion(declarations)
+        }
+        Stmt::Expr(_)
+        | Stmt::If { .. }
+        | Stmt::While { .. }
+        | Stmt::DoWhile { .. }
+        | Stmt::With { .. }
+        | Stmt::Label { .. }
+        | Stmt::For { .. }
+        | Stmt::ForIn { .. }
+        | Stmt::ForOf { .. }
+        | Stmt::Switch { .. }
+        | Stmt::Try { .. }
+        | Stmt::Break(_)
+        | Stmt::Continue(_)
+        | Stmt::Throw(_)
+        | Stmt::Return(_) => true,
+    })
+}
+
 fn statements_have_block_functions(statements: &[Statement]) -> bool {
     statements.iter().any(|statement| {
         matches!(
@@ -586,11 +620,11 @@ fn statement_needs_lexical_scope(statement: &Statement) -> bool {
     match statement.kind() {
         Stmt::DeclList(statements) => statements_need_lexical_scope(statements),
         Stmt::VarDecl {
-            kind: DeclKind::Let | DeclKind::Const,
+            kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
         }
         | Stmt::PatternDecl {
-            kind: DeclKind::Let | DeclKind::Const,
+            kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
         }
         | Stmt::ClassDecl { .. }

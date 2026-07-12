@@ -24,11 +24,15 @@ impl LayoutBuilder {
             }
             Stmt::VarDecl { name, kind, .. } => match kind {
                 DeclKind::Var => self.declare(var_scope, name),
-                DeclKind::Let | DeclKind::Const => self.declare(scope, name),
+                DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing => {
+                    self.declare(scope, name)
+                }
             },
             Stmt::PatternDecl { pattern, kind, .. } => match kind {
                 DeclKind::Var => self.declare_pattern(pattern, var_scope),
-                DeclKind::Let | DeclKind::Const => self.declare_pattern(pattern, scope),
+                DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing => {
+                    self.declare_pattern(pattern, scope)
+                }
             },
             Stmt::ClassDecl { name, .. } => self.declare(scope, name),
             Stmt::FunctionDecl {
@@ -177,7 +181,7 @@ impl LayoutBuilder {
             }
             Stmt::VarDecl {
                 name,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
             | Stmt::ClassDecl { name, .. } => {
@@ -185,7 +189,7 @@ impl LayoutBuilder {
             }
             Stmt::PatternDecl {
                 pattern,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             } => Self::collect_pattern_names(pattern, names)?,
             _ => {}
@@ -197,13 +201,13 @@ impl LayoutBuilder {
         match target {
             ForInTarget::Binding {
                 name,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             } => {
                 names.insert(name.name().as_str().to_owned());
             }
             ForInTarget::PatternBinding {
                 pattern,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             } => Self::collect_pattern_names(pattern, names)?,
             _ => {}
         }

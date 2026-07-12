@@ -92,6 +92,15 @@ impl Parser {
     }
 
     fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
+        if self.await_using_declaration_start() {
+            self.consume(&TokenKind::Await, "expected 'await'")?;
+            self.consume_contextual_using()?;
+            return self.for_resource_binding_header(DeclKind::AwaitUsing);
+        }
+        if self.using_declaration_start() && !self.using_of_lookahead() {
+            self.consume_contextual_using()?;
+            return self.for_resource_binding_header(DeclKind::Using);
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.for_in_binding_header(DeclKind::Let);
         }
@@ -130,6 +139,31 @@ impl Parser {
         };
         let object = self.for_head_rhs(head)?;
         Ok(Some((ForInTarget::Assignment(target), object, head)))
+    }
+
+    fn for_resource_binding_header(
+        &mut self,
+        kind: DeclKind,
+    ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
+        let name = self.consume_binding_identifier("expected resource binding name")?;
+        let Some(head) = self.match_for_head_kind() else {
+            return Ok(None);
+        };
+        if head == ForHeadKind::In {
+            return Err(self.parse_error("resource declarations are not allowed in for-in heads"));
+        }
+        let object = self.for_head_rhs(head)?;
+        Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
+    }
+
+    fn using_of_lookahead(&self) -> bool {
+        self.peek_token(1).is_some_and(|token| {
+            !token.identifier_escaped
+                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
+        }) && self.peek_token(2).is_some_and(|token| {
+            !token.identifier_escaped
+                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
+        })
     }
 
     fn for_in_binding_header(
@@ -224,6 +258,21 @@ impl Parser {
         }
         if self.match_kind(&TokenKind::Var) {
             let kind = self.for_var_decl(DeclKind::Var)?;
+            return Ok(Some(Box::new(self.statement_node(start, kind))));
+        }
+        if self.await_using_declaration_start() {
+            self.consume(&TokenKind::Await, "expected 'await'")?;
+            self.consume_contextual_using()?;
+            let declarations = self.resource_declarations(DeclKind::AwaitUsing)?;
+            self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
+            let kind = self.declarations_stmt(declarations)?;
+            return Ok(Some(Box::new(self.statement_node(start, kind))));
+        }
+        if self.using_declaration_start() {
+            self.consume_contextual_using()?;
+            let declarations = self.resource_declarations(DeclKind::Using)?;
+            self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
+            let kind = self.declarations_stmt(declarations)?;
             return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         let expr = self.expression()?;

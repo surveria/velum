@@ -493,13 +493,6 @@ impl BytecodeStack {
     }
 }
 
-pub(super) fn init_completion_to_result(completion: Completion) -> Result<()> {
-    match completion {
-        Completion::Normal(_) => Ok(()),
-        completion => completion.into_result().map(|_| ()),
-    }
-}
-
 pub(super) fn bytecode_loop_completion(
     last: &mut Value,
     completion: Completion,

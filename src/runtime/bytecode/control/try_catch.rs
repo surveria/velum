@@ -280,10 +280,12 @@ impl Context {
         if result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
-        let removed = self.pop_lexical_scope()?;
-        if removed.is_none() {
+        let Some(removed) = self.pop_lexical_scope()? else {
             return Err(Error::runtime("bytecode try lexical scope disappeared"));
+        };
+        match result {
+            Ok(completion) => self.dispose_binding_scope(removed, completion),
+            Err(error) => Err(error),
         }
-        result
     }
 }

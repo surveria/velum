@@ -17,10 +17,10 @@ impl Parser {
             || matches!(
                 statement.kind(),
                 Stmt::VarDecl {
-                    kind: DeclKind::Let | DeclKind::Const,
+                    kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                     ..
                 } | Stmt::PatternDecl {
-                    kind: DeclKind::Let | DeclKind::Const,
+                    kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                     ..
                 }
             )
@@ -34,14 +34,6 @@ impl Parser {
         &self,
         statements: &[Statement],
     ) -> Result<()> {
-        if !statements.iter().any(|statement| {
-            matches!(
-                statement.kind(),
-                Stmt::FunctionDecl { kind, .. } if kind.is_generator()
-            )
-        }) {
-            return Ok(());
-        }
         self.validate_lexical_var_declarations(statements, true)
     }
 
@@ -149,13 +141,13 @@ impl Parser {
             }
             Stmt::VarDecl {
                 name,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
             | Stmt::ClassDecl { name, .. } => names.push(name.name().as_str().to_owned()),
             Stmt::PatternDecl {
                 pattern,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             } => Self::collect_pattern_names(pattern, names)?,
             Stmt::FunctionDecl { name, .. } if functions_are_lexical => {

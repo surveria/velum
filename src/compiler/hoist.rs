@@ -48,12 +48,16 @@ impl<'a> HoistCollector<'a> {
                 }
                 Stmt::VarDecl {
                     name,
-                    kind: kind @ (DeclKind::Let | DeclKind::Const),
+                    kind:
+                        kind
+                        @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
                     ..
                 } => self.lexical_declarations.push((name.clone(), *kind)),
                 Stmt::PatternDecl {
                     pattern,
-                    kind: kind @ (DeclKind::Let | DeclKind::Const),
+                    kind:
+                        kind
+                        @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
                     ..
                 } => self.collect_pattern_lexical_declarations(pattern, *kind),
                 Stmt::ClassDecl { name, .. } => self

@@ -75,7 +75,8 @@ impl Context {
         let completion = match target {
             BytecodeForInTarget::Binding {
                 name,
-                kind: kind @ (DeclKind::Let | DeclKind::Const),
+                kind:
+                    kind @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
             } => self.eval_for_of_lexical_binding(name, *kind, iterator, body, labels)?,
             BytecodeForInTarget::Binding {
                 name,
@@ -118,7 +119,7 @@ impl Context {
         self.ensure_extra_binding_capacity(0)?;
         let atom = self.intern_static_name_atom(name.name().name())?;
         let frame = self.compiled_local_binding_frame(name.name())?;
-        let mutable = kind != DeclKind::Const;
+        let mutable = kind.is_mutable();
         let mut scope = BindingScope::new();
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(iterator))?;
         let mut control = self.checkout_bytecode_control(handle)?;
