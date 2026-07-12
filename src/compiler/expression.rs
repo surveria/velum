@@ -289,7 +289,9 @@ impl BytecodeCompiler<'_> {
         expr: &Expression,
     ) -> Result<()> {
         let binding = BytecodeBinding::compile_write(name, self.layout, strict)?;
-        if binding.with_environment_count() > 0 {
+        let resolve_before_value = binding.with_environment_count() > 0
+            || binding.operand() == crate::binding_metadata::BindingOperand::Unresolved;
+        if resolve_before_value {
             self.emit(BytecodeInstruction::ResolveBinding(binding.clone()));
         }
         if infer_name {
@@ -297,7 +299,7 @@ impl BytecodeCompiler<'_> {
         } else {
             self.compile_expr(expr)?;
         }
-        self.emit(if binding.with_environment_count() > 0 {
+        self.emit(if resolve_before_value {
             BytecodeInstruction::StoreResolvedBinding(binding)
         } else {
             BytecodeInstruction::StoreBinding(binding)

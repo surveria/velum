@@ -64,12 +64,49 @@ const GLOBAL_MUTATION_SOURCE: &str = r#"
         recreated === 42 ? 42 : 0
 "#;
 
+const GLOBAL_REFERENCE_TIMING_SOURCE: &str = r#"
+    var initial;
+    Object.defineProperty(globalThis, "f", {
+        enumerable: true,
+        writable: true,
+        configurable: false
+    });
+    eval("initial = f; function f() { return 42; }");
+
+    let strictThrew = false;
+    try {
+        (function () {
+            "use strict";
+            unresolvedDuringRhs = (globalThis.unresolvedDuringRhs = 5);
+        })();
+    } catch (error) {
+        strictThrew = error instanceof ReferenceError;
+    }
+
+    typeof initial === "function" &&
+        initial() === 42 &&
+        strictThrew &&
+        globalThis.unresolvedDuringRhs === 5 ? 42 : 0
+"#;
+
 #[test]
 fn global_object_mutations_control_bare_identifier_semantics() -> TestResult {
     for mode in [OptimizationMode::Enabled, OptimizationMode::Disabled] {
         let config = VmConfig::default().with_optimization_mode(mode);
         let mut vm = Vm::with_config(config);
         let script = vm.compile(GLOBAL_MUTATION_SOURCE)?;
+        let value = vm.eval_compiled_owned(&script)?;
+        ensure_equal(&value, &OwnedValue::Number(42.0))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn global_references_resolve_before_rhs_and_eval_function_initialization() -> TestResult {
+    for mode in [OptimizationMode::Enabled, OptimizationMode::Disabled] {
+        let config = VmConfig::default().with_optimization_mode(mode);
+        let mut vm = Vm::with_config(config);
+        let script = vm.compile(GLOBAL_REFERENCE_TIMING_SOURCE)?;
         let value = vm.eval_compiled_owned(&script)?;
         ensure_equal(&value, &OwnedValue::Number(42.0))?;
     }

@@ -165,15 +165,34 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::ResolveBinding(binding) => {
-                let object = self
-                    .resolve_with_binding(binding)?
-                    .map_or(Value::Undefined, |reference| reference.object().clone());
+                let object = if let Some(reference) = self.resolve_with_binding(binding)? {
+                    reference.object().clone()
+                } else if self.get_or_materialize_binding_bytecode(binding)?.is_some() {
+                    Value::Undefined
+                } else if let Some(global_object) = self.realm.global_object {
+                    let object = Value::Object(global_object);
+                    let lookup = self.property_lookup(binding.name().as_str());
+                    if self.has_property_value_with_lookup(&object, lookup)? {
+                        object
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    Value::Null
+                };
                 state.stack.push(object);
             }
             BytecodeInstruction::StoreResolvedBinding(binding) => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                if matches!(object, Value::Undefined) {
+                if matches!(object, Value::Null) {
+                    if binding.strict_write() {
+                        return Err(crate::runtime::control::reference_error_undefined(
+                            binding.name(),
+                        ));
+                    }
+                    self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
+                } else if matches!(object, Value::Undefined) {
                     self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
                 } else {
                     crate::runtime::binding::WithBindingReference::new(object).set(

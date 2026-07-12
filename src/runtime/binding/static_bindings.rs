@@ -8,7 +8,6 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope, BindingSlot},
-    runtime::control::reference_error_undefined,
     runtime::native::NativeFunctionKind,
     runtime::native::{INFINITY_NAME, NAN_NAME},
     runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
@@ -356,7 +355,7 @@ impl Context {
             return reference.set(self, binding, value);
         }
         let Some(cell) = self.get_binding_bytecode(binding)? else {
-            return Err(reference_error_undefined(binding.name()));
+            return self.assign_bytecode_or_create_sloppy_global(binding, value);
         };
         self.assign_bytecode_cell(binding, &cell, value)
     }
