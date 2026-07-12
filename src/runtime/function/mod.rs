@@ -29,7 +29,6 @@ mod property_dispatch;
 mod storage;
 mod suspended;
 mod upvalues;
-
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
