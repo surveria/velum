@@ -130,7 +130,19 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Every VM-facing feature must define how it behaves across independent VM instances, including resource limits, teardown, errors, queued jobs, and host callbacks.
 - Host extensions are part of the core product surface. New runtime work must preserve a path for typed Rust host functions, contextual `Result` errors, async callbacks, and embedder-owned executors.
 - Do not make the CLI the only way to exercise a feature. If a feature affects embedders, add or plan direct library API tests and benchmarks in addition to CLI smoke coverage.
-- `scripts/check-architecture-boundaries.sh` is the no-growth gate for the split semantic paths recorded in `docs/semantic-architecture-inventory.md`. Update an allowlist only when the same pull request names the owning AS migration and updates the inventory or stabilization evidence; do not weaken a guard merely to land a feature.
+- `scripts/check-architecture-boundaries.sh` protects architectural properties,
+  not the current file layout, struct shape, helper count, or source spelling.
+  Its checks are versioned architecture decisions, not immutable constraints.
+- An intentional architecture change may update, replace, add, or remove a
+  boundary check or debt allowlist in the same pull request. Explain the old
+  and new invariant, update `docs/semantic-architecture-inventory.md` or the
+  relevant stabilization evidence, and add or adjust behavioral or mutation
+  coverage for the new design. Treat a guard failure as a review signal to
+  evaluate the rule, not as an instruction to preserve the current design.
+- Do not change a guard solely to bypass an unrelated feature failure. Prefer
+  semantic, ownership, and layering assertions; avoid complete field/file
+  inventories, exact helper counts, or verbatim implementation statements
+  unless that exact representation is itself the documented invariant.
 
 ## Rust Development Rules
 
