@@ -513,7 +513,8 @@ impl Parser {
                     },
                 )?;
                 super::function::ParsedParameters {
-                    params: vec![FunctionParam::new(parameter, None)],
+                    params: vec![FunctionParam::new(parameter.clone(), None)],
+                    bound_names: vec![parameter],
                     pattern_prologue: Vec::new(),
                     is_simple: true,
                 }
@@ -536,16 +537,17 @@ impl Parser {
                 parameters
             }
         };
-        self.reject_duplicate_parameters(&parameters.params)?;
+        self.reject_duplicate_parameters(&parameters.bound_names)?;
         self.consume(&TokenKind::Arrow, "expected '=>' after arrow parameters")?;
         let body = self.arrow_body(inherited_strict, signature.is_async)?;
         self.validate_function_parameters(
-            &parameters.params,
+            &parameters.bound_names,
             parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
         let id = self.static_function()?;
+        let strict = inherited_strict || body.contains_use_strict;
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         Ok(Some(self.expression_node(
@@ -560,6 +562,7 @@ impl Parser {
                 } else {
                     FunctionKind::Ordinary
                 },
+                strict,
             },
         )))
     }

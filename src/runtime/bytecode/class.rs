@@ -73,6 +73,7 @@ impl Context {
                     constructor: Some(heritage.constructor.clone()),
                     home_prototype: heritage.prototype.clone(),
                     own_constructor: Some(*constructor_id),
+                    this_initialized: std::cell::Cell::new(false),
                 }),
             )?;
         }
@@ -155,6 +156,7 @@ impl Context {
                         constructor: None,
                         home_prototype: home,
                         own_constructor: None,
+                        this_initialized: std::cell::Cell::new(false),
                     }),
                 )?;
             }

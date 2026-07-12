@@ -70,6 +70,12 @@ impl Context {
         let Completion::Normal(_) = completion else {
             return Ok(Some(completion));
         };
+        if frame.constructor.is_some() && frame.this_initialized.replace(true) {
+            return Err(Error::exception(
+                crate::value::ErrorName::ReferenceError,
+                "super constructor has already initialized this",
+            ));
+        }
         // Derived-class instance fields initialize after super() completes.
         if let Some(own) = frame.own_constructor {
             self.initialize_class_fields(own, &this_value)?;

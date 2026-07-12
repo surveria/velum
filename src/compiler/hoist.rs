@@ -49,6 +49,7 @@ impl<'a> HoistCollector<'a> {
         body: &std::rc::Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: crate::syntax::FunctionKind,
+        strict: bool,
     ) -> Result<()> {
         let (name, arguments_binding) = bindings;
         self.var_declarations.push(name.clone());
@@ -63,6 +64,7 @@ impl<'a> HoistCollector<'a> {
                 body,
                 kind,
                 parameter_prologue_count,
+                strict,
                 self.layout,
             )?,
             kind,
@@ -180,6 +182,7 @@ impl<'a> HoistCollector<'a> {
                 body,
                 parameter_prologue_count,
                 kind,
+                strict,
                 ..
             } => self.collect_function_declaration(
                 (name, arguments_binding.as_ref()),
@@ -188,6 +191,7 @@ impl<'a> HoistCollector<'a> {
                 body,
                 *parameter_prologue_count,
                 *kind,
+                *strict,
             ),
             Stmt::Empty
             | Stmt::Break(_)

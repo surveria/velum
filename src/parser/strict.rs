@@ -1,4 +1,4 @@
-use crate::ast::{Expr, FunctionParam, Statement, StaticBinding, StaticName, Stmt};
+use crate::ast::{Expr, Statement, StaticBinding, StaticName, Stmt};
 use crate::error::Result;
 
 use super::{
@@ -24,19 +24,19 @@ impl Parser {
     }
 
     pub(super) fn validate_function_name_in_strict_code(&self, name: &StaticName) -> Result<()> {
-        self.reject_restricted_strict_name(name.as_str())
+        self.reject_strict_binding_name(name.as_str())
     }
 
     pub(super) fn validate_function_binding_in_strict_code(
         &self,
         name: &StaticBinding,
     ) -> Result<()> {
-        self.reject_restricted_strict_name(name.as_str())
+        self.reject_strict_binding_name(name.as_str())
     }
 
     pub(super) fn validate_function_parameters(
         &self,
-        params: &[FunctionParam],
+        bound_names: &[StaticBinding],
         parameters_are_simple: bool,
         inherited_strict: bool,
         body_contains_use_strict: bool,
@@ -48,9 +48,9 @@ impl Parser {
         }
 
         if inherited_strict || body_contains_use_strict {
-            self.reject_duplicate_parameters(params)?;
-            for param in params {
-                self.reject_restricted_strict_name(param.name.as_str())?;
+            self.reject_duplicate_parameters(bound_names)?;
+            for name in bound_names {
+                self.reject_strict_binding_name(name.as_str())?;
             }
         }
 
@@ -59,19 +59,19 @@ impl Parser {
 
     pub(super) fn reject_duplicate_non_simple_parameters(
         &self,
-        params: &[FunctionParam],
+        bound_names: &[StaticBinding],
         parameters_are_simple: bool,
     ) -> Result<()> {
         if !parameters_are_simple {
-            self.reject_duplicate_parameters(params)?;
+            self.reject_duplicate_parameters(bound_names)?;
         }
         Ok(())
     }
 
-    pub(super) fn reject_duplicate_parameters(&self, params: &[FunctionParam]) -> Result<()> {
+    pub(super) fn reject_duplicate_parameters(&self, bound_names: &[StaticBinding]) -> Result<()> {
         let mut seen = Vec::new();
-        for param in params {
-            let name = param.name.as_str();
+        for binding in bound_names {
+            let name = binding.as_str();
             if seen.contains(&name) {
                 return Err(self.parse_error("duplicate parameter name"));
             }
@@ -83,6 +83,14 @@ impl Parser {
     fn reject_restricted_strict_name(&self, name: &str) -> Result<()> {
         if Self::is_restricted_strict_name(name) {
             return Err(self.parse_error("eval and arguments are not valid strict binding names"));
+        }
+        Ok(())
+    }
+
+    fn reject_strict_binding_name(&self, name: &str) -> Result<()> {
+        self.reject_restricted_strict_name(name)?;
+        if is_strict_future_reserved_word(name) {
+            return Err(self.parse_error("future reserved word is not a valid strict binding name"));
         }
         Ok(())
     }

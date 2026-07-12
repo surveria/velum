@@ -99,6 +99,7 @@ pub(in crate::runtime) struct FunctionSuperBinding {
     /// The derived constructor owning this binding; its instance fields
     /// initialize after `super()` completes.
     pub(in crate::runtime) own_constructor: Option<FunctionId>,
+    pub(in crate::runtime) this_initialized: std::cell::Cell<bool>,
 }
 
 pub(super) struct BytecodeFunctionInit<'a> {
@@ -215,6 +216,11 @@ impl Context {
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
         let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
+        let lexical_this = if init.new_target_mode == BytecodeNewTargetMode::Lexical {
+            Some(self.current_this()?)
+        } else {
+            None
+        };
         self.functions.insert_at_next(
             id.index(),
             super::Function {
@@ -242,6 +248,7 @@ impl Context {
                 private_slots: Vec::new(),
                 params_remembered: std::cell::Cell::new(false),
                 scope_template,
+                lexical_this,
                 new_target: FunctionNewTarget::from_mode(
                     init.new_target_mode,
                     self.current_new_target()?,
@@ -288,6 +295,7 @@ impl Context {
         this_value: Value,
     ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
+        let this_value = self.function_direct_call_this(id, this_value)?;
         let new_target = self.function_direct_call_new_target(id)?;
         if self.function(id)?.kind.is_async_generator() {
             let completion = self.eval_generator_function_completion_with_this_and_new_target(
@@ -335,6 +343,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        let this_value = self.function_direct_call_this(id, this_value)?;
         let new_target = self.function_direct_call_new_target(id)?;
         self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)
     }
@@ -393,6 +402,13 @@ impl Context {
             remember_params,
             scope_template,
         } = self.function_call_setup(id)?;
+        let super_binding = super_binding.map(|binding| {
+            if binding.own_constructor == Some(id) {
+                binding.fresh_activation()
+            } else {
+                binding
+            }
+        });
         let packed_args = if bytecode.has_rest_parameter() {
             Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
         } else {
@@ -600,8 +616,11 @@ impl Context {
         id: FunctionId,
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
-        let kind = self.function(id)?.kind;
-        Ok((kind.is_generator() || kind.is_async()) && Self::is_restricted_property(property))
+        let function = self.function(id)?;
+        Ok((function.kind.is_generator()
+            || function.kind.is_async()
+            || function.lexical_this.is_some())
+            && Self::is_restricted_property(property))
     }
 
     pub(in crate::runtime) fn is_restricted_property(property: PropertyLookup<'_>) -> bool {

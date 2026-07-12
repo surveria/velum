@@ -74,6 +74,7 @@ pub enum Stmt {
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: FunctionKind,
+        strict: bool,
     },
     VarDecl {
         name: StaticBinding,

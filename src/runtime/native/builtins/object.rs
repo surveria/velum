@@ -59,7 +59,7 @@ impl Context {
         self.eval_direct_object_constructor(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_object_constructor(
+    pub(in crate::runtime) fn eval_direct_object_constructor(
         &mut self,
         args: &[Value],
     ) -> Result<Value> {

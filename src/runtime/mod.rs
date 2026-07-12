@@ -156,6 +156,7 @@ struct Function {
     private_slots: Vec<private::PrivateSlot>,
     params_remembered: std::cell::Cell<bool>,
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,
+    lexical_this: Option<Value>,
     new_target: FunctionNewTarget,
 }
 

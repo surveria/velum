@@ -361,6 +361,7 @@ impl<'a> BytecodeCompiler<'a> {
                     &class.constructor.body,
                     crate::syntax::FunctionKind::Ordinary,
                     0,
+                    true,
                     self.layout,
                 )?,
                 members: members.into(),
@@ -400,6 +401,7 @@ impl<'a> BytecodeCompiler<'a> {
                     &member.body,
                     member.function_kind,
                     member.parameter_prologue_count,
+                    true,
                     self.layout,
                 )?,
             });
