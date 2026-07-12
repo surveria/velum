@@ -351,6 +351,69 @@ fn supports_observable_regexp_match_search_and_match_all_protocols() -> TestResu
 }
 
 #[test]
+fn supports_string_match_all_protocol_and_primitive_fallback() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let descriptor = Object.getOwnPropertyDescriptor(String.prototype, "matchAll");
+        let receiver = { marker: "receiver" };
+        let calls = [];
+        let protocolResult = { marker: "result" };
+        let matcher = {
+            get [Symbol.match]() {
+                calls.push("match");
+                return true;
+            },
+            get flags() {
+                calls.push("flags");
+                return "g";
+            },
+            [Symbol.matchAll]: function(value) {
+                calls.push("matchAll");
+                return this === matcher && value === receiver ? protocolResult : null;
+            }
+        };
+        let dispatched = String.prototype.matchAll.call(receiver, matcher);
+
+        Object.defineProperty(String.prototype, Symbol.matchAll, {
+            get: function() {
+                throw new Error("primitive protocol lookup");
+            }
+        });
+        let matches = Array.from("a,b,c".matchAll(","));
+
+        let rejected = 0;
+        for (const source of [undefined, null]) {
+            try {
+                String.prototype.matchAll.call(source, /a/g);
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        try {
+            "a".matchAll(/a/);
+        } catch (error) {
+            if (error instanceof TypeError) rejected += 1;
+        }
+
+        String.prototype.matchAll.name === "matchAll" &&
+            String.prototype.matchAll.length === 1 &&
+            descriptor.writable && !descriptor.enumerable && descriptor.configurable &&
+            dispatched === protocolResult &&
+            calls.join("|") === "match|flags|matchAll" &&
+            matches.length === 2 &&
+            matches[0][0] === "," && matches[0].index === 1 &&
+            matches[1][0] === "," && matches[1].index === 3 &&
+            rejected === 3 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_regexp_escape_utf16_and_metadata_semantics() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

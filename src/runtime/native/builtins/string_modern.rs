@@ -9,13 +9,15 @@ use crate::{
             PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
         },
         property::DynamicPropertyKey,
+        roots::VmRootKind,
     },
     value::{ObjectId, Value},
 };
 
 use super::{
     NativeFunctionKind, STRING_PROTOTYPE_IS_WELL_FORMED_NAME, STRING_PROTOTYPE_ITERATOR_NAME,
-    STRING_PROTOTYPE_REPLACE_ALL_NAME, STRING_PROTOTYPE_TO_WELL_FORMED_NAME,
+    STRING_PROTOTYPE_MATCH_ALL_NAME, STRING_PROTOTYPE_REPLACE_ALL_NAME,
+    STRING_PROTOTYPE_TO_WELL_FORMED_NAME,
 };
 
 const REPLACEMENT_MARKER: u16 = 0x24;
@@ -23,6 +25,7 @@ const REPLACEMENT_CHARACTER: u16 = 0xFFFD;
 const STRING_METHOD_NULLISH_RECEIVER_ERROR: &str =
     "String.prototype method cannot convert undefined or null to object";
 const SYMBOL_MATCH_PROPERTY: &str = "match";
+const SYMBOL_MATCH_ALL_PROPERTY: &str = "matchAll";
 const SYMBOL_REPLACE_PROPERTY: &str = "replace";
 const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const STRING_ITERATOR_TAG: &str = "String Iterator";
@@ -45,6 +48,9 @@ impl Context {
             NativeFunctionKind::StringPrototypeIterator => {
                 Some(self.eval_string_prototype_iterator(args, this_value))
             }
+            NativeFunctionKind::StringPrototypeMatchAll => {
+                Some(self.eval_string_prototype_match_all(args, this_value))
+            }
             NativeFunctionKind::StringPrototypeReplaceAll => {
                 Some(self.eval_string_prototype_replace_all(args, this_value))
             }
@@ -66,6 +72,10 @@ impl Context {
             (
                 STRING_PROTOTYPE_IS_WELL_FORMED_NAME,
                 NativeFunctionKind::StringPrototypeIsWellFormed,
+            ),
+            (
+                STRING_PROTOTYPE_MATCH_ALL_NAME,
+                NativeFunctionKind::StringPrototypeMatchAll,
             ),
             (
                 STRING_PROTOTYPE_REPLACE_ALL_NAME,
@@ -170,6 +180,40 @@ impl Context {
         append_utf16_slice(&mut output, &string, cursor, string.len())?;
         self.check_utf16_string_len(&output)?;
         self.heap_utf16_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_match_all(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(STRING_METHOD_NULLISH_RECEIVER_ERROR));
+        }
+        let regexp = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        if self.semantic_object_ref(&regexp)?.is_some() {
+            self.require_global_regexp_for_match_all(&regexp)?;
+            if let Some(matcher) =
+                self.string_well_known_method(&regexp, SYMBOL_MATCH_ALL_PROPERTY)?
+            {
+                return self.call_value(&matcher, std::slice::from_ref(this_value), regexp);
+            }
+        }
+
+        let string = self.string_receiver_utf16(this_value)?;
+        let string = self.heap_utf16_string_value(&string)?;
+        let _string_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&string))?;
+        let flags = self.heap_string_value("g")?;
+        let constructor = self.regexp_constructor_value()?;
+        let matcher =
+            self.semantic_construct(&constructor, &[regexp, flags], constructor.clone())?;
+        let _matcher_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&matcher))?;
+        let method = self
+            .string_well_known_method(&matcher, SYMBOL_MATCH_ALL_PROPERTY)?
+            .ok_or_else(|| Error::type_error("RegExp Symbol.matchAll method is not callable"))?;
+        self.call_value(&method, &[string], matcher)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_iterator(
@@ -346,6 +390,24 @@ impl Context {
         Ok(())
     }
 
+    fn require_global_regexp_for_match_all(&mut self, regexp: &Value) -> Result<()> {
+        if !self.string_is_regexp(regexp)? {
+            return Ok(());
+        }
+        let flags = self.get_named(regexp, "flags")?;
+        if matches!(flags, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "String.prototype.matchAll RegExp flags are nullish",
+            ));
+        }
+        if !self.to_string(&flags)?.contains('g') {
+            return Err(Error::type_error(
+                "String.prototype.matchAll requires a global RegExp",
+            ));
+        }
+        Ok(())
+    }
+
     fn string_is_regexp(&mut self, value: &Value) -> Result<bool> {
         if self.semantic_object_ref(value)?.is_none() {
             return Ok(false);
@@ -393,6 +455,7 @@ impl Context {
 fn symbol_display_name(property: &str) -> &str {
     match property {
         SYMBOL_MATCH_PROPERTY => "Symbol(Symbol.match)",
+        SYMBOL_MATCH_ALL_PROPERTY => "Symbol(Symbol.matchAll)",
         SYMBOL_REPLACE_PROPERTY => "Symbol(Symbol.replace)",
         _ => "Symbol",
     }
