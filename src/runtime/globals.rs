@@ -460,6 +460,18 @@ impl Context {
             .define_property(id, key, name, update, self.limits.max_object_properties)
     }
 
+    pub(crate) fn update_global_object_data_property_value(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        let update = PropertyUpdate::Data(DataPropertyUpdate::new(Some(value), None, None, None));
+        self.objects
+            .define_property(id, key, name, update, self.limits.max_object_properties)
+    }
+
     pub(crate) fn define_non_enumerable_object_property(
         &mut self,
         id: ObjectId,

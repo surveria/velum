@@ -26,6 +26,25 @@ const GLOBAL_MUTATION_SOURCE: &str = r#"
     Object.assign(globalThis, { JSON: { answer: 42 } });
     let assignOverride = JSON.answer;
 
+    Object.defineProperty(globalThis, "evalFunction", {
+        writable: true,
+        enumerable: true,
+        configurable: false
+    });
+    eval("function evalFunction() { return 42; }");
+    let evalOverride = evalFunction();
+
+    let strictUnresolved = false;
+    try {
+        (function () {
+            "use strict";
+            strictCreated = (globalThis.strictCreated = 5);
+        })();
+    } catch (error) {
+        strictUnresolved = error.name === "ReferenceError";
+    }
+    delete globalThis.strictCreated;
+
     let deleted = delete globalThis.parseInt;
     let deletionVisible =
         deleted &&
@@ -39,6 +58,8 @@ const GLOBAL_MUTATION_SOURCE: &str = r#"
         declaredOverride &&
         accessorOverride === 42 &&
         assignOverride === 42 &&
+        evalOverride === 42 &&
+        strictUnresolved &&
         deletionVisible &&
         recreated === 42 ? 42 : 0
 "#;
