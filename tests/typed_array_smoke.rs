@@ -349,6 +349,58 @@ fn supports_typed_array_mutation_sort_iteration_and_statics() -> TestResult {
 }
 
 #[test]
+fn typed_array_set_preserves_array_like_order_and_resize_semantics() -> TestResult {
+    ensure_eval(
+        r#"
+        let primitive = new Uint8Array([0, 0, 0, 9]);
+        primitive.set("123");
+
+        let target = new Uint8Array([0, 0, 0]);
+        let events = [];
+        let source = {
+            get length() { events.push("length"); return 2; },
+            get 0() { events.push("get0"); return { valueOf() {
+                events.push("convert0"); return 7;
+            } }; },
+            get 1() { events.push("get1"); throw new Error("stop"); },
+            get 2() { events.push("get2"); return 9; }
+        };
+        try {
+            target.set(source, { valueOf() { events.push("offset"); return 1; } });
+        } catch (error) {}
+
+        let detached = new Uint8Array(1);
+        let detachedRejected = false;
+        try {
+            detached.set([1], { valueOf() {
+                detached.buffer.transfer();
+                return 0;
+            } });
+        } catch (error) {
+            detachedRejected = error instanceof TypeError;
+        }
+
+        let rab = new ArrayBuffer(4, { maxByteLength: 4 });
+        let resized = new Uint8Array(rab, 0, 4);
+        let requested = [];
+        let resizingSource = {
+            length: 3,
+            get 0() { requested.push(0); return 5; },
+            get 1() { requested.push(1); rab.resize(1); return 6; },
+            get 2() { requested.push(2); return 7; }
+        };
+        resized.set(resizingSource);
+
+        primitive.join(",") === "1,2,3,9" && target.join(",") === "0,7,0" &&
+            events.join(",") === "offset,length,get0,convert0,get1" &&
+            detachedRejected === true && requested.join(",") === "0,1,2" &&
+            new Uint8Array(rab)[0] === 5 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn honors_species_and_rejects_invalid_receivers() -> TestResult {
     ensure_eval(
         r#"
