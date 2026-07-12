@@ -120,6 +120,7 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
+        let target = self.object_to_object(&target)?;
         self.semantic_get_prototype(&target)?.ok_or_else(|| {
             Error::runtime("Object.getPrototypeOf target cannot be converted to an object")
         })

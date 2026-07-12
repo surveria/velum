@@ -458,6 +458,7 @@ impl Context {
             return self.runtime_value(cell.value(binding.name())?);
         }
         self.builtin_value(binding.name().name())?
+            .or(self.unresolved_global_property_value(binding.name().name())?)
             .ok_or_else(|| reference_error_undefined(binding.name()))
     }
 

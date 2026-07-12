@@ -1,7 +1,8 @@
 use super::{
     AtomicsFunctionKind, array_buffer_kind::ArrayBufferFunctionKind,
     data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
-    iterator_kind::IteratorFunctionKind, shared_array_buffer_kind::SharedArrayBufferFunctionKind,
+    iterator_kind::IteratorFunctionKind, shadow_realm_kind::ShadowRealmFunctionKind,
+    shared_array_buffer_kind::SharedArrayBufferFunctionKind,
     typed_array_kind::TypedArrayFunctionKind,
 };
 use crate::runtime::{
@@ -278,6 +279,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Atomics(AtomicsFunctionKind),
     SharedArrayBuffer,
     SharedArrayBufferPrototype(SharedArrayBufferFunctionKind),
+    ShadowRealm(ShadowRealmFunctionKind),
     AsyncFunction,
     AsyncGeneratorFunction,
     AsyncGeneratorNext,

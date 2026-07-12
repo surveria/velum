@@ -5,13 +5,16 @@ use std::{
 
 use rs_quickjs::{Error, ModuleLoader, ModuleSource};
 
-pub struct Test262ModuleLoader<'path> {
-    test262_dir: &'path Path,
+#[derive(Clone)]
+pub struct Test262ModuleLoader {
+    test262_dir: PathBuf,
 }
 
-impl<'path> Test262ModuleLoader<'path> {
-    pub const fn new(test262_dir: &'path Path) -> Self {
-        Self { test262_dir }
+impl Test262ModuleLoader {
+    pub fn new(test262_dir: &Path) -> Self {
+        Self {
+            test262_dir: test262_dir.to_path_buf(),
+        }
     }
 
     fn resolve(referrer: &str, request: &str) -> rs_quickjs::Result<PathBuf> {
@@ -32,7 +35,7 @@ impl<'path> Test262ModuleLoader<'path> {
     }
 }
 
-impl ModuleLoader for Test262ModuleLoader<'_> {
+impl ModuleLoader for Test262ModuleLoader {
     fn load(&mut self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
         let relative = Self::resolve(referrer, request)?;
         let source = fs::read_to_string(self.test262_dir.join(&relative)).map_err(|error| {

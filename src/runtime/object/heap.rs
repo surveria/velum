@@ -206,6 +206,29 @@ impl ObjectHeap {
         Ok(self.object(id)?.arguments_brand)
     }
 
+    pub(in crate::runtime) fn bind_shadow_realm(
+        &mut self,
+        id: ObjectId,
+        realm: crate::runtime::realm::RealmIndex,
+    ) -> Result<()> {
+        if self.object(id)?.shadow_realm.is_some() {
+            return Err(Error::runtime(
+                "ShadowRealm instance is already initialized",
+            ));
+        }
+        self.storage_ledger
+            .grow_count(VmStorageKind::Association, 1)?;
+        self.object_mut(id)?.shadow_realm = Some(realm);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn shadow_realm(
+        &self,
+        id: ObjectId,
+    ) -> Result<Option<crate::runtime::realm::RealmIndex>> {
+        Ok(self.object(id)?.shadow_realm)
+    }
+
     pub(crate) fn create_with_prototype_property(
         &mut self,
         prototype: Option<ObjectId>,

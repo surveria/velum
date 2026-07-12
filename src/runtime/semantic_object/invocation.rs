@@ -94,6 +94,9 @@ impl Context {
             Value::NativeFunction(id) => {
                 let kind = self.native_function(*id)?.kind();
                 if let NativeFunctionKind::BoundFunction(bound) = kind {
+                    if self.bound_function_is_shadow_realm(bound)? {
+                        return Ok(false);
+                    }
                     let target = self.bound_function_target(bound)?;
                     return self.semantic_is_constructor(&target);
                 }

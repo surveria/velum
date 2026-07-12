@@ -78,6 +78,10 @@ impl Context {
         self.static_name_atom_caches.last().cloned()
     }
 
+    pub(crate) fn current_static_name_atom_cache_owner(&self) -> Option<StaticNameAtomCacheHandle> {
+        self.static_name_atom_caches.last().cloned()
+    }
+
     pub(in crate::runtime) fn cached_static_property_native_call_kind(
         &self,
         access: StaticPropertyAccessId,

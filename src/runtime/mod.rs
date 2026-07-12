@@ -111,6 +111,8 @@ pub struct Context {
     locals: Vec<BindingScope>,
     modules: Vec<module::ModuleRecord>,
     module_evaluation_depth: usize,
+    dynamic_module_loader: Option<module::DynamicModuleLoader>,
+    active_module_name: Option<String>,
     activation_frames: Vec<activation::ActivationFrame>,
     functions: SlotArena<Function>,
     native_functions: SlotArena<native::NativeFunction>,
@@ -379,6 +381,8 @@ impl Context {
             locals: Vec::new(),
             modules: Vec::new(),
             module_evaluation_depth: 0,
+            dynamic_module_loader: None,
+            active_module_name: None,
             activation_frames: Vec::new(),
             functions: SlotArena::new(),
             native_functions: SlotArena::new(),
@@ -552,7 +556,9 @@ impl Context {
         }
         if let Value::NativeFunction(id) = function {
             if let Some(target) = native
-                && self.direct_native_call_kind(id, target).is_some()
+                && (self.direct_native_call_kind(id, target).is_some()
+                    || (target == NativeCallTarget::Eval
+                        && self.native_function(id)?.kind() == NativeFunctionKind::Eval))
             {
                 return Ok(CallReference::DirectNative {
                     id,

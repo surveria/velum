@@ -20,19 +20,36 @@ const ARRAY_LIKE_LENGTH_PROPERTY: &str = "length";
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct BoundFunction {
     target: Value,
-    this_value: Value,
-    args: Vec<Value>,
+    behavior: BoundFunctionBehavior,
+}
+
+#[derive(Debug, Clone)]
+enum BoundFunctionBehavior {
+    Ordinary { this_value: Value, args: Vec<Value> },
+    ShadowRealm,
 }
 
 impl BoundFunction {
-    const fn new(target: Value, this_value: Value, args: Vec<Value>) -> Self {
+    const fn ordinary(target: Value, this_value: Value, args: Vec<Value>) -> Self {
         Self {
             target,
-            this_value,
-            args,
+            behavior: BoundFunctionBehavior::Ordinary { this_value, args },
         }
     }
 
+    const fn shadow_realm(target: Value) -> Self {
+        Self {
+            target,
+            behavior: BoundFunctionBehavior::ShadowRealm,
+        }
+    }
+
+    const fn is_shadow_realm(&self) -> bool {
+        matches!(self.behavior, BoundFunctionBehavior::ShadowRealm)
+    }
+}
+
+impl BoundFunction {
     pub(in crate::runtime) fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
         &self,
         visitor: &mut V,
@@ -41,15 +58,17 @@ impl BoundFunction {
             VmCallableEdgeKind::BoundFunctionInternal,
             StrongEdgeReference::Value(&self.target),
         )?;
-        visitor.visit(
-            VmCallableEdgeKind::BoundFunctionInternal,
-            StrongEdgeReference::Value(&self.this_value),
-        )?;
-        for arg in &self.args {
+        if let BoundFunctionBehavior::Ordinary { this_value, args } = &self.behavior {
             visitor.visit(
                 VmCallableEdgeKind::BoundFunctionInternal,
-                StrongEdgeReference::Value(arg),
+                StrongEdgeReference::Value(this_value),
             )?;
+            for arg in args {
+                visitor.visit(
+                    VmCallableEdgeKind::BoundFunctionInternal,
+                    StrongEdgeReference::Value(arg),
+                )?;
+            }
         }
         Ok(())
     }
@@ -154,16 +173,25 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let function = self.bound_function(id)?.clone();
+        if function.is_shadow_realm() {
+            return self.eval_shadow_realm_wrapped_call(&function.target, args.as_slice());
+        }
+        let BoundFunctionBehavior::Ordinary {
+            this_value,
+            args: bound_args,
+        } = function.behavior
+        else {
+            return Err(Error::runtime("bound function behavior is invalid"));
+        };
         let call_args = args.as_slice();
-        let capacity = function
-            .args
+        let capacity = bound_args
             .len()
             .checked_add(call_args.len())
             .ok_or_else(|| Error::limit("bound function argument count overflowed"))?;
         let mut values = Vec::with_capacity(capacity);
-        values.extend_from_slice(&function.args);
+        values.extend_from_slice(&bound_args);
         values.extend_from_slice(call_args);
-        self.call_value(&function.target, &values, function.this_value)
+        self.call_value(&function.target, &values, this_value)
     }
 
     pub(in crate::runtime) fn eval_bound_function_construct(
@@ -174,13 +202,21 @@ impl Context {
         new_target: Value,
     ) -> Result<Value> {
         let function = self.bound_function(id)?.clone();
-        let capacity = function
-            .args
+        let BoundFunctionBehavior::Ordinary {
+            this_value: _,
+            args: bound_args,
+        } = function.behavior
+        else {
+            return Err(Error::type_error(
+                "ShadowRealm wrapped function is not a constructor",
+            ));
+        };
+        let capacity = bound_args
             .len()
             .checked_add(args.len())
             .ok_or_else(|| Error::limit("bound constructor argument count overflowed"))?;
         let mut values = Vec::with_capacity(capacity);
-        values.extend_from_slice(&function.args);
+        values.extend_from_slice(&bound_args);
         values.extend_from_slice(args);
         let new_target = if same_value(&new_target, bound_value) {
             function.target.clone()
@@ -193,6 +229,13 @@ impl Context {
     pub(in crate::runtime) fn bound_function_target(&self, id: BoundFunctionId) -> Result<Value> {
         self.bound_function(id)
             .map(|function| function.target.clone())
+    }
+
+    pub(in crate::runtime) fn bound_function_is_shadow_realm(
+        &self,
+        id: BoundFunctionId,
+    ) -> Result<bool> {
+        self.bound_function(id).map(BoundFunction::is_shadow_realm)
     }
 
     fn create_bound_function(
@@ -209,8 +252,10 @@ impl Context {
         self.bound_functions.reserve_removals(1)?;
         let id = BoundFunctionId::new(self.bound_functions.next_index());
         reservation.commit()?;
-        self.bound_functions
-            .insert_at_next(id.index(), BoundFunction::new(target, this_value, args))?;
+        self.bound_functions.insert_at_next(
+            id.index(),
+            BoundFunction::ordinary(target, this_value, args),
+        )?;
         let result =
             self.create_ephemeral_native_function(NativeFunctionKind::BoundFunction(id), prototype);
         match result {
@@ -219,6 +264,36 @@ impl Context {
                 let removed = self.bound_functions.remove_reserved(id.index())?;
                 if removed.is_none() {
                     return Err(Error::runtime("bound function rollback failed"));
+                }
+                self.storage_ledger
+                    .release_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
+                Err(error)
+            }
+        }
+    }
+
+    pub(in crate::runtime) fn create_shadow_realm_wrapper_record(
+        &mut self,
+        target: Value,
+    ) -> Result<Value> {
+        let prototype = self.function_constructor_prototype_value()?;
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
+        self.bound_functions.reserve_insert()?;
+        self.bound_functions.reserve_removals(1)?;
+        let id = BoundFunctionId::new(self.bound_functions.next_index());
+        reservation.commit()?;
+        self.bound_functions
+            .insert_at_next(id.index(), BoundFunction::shadow_realm(target))?;
+        match self
+            .create_ephemeral_native_function(NativeFunctionKind::BoundFunction(id), prototype)
+        {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                let removed = self.bound_functions.remove_reserved(id.index())?;
+                if removed.is_none() {
+                    return Err(Error::runtime("ShadowRealm wrapper rollback failed"));
                 }
                 self.storage_ledger
                     .release_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
