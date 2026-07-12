@@ -6,6 +6,7 @@ use crate::{
 
 use super::{ARRAY_NAME, NativeFunctionKind};
 
+mod callback_state;
 mod callbacks;
 mod copy;
 mod find_last;

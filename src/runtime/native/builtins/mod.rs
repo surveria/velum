@@ -1,4 +1,5 @@
 mod array;
+mod array_buffer;
 mod boolean;
 mod data_view;
 mod date;

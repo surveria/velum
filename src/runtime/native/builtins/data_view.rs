@@ -100,11 +100,11 @@ impl Context {
                 .map(|view| Value::Object(view.buffer_object())),
             DataViewFunctionKind::ByteLengthGetter => {
                 let view = self.data_view_receiver(this_value)?;
-                Self::data_view_usize_value(view.byte_length())
+                Self::data_view_usize_value(view.byte_length()?)
             }
             DataViewFunctionKind::ByteOffsetGetter => {
                 let view = self.data_view_receiver(this_value)?;
-                Self::data_view_usize_value(view.byte_offset())
+                Self::data_view_usize_value(view.byte_offset()?)
             }
             DataViewFunctionKind::Get(element_kind) => {
                 self.eval_data_view_get(element_kind, args, this_value)

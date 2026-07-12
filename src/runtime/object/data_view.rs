@@ -246,12 +246,14 @@ impl DataViewView {
         self.buffer_object
     }
 
-    pub(in crate::runtime) const fn byte_offset(&self) -> usize {
-        self.byte_offset
+    pub(in crate::runtime) fn byte_offset(&self) -> Result<usize> {
+        self.ensure_in_bounds()?;
+        Ok(self.byte_offset)
     }
 
-    pub(in crate::runtime) const fn byte_length(&self) -> usize {
-        self.byte_length
+    pub(in crate::runtime) fn byte_length(&self) -> Result<usize> {
+        self.ensure_in_bounds()?;
+        Ok(self.byte_length)
     }
 
     pub(in crate::runtime) fn read(
@@ -276,6 +278,7 @@ impl DataViewView {
     }
 
     fn element_offset(&self, offset: usize, width: usize) -> Result<usize> {
+        self.ensure_in_bounds()?;
         let relative_end = offset
             .checked_add(width)
             .ok_or_else(|| Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR))?;
@@ -288,6 +291,19 @@ impl DataViewView {
         self.byte_offset
             .checked_add(offset)
             .ok_or_else(|| Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR))
+    }
+
+    fn ensure_in_bounds(&self) -> Result<()> {
+        if self.buffer.is_detached() {
+            return Err(Error::type_error("DataView buffer is detached"));
+        }
+        let Some(end) = self.byte_offset.checked_add(self.byte_length) else {
+            return Err(Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR));
+        };
+        if end > self.buffer.byte_length() {
+            return Err(Error::type_error("DataView is out of bounds"));
+        }
+        Ok(())
     }
 }
 

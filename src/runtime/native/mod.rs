@@ -52,9 +52,9 @@ pub(in crate::runtime::native) use function::{
     SYMBOL_PROTOTYPE_VALUE_OF_NAME,
 };
 pub(in crate::runtime) use function::{
-    DATA_VIEW_NAME, DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DataViewFunctionKind,
-    DateFunctionKind, ITERATOR_NAME, IteratorFunctionKind, NativeFunction, NativeFunctionKind,
-    NativeFunctionRegistry, TypedArrayFunctionKind,
+    ArrayBufferFunctionKind, DATA_VIEW_NAME, DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME,
+    DATE_UTC_NAME, DataViewFunctionKind, DateFunctionKind, ITERATOR_NAME, IteratorFunctionKind,
+    NativeFunction, NativeFunctionKind, NativeFunctionRegistry, TypedArrayFunctionKind,
 };
 pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,

@@ -9,6 +9,7 @@ use crate::{
 };
 
 mod array;
+mod array_buffer_kind;
 mod array_kind;
 mod call_target;
 mod collection;
@@ -31,6 +32,7 @@ mod typed_array_kind;
 
 use super::number_intrinsic_property;
 
+pub(in crate::runtime) use array_buffer_kind::ArrayBufferFunctionKind;
 pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
 pub(in crate::runtime) use data_view_kind::DATA_VIEW_NAME;
 pub(in crate::runtime) use data_view_kind::DataViewFunctionKind;

@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09x adds VM-owned static Iterator combinator continuations over the shared iterator protocol and close owners. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09y adds one shared resizable and detachable ArrayBuffer lifecycle owner for buffers and every typed view. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2890,6 +2890,31 @@ AS-09x profile evidence in draft PR #489:
   current per-case 65,536-object conformance budget;
 - required exact-tree correctness and canonical publication remain before
   AS-09x can close.
+
+AS-09y profile evidence in draft PR #492:
+
+- `ByteBuffer` retains one `Rc<RefCell<ByteBufferState>>` across the owning
+  ArrayBuffer object and every TypedArray/DataView clone. The state owns the
+  optional byte vector, optional resizable maximum, and detachment marker;
+- ArrayBuffer construction, `resize`, `slice`, `transfer`, and
+  `transferToFixedLength` all mutate or copy through that owner. The existing
+  ObjectHeap byte payload total is adjusted on resize and detach, so storage
+  limits and snapshots observe the live byte length rather than the original
+  allocation;
+- prototype accessors and methods use branded native-function kinds, while
+  `ArrayBuffer.isView` checks the existing typed internal slots. Slice reuses
+  semantic species lookup and construction instead of adding a parallel
+  constructor path;
+- three direct lifecycle cases cover metadata and view detection, resizable
+  growth/shrink over shared bytes, slicing, transfer, detachment, zero fill,
+  and resizability preservation;
+- the exact focused ArrayBuffer profile advances from 56/442 to 320/442
+  variants and from 28/221 to 160/221 files. Residuals belong to immutable
+  ArrayBuffer proposal methods, SharedArrayBuffer, `$262` realm/detach hooks,
+  BigInt syntax, allocation ceilings, and the separately owned native-subclass
+  `newTarget` boundary;
+- required exact-tree correctness and canonical publication remain before
+  AS-09y can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

@@ -134,7 +134,7 @@ fn supports_shared_array_buffer_views_and_constructor_metadata() -> TestResult {
             Int16Array.BYTES_PER_ELEMENT === 2 &&
             Float64Array.BYTES_PER_ELEMENT === 8 &&
             Int16Array.prototype.BYTES_PER_ELEMENT === 2 &&
-            ArrayBuffer.prototype.resize === undefined;
+            typeof ArrayBuffer.prototype.resize === "function";
 
         print(buffer.byteLength, i16.length, i16.byteLength, i16.byteOffset);
         print(f64.length, f64.byteLength, f64.byteOffset);

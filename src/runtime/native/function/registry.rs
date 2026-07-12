@@ -265,7 +265,8 @@ const PROMISE_ALL_SETTLED_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::n
 const ITERATOR_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(270);
 const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
 const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 273;
+const ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 273;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 282;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -391,6 +392,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = data_view_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = array_buffer_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
         NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
@@ -462,6 +466,16 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::Iterator(iterator_kind) => iterator_slot(iterator_kind),
         _ => collection_slot(kind),
     }
+}
+
+const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    let NativeFunctionKind::ArrayBufferPrototype(method) = kind else {
+        return None;
+    };
+    let Some(index) = ARRAY_BUFFER_METHOD_SLOT_BASE.checked_add(method.index()) else {
+        return None;
+    };
+    Some(NativeFunctionSlot::new(index))
 }
 
 const fn data_view_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {

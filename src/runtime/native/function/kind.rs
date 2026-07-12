@@ -1,6 +1,7 @@
 use super::{
-    data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
-    iterator_kind::IteratorFunctionKind, typed_array_kind::TypedArrayFunctionKind,
+    array_buffer_kind::ArrayBufferFunctionKind, data_view_kind::DataViewFunctionKind,
+    date_kind::DateFunctionKind, iterator_kind::IteratorFunctionKind,
+    typed_array_kind::TypedArrayFunctionKind,
 };
 use crate::runtime::{
     object::TypedArrayElementKind,
@@ -257,6 +258,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayWith,
     ArrayValues,
     ArrayBuffer,
+    ArrayBufferPrototype(ArrayBufferFunctionKind),
     AsyncFunction,
     AsyncGeneratorFunction,
     AsyncGeneratorNext,
@@ -550,6 +552,9 @@ impl NativeFunctionKind {
         if let Self::DataView(kind) = self {
             return kind.length();
         }
+        if let Self::ArrayBufferPrototype(kind) = self {
+            return kind.length();
+        }
         if let Self::Iterator(kind) = self {
             return kind.length();
         }
@@ -645,6 +650,9 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::DataView(kind) = self {
+            return kind.name();
+        }
+        if let Self::ArrayBufferPrototype(kind) = self {
             return kind.name();
         }
         if let Self::Iterator(kind) = self {
