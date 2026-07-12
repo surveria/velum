@@ -238,6 +238,13 @@ impl StringHeap {
         self.insert_string(units, Some(text))
     }
 
+    pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
+        if let Some(id) = self.entries.get(string.as_utf16()).copied() {
+            return self.js_string(id);
+        }
+        self.insert_data(&string.data)
+    }
+
     pub fn intern_utf16(&mut self, units: &[u16]) -> Result<JsString> {
         if let Some(id) = self.entries.get(units).copied() {
             return self.js_string(id);

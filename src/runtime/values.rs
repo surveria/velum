@@ -23,6 +23,11 @@ impl Context {
         if let Value::String(text) = value {
             return self.heap_string_value(&text);
         }
+        if let Value::HeapString(text) = &value
+            && !text.is_heap_owned()
+        {
+            return self.heap_js_string_value(text);
+        }
         self.checked_value(value)
     }
 
