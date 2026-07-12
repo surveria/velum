@@ -35,7 +35,16 @@ impl NativeFunctionKind {
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::Date(DateFunctionKind::Constructor)
-                | Self::Temporal(TemporalFunctionKind::Constructor)
+                | Self::Temporal(
+                    TemporalFunctionKind::Constructor
+                        | TemporalFunctionKind::PlainDateConstructor
+                        | TemporalFunctionKind::PlainDateTimeConstructor
+                        | TemporalFunctionKind::InstantConstructor
+                        | TemporalFunctionKind::PlainMonthDayConstructor
+                        | TemporalFunctionKind::PlainTimeConstructor
+                        | TemporalFunctionKind::PlainYearMonthConstructor
+                        | TemporalFunctionKind::ZonedDateTimeConstructor
+                )
                 | Self::DisposableStack(
                     super::disposable_stack_kind::DisposableStackFunctionKind::Constructor,
                 )
@@ -70,7 +79,16 @@ impl NativeFunctionKind {
                 | Self::WeakSet
                 | Self::TypedArray(_)
                 | Self::Date(DateFunctionKind::Constructor)
-                | Self::Temporal(TemporalFunctionKind::Constructor)
+                | Self::Temporal(
+                    TemporalFunctionKind::Constructor
+                        | TemporalFunctionKind::PlainDateConstructor
+                        | TemporalFunctionKind::PlainDateTimeConstructor
+                        | TemporalFunctionKind::InstantConstructor
+                        | TemporalFunctionKind::PlainMonthDayConstructor
+                        | TemporalFunctionKind::PlainTimeConstructor
+                        | TemporalFunctionKind::PlainYearMonthConstructor
+                        | TemporalFunctionKind::ZonedDateTimeConstructor
+                )
                 | Self::AsyncDisposableStack(AsyncDisposableStackFunctionKind::Constructor)
                 | Self::DisposableStack(DisposableStackFunctionKind::Constructor)
         )

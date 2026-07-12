@@ -88,7 +88,7 @@ impl super::Object {
         let temporal_payload_bytes = self
             .temporal_value
             .as_ref()
-            .map_or(0, |_| super::TemporalValue::storage_payload_bytes());
+            .map_or(0, super::TemporalValue::storage_payload_bytes);
         let object_payload_bytes = regexp_payload_bytes
             .checked_add(temporal_payload_bytes)
             .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;

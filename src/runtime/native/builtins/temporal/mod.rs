@@ -10,14 +10,42 @@ use crate::{
     value::{ErrorName, ObjectId, Value},
 };
 
+mod calendar_types;
 mod duration;
 mod install;
 
+use crate::runtime::call::RuntimeCallArgs;
 use crate::runtime::native::{TEMPORAL_NAME, TemporalFunctionKind};
 
 const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 
 impl Context {
+    pub(in crate::runtime::native) fn construct_temporal_kind(
+        &mut self,
+        kind: TemporalFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        match kind {
+            TemporalFunctionKind::Constructor => self.construct_temporal_duration(args),
+            TemporalFunctionKind::InstantConstructor => self.construct_temporal_instant(args),
+            TemporalFunctionKind::PlainDateConstructor => self.construct_temporal_plain_date(args),
+            TemporalFunctionKind::PlainDateTimeConstructor => {
+                self.construct_temporal_plain_date_time(args)
+            }
+            TemporalFunctionKind::PlainMonthDayConstructor => {
+                self.construct_temporal_plain_month_day(args)
+            }
+            TemporalFunctionKind::PlainTimeConstructor => self.construct_temporal_plain_time(args),
+            TemporalFunctionKind::PlainYearMonthConstructor => {
+                self.construct_temporal_plain_year_month(args)
+            }
+            TemporalFunctionKind::ZonedDateTimeConstructor => {
+                self.construct_temporal_zoned_date_time(args)
+            }
+            _ => Err(Error::type_error("Temporal method is not a constructor")),
+        }
+    }
+
     pub(in crate::runtime::native) fn temporal_namespace_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(TEMPORAL_NAME) {
             return binding.value(TEMPORAL_NAME);
@@ -32,6 +60,20 @@ impl Context {
         )?;
         let duration = self.temporal_duration_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Duration", duration)?;
+        let instant = self.temporal_instant_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "Instant", instant)?;
+        let plain_date = self.temporal_plain_date_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "PlainDate", plain_date)?;
+        let plain_date_time = self.temporal_plain_date_time_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "PlainDateTime", plain_date_time)?;
+        let plain_month_day = self.temporal_plain_month_day_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "PlainMonthDay", plain_month_day)?;
+        let plain_time = self.temporal_plain_time_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "PlainTime", plain_time)?;
+        let plain_year_month = self.temporal_plain_year_month_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "PlainYearMonth", plain_year_month)?;
+        let zoned_date_time = self.temporal_zoned_date_time_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "ZonedDateTime", zoned_date_time)?;
         self.define_temporal_to_string_tag(namespace, TEMPORAL_NAME)?;
         let value = Value::Object(namespace);
         self.insert_global_builtin(TEMPORAL_NAME, value.clone())?;

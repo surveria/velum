@@ -8,11 +8,28 @@ use super::{Object, ObjectHeap};
 #[derive(Debug, Clone)]
 pub enum TemporalValue {
     Duration(temporal_rs::Duration),
+    Instant(temporal_rs::Instant),
+    PlainDate(temporal_rs::PlainDate),
+    PlainDateTime(temporal_rs::PlainDateTime),
+    PlainMonthDay(temporal_rs::PlainMonthDay),
+    PlainTime(temporal_rs::PlainTime),
+    PlainYearMonth(temporal_rs::PlainYearMonth),
+    ZonedDateTime(temporal_rs::ZonedDateTime),
 }
 
 impl TemporalValue {
-    pub(super) const fn storage_payload_bytes() -> usize {
-        std::mem::size_of::<Self>()
+    pub(super) fn storage_payload_bytes(&self) -> usize {
+        let active_payload = match self {
+            Self::Duration(value) => std::mem::size_of_val(value),
+            Self::Instant(value) => std::mem::size_of_val(value),
+            Self::PlainDate(value) => std::mem::size_of_val(value),
+            Self::PlainDateTime(value) => std::mem::size_of_val(value),
+            Self::PlainMonthDay(value) => std::mem::size_of_val(value),
+            Self::PlainTime(value) => std::mem::size_of_val(value),
+            Self::PlainYearMonth(value) => std::mem::size_of_val(value),
+            Self::ZonedDateTime(value) => std::mem::size_of_val(value),
+        };
+        std::cmp::max(std::mem::size_of::<Self>(), active_payload)
     }
 }
 

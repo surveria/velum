@@ -20,7 +20,7 @@ use super::{
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
     PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
     SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, TEMPORAL_NAME,
-    TemporalFunctionKind, UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -226,9 +226,7 @@ impl Context {
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
-            NativeFunctionKind::Temporal(TemporalFunctionKind::Constructor) => {
-                self.construct_temporal_duration(args)
-            }
+            NativeFunctionKind::Temporal(kind) => self.construct_temporal_kind(kind, args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
             NativeFunctionKind::BigInt => Err(Error::type_error("BigInt is not a constructor")),

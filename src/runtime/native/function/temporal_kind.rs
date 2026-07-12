@@ -29,6 +29,28 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     PrototypeToJson,
     PrototypeToLocaleString,
     PrototypeValueOf,
+    PlainDateConstructor,
+    PlainDateFrom,
+    PlainDatePrototypeYear,
+    PlainDatePrototypeMonth,
+    PlainDatePrototypeDay,
+    PlainDatePrototypeCalendarId,
+    PlainDatePrototypeToString,
+    PlainDatePrototypeToJson,
+    PlainDatePrototypeValueOf,
+    ZonedDateTimeConstructor,
+    ZonedDateTimeFrom,
+    ZonedDateTimePrototypeEpochNanoseconds,
+    ZonedDateTimePrototypeTimeZoneId,
+    ZonedDateTimePrototypeCalendarId,
+    ZonedDateTimePrototypeToString,
+    ZonedDateTimePrototypeToJson,
+    ZonedDateTimePrototypeValueOf,
+    PlainDateTimeConstructor,
+    PlainMonthDayConstructor,
+    PlainYearMonthConstructor,
+    InstantConstructor,
+    PlainTimeConstructor,
 }
 
 impl TemporalFunctionKind {
@@ -60,13 +82,42 @@ impl TemporalFunctionKind {
             Self::PrototypeToJson => 23,
             Self::PrototypeToLocaleString => 24,
             Self::PrototypeValueOf => 25,
+            Self::PlainDateConstructor => 26,
+            Self::PlainDateFrom => 27,
+            Self::PlainDatePrototypeYear => 28,
+            Self::PlainDatePrototypeMonth => 29,
+            Self::PlainDatePrototypeDay => 30,
+            Self::PlainDatePrototypeCalendarId => 31,
+            Self::PlainDatePrototypeToString => 32,
+            Self::PlainDatePrototypeToJson => 33,
+            Self::PlainDatePrototypeValueOf => 34,
+            Self::ZonedDateTimeConstructor => 35,
+            Self::ZonedDateTimeFrom => 36,
+            Self::ZonedDateTimePrototypeEpochNanoseconds => 37,
+            Self::ZonedDateTimePrototypeTimeZoneId => 38,
+            Self::ZonedDateTimePrototypeCalendarId => 39,
+            Self::ZonedDateTimePrototypeToString => 40,
+            Self::ZonedDateTimePrototypeToJson => 41,
+            Self::ZonedDateTimePrototypeValueOf => 42,
+            Self::PlainDateTimeConstructor => 43,
+            Self::PlainMonthDayConstructor => 44,
+            Self::PlainYearMonthConstructor => 45,
+            Self::InstantConstructor => 46,
+            Self::PlainTimeConstructor => 47,
         }
     }
 
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         match self {
-            Self::Compare => 2.0,
+            Self::Compare
+            | Self::ZonedDateTimeConstructor
+            | Self::PlainMonthDayConstructor
+            | Self::PlainYearMonthConstructor => 2.0,
+            Self::PlainDateConstructor | Self::PlainDateTimeConstructor => 3.0,
             Self::From
+            | Self::InstantConstructor
+            | Self::PlainDateFrom
+            | Self::ZonedDateTimeFrom
             | Self::PrototypeWith
             | Self::PrototypeAdd
             | Self::PrototypeSubtract
@@ -79,7 +130,7 @@ impl TemporalFunctionKind {
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         match self {
             Self::Constructor => TEMPORAL_DURATION_NAME,
-            Self::From => "from",
+            Self::From | Self::PlainDateFrom | Self::ZonedDateTimeFrom => "from",
             Self::Compare => "compare",
             Self::PrototypeYears => "get years",
             Self::PrototypeMonths => "get months",
@@ -100,10 +151,31 @@ impl TemporalFunctionKind {
             Self::PrototypeSubtract => "subtract",
             Self::PrototypeRound => "round",
             Self::PrototypeTotal => "total",
-            Self::PrototypeToString => "toString",
-            Self::PrototypeToJson => "toJSON",
+            Self::PrototypeToString
+            | Self::PlainDatePrototypeToString
+            | Self::ZonedDateTimePrototypeToString => "toString",
+            Self::PrototypeToJson
+            | Self::PlainDatePrototypeToJson
+            | Self::ZonedDateTimePrototypeToJson => "toJSON",
             Self::PrototypeToLocaleString => "toLocaleString",
-            Self::PrototypeValueOf => "valueOf",
+            Self::PrototypeValueOf
+            | Self::PlainDatePrototypeValueOf
+            | Self::ZonedDateTimePrototypeValueOf => "valueOf",
+            Self::PlainDateConstructor => "PlainDate",
+            Self::PlainDatePrototypeYear => "get year",
+            Self::PlainDatePrototypeMonth => "get month",
+            Self::PlainDatePrototypeDay => "get day",
+            Self::PlainDatePrototypeCalendarId | Self::ZonedDateTimePrototypeCalendarId => {
+                "get calendarId"
+            }
+            Self::ZonedDateTimeConstructor => "ZonedDateTime",
+            Self::ZonedDateTimePrototypeEpochNanoseconds => "get epochNanoseconds",
+            Self::ZonedDateTimePrototypeTimeZoneId => "get timeZoneId",
+            Self::PlainDateTimeConstructor => "PlainDateTime",
+            Self::PlainMonthDayConstructor => "PlainMonthDay",
+            Self::PlainYearMonthConstructor => "PlainYearMonth",
+            Self::InstantConstructor => "Instant",
+            Self::PlainTimeConstructor => "PlainTime",
         }
     }
 }

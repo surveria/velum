@@ -90,3 +90,31 @@ fn rejects_invalid_duration_receivers_and_fields() -> TestResult {
     )?;
     ensure_value(&value, &Value::Number(5.0))
 }
+
+#[test]
+fn applies_plain_and_zoned_relative_to_algorithms() -> TestResult {
+    let value = eval(
+        r#"
+        const plain = Temporal.PlainDate.from("2019-11-01");
+        const zoned = Temporal.ZonedDateTime.from(
+            "2019-11-01T00:00-07:00[America/Los_Angeles]"
+        );
+        const yearly = new Temporal.Duration(1, 0, 0, 0, 24);
+        const propertyBag = {
+            year: 2019,
+            month: 11,
+            day: 1,
+            timeZone: "America/Los_Angeles",
+        };
+        const zonedTotal = yearly.total({ unit: "days", relativeTo: zoned });
+        const propertyBagTotal = yearly.total({ unit: "days", relativeTo: propertyBag });
+        yearly.total({ unit: "days", relativeTo: plain }) === 367 &&
+            zonedTotal === propertyBagTotal &&
+            zonedTotal > 366 && zonedTotal < 367 &&
+            new Temporal.Duration(0, 1)
+                .round({ largestUnit: "days", relativeTo: "2020-01-01" })
+                .days === 31
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
