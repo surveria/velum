@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T213757Z.md`
-- Task: PR #536: runtime: canonicalize JavaScript string values
-- Performance: 6.29x (4/5 >1.00x) (from `rsqjs-test-report-20260712T213757Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T213757Z.md`)
+- `rsqjs-test-report-20260712T215136Z.md`
+- Task: PR #540: parser: implement AssignmentTargetType semantics
+- Performance: 6.33x (4/5 >1.00x) (from `rsqjs-test-report-20260712T215136Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T215136Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 81003 passed / 21575 failed (78.97%) (from `rsqjs-test-report-20260712T213757Z.md`)
+- Full Test262: 81020 passed / 21558 failed (78.98%) (from `rsqjs-test-report-20260712T215136Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -506,3 +506,4 @@ Latest report:
 | `20260712T205619Z` `4669347` PR #534: runtime: complete String matchAll protocol semantics | 10.68x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80573 passed / 22005 failed (78.55%) |
 | `20260712T212041Z` `3811e10` PR #538: runtime: implement Object.groupBy semantics | 10.20x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81003 passed / 21575 failed (78.97%) |
 | `20260712T213757Z` `d88e5b9` PR #536: runtime: canonicalize JavaScript string values | 6.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81003 passed / 21575 failed (78.97%) |
+| `20260712T215136Z` `5540b90` PR #540: parser: implement AssignmentTargetType semantics | 6.33x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81020 passed / 21558 failed (78.98%) |
