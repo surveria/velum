@@ -652,7 +652,11 @@ impl Context {
         Ok(Value::Object(object_id))
     }
 
-    fn define_collection_iterator_state(&mut self, object: ObjectId, state: Value) -> Result<()> {
+    pub(in crate::runtime::native) fn define_collection_iterator_state(
+        &mut self,
+        object: ObjectId,
+        state: Value,
+    ) -> Result<()> {
         let key = self.intern_property_key(COLLECTION_ITERATOR_STATE_PROPERTY)?;
         self.objects.define_property(
             object,
@@ -749,7 +753,7 @@ impl Context {
         )
     }
 
-    fn collection_iterator_receiver_state(
+    pub(in crate::runtime::native) fn collection_iterator_receiver_state(
         &mut self,
         this_value: &Value,
     ) -> Result<CollectionIteratorId> {

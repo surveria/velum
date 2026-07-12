@@ -177,7 +177,12 @@ impl Context {
                 Some(self.eval_array_to_spliced(args, this_value))
             }
             NativeFunctionKind::ArrayWith => Some(self.eval_array_with(args, this_value)),
+            NativeFunctionKind::ArrayEntries => Some(self.eval_array_entries(this_value)),
+            NativeFunctionKind::ArrayKeys => Some(self.eval_array_keys(this_value)),
             NativeFunctionKind::ArrayValues => Some(self.eval_array_values(this_value)),
+            NativeFunctionKind::ArrayIteratorNext => {
+                Some(self.eval_array_iterator_next(this_value))
+            }
             _ => None,
         }
     }

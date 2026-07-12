@@ -14,6 +14,7 @@ mod flatten;
 mod from;
 mod from_async;
 mod generic;
+mod iterator;
 mod mutate;
 mod prototype_registry;
 mod sort;
@@ -25,30 +26,6 @@ const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
 const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
-    pub(in crate::runtime::native) fn eval_array_values(
-        &mut self,
-        this_value: &Value,
-    ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::type_error(
-                "Array.prototype.values requires an array receiver",
-            ));
-        };
-        let Some(length) = self.objects.array_len_if_array(*id)? else {
-            return Err(Error::type_error(
-                "Array.prototype.values requires an array receiver",
-            ));
-        };
-        let mut items = Vec::new();
-        items
-            .try_reserve_exact(length)
-            .map_err(|_| Error::limit("array iterator snapshot allocation failed"))?;
-        for index in 0..length {
-            items.push(self.get_named(this_value, &index.to_string())?);
-        }
-        self.create_collection_iterator_object(items)
-    }
-
     pub(in crate::runtime::native) fn array_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Array) {
             return Ok(Value::NativeFunction(id));

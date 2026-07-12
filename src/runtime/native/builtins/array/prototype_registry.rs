@@ -46,6 +46,8 @@ const ARRAY_PROTOTYPE_TO_REVERSED_PROPERTY: &str = "toReversed";
 const ARRAY_PROTOTYPE_TO_SPLICED_PROPERTY: &str = "toSpliced";
 const ARRAY_PROTOTYPE_WITH_PROPERTY: &str = "with";
 const ARRAY_PROTOTYPE_VALUES_PROPERTY: &str = "values";
+const ARRAY_PROTOTYPE_KEYS_PROPERTY: &str = "keys";
+const ARRAY_PROTOTYPE_ENTRIES_PROPERTY: &str = "entries";
 const ARRAY_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ARRAY_UNSCOPABLES_SYMBOL_DISPLAY: &str = "[Symbol.unscopables]";
 const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
@@ -176,6 +178,15 @@ impl Context {
             let method = self.create_native_function(kind, Value::Undefined)?;
             self.define_non_enumerable_object_property(prototype, property, method)?;
         }
+        let keys = self.create_native_function(NativeFunctionKind::ArrayKeys, Value::Undefined)?;
+        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_KEYS_PROPERTY, keys)?;
+        let entries =
+            self.create_native_function(NativeFunctionKind::ArrayEntries, Value::Undefined)?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            ARRAY_PROTOTYPE_ENTRIES_PROPERTY,
+            entries,
+        )?;
         let values =
             self.create_native_function(NativeFunctionKind::ArrayValues, Value::Undefined)?;
         self.define_non_enumerable_object_property(

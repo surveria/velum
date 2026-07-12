@@ -9,6 +9,8 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+use super::collection_array_iterator::LiveArrayIteratorState;
+
 const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
 
 /// VM-local index of one Map or Set backing store.
@@ -345,13 +347,13 @@ const ITERATOR_HELPER_ITEM_CHARGE: usize = 5;
 /// Fixed ledger charge for a wrapped iterator: the target and its `next`.
 const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
 
-/// One live runtime iterator record. The arena historically backed only
-/// collection snapshot iterators; it also hosts lazy iterator-helper and
+/// One live runtime iterator record. The arena also hosts lazy iterator-helper and
 /// `Iterator.from` wrapper states because the storage field and ledger kinds
 /// (`CollectionIterator` / `IteratorItem`) are frozen accounting categories.
 #[derive(Debug, Clone)]
 pub(in crate::runtime) enum CollectionIteratorState {
     Snapshot(SnapshotIteratorState),
+    LiveArray(LiveArrayIteratorState),
     LiveCollection(LiveCollectionIteratorState),
     Helper(IteratorHelperState),
     Static(IteratorStaticState),
@@ -481,6 +483,10 @@ impl CollectionIteratorState {
     {
         match self {
             Self::Snapshot(state) => state.visit_strong_edges(visitor),
+            Self::LiveArray(state) => visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(&state.owner),
+            ),
             Self::LiveCollection(state) => visitor.visit(
                 VmAsyncEdgeKind::IteratorItem,
                 StrongEdgeReference::Value(&state.owner),
@@ -505,7 +511,7 @@ impl CollectionIteratorState {
     fn item_charge(&self) -> Result<usize> {
         match self {
             Self::Snapshot(state) => Ok(state.items.len()),
-            Self::LiveCollection(_) => Ok(1),
+            Self::LiveArray(_) | Self::LiveCollection(_) => Ok(1),
             Self::Helper(_) => Ok(ITERATOR_HELPER_ITEM_CHARGE),
             Self::Static(state) => state.item_charge(),
             Self::Wrap(_) => Ok(WRAPPED_ITERATOR_ITEM_CHARGE),
@@ -681,7 +687,7 @@ impl Context {
         }))
     }
 
-    fn insert_iterator_state(
+    pub(in crate::runtime) fn insert_iterator_state(
         &mut self,
         state: CollectionIteratorState,
     ) -> Result<CollectionIteratorId> {
