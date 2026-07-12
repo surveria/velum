@@ -92,6 +92,16 @@ impl Context {
                 .define_array_length_property(*id, update, new_length)?;
             return Ok(true);
         }
+        if let Value::Object(id) = object_ref.value
+            && self.is_global_object_id(*id)
+            && self
+                .objects
+                .own_property_descriptor(*id, property.lookup())?
+                .is_none()
+        {
+            let _materialized_descriptor =
+                self.global_object_property_descriptor(*id, property.lookup())?;
+        }
         let key = self.intern_dynamic_property_key(property)?;
         match object_ref.value {
             Value::Object(id) => {
@@ -102,6 +112,11 @@ impl Context {
                     update,
                     self.limits.max_object_properties,
                 )?;
+                if self.is_global_object_id(*id)
+                    && property.key().is_none_or(|key| key.symbol_id().is_none())
+                {
+                    self.mark_global_object_property_authoritative(*id, property.name())?;
+                }
             }
             Value::Function(id) => {
                 self.define_function_property_key(*id, property.name(), key, update)?;

@@ -12,6 +12,7 @@ pub(super) enum BindingLocation {
         validation: BindingLocationValidation,
     },
     ExactGlobal {
+        atom: AtomId,
         slot: BindingSlot,
     },
     BuiltinGlobal {
@@ -44,8 +45,8 @@ impl BindingLocation {
         }
     }
 
-    pub(super) const fn exact_global(slot: BindingSlot) -> Self {
-        Self::ExactGlobal { slot }
+    pub(super) const fn exact_global(atom: AtomId, slot: BindingSlot) -> Self {
+        Self::ExactGlobal { atom, slot }
     }
 
     pub(super) const fn builtin_global(atom: AtomId, slot: BindingSlot) -> Self {

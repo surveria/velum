@@ -11,8 +11,9 @@ use crate::{
     runtime::control::reference_error_undefined,
     runtime::native::NativeFunctionKind,
     runtime::native::{INFINITY_NAME, NAN_NAME},
+    runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
     storage::atom::AtomId,
-    syntax::{StaticBinding, StaticBindingId},
+    syntax::{DeclKind, StaticBinding, StaticBindingId},
     value::{NativeFunctionId, Value},
 };
 
@@ -367,26 +368,46 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let value = self.checked_value(value)?;
-        cell.assign_bytecode(binding.name(), value.clone(), binding.strict_write())?;
-        self.sync_builtin_binding_global_property(binding, cell, value)
-    }
-
-    fn sync_builtin_binding_global_property(
-        &mut self,
-        binding: &BytecodeBinding,
-        cell: &BindingCell,
-        value: Value,
-    ) -> Result<()> {
         let Some(atom) = self.atom(binding.name().name()) else {
-            return Ok(());
+            return cell.assign_bytecode(binding.name(), value, binding.strict_write());
         };
-        let Some(builtin) = self.realm.builtin_globals.get(atom) else {
-            return Ok(());
-        };
-        if builtin.same_cell(cell) {
-            return self.sync_global_object_binding_property(binding.name().name(), value);
+        if let Some(global) = self.realm.globals.get(atom)
+            && global.same_cell(cell)
+            && global.kind() == DeclKind::Var
+        {
+            cell.assign_bytecode(binding.name(), value.clone(), binding.strict_write())?;
+            let global_object = self.global_object_id()?;
+            return self.define_global_object_data_property(
+                global_object,
+                binding.name().name(),
+                value,
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::No,
+            );
         }
-        Ok(())
+        if let Some(builtin) = self.realm.builtin_globals.get(atom)
+            && builtin.same_cell(cell)
+        {
+            if matches!(binding.name().as_str(), NAN_NAME | INFINITY_NAME) {
+                return cell.assign_bytecode(binding.name(), value, binding.strict_write());
+            }
+            if builtin.kind() == DeclKind::Var {
+                builtin.assign_bytecode(binding.name(), value.clone(), binding.strict_write())?;
+            }
+            let global_object = self.global_object_id()?;
+            self.define_global_object_data_property(
+                global_object,
+                binding.name().name(),
+                value,
+                PropertyWritable::Yes,
+                PropertyEnumerable::No,
+                PropertyConfigurable::Yes,
+            )?;
+            return self
+                .mark_global_object_property_authoritative(global_object, binding.name().name());
+        }
+        cell.assign_bytecode(binding.name(), value, binding.strict_write())
     }
 
     pub(crate) fn get_or_materialize_binding_bytecode(
@@ -395,6 +416,9 @@ impl Context {
     ) -> Result<Option<BindingCell>> {
         if let Some(cell) = self.get_binding_bytecode(binding)? {
             return Ok(Some(cell));
+        }
+        if self.global_object_name_is_authoritative(binding.name().name()) {
+            return Ok(None);
         }
         if self.builtin_value(binding.name().name())?.is_none() {
             return Ok(None);

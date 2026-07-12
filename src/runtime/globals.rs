@@ -7,7 +7,7 @@ use crate::{
         OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
         PropertyLookup, PropertyUpdate, PropertyWritable,
     },
-    runtime::property::{delete_property, get_property, has_property},
+    runtime::property::{get_property, has_property},
     runtime::{Context, VmStorageKind},
     storage::atom::AtomId,
     storage::string_heap::JsString,
@@ -18,7 +18,7 @@ use crate::{
 impl Context {
     pub(crate) fn unresolved_global_property_value(&mut self, name: &str) -> Result<Option<Value>> {
         let Some(global_object) = self.realm.global_object else {
-            return Ok(None);
+            return self.builtin_value(name);
         };
         let lookup = self.property_lookup(name);
         self.global_object_property_value(global_object, lookup)
@@ -30,7 +30,7 @@ impl Context {
         };
         let object = Value::Object(global_object);
         let lookup = self.property_lookup(name);
-        delete_property(&mut self.objects, &object, lookup)
+        self.delete_property_value_with_lookup(&object, lookup)
     }
 
     #[must_use]
@@ -296,6 +296,9 @@ impl Context {
             let value = get_property(&self.objects, &object, lookup)?;
             return self.runtime_property_value(value).map(Some);
         }
+        if self.global_object_name_is_authoritative(lookup.name()) {
+            return Ok(None);
+        }
         self.global_binding_property_value(lookup.name())
     }
 
@@ -321,6 +324,9 @@ impl Context {
         if has_property(&self.objects, &object, lookup)? {
             return Ok(Some(true));
         }
+        if self.global_object_name_is_authoritative(lookup.name()) {
+            return Ok(Some(false));
+        }
         self.global_binding_property_value(lookup.name())
             .map(|value| Some(value.is_some()))
     }
@@ -343,6 +349,9 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<OwnPropertyDescriptor>> {
+        if self.global_object_name_is_authoritative(lookup.name()) {
+            return Ok(None);
+        }
         let Some(value) = self.global_binding_property_value(lookup.name())? else {
             return Ok(None);
         };
@@ -373,63 +382,43 @@ impl Context {
         Ok(Some(OwnPropertyDescriptor::Data(descriptor)))
     }
 
-    pub(crate) fn sync_global_object_binding_property(
-        &mut self,
-        name: &str,
-        value: Value,
-    ) -> Result<()> {
-        if name != GLOBAL_THIS_NAME {
-            return Ok(());
-        }
-        let Some(id) = self.realm.global_object else {
-            return Ok(());
-        };
-        self.define_global_object_data_property(
-            id,
-            name,
-            value,
-            PropertyWritable::Yes,
-            PropertyEnumerable::No,
-            PropertyConfigurable::Yes,
-        )
-    }
-
-    pub(crate) fn sync_global_object_property_binding(
+    pub(in crate::runtime) fn mark_global_object_property_authoritative(
         &mut self,
         id: ObjectId,
         name: &str,
-        value: Value,
     ) -> Result<()> {
         let Some(realm) = self.global_object_realm(id) else {
             return Ok(());
         };
         self.with_realm(realm, |context| {
-            context.sync_global_object_property_binding_in_active_realm(name, value)
+            context.mark_global_object_property_authoritative_in_active_realm(name)
         })
     }
 
-    fn sync_global_object_property_binding_in_active_realm(
+    fn mark_global_object_property_authoritative_in_active_realm(
         &mut self,
         name: &str,
-        value: Value,
     ) -> Result<()> {
-        let value = self.runtime_value(value)?;
-        if let Some(atom) = self.atom(name)
-            && let Some(cell) = self.realm.globals.get(atom)
-            && cell.kind() == crate::syntax::DeclKind::Var
-        {
-            return cell.assign(name, value);
-        }
-        if name != GLOBAL_THIS_NAME {
+        let atom = self.intern_atom(name)?;
+        if self.realm.object_global_names.contains(&atom) {
             return Ok(());
         }
-        if let Some(cell) = self.builtin_global_cell(name) {
-            return cell.assign(name, value);
-        }
-        Ok(())
+        let reservation = self
+            .storage_ledger
+            .reserve_count(VmStorageKind::CacheEntry, 1)?;
+        self.realm.object_global_names.insert(atom);
+        reservation.commit()
+    }
+
+    pub(in crate::runtime) fn global_object_name_is_authoritative(&self, name: &str) -> bool {
+        self.atom(name)
+            .is_some_and(|atom| self.realm.object_global_names.contains(&atom))
     }
 
     fn global_binding_property_value(&mut self, name: &str) -> Result<Option<Value>> {
+        if self.global_object_name_is_authoritative(name) {
+            return Ok(None);
+        }
         if let Some(atom) = self.atom(name)
             && let Some(binding) = self.realm.globals.get(atom)
             && binding.kind() == crate::syntax::DeclKind::Var
@@ -449,11 +438,6 @@ impl Context {
             .builtin_globals
             .insert(atom, BindingCell::new(value, true, DeclKind::Var))?;
         Ok(())
-    }
-
-    fn builtin_global_cell(&self, name: &str) -> Option<BindingCell> {
-        let atom = self.atom(name)?;
-        self.realm.builtin_globals.get(atom)
     }
 
     pub(crate) fn define_global_object_data_property(

@@ -133,6 +133,9 @@ impl Context {
                     property.name(),
                     value,
                 )?;
+                if self.is_global_object_id(id) && key.symbol_id().is_none() {
+                    self.mark_global_object_property_authoritative(id, property.name())?;
+                }
                 Ok(true)
             }
         }
@@ -187,7 +190,16 @@ impl Context {
     ) -> Result<bool> {
         match deletion {
             SemanticPropertyDelete::Resolved(deleted) => Ok(deleted),
-            SemanticPropertyDelete::ObjectTail(id) => self.objects.delete(id, property),
+            SemanticPropertyDelete::ObjectTail(id) => {
+                let deleted = self.objects.delete(id, property)?;
+                if deleted
+                    && self.is_global_object_id(id)
+                    && property.key().is_none_or(|key| key.symbol_id().is_none())
+                {
+                    self.mark_global_object_property_authoritative(id, property.name())?;
+                }
+                Ok(deleted)
+            }
         }
     }
 

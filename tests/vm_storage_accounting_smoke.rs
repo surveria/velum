@@ -25,9 +25,13 @@ fn atom_payload_bytes_charge_each_canonical_name_once() -> TestResult {
     let mut vm = engine.create_vm();
     vm.eval("var camera = 42; camera;")?;
     let first = vm.storage_snapshot()?;
+    let expected_names = "camera"
+        .len()
+        .saturating_add("constructor".len())
+        .saturating_add("globalThis".len());
     ensure_usize(
         first.payload_bytes(VmStorageKind::Atom),
-        "camera".len(),
+        expected_names,
         "first atom payload bytes",
     )?;
 
