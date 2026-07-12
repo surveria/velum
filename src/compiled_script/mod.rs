@@ -5,6 +5,7 @@ pub use usage::CompiledScriptUsage;
 use crate::{
     binding_metadata::BindingLayout,
     bytecode::BytecodeProgram,
+    compiled_module::{ModuleExport, ModuleImport, ModuleImportName},
     compiler,
     error::{Error, Result},
     lexer,
@@ -103,7 +104,12 @@ impl CompiledScript {
         source_name: &str,
         source: &str,
         limits: RuntimeLimits,
-    ) -> Result<(Self, ModuleSyntax)> {
+    ) -> Result<(
+        Self,
+        Box<[String]>,
+        Box<[ModuleImport]>,
+        Box<[ModuleExport]>,
+    )> {
         let (script, module) = Self::compile_with_name_and_mode_parts(
             Some(source_name),
             source,
@@ -111,7 +117,53 @@ impl CompiledScript {
             CompileMode::Module,
         )?;
         let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
-        Ok((script, module))
+        let imports = module
+            .imports
+            .into_iter()
+            .map(|entry| {
+                ModuleImport::new(
+                    entry.request,
+                    match entry.import_name {
+                        parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
+                        parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
+                    },
+                    entry.local_name,
+                )
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let exports = module
+            .exports
+            .into_iter()
+            .map(|entry| match entry {
+                parser::ModuleExportEntry::Local {
+                    export_name,
+                    local_name,
+                } => ModuleExport::Local {
+                    export_name,
+                    local_name,
+                },
+                parser::ModuleExportEntry::Indirect {
+                    export_name,
+                    import_name,
+                    request,
+                } => ModuleExport::Indirect {
+                    export_name,
+                    import_name,
+                    request,
+                },
+                parser::ModuleExportEntry::Namespace {
+                    export_name,
+                    request,
+                } => ModuleExport::Namespace {
+                    export_name,
+                    request,
+                },
+                parser::ModuleExportEntry::Star { request } => ModuleExport::Star { request },
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Ok((script, module.requests.into_boxed_slice(), imports, exports))
     }
 
     fn compile_with_name_and_mode(
@@ -172,7 +224,16 @@ impl CompiledScript {
                 parsed.usage.static_function_count,
             )?
         };
-        let bytecode = compiler::compile_program(&program, &binding_layout)?;
+        let bytecode = if let Some(module) = module.as_ref() {
+            let import_local_names = module
+                .imports
+                .iter()
+                .map(|entry| entry.local_name.as_str())
+                .collect();
+            compiler::compile_module_program(&program, &binding_layout, &import_local_names)?
+        } else {
+            compiler::compile_program(&program, &binding_layout)?
+        };
         let bytecode_instruction_count = bytecode.instruction_count();
         let bytecode_binding_operand_count = bytecode.binding_operand_count();
         let bytecode_property_operand_count = bytecode.property_operand_count();

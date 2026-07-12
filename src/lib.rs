@@ -27,7 +27,9 @@ pub use crate::api::embedding::{
 pub use crate::api::host::{FromJsValue, HostCall, HostOperation, IntoJsValue, LocalValue};
 pub use crate::api::owned_value::OwnedValue;
 pub use crate::build_info::{BuildInfo, engine_build_info};
-pub use crate::compiled_module::{CompiledModule, ModuleExport, ModuleImport, ModuleImportName};
+pub use crate::compiled_module::{
+    CompiledModule, ModuleExport, ModuleImport, ModuleImportName, ModuleLoader, ModuleSource,
+};
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
 pub use crate::error::{Error, JavaScriptErrorMetadata, JavaScriptException, Result};
 pub use crate::ownership::{VmGeneration, VmIdentity};

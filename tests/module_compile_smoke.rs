@@ -1,4 +1,8 @@
-use rs_quickjs::{ModuleExport, ModuleImportName, Runtime};
+use std::collections::BTreeMap;
+
+use rs_quickjs::{
+    Error, ModuleExport, ModuleImportName, ModuleLoader, ModuleSource, Runtime, Value, VmRootKind,
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -75,6 +79,59 @@ fn keeps_module_compilation_independent_between_runtimes() -> TestResult {
         "equivalent export shapes should match",
     )?;
     Ok(())
+}
+
+#[test]
+fn links_and_evaluates_named_imports_with_live_cells() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([("dep.js", "export let value = 40; value += 2;".to_owned())]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { value } from 'dep.js'; value;",
+        &mut loader,
+    )?;
+
+    ensure(value == Value::Number(42.0), "linked import value mismatch")?;
+    ensure(
+        context.loaded_module_count() == 2,
+        "module record count mismatch",
+    )?;
+    ensure(
+        context.has_loaded_module("dep.js"),
+        "dependency module record is missing",
+    )?;
+    ensure(
+        context.root_snapshot()?.count(VmRootKind::ModuleBinding) > 0,
+        "module bindings are not rooted",
+    )?;
+    Ok(())
+}
+
+struct MapLoader {
+    sources: BTreeMap<String, String>,
+}
+
+impl MapLoader {
+    fn new<const N: usize>(sources: [(&str, String); N]) -> Self {
+        Self {
+            sources: sources
+                .into_iter()
+                .map(|(name, source)| (name.to_owned(), source))
+                .collect(),
+        }
+    }
+}
+
+impl ModuleLoader for MapLoader {
+    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+        let source = self
+            .sources
+            .get(request)
+            .cloned()
+            .ok_or_else(|| Error::runtime(format!("missing test module '{request}'")))?;
+        Ok(ModuleSource::new(request, source))
+    }
 }
 
 fn ensure(condition: bool, message: &str) -> TestResult {

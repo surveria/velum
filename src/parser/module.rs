@@ -111,7 +111,7 @@ impl Parser {
                 self.previous_span(),
                 Stmt::VarDecl {
                     name: binding,
-                    kind: DeclKind::Let,
+                    kind: DeclKind::Const,
                     init: None,
                 },
             ));

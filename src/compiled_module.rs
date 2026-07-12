@@ -1,10 +1,44 @@
 use crate::{
     compiled_script::{CompiledScript, CompiledScriptUsage},
     error::Result,
-    parser::{ModuleExportEntry, ModuleImportName as ParsedImportName, ModuleSyntax},
     runtime::limits::RuntimeLimits,
     source::SourceId,
 };
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ModuleSource {
+    specifier: String,
+    source: String,
+}
+
+impl ModuleSource {
+    #[must_use]
+    pub fn new(specifier: impl Into<String>, source: impl Into<String>) -> Self {
+        Self {
+            specifier: specifier.into(),
+            source: source.into(),
+        }
+    }
+
+    #[must_use]
+    pub const fn specifier(&self) -> &str {
+        self.specifier.as_str()
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &str {
+        self.source.as_str()
+    }
+}
+
+pub trait ModuleLoader {
+    /// Resolves and loads one requested module source. The returned specifier
+    /// is the canonical identity used for graph deduplication and cycles.
+    ///
+    /// # Errors
+    /// Returns an embedder or policy error when resolution or loading fails.
+    fn load(&mut self, referrer: &str, request: &str) -> Result<ModuleSource>;
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ModuleImportName {
@@ -20,6 +54,18 @@ pub struct ModuleImport {
 }
 
 impl ModuleImport {
+    pub(crate) const fn new(
+        request: String,
+        import_name: ModuleImportName,
+        local_name: String,
+    ) -> Self {
+        Self {
+            request,
+            import_name,
+            local_name,
+        }
+    }
+
     #[must_use]
     pub const fn request(&self) -> &str {
         self.request.as_str()
@@ -70,61 +116,14 @@ impl CompiledModule {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        let (script, syntax) = CompiledScript::compile_module_named(source_name, source, limits)?;
-        Ok(Self::from_syntax(script, syntax))
-    }
-
-    fn from_syntax(script: CompiledScript, syntax: ModuleSyntax) -> Self {
-        let imports = syntax
-            .imports
-            .into_iter()
-            .map(|entry| ModuleImport {
-                request: entry.request,
-                import_name: match entry.import_name {
-                    ParsedImportName::Name(name) => ModuleImportName::Name(name),
-                    ParsedImportName::Namespace => ModuleImportName::Namespace,
-                },
-                local_name: entry.local_name,
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        let exports = syntax
-            .exports
-            .into_iter()
-            .map(|entry| match entry {
-                ModuleExportEntry::Local {
-                    export_name,
-                    local_name,
-                } => ModuleExport::Local {
-                    export_name,
-                    local_name,
-                },
-                ModuleExportEntry::Indirect {
-                    export_name,
-                    import_name,
-                    request,
-                } => ModuleExport::Indirect {
-                    export_name,
-                    import_name,
-                    request,
-                },
-                ModuleExportEntry::Namespace {
-                    export_name,
-                    request,
-                } => ModuleExport::Namespace {
-                    export_name,
-                    request,
-                },
-                ModuleExportEntry::Star { request } => ModuleExport::Star { request },
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        Self {
+        let (script, requests, imports, exports) =
+            CompiledScript::compile_module_named(source_name, source, limits)?;
+        Ok(Self {
             script,
-            requests: syntax.requests.into_boxed_slice(),
+            requests,
             imports,
             exports,
-        }
+        })
     }
 
     #[must_use]
@@ -155,5 +154,9 @@ impl CompiledModule {
     #[must_use]
     pub fn source_name(&self) -> Option<&str> {
         self.script.source_name()
+    }
+
+    pub(crate) const fn script(&self) -> &CompiledScript {
+        &self.script
     }
 }
