@@ -13,11 +13,13 @@ use crate::{
 
 use super::BytecodeDirectThrow;
 use super::block::BytecodeBlock;
+use super::function_mode::BytecodeNewTargetMode;
 use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
 use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
+use super::super_property::BytecodeSuperProperty;
 
 mod binding;
 
@@ -173,12 +175,6 @@ impl BytecodeObjectProperty {
             | Self::ComputedAccessor { .. } => 2,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum BytecodeNewTargetMode {
-    Own,
-    Lexical,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -420,15 +416,6 @@ pub enum BytecodeAssignmentTarget {
     PrivateProperty {
         object: BytecodeBlock,
         property: BytecodePrivateName,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BytecodeSuperProperty {
-    Static(BytecodeProperty),
-    Computed {
-        expression: BytecodeBlock,
-        operand: BytecodeDynamicProperty,
     },
 }
 

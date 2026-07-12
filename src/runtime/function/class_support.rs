@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use super::FunctionSuperBinding;
-
 use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
@@ -9,6 +7,36 @@ use crate::{
     runtime::control::Completion,
     value::{FunctionId, Value},
 };
+
+/// Super references available to a class constructor or method body.
+#[derive(Debug)]
+pub(in crate::runtime) struct FunctionSuperBinding {
+    pub(in crate::runtime) constructor: Option<Value>,
+    pub(in crate::runtime) home_object: Value,
+    pub(in crate::runtime) own_constructor: Option<FunctionId>,
+    pub(in crate::runtime) this_value: std::cell::RefCell<Option<Value>>,
+}
+
+pub(super) fn activation_super_bindings(
+    id: FunctionId,
+    binding: Option<Rc<FunctionSuperBinding>>,
+) -> (
+    Option<Rc<FunctionSuperBinding>>,
+    Option<Rc<FunctionSuperBinding>>,
+) {
+    let binding = binding.map(|binding| {
+        if binding.own_constructor == Some(id) {
+            binding.fresh_activation()
+        } else {
+            binding
+        }
+    });
+    let derived = binding
+        .as_ref()
+        .filter(|binding| binding.constructor.is_some())
+        .cloned();
+    (binding, derived)
+}
 
 impl FunctionSuperBinding {
     pub(super) fn fresh_activation(&self) -> Rc<Self> {
@@ -47,6 +75,37 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(super) fn normalize_derived_constructor_completion(
+        &self,
+        completion: Completion,
+        binding: &FunctionSuperBinding,
+    ) -> Result<Completion> {
+        match completion {
+            Completion::Return(value) | Completion::ReturnDirect(value)
+                if self.semantic_object_ref(&value)?.is_some() =>
+            {
+                Ok(Completion::Return(value))
+            }
+            Completion::Return(Value::Undefined)
+            | Completion::ReturnDirect(Value::Undefined)
+            | Completion::Normal(_) => binding
+                .this_value
+                .borrow()
+                .clone()
+                .map(Completion::Return)
+                .ok_or_else(|| {
+                    Error::exception(
+                        crate::value::ErrorName::ReferenceError,
+                        "derived constructor did not initialize this",
+                    )
+                }),
+            Completion::Return(_) | Completion::ReturnDirect(_) => Err(Error::type_error(
+                "derived constructor can only return an object or undefined",
+            )),
+            completion => Ok(completion),
+        }
+    }
+
     pub(in crate::runtime) fn add_function_private_slot(
         &mut self,
         id: FunctionId,
