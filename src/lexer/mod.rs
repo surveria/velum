@@ -5,6 +5,6 @@ mod support;
 mod template;
 mod token;
 
-pub(crate) use scanner::LexicalGoal;
-pub(crate) use stream::TokenStream;
+pub use scanner::LexicalGoal;
+pub use stream::TokenStream;
 pub use token::{Token, TokenKind};

@@ -19,7 +19,7 @@ struct TokenStreamState {
     tokens: Vec<BufferedToken>,
 }
 
-pub(crate) struct TokenStream {
+pub struct TokenStream {
     state: RefCell<TokenStreamState>,
 }
 

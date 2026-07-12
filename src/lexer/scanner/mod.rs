@@ -23,7 +23,7 @@ mod names;
 mod operators;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum LexicalGoal {
+pub enum LexicalGoal {
     Div,
     RegExp,
 }
@@ -69,7 +69,8 @@ impl Lexer {
     pub(super) fn restore(&mut self, checkpoint: &LexerCheckpoint) {
         self.cursor = checkpoint.cursor;
         self.line_terminator_before = checkpoint.line_terminator_before;
-        self.template_substitutions = checkpoint.template_substitutions.clone();
+        self.template_substitutions
+            .clone_from(&checkpoint.template_substitutions);
         self.pending = None;
     }
 

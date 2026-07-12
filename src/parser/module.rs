@@ -358,9 +358,7 @@ impl Parser {
     }
 
     fn module_specifier(&mut self) -> Result<String> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected module specifier"))?;
+        let token = self.advance_token("expected module specifier")?;
         let span = token.span;
         let TokenKind::String(value) = token.kind else {
             return Err(Error::parse_at("expected module specifier string", span));
@@ -370,9 +368,7 @@ impl Parser {
     }
 
     fn module_identifier_name(&mut self, allow_string: bool) -> Result<String> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected module export name"))?;
+        let token = self.advance_token("expected module export name")?;
         let span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),

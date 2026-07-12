@@ -239,11 +239,10 @@ impl Parser {
     }
 
     pub(super) fn consume_identifier(&mut self, message: &str) -> Result<StaticName> {
-        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
+        let token = self.advance_token(message)?;
         let token_span = token.span;
         let token_offset = token.offset();
         match token.kind {
-            TokenKind::LexicalError(error) => Err(*error),
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
                 "super is not a valid identifier",
                 token_span,
@@ -502,6 +501,14 @@ impl Parser {
 
     pub(super) fn advance(&mut self) -> Option<Token> {
         self.advance_with_goal(None)
+    }
+
+    pub(super) fn advance_token(&mut self, message: &str) -> Result<Token> {
+        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
+        if let TokenKind::LexicalError(error) = &token.kind {
+            return Err((**error).clone());
+        }
+        Ok(token)
     }
 
     pub(super) fn advance_regexp(&mut self) -> Option<Token> {

@@ -71,9 +71,7 @@ impl Parser {
             return self.object_method_property(name, FunctionKind::Generator, start);
         }
         if let Some(kind) = self.object_accessor_start() {
-            let keyword = self
-                .advance()
-                .ok_or_else(|| self.parse_error("expected accessor keyword"))?;
+            let keyword = self.advance_token("expected accessor keyword")?;
             let name = self.object_property_key()?;
             return self.object_accessor_property(name, kind, keyword.span);
         }
@@ -335,9 +333,7 @@ impl Parser {
             )?;
             return Ok(ObjectPropertyName::Computed(expr));
         }
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected object property name"))?;
+        let token = self.advance_token("expected object property name")?;
         let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => {

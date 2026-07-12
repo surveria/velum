@@ -44,9 +44,7 @@ impl Parser {
         if !self.contextual_using_at(0) {
             return Err(self.parse_error("expected contextual 'using' keyword"));
         }
-        let _token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected contextual 'using' keyword"))?;
+        let _token = self.advance_token("expected contextual 'using' keyword")?;
         Ok(())
     }
 

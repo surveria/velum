@@ -253,9 +253,7 @@ impl Parser {
     }
 
     fn new_target_expr(&mut self, new_span: crate::SourceSpan) -> Result<Expression> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected 'target' after 'new.'"))?;
+        let token = self.advance_token("expected 'target' after 'new.'")?;
         let token_span = token.span;
         let TokenKind::Identifier(name) = token.kind else {
             return Err(Error::parse_at(
@@ -329,12 +327,9 @@ impl Parser {
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.expression()?);
-            let token = self
-                .advance()
-                .ok_or_else(|| self.parse_error("expected template literal continuation"))?;
+            let token = self.advance_token("expected template literal continuation")?;
             let token_span = token.span;
             match token.kind {
-                TokenKind::LexicalError(error) => return Err(*error),
                 TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
                 TokenKind::TemplateTail(cooked) => {
                     quasis.push(self.static_string(cooked)?);

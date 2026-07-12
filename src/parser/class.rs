@@ -243,9 +243,7 @@ impl Parser {
         if !matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_))) {
             return Ok(ClassKeySeed::Property(self.object_property_key()?));
         }
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected class element name"))?;
+        let token = self.advance_token("expected class element name")?;
         let token_span = token.span;
         let TokenKind::PrivateName(text) = token.kind else {
             return Err(Error::parse_at("expected class element name", token_span));
@@ -259,9 +257,7 @@ impl Parser {
     }
 
     fn class_static_block(&mut self, static_blocks: &mut Vec<ClassStaticBlock>) -> Result<()> {
-        let static_token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected 'static' before class static block"))?;
+        let static_token = self.advance_token("expected 'static' before class static block")?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
         let mut body = self.with_restricted_class_arguments(|parser| {
             parser.with_isolated_control_context(|parser| {

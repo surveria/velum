@@ -102,14 +102,14 @@ fn keeps_division_goal_after_expression_operands() -> TestResult {
     let mut context = runtime.context();
 
     let value = context.eval(
-        r#"
+        r"
         let quotient = (84) / 2 / 3;
         quotient /= 2;
         let async = 18;
         let contextualIdentifier = async / 3;
         let regexpThenDivision = /42/.source.length / 2;
         quotient === 7 && contextualIdentifier === 6 && regexpThenDivision === 1 ? 42 : 0
-        "#,
+        ",
     )?;
 
     ensure_value(&value, &Value::Number(42.0))

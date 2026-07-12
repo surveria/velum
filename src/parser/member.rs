@@ -69,9 +69,7 @@ impl Parser {
         if !matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_))) {
             return Ok(None);
         }
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected private name"))?;
+        let token = self.advance_token("expected private name")?;
         let token_span = token.span;
         let TokenKind::PrivateName(text) = token.kind else {
             return Err(Error::parse_at("expected private name", token_span));
@@ -111,7 +109,7 @@ impl Parser {
     }
 
     pub(super) fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
-        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
+        let token = self.advance_token(message)?;
         let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => self.static_name(name),
