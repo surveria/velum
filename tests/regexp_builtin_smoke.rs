@@ -134,6 +134,66 @@ fn supports_ecmascript_patterns_captures_and_match_indices() -> TestResult {
 }
 
 #[test]
+fn supports_observable_string_and_regexp_split_protocols() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let order = [];
+        let receiver = {
+            toString: function() {
+                order.push("receiver");
+                return "a,b";
+            }
+        };
+        let separator = {};
+        Object.defineProperty(separator, Symbol.split, {
+            get: function() {
+                order.push("method");
+                return function(value, limit) {
+                    order.push(value === receiver ? "call" : "wrong");
+                    return [limit, this === separator];
+                };
+            }
+        });
+        let dispatched = String.prototype.split.call(receiver, separator, 7);
+
+        function Splitter(pattern, flags) {
+            this.pattern = pattern;
+            this.flags = flags;
+            this.lastIndex = 0;
+            this.exec = function(input) {
+                if (this.lastIndex !== 1) return null;
+                this.lastIndex = 2;
+                return { 0: ",", 1: "capture", length: 2 };
+            };
+        }
+        let regexp = /,/;
+        let species = {};
+        Object.defineProperty(species, Symbol.species, { value: Splitter });
+        regexp.constructor = species;
+        let split = regexp[Symbol.split]("a,b", 3);
+
+        let surrogateParts = "\uD83D\uDE00".split("");
+        order.join("|") === "method|call" &&
+            dispatched[0] === 7 &&
+            dispatched[1] === true &&
+            split.length === 3 &&
+            split[0] === "a" &&
+            split[1] === "capture" &&
+            split[2] === "b" &&
+            surrogateParts.length === 2 &&
+            surrogateParts[0].charCodeAt(0) === 0xD83D &&
+            surrogateParts[1].charCodeAt(0) === 0xDE00 &&
+            "1001".split(1, 1)[0] === "" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_invalid_regexp_literals_during_parsing() -> TestResult {
     for source in ["/(/", "/a/gg", "/a/z"] {
         let runtime = Runtime::new();

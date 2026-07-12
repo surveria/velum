@@ -1,6 +1,11 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, numeric::number_to_uint32},
+    runtime::{
+        Context,
+        call::RuntimeCallArgs,
+        numeric::number_to_uint32,
+        object::{PropertyKey, PropertyLookup},
+    },
     value::Value,
 };
 
@@ -9,6 +14,8 @@ const REGEXP_MATCH_INDEX_PROPERTY: &str = "index";
 const REGEXP_MATCH_GROUPS_PROPERTY: &str = "groups";
 const REGEXP_MATCH_LENGTH_PROPERTY: &str = "length";
 const FIRST_MATCH_PROPERTY: &str = "0";
+const SPLIT_SYMBOL_DISPLAY: &str = "[Symbol.split]";
+const SPLIT_SYMBOL_PROPERTY: &str = "split";
 const ZERO_INDEX: f64 = 0.0;
 
 #[derive(Debug)]
@@ -117,19 +124,44 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "String.prototype.split requires a non-nullish receiver",
+            ));
+        }
+        let separator = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let limit_value = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        if self.semantic_object_ref(&separator)?.is_some()
+            && let Some(splitter) = self.string_split_method(&separator)?
+        {
+            return self.call_value(&splitter, &[this_value.clone(), limit_value], separator);
+        }
+
+        let text = self.string_receiver_utf16(this_value)?;
         let limit = self.string_split_limit(args.as_slice().get(1))?;
+        if matches!(separator, Value::Undefined) {
+            if limit == 0 {
+                return self.string_utf16_values_array(Vec::new());
+            }
+            return self.string_utf16_values_array(vec![text]);
+        }
+        let separator = self.string_argument_utf16(&separator)?;
         if limit == 0 {
-            return self.string_values_array(Vec::new());
+            return self.string_utf16_values_array(Vec::new());
         }
-        let Some(separator) = args.as_slice().first() else {
-            return self.string_values_array(vec![text]);
+        self.string_utf16_values_array(split_plain_utf16(&text, &separator, limit)?)
+    }
+
+    fn string_split_method(&mut self, separator: &Value) -> Result<Option<Value>> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_named(&symbol_constructor, SPLIT_SYMBOL_PROPERTY)?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.split is not initialized"));
         };
-        if !self.string_regexp_is_object(separator)? {
-            let separator = self.string_argument_text(separator)?;
-            return self.string_values_array(split_plain(&text, &separator, limit)?);
-        }
-        self.string_regexp_split(&text, separator, limit)
+        self.get_method(
+            separator,
+            PropertyLookup::from_key(SPLIT_SYMBOL_DISPLAY, PropertyKey::symbol(symbol.id())),
+        )
     }
 
     fn string_regexp_is_object(&self, value: &Value) -> Result<bool> {
@@ -390,48 +422,6 @@ impl Context {
         Ok(relative_end.saturating_add(3))
     }
 
-    fn string_regexp_split(
-        &mut self,
-        text: &str,
-        separator: &Value,
-        limit: usize,
-    ) -> Result<Value> {
-        let mut parts = Vec::new();
-        let mut cursor = 0usize;
-        while parts.len() < limit {
-            let Some(matched) = self.string_regexp_exec_match_from(separator, text, cursor)? else {
-                break;
-            };
-            if matched.byte_start < cursor {
-                return Err(Error::runtime("RegExp split match moved backwards"));
-            }
-            parts.push(slice_to_string(text, cursor, matched.byte_start)?);
-            cursor = matched.byte_end;
-            if matched.text.is_empty() {
-                cursor = next_char_boundary(text, matched.byte_end);
-            }
-        }
-        if parts.len() < limit {
-            parts.push(slice_to_string(text, cursor, text.len())?);
-        }
-        self.string_values_array(parts)
-    }
-
-    fn string_regexp_exec_match_from(
-        &mut self,
-        pattern: &Value,
-        text: &str,
-        start: usize,
-    ) -> Result<Option<StringRegExpMatch>> {
-        let code_unit_start = text
-            .get(..start)
-            .ok_or_else(|| Error::runtime("RegExp split start is not a string boundary"))?
-            .encode_utf16()
-            .count();
-        let result = self.regexp_exec_from(pattern, text, code_unit_start)?;
-        self.string_regexp_match_from_value(text, &result)
-    }
-
     fn string_regexp_match_from_value(
         &mut self,
         text: &str,
@@ -515,12 +505,24 @@ impl Context {
     }
 
     fn string_values_array(&mut self, values: Vec<String>) -> Result<Value> {
-        self.array_constructor_value()?;
-        let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
             elements.push(self.heap_string_value(&value)?);
         }
+        self.string_value_array(elements)
+    }
+
+    fn string_utf16_values_array(&mut self, values: Vec<Vec<u16>>) -> Result<Value> {
+        let mut elements = Vec::with_capacity(values.len());
+        for value in values {
+            elements.push(self.heap_utf16_string_value(&value)?);
+        }
+        self.string_value_array(elements)
+    }
+
+    fn string_value_array(&mut self, elements: Vec<Value>) -> Result<Value> {
+        self.array_constructor_value()?;
+        let prototype = self.objects.existing_array_prototype_id()?;
         self.objects.create_array(
             elements,
             prototype,
@@ -559,33 +561,41 @@ fn replace_span(text: &str, start: usize, end: usize, replacement: &str) -> Resu
     Ok(output)
 }
 
-fn split_plain(text: &str, separator: &str, limit: usize) -> Result<Vec<String>> {
+fn split_plain_utf16(text: &[u16], separator: &[u16], limit: usize) -> Result<Vec<Vec<u16>>> {
     if separator.is_empty() {
-        let mut values = Vec::new();
-        for ch in text.chars().take(limit) {
-            values.push(ch.to_string());
-        }
-        return Ok(values);
+        return Ok(text.iter().take(limit).map(|unit| vec![*unit]).collect());
     }
     let mut values = Vec::new();
     let mut cursor = 0usize;
-    while values.len() + 1 < limit {
+    while values.len() < limit {
         let Some(relative) = text
             .get(cursor..)
             .ok_or_else(|| Error::runtime("String.prototype.split cursor is invalid"))?
-            .find(separator)
+            .windows(separator.len())
+            .position(|window| window == separator)
         else {
             break;
         };
         let start = cursor
             .checked_add(relative)
             .ok_or_else(|| Error::limit("String.prototype.split index overflowed"))?;
-        values.push(slice_to_string(text, cursor, start)?);
+        values.push(
+            text.get(cursor..start)
+                .ok_or_else(|| Error::runtime("String.prototype.split span is invalid"))?
+                .to_vec(),
+        );
+        if values.len() >= limit {
+            return Ok(values);
+        }
         cursor = start
             .checked_add(separator.len())
             .ok_or_else(|| Error::limit("String.prototype.split cursor overflowed"))?;
     }
-    values.push(slice_to_string(text, cursor, text.len())?);
+    values.push(
+        text.get(cursor..)
+            .ok_or_else(|| Error::runtime("String.prototype.split tail is invalid"))?
+            .to_vec(),
+    );
     Ok(values)
 }
 
@@ -595,21 +605,6 @@ fn push_checked_slice(output: &mut String, text: &str, start: usize, end: usize)
             .ok_or_else(|| Error::runtime("String.prototype RegExp span is invalid"))?,
     );
     Ok(())
-}
-
-fn slice_to_string(text: &str, start: usize, end: usize) -> Result<String> {
-    text.get(start..end)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| Error::runtime("String.prototype RegExp span is invalid"))
-}
-
-fn next_char_boundary(text: &str, index: usize) -> usize {
-    if index >= text.len() {
-        return text.len();
-    }
-    text.get(index..)
-        .and_then(|tail| tail.chars().next())
-        .map_or(text.len(), |ch| index.saturating_add(ch.len_utf8()))
 }
 
 fn utf16_index_to_byte_boundary(text: &str, index: usize) -> Option<usize> {
