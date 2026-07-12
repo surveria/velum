@@ -30,12 +30,20 @@ pub(in crate::runtime) enum CollectionKind {
     WeakSet,
 }
 
+/// Which entry component a live Map or Set iterator yields.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum CollectionIterationTarget {
+    Keys,
+    Values,
+    Entries,
+}
+
 /// Insertion-ordered entry storage shared by Map (key/value pairs) and Set
 /// (the key doubles as the value). Keys compare with `SameValueZero`.
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct CollectionData {
     kind: CollectionKind,
-    entries: Vec<(Value, Value)>,
+    entries: Vec<Option<(Value, Value)>>,
 }
 
 impl CollectionData {
@@ -50,7 +58,7 @@ impl CollectionData {
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
     {
-        for (key, value) in &self.entries {
+        for (key, value) in self.entries.iter().flatten() {
             match self.kind {
                 CollectionKind::Map | CollectionKind::Set => {
                     visitor.visit(
@@ -83,9 +91,13 @@ impl CollectionData {
         if matches!(self.kind, CollectionKind::Map | CollectionKind::Set) {
             return 0;
         }
-        let before = self.entries.len();
-        self.entries.retain(|(key, _value)| key_is_reachable(key));
-        before.saturating_sub(self.entries.len())
+        let before = self.entries.iter().flatten().count();
+        self.entries.retain(|entry| {
+            entry
+                .as_ref()
+                .is_some_and(|(key, _value)| key_is_reachable(key))
+        });
+        before.saturating_sub(self.entries.iter().flatten().count())
     }
 }
 
@@ -93,7 +105,7 @@ impl Context {
     pub(in crate::runtime) fn collection_storage_entry_count(&self) -> Result<usize> {
         self.collections.iter().try_fold(0_usize, |count, data| {
             count
-                .checked_add(data.entries.len())
+                .checked_add(data.entries.iter().flatten().count())
                 .ok_or_else(|| Error::limit("collection entry count overflowed"))
         })
     }
@@ -199,7 +211,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn collection_len(&self, id: CollectionId) -> Result<usize> {
-        Ok(self.collection(id)?.entries.len())
+        Ok(self.collection(id)?.entries.iter().flatten().count())
     }
 
     pub(in crate::runtime) fn collection_get(
@@ -211,6 +223,7 @@ impl Context {
             .collection(id)?
             .entries
             .iter()
+            .flatten()
             .find(|(entry_key, _)| same_value_zero(entry_key, key))
             .map(|(_, value)| value.clone()))
     }
@@ -220,6 +233,7 @@ impl Context {
             .collection(id)?
             .entries
             .iter()
+            .flatten()
             .any(|(entry_key, _)| same_value_zero(entry_key, key)))
     }
 
@@ -235,6 +249,7 @@ impl Context {
             .collection_mut(id)?
             .entries
             .iter_mut()
+            .flatten()
             .find(|(entry_key, _)| same_value_zero(entry_key, &key))
         {
             entry.1 = value;
@@ -242,7 +257,7 @@ impl Context {
         }
         self.storage_ledger
             .grow_count(VmStorageKind::CollectionEntry, 1)?;
-        self.collection_mut(id)?.entries.push((key, value));
+        self.collection_mut(id)?.entries.push(Some((key, value)));
         Ok(())
     }
 
@@ -251,25 +266,32 @@ impl Context {
         id: CollectionId,
         key: &Value,
     ) -> Result<bool> {
-        let position = self
-            .collection(id)?
-            .entries
-            .iter()
-            .position(|(entry_key, _)| same_value_zero(entry_key, key));
+        let position = self.collection(id)?.entries.iter().position(|entry| {
+            entry
+                .as_ref()
+                .is_some_and(|(entry_key, _)| same_value_zero(entry_key, key))
+        });
         let Some(position) = position else {
             return Ok(false);
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, 1)?;
-        self.collection_mut(id)?.entries.remove(position);
+        let Some(entry) = self.collection_mut(id)?.entries.get_mut(position) else {
+            return Err(Error::runtime(
+                "collection entry disappeared during deletion",
+            ));
+        };
+        *entry = None;
         Ok(true)
     }
 
     pub(in crate::runtime) fn collection_clear(&mut self, id: CollectionId) -> Result<()> {
-        let released = self.collection(id)?.entries.len();
+        let released = self.collection(id)?.entries.iter().flatten().count();
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, released)?;
-        self.collection_mut(id)?.entries.clear();
+        for entry in &mut self.collection_mut(id)?.entries {
+            *entry = None;
+        }
         Ok(())
     }
 
@@ -278,7 +300,31 @@ impl Context {
         &self,
         id: CollectionId,
     ) -> Result<Vec<(Value, Value)>> {
-        Ok(self.collection(id)?.entries.clone())
+        Ok(self
+            .collection(id)?
+            .entries
+            .iter()
+            .flatten()
+            .cloned()
+            .collect())
+    }
+
+    pub(in crate::runtime) fn collection_entry_at_or_after(
+        &self,
+        id: CollectionId,
+        cursor: usize,
+    ) -> Result<Option<(usize, Value, Value)>> {
+        Ok(self
+            .collection(id)?
+            .entries
+            .iter()
+            .enumerate()
+            .skip(cursor)
+            .find_map(|(index, entry)| {
+                entry
+                    .as_ref()
+                    .map(|(key, value)| (index, key.clone(), value.clone()))
+            }))
     }
 
     pub(in crate::runtime) const fn can_be_held_weakly(value: &Value) -> bool {
@@ -310,9 +356,20 @@ const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
 #[derive(Debug, Clone)]
 pub(in crate::runtime) enum CollectionIteratorState {
     Snapshot(SnapshotIteratorState),
+    LiveCollection(LiveCollectionIteratorState),
     Helper(IteratorHelperState),
     Static(IteratorStaticState),
     Wrap(WrappedIteratorState),
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct LiveCollectionIteratorState {
+    pub(in crate::runtime) owner: Value,
+    pub(in crate::runtime) collection: CollectionId,
+    pub(in crate::runtime) kind: CollectionKind,
+    pub(in crate::runtime) target: CollectionIterationTarget,
+    pub(in crate::runtime) cursor: usize,
+    pub(in crate::runtime) done: bool,
 }
 
 impl Default for CollectionIteratorState {
@@ -428,6 +485,10 @@ impl CollectionIteratorState {
     {
         match self {
             Self::Snapshot(state) => state.visit_strong_edges(visitor),
+            Self::LiveCollection(state) => visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(&state.owner),
+            ),
             Self::Helper(state) => state.visit_strong_edges(visitor),
             Self::Static(state) => state.visit_strong_edges(visitor),
             Self::Wrap(state) => {
@@ -448,6 +509,7 @@ impl CollectionIteratorState {
     fn item_charge(&self) -> Result<usize> {
         match self {
             Self::Snapshot(state) => Ok(state.items.len()),
+            Self::LiveCollection(_) => Ok(1),
             Self::Helper(_) => Ok(ITERATOR_HELPER_ITEM_CHARGE),
             Self::Static(state) => state.item_charge(),
             Self::Wrap(_) => Ok(WRAPPED_ITERATOR_ITEM_CHARGE),
@@ -577,6 +639,25 @@ impl Context {
             items,
             cursor: 0,
         }))
+    }
+
+    pub(in crate::runtime) fn create_live_collection_iterator(
+        &mut self,
+        owner: Value,
+        collection: CollectionId,
+        kind: CollectionKind,
+        target: CollectionIterationTarget,
+    ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::LiveCollection(
+            LiveCollectionIteratorState {
+                owner,
+                collection,
+                kind,
+                target,
+                cursor: 0,
+                done: false,
+            },
+        ))
     }
 
     pub(in crate::runtime) fn create_iterator_helper(

@@ -225,13 +225,11 @@ impl Context {
         let Value::NativeFunction(id) = next else {
             return Err(Error::type_error(STRING_ITERATOR_RECEIVER_ERROR));
         };
-        if !matches!(
-            self.native_function(id)?.kind(),
-            NativeFunctionKind::CollectionIteratorNext(_)
-        ) {
+        let NativeFunctionKind::CollectionIteratorNext(iterator) = self.native_function(id)?.kind()
+        else {
             return Err(Error::type_error(STRING_ITERATOR_RECEIVER_ERROR));
-        }
-        self.call_value(&Value::NativeFunction(id), &[], this_value.clone())
+        };
+        self.eval_collection_iterator_next_state(iterator, iterator)
     }
 
     fn install_string_iterator_method(&mut self, prototype: ObjectId) -> Result<()> {

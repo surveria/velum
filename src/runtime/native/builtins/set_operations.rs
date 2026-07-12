@@ -131,7 +131,13 @@ impl Context {
         if Self::set_size_as_f64(self.collection_len(this_id)?) > record.size {
             return Ok(Value::Bool(false));
         }
-        for item in self.set_items(this_id)? {
+        let mut cursor = 0usize;
+        while let Some((index, item, _value)) =
+            self.collection_entry_at_or_after(this_id, cursor)?
+        {
+            cursor = index
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("Set subset cursor overflowed"))?;
             self.step()?;
             if !self.set_record_has(&record, &item)? {
                 return Ok(Value::Bool(false));
@@ -150,13 +156,18 @@ impl Context {
         if Self::set_size_as_f64(self.collection_len(this_id)?) < record.size {
             return Ok(Value::Bool(false));
         }
-        for key in self.set_record_keys(&record)? {
+        let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
+        loop {
             self.step()?;
-            if !self.collection_has(this_id, &key)? {
-                return Ok(Value::Bool(false));
+            match self.iterator_step(&mut source)? {
+                IteratorStep::Value(key) if !self.collection_has(this_id, &key)? => {
+                    return self.close_set_predicate_iterator(&mut source, false);
+                }
+                IteratorStep::Value(_) => {}
+                IteratorStep::Done => return Ok(Value::Bool(true)),
+                IteratorStep::Abrupt(completion) => return completion.into_result(),
             }
         }
-        Ok(Value::Bool(true))
     }
 
     pub(in crate::runtime::native) fn eval_set_is_disjoint_from(
@@ -167,21 +178,45 @@ impl Context {
         let this_id = self.collection_from_this(this_value, CollectionKind::Set)?;
         let record = self.get_set_record(&Self::set_first_arg(&args))?;
         if Self::set_size_as_f64(self.collection_len(this_id)?) <= record.size {
-            for item in self.set_items(this_id)? {
+            let mut cursor = 0usize;
+            while let Some((index, item, _value)) =
+                self.collection_entry_at_or_after(this_id, cursor)?
+            {
+                cursor = index
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("Set disjoint cursor overflowed"))?;
                 self.step()?;
                 if self.set_record_has(&record, &item)? {
                     return Ok(Value::Bool(false));
                 }
             }
         } else {
-            for key in self.set_record_keys(&record)? {
+            let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
+            loop {
                 self.step()?;
-                if self.collection_has(this_id, &key)? {
-                    return Ok(Value::Bool(false));
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(key) if self.collection_has(this_id, &key)? => {
+                        return self.close_set_predicate_iterator(&mut source, false);
+                    }
+                    IteratorStep::Value(_) => {}
+                    IteratorStep::Done => return Ok(Value::Bool(true)),
+                    IteratorStep::Abrupt(completion) => return completion.into_result(),
                 }
             }
         }
         Ok(Value::Bool(true))
+    }
+
+    fn close_set_predicate_iterator(
+        &mut self,
+        source: &mut crate::runtime::abstract_operations::IteratorSource,
+        result: bool,
+    ) -> Result<Value> {
+        self.iterator_close(
+            source,
+            crate::runtime::control::Completion::Normal(Value::Bool(result)),
+        )?
+        .into_result()
     }
 
     fn set_first_arg(args: &RuntimeCallArgs<'_>) -> Value {

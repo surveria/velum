@@ -27,6 +27,7 @@ pub mod binding;
 pub mod bytecode;
 pub mod call;
 mod clock;
+mod collection_live_iterator;
 pub mod collections;
 pub mod control;
 pub mod engine;
