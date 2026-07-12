@@ -18,6 +18,8 @@ const ARRAY_FOR_EACH_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_FOR_EACH_NAME: &str = "forEach";
 const ARRAY_FROM_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_FROM_NAME: &str = "from";
+const ARRAY_FROM_ASYNC_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_FROM_ASYNC_NAME: &str = "fromAsync";
 const ARRAY_INCLUDES_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_INCLUDES_NAME: &str = "includes";
 const ARRAY_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
@@ -88,6 +90,7 @@ impl NativeFunctionKind {
             Self::ArrayFlatMap => Some(ARRAY_FLAT_MAP_FUNCTION_LENGTH),
             Self::ArrayForEach => Some(ARRAY_FOR_EACH_FUNCTION_LENGTH),
             Self::ArrayFrom => Some(ARRAY_FROM_FUNCTION_LENGTH),
+            Self::ArrayFromAsync => Some(ARRAY_FROM_ASYNC_FUNCTION_LENGTH),
             Self::ArrayIncludes => Some(ARRAY_INCLUDES_FUNCTION_LENGTH),
             Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_FUNCTION_LENGTH),
             Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_FUNCTION_LENGTH),
@@ -131,6 +134,7 @@ impl NativeFunctionKind {
             Self::ArrayFlatMap => Some(ARRAY_FLAT_MAP_NAME),
             Self::ArrayForEach => Some(ARRAY_FOR_EACH_NAME),
             Self::ArrayFrom => Some(ARRAY_FROM_NAME),
+            Self::ArrayFromAsync => Some(ARRAY_FROM_ASYNC_NAME),
             Self::ArrayIncludes => Some(ARRAY_INCLUDES_NAME),
             Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_NAME),
             Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_NAME),

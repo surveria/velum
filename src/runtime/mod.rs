@@ -22,6 +22,7 @@ mod abstract_operations;
 mod accounting;
 mod activation;
 mod arena;
+mod async_operation;
 mod async_trace;
 pub mod binding;
 pub mod bytecode;

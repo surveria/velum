@@ -1,6 +1,7 @@
 use crate::{
     error::Result,
     runtime::{
+        async_operation::ArrayFromAsyncContinuation,
         async_trace::VmAsyncEdgeKind,
         function::SuspendedAsyncFunction,
         generator::GeneratorId,
@@ -25,6 +26,9 @@ pub(in crate::runtime) enum PromiseReaction {
     AsyncGeneratorAwait {
         generator: GeneratorId,
     },
+    ArrayFromAsync {
+        continuation: Box<ArrayFromAsyncContinuation>,
+    },
 }
 
 impl PromiseReaction {
@@ -48,6 +52,14 @@ impl PromiseReaction {
 
     pub(in crate::runtime) const fn awaiting_async_generator(generator: GeneratorId) -> Self {
         Self::AsyncGeneratorAwait { generator }
+    }
+
+    pub(in crate::runtime) fn awaiting_array_from_async(
+        continuation: ArrayFromAsyncContinuation,
+    ) -> Self {
+        Self::ArrayFromAsync {
+            continuation: Box::new(continuation),
+        }
     }
 
     pub(super) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
@@ -79,6 +91,9 @@ impl PromiseReaction {
             }
             Self::Await { continuation } => continuation.visit_strong_edges(visitor)?,
             Self::AsyncGeneratorAwait { .. } => {}
+            Self::ArrayFromAsync { continuation } => {
+                continuation.visit_strong_edges(visitor)?;
+            }
         }
         Ok(())
     }
@@ -86,14 +101,18 @@ impl PromiseReaction {
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Await { continuation } => continuation.execution_frame_count(),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => Ok(0),
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
+                Ok(0)
+            }
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Await { continuation } => continuation.cache_entry_count(),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => Ok(0),
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
+                Ok(0)
+            }
         }
     }
 
@@ -115,6 +134,7 @@ impl PromiseReaction {
             }
             Self::Await { continuation } => continuation.visit_direct_roots(visitor),
             Self::AsyncGeneratorAwait { .. } => Ok(()),
+            Self::ArrayFromAsync { continuation } => continuation.visit_direct_roots(visitor),
         }
     }
 
@@ -127,13 +147,16 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
+            Self::ArrayFromAsync { .. } => None,
         }
     }
 
     pub(in crate::runtime) fn into_suspended(self) -> Option<SuspendedAsyncFunction> {
         match self {
             Self::Await { continuation } => Some(*continuation),
-            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => None,
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } | Self::ArrayFromAsync { .. } => {
+                None
+            }
         }
     }
 }

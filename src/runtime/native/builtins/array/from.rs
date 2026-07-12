@@ -124,7 +124,11 @@ impl Context {
         Ok(result)
     }
 
-    fn array_from_result(&mut self, constructor: &Value, length: Option<usize>) -> Result<Value> {
+    pub(in crate::runtime) fn array_from_result(
+        &mut self,
+        constructor: &Value,
+        length: Option<usize>,
+    ) -> Result<Value> {
         let length_value = length.map(Self::array_like_length_value).transpose()?;
         if self.semantic_is_constructor(constructor)? {
             let arguments = length_value.as_slice();
@@ -148,7 +152,7 @@ impl Context {
         self.call_value(map_function, &[value, index], this_argument.clone())
     }
 
-    fn array_from_create_data_property(
+    pub(in crate::runtime) fn array_from_create_data_property(
         &mut self,
         result: &Value,
         index: usize,

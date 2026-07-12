@@ -605,6 +605,13 @@ impl Context {
                     };
                     self.resume_async_generator_await(generator, resume)
                 }
+                PromiseReaction::ArrayFromAsync { continuation } => {
+                    let resume = match state.status {
+                        PromiseStatus::Fulfilled => Completion::Normal(state.value),
+                        PromiseStatus::Rejected => Completion::Throw(state.value),
+                    };
+                    self.resume_array_from_async(*continuation, resume)
+                }
                 PromiseReaction::Then { .. } => {
                     Err(Error::runtime("Promise reaction kind disappeared"))
                 }
