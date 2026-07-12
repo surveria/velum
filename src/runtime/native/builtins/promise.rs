@@ -88,11 +88,13 @@ impl Context {
         args: &[Value],
         new_target: &Value,
     ) -> Result<Value> {
+        let executor = self.promise_executor_argument(args)?;
         let prototype = match self.constructor_instance_prototype(new_target)? {
             Some(prototype) => prototype,
             None => self.promise_constructor_prototype()?,
         };
-        self.eval_promise_constructor_with_prototype(args, prototype)
+        let (promise, object) = self.create_pending_promise_with_prototype(prototype)?;
+        self.run_promise_executor(promise, object, executor)
     }
 
     fn eval_promise_constructor_with_prototype(

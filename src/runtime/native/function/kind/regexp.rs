@@ -2,6 +2,8 @@ use super::NativeFunctionKind;
 
 const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const REGEXP_NAME: &str = "RegExp";
+const REGEXP_PROTOTYPE_COMPILE_LENGTH: f64 = 2.0;
+const REGEXP_PROTOTYPE_COMPILE_NAME: &str = "compile";
 const REGEXP_PROTOTYPE_GETTER_LENGTH: f64 = 0.0;
 const REGEXP_PROTOTYPE_DOT_ALL_GETTER_NAME: &str = "get dotAll";
 pub(in crate::runtime::native) const REGEXP_PROTOTYPE_EXEC_NAME: &str = "exec";
@@ -31,6 +33,7 @@ impl NativeFunctionKind {
     pub(super) const fn regexp_length(self) -> Option<f64> {
         match self {
             Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
+            Self::RegExpPrototypeCompile => Some(REGEXP_PROTOTYPE_COMPILE_LENGTH),
             Self::RegExpPrototypeDotAllGetter
             | Self::RegExpPrototypeFlagsGetter
             | Self::RegExpPrototypeGlobalGetter
@@ -57,6 +60,7 @@ impl NativeFunctionKind {
     pub(super) const fn regexp_name(self) -> Option<&'static str> {
         match self {
             Self::RegExp => Some(REGEXP_NAME),
+            Self::RegExpPrototypeCompile => Some(REGEXP_PROTOTYPE_COMPILE_NAME),
             Self::RegExpPrototypeDotAllGetter => Some(REGEXP_PROTOTYPE_DOT_ALL_GETTER_NAME),
             Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
             Self::RegExpPrototypeFlagsGetter => Some(REGEXP_PROTOTYPE_FLAGS_GETTER_NAME),

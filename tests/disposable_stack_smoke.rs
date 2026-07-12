@@ -145,3 +145,31 @@ fn disposable_stack_reads_bound_new_target_prototype_before_allocation() -> Test
         "true:1",
     )
 }
+
+#[test]
+fn bound_prototype_accessors_preserve_existing_constructor_ordering() -> TestResult {
+    ensure_string(
+        r#"
+        const promiseTarget = function() {}.bind(null);
+        let promisePrototypeRead = false;
+        Object.defineProperty(promiseTarget, "prototype", {
+            get() { promisePrototypeRead = true; throw new Error("unexpected"); }
+        });
+        let promiseError = "none";
+        try { Reflect.construct(Promise, [], promiseTarget); }
+        catch (error) { promiseError = error instanceof TypeError ? "type" : "other"; }
+
+        const pattern = /a/;
+        const regexpTarget = function() {}.bind(null);
+        Object.defineProperty(regexpTarget, "prototype", {
+            get() {
+                pattern.compile("b");
+                return RegExp.prototype;
+            }
+        });
+        const copy = Reflect.construct(RegExp, [pattern], regexpTarget);
+        [promiseError, promisePrototypeRead, copy.source, pattern.source].join(":")
+        "#,
+        "type:false:a:b",
+    )
+}

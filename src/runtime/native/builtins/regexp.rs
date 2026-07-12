@@ -12,6 +12,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+mod compile;
 mod engine;
 mod match_result;
 
@@ -26,6 +27,7 @@ use super::{
 };
 
 const REGEXP_DOT_ALL_PROPERTY: &str = "dotAll";
+const REGEXP_COMPILE_PROPERTY: &str = "compile";
 const REGEXP_SOURCE_PROPERTY: &str = "source";
 const REGEXP_FLAGS_PROPERTY: &str = "flags";
 const REGEXP_GLOBAL_PROPERTY: &str = "global";
@@ -408,6 +410,10 @@ impl Context {
             self.define_regexp_prototype_accessor(prototype, name, kind)?;
         }
         for (name, kind) in [
+            (
+                REGEXP_COMPILE_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeCompile,
+            ),
             (
                 REGEXP_PROTOTYPE_EXEC_NAME,
                 NativeFunctionKind::RegExpPrototypeExec,

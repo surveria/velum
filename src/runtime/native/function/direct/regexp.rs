@@ -36,6 +36,9 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             NativeFunctionKind::RegExp => Some(self.eval_regexp_constructor(args)),
+            NativeFunctionKind::RegExpPrototypeCompile => {
+                Some(self.eval_regexp_prototype_compile(args, this_value))
+            }
             NativeFunctionKind::RegExpPrototypeDotAllGetter
             | NativeFunctionKind::RegExpPrototypeFlagsGetter
             | NativeFunctionKind::RegExpPrototypeGlobalGetter

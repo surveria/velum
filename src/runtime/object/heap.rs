@@ -346,6 +346,19 @@ impl ObjectHeap {
         Ok(self.object(id)?.regexp_value.as_ref())
     }
 
+    pub(in crate::runtime) fn replace_regexp_value(
+        &mut self,
+        id: ObjectId,
+        value: RegExpValue,
+    ) -> Result<()> {
+        let object = self.object_mut(id)?;
+        if object.regexp_value.is_none() {
+            return Err(Error::type_error("object is not a RegExp"));
+        }
+        object.regexp_value = Some(value);
+        Ok(())
+    }
+
     pub fn has(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         self.has_in_chain(id, property)
     }
