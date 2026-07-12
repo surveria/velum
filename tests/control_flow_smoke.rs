@@ -7,7 +7,6 @@ fn eval(source: &str) -> rs_quickjs::Result<Value> {
     let mut context = runtime.context();
     context.eval(source)
 }
-
 #[test]
 fn supports_while_statements() -> TestResult {
     expect_value(
@@ -44,7 +43,6 @@ fn supports_while_statements() -> TestResult {
         &Value::Undefined,
     )
 }
-
 #[test]
 fn preserves_if_statement_completion_values() -> TestResult {
     expect_value(
@@ -68,7 +66,6 @@ fn preserves_if_statement_completion_values() -> TestResult {
         &Value::Number(42.0),
     )
 }
-
 #[test]
 fn supports_do_while_statements() -> TestResult {
     expect_value(
@@ -105,7 +102,6 @@ fn supports_do_while_statements() -> TestResult {
         &Value::Number(42.0),
     )
 }
-
 #[test]
 fn propagates_do_while_control_flow() -> TestResult {
     expect_value(
@@ -159,7 +155,6 @@ fn propagates_do_while_control_flow() -> TestResult {
         &Value::from("boom"),
     )
 }
-
 #[test]
 fn supports_labeled_break_statements() -> TestResult {
     expect_value(
@@ -195,7 +190,6 @@ fn supports_labeled_break_statements() -> TestResult {
         &Value::Number(3.0),
     )
 }
-
 #[test]
 fn supports_labeled_continue_statements() -> TestResult {
     expect_value(
@@ -261,7 +255,6 @@ fn supports_labeled_continue_statements() -> TestResult {
         &Value::from("ac"),
     )
 }
-
 #[test]
 fn propagates_while_completion() -> TestResult {
     expect_value(
@@ -296,7 +289,6 @@ fn propagates_while_completion() -> TestResult {
         &Value::from("boom"),
     )
 }
-
 #[test]
 fn supports_break_and_continue() -> TestResult {
     expect_value(
@@ -343,7 +335,6 @@ fn supports_break_and_continue() -> TestResult {
         &Value::Number(4.0),
     )
 }
-
 #[test]
 fn supports_for_statements() -> TestResult {
     expect_value(
