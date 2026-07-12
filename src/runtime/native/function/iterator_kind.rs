@@ -1,7 +1,10 @@
 use crate::{runtime::collections::CollectionIteratorId, value::ObjectId};
 
 pub(in crate::runtime) const ITERATOR_NAME: &str = "Iterator";
+pub(in crate::runtime::native) const ITERATOR_CONCAT_NAME: &str = "concat";
 pub(in crate::runtime::native) const ITERATOR_FROM_NAME: &str = "from";
+pub(in crate::runtime::native) const ITERATOR_ZIP_KEYED_NAME: &str = "zipKeyed";
+pub(in crate::runtime::native) const ITERATOR_ZIP_NAME: &str = "zip";
 pub(in crate::runtime::native) const ITERATOR_PROTOTYPE_MAP_NAME: &str = "map";
 pub(in crate::runtime::native) const ITERATOR_PROTOTYPE_FILTER_NAME: &str = "filter";
 pub(in crate::runtime::native) const ITERATOR_PROTOTYPE_TAKE_NAME: &str = "take";
@@ -35,6 +38,9 @@ pub(in crate::runtime) enum IteratorFunctionKind {
         wrapped_prototype: ObjectId,
         collection_prototype: ObjectId,
     },
+    Concat,
+    Zip,
+    ZipKeyed,
     PrototypeMap,
     PrototypeFilter,
     PrototypeTake,
@@ -53,6 +59,8 @@ pub(in crate::runtime) enum IteratorFunctionKind {
     PrototypeToStringTagSetter,
     HelperNext(CollectionIteratorId),
     HelperReturn(CollectionIteratorId),
+    StaticNext(CollectionIteratorId),
+    StaticReturn(CollectionIteratorId),
     WrapNext(CollectionIteratorId),
     WrapReturn(CollectionIteratorId),
 }
@@ -61,15 +69,20 @@ impl IteratorFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         match self {
             Self::Constructor
+            | Self::Concat
             | Self::PrototypeToArray
             | Self::PrototypeDispose
             | Self::PrototypeConstructorGetter
             | Self::PrototypeToStringTagGetter
             | Self::HelperNext(_)
             | Self::HelperReturn(_)
+            | Self::StaticNext(_)
+            | Self::StaticReturn(_)
             | Self::WrapNext(_)
             | Self::WrapReturn(_) => ITERATOR_NULLARY_LENGTH,
             Self::From { .. }
+            | Self::Zip
+            | Self::ZipKeyed
             | Self::PrototypeMap
             | Self::PrototypeFilter
             | Self::PrototypeTake
@@ -88,7 +101,10 @@ impl IteratorFunctionKind {
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         match self {
             Self::Constructor => ITERATOR_NAME,
+            Self::Concat => ITERATOR_CONCAT_NAME,
             Self::From { .. } => ITERATOR_FROM_NAME,
+            Self::Zip => ITERATOR_ZIP_NAME,
+            Self::ZipKeyed => ITERATOR_ZIP_KEYED_NAME,
             Self::PrototypeMap => ITERATOR_PROTOTYPE_MAP_NAME,
             Self::PrototypeFilter => ITERATOR_PROTOTYPE_FILTER_NAME,
             Self::PrototypeTake => ITERATOR_PROTOTYPE_TAKE_NAME,
@@ -105,8 +121,12 @@ impl IteratorFunctionKind {
             Self::PrototypeConstructorSetter => ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_NAME,
             Self::PrototypeToStringTagGetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_NAME,
             Self::PrototypeToStringTagSetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_NAME,
-            Self::HelperNext(_) | Self::WrapNext(_) => ITERATOR_HELPER_NEXT_NAME,
-            Self::HelperReturn(_) | Self::WrapReturn(_) => ITERATOR_HELPER_RETURN_NAME,
+            Self::HelperNext(_) | Self::StaticNext(_) | Self::WrapNext(_) => {
+                ITERATOR_HELPER_NEXT_NAME
+            }
+            Self::HelperReturn(_) | Self::StaticReturn(_) | Self::WrapReturn(_) => {
+                ITERATOR_HELPER_RETURN_NAME
+            }
         }
     }
 
@@ -116,10 +136,15 @@ impl IteratorFunctionKind {
         match self {
             Self::HelperNext(id)
             | Self::HelperReturn(id)
+            | Self::StaticNext(id)
+            | Self::StaticReturn(id)
             | Self::WrapNext(id)
             | Self::WrapReturn(id) => Some(id),
             Self::Constructor
+            | Self::Concat
             | Self::From { .. }
+            | Self::Zip
+            | Self::ZipKeyed
             | Self::PrototypeMap
             | Self::PrototypeFilter
             | Self::PrototypeTake

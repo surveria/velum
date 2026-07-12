@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09w extends the shared Promise combinator owner to enumerable string/Symbol-keyed dictionaries. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09x adds VM-owned static Iterator combinator continuations over the shared iterator protocol and close owners. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2840,7 +2840,7 @@ AS-09v canonical evidence from PR #485:
   report `20260712T051106Z` in report commit `7cd2799`, reaching 68,651 passing
   variants and 35,406 conforming files; AS-09v is complete.
 
-AS-09w profile evidence in draft PR #486:
+AS-09w canonical evidence from PR #486:
 
 - `PromiseCombinatorKind` now owns `allKeyed` and `allSettledKeyed` beside the
   four iterable combinators, while the existing traced element-function state
@@ -2860,8 +2860,36 @@ AS-09w profile evidence in draft PR #486:
   unavailable BigInt syntax; the remaining two are an upstream destructive
   `verifyProperty` ordering case that deletes outer configurable properties
   before dereferencing them again;
-- exact-tree correctness and canonical publication remain required before
-  AS-09w can close.
+- exact-tree run `29181722226` adds 168 variants with no removals. PR #486
+  merged as `552d206`; post-merge run `29181826750` published canonical report
+  `20260712T055326Z` in `c522dfe`, reaching 68,926 passing variants and 35,566
+  conforming files; AS-09w is complete.
+
+AS-09x profile evidence in draft PR #489:
+
+- `Iterator.concat`, `Iterator.zip`, and `Iterator.zipKeyed` retain their lazy
+  execution state in the existing VM-local collection-iterator arena. Native
+  `next` and `return` functions carry only the typed state id;
+- static state records every cached iterable method, iterator/next pair,
+  length mode, padding value, and keyed result key as typed strong edges. Its
+  creation-time `IteratorItem` charge remains stable after sources complete;
+- acquisition and stepping reuse shared `GetIterator`, `GetMethod`,
+  `IteratorStep`/`IteratorValue`, and `IteratorClose`. A shared raw-result step
+  lets strict zip verify remaining `done` states without observing `value`;
+- closing processes open records in reverse order, preserves original abrupt
+  completions, distinguishes suspended-start from executing re-entry, and
+  never opens an unstarted `concat` source during `return`;
+- keyed discovery reuses semantic own-key and descriptor owners and creates
+  fresh null-prototype result objects with ordinary writable, enumerable,
+  configurable properties;
+- five direct engine cases cover metadata, concat laziness/close, all zip
+  modes, keyed string/Symbol result shape, and reverse close order;
+- the exact combined profile advances from 8/228 to 196/228 variants and from
+  4/114 to 98/114 files. Twenty-eight residual variants require unavailable
+  BigInt syntax; four exhaustive longest-mode variants exceed the runner's
+  current per-case 65,536-object conformance budget;
+- required exact-tree correctness and canonical publication remain before
+  AS-09x can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

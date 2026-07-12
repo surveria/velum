@@ -262,7 +262,10 @@ const PROMISE_RACE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(266);
 const PROMISE_FINALLY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(267);
 const PROMISE_ALL_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(268);
 const PROMISE_ALL_SETTLED_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(269);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 270;
+const ITERATOR_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(270);
+const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
+const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 273;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -511,7 +514,10 @@ const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot
 const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         IteratorFunctionKind::Constructor => Some(ITERATOR_SLOT),
+        IteratorFunctionKind::Concat => Some(ITERATOR_CONCAT_SLOT),
         IteratorFunctionKind::From { .. } => Some(ITERATOR_FROM_SLOT),
+        IteratorFunctionKind::Zip => Some(ITERATOR_ZIP_SLOT),
+        IteratorFunctionKind::ZipKeyed => Some(ITERATOR_ZIP_KEYED_SLOT),
         IteratorFunctionKind::PrototypeMap => Some(ITERATOR_PROTOTYPE_MAP_SLOT),
         IteratorFunctionKind::PrototypeFilter => Some(ITERATOR_PROTOTYPE_FILTER_SLOT),
         IteratorFunctionKind::PrototypeTake => Some(ITERATOR_PROTOTYPE_TAKE_SLOT),
@@ -538,6 +544,8 @@ const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot>
         }
         IteratorFunctionKind::HelperNext(_)
         | IteratorFunctionKind::HelperReturn(_)
+        | IteratorFunctionKind::StaticNext(_)
+        | IteratorFunctionKind::StaticReturn(_)
         | IteratorFunctionKind::WrapNext(_)
         | IteratorFunctionKind::WrapReturn(_) => None,
     }

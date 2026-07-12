@@ -103,7 +103,7 @@ impl Context {
             .iter()
             .try_fold(0_usize, |count, iterator| {
                 count
-                    .checked_add(iterator.item_charge())
+                    .checked_add(iterator.item_charge()?)
                     .ok_or_else(|| Error::limit("collection iterator item count overflowed"))
             })
     }
@@ -311,6 +311,7 @@ const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
 pub(in crate::runtime) enum CollectionIteratorState {
     Snapshot(SnapshotIteratorState),
     Helper(IteratorHelperState),
+    Static(IteratorStaticState),
     Wrap(WrappedIteratorState),
 }
 
@@ -365,6 +366,53 @@ pub(in crate::runtime) struct InnerIteratorState {
     pub(in crate::runtime) next: Value,
 }
 
+/// Cached protocol pair used by the static iterator combinators.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct IteratorRecordState {
+    pub(in crate::runtime) iterator: Value,
+    pub(in crate::runtime) next: Value,
+}
+
+/// One eagerly validated iterable consumed lazily by `Iterator.concat`.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct IteratorConcatInput {
+    pub(in crate::runtime) iterable: Value,
+    pub(in crate::runtime) open_method: Value,
+}
+
+/// Length policy shared by `Iterator.zip` and `Iterator.zipKeyed`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum IteratorZipMode {
+    Shortest,
+    Longest,
+    Strict,
+}
+
+/// Persistent state for the Stage 4 static iterator combinators.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct IteratorStaticState {
+    pub(in crate::runtime) started: bool,
+    pub(in crate::runtime) running: bool,
+    pub(in crate::runtime) done: bool,
+    pub(in crate::runtime) kind: IteratorStaticKind,
+}
+
+/// Static combinator-specific payload retained by one helper iterator.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) enum IteratorStaticKind {
+    Concat {
+        inputs: Vec<IteratorConcatInput>,
+        index: usize,
+        active: Option<IteratorRecordState>,
+    },
+    Zip {
+        records: Vec<Option<IteratorRecordState>>,
+        mode: IteratorZipMode,
+        padding: Vec<Value>,
+        keys: Option<Vec<Value>>,
+    },
+}
+
 /// `Iterator.from` wrapper target for iterators that do not inherit from
 /// %Iterator.prototype%.
 #[derive(Debug, Clone)]
@@ -381,6 +429,7 @@ impl CollectionIteratorState {
         match self {
             Self::Snapshot(state) => state.visit_strong_edges(visitor),
             Self::Helper(state) => state.visit_strong_edges(visitor),
+            Self::Static(state) => state.visit_strong_edges(visitor),
             Self::Wrap(state) => {
                 for value in [&state.iterator, &state.next] {
                     visitor.visit(
@@ -396,12 +445,80 @@ impl CollectionIteratorState {
     /// The `IteratorItem` ledger charge this state was created with. The
     /// charge is intentionally constant per state so creation-time growth and
     /// post-collection reconciliation stay consistent.
-    const fn item_charge(&self) -> usize {
+    fn item_charge(&self) -> Result<usize> {
         match self {
-            Self::Snapshot(state) => state.items.len(),
-            Self::Helper(_) => ITERATOR_HELPER_ITEM_CHARGE,
-            Self::Wrap(_) => WRAPPED_ITERATOR_ITEM_CHARGE,
+            Self::Snapshot(state) => Ok(state.items.len()),
+            Self::Helper(_) => Ok(ITERATOR_HELPER_ITEM_CHARGE),
+            Self::Static(state) => state.item_charge(),
+            Self::Wrap(_) => Ok(WRAPPED_ITERATOR_ITEM_CHARGE),
         }
+    }
+}
+
+impl IteratorStaticState {
+    fn item_charge(&self) -> Result<usize> {
+        match &self.kind {
+            IteratorStaticKind::Concat { inputs, .. } => inputs
+                .len()
+                .checked_mul(2)
+                .and_then(|count| count.checked_add(2))
+                .ok_or_else(|| Error::limit("static iterator item count overflowed")),
+            IteratorStaticKind::Zip {
+                records,
+                padding,
+                keys,
+                ..
+            } => records
+                .len()
+                .checked_mul(2)
+                .and_then(|count| count.checked_add(padding.len()))
+                .and_then(|count| count.checked_add(keys.as_ref().map_or(0, Vec::len)))
+                .ok_or_else(|| Error::limit("static iterator item count overflowed")),
+        }
+    }
+
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        let mut visit = |value: &Value| {
+            visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(value),
+            )
+        };
+        match &self.kind {
+            IteratorStaticKind::Concat { inputs, active, .. } => {
+                for input in inputs {
+                    visit(&input.iterable)?;
+                    visit(&input.open_method)?;
+                }
+                if let Some(record) = active {
+                    visit(&record.iterator)?;
+                    visit(&record.next)?;
+                }
+            }
+            IteratorStaticKind::Zip {
+                records,
+                padding,
+                keys,
+                ..
+            } => {
+                for record in records.iter().flatten() {
+                    visit(&record.iterator)?;
+                    visit(&record.next)?;
+                }
+                for value in padding {
+                    visit(value)?;
+                }
+                if let Some(keys) = keys {
+                    for key in keys {
+                        visit(key)?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -469,6 +586,13 @@ impl Context {
         self.insert_iterator_state(CollectionIteratorState::Helper(state))
     }
 
+    pub(in crate::runtime) fn create_static_iterator(
+        &mut self,
+        state: IteratorStaticState,
+    ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::Static(state))
+    }
+
     pub(in crate::runtime) fn create_wrapped_iterator(
         &mut self,
         iterator: Value,
@@ -484,7 +608,7 @@ impl Context {
         &mut self,
         state: CollectionIteratorState,
     ) -> Result<CollectionIteratorId> {
-        let item_charge = state.item_charge();
+        let item_charge = state.item_charge()?;
         self.collection_iterators.reserve_insert()?;
         self.storage_ledger
             .grow_count(VmStorageKind::CollectionIterator, 1)?;
@@ -537,6 +661,34 @@ impl Context {
             .ok_or_else(|| Error::runtime("iterator helper state disappeared"))?
         else {
             return Err(Error::runtime("iterator state is not an iterator helper"));
+        };
+        Ok(state)
+    }
+
+    pub(in crate::runtime) fn iterator_static_state(
+        &self,
+        id: CollectionIteratorId,
+    ) -> Result<&IteratorStaticState> {
+        let CollectionIteratorState::Static(state) = self
+            .collection_iterators
+            .get(id.index())
+            .ok_or_else(|| Error::runtime("static iterator state disappeared"))?
+        else {
+            return Err(Error::runtime("iterator state is not a static combinator"));
+        };
+        Ok(state)
+    }
+
+    pub(in crate::runtime) fn iterator_static_state_mut(
+        &mut self,
+        id: CollectionIteratorId,
+    ) -> Result<&mut IteratorStaticState> {
+        let CollectionIteratorState::Static(state) = self
+            .collection_iterators
+            .get_mut(id.index())
+            .ok_or_else(|| Error::runtime("static iterator state disappeared"))?
+        else {
+            return Err(Error::runtime("iterator state is not a static combinator"));
         };
         Ok(state)
     }

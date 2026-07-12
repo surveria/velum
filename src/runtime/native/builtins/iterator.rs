@@ -85,6 +85,7 @@ impl Context {
                 Some(PropertyConfigurable::Yes),
             ),
         )?;
+        self.install_iterator_static_methods(id)?;
         self.insert_global_builtin(ITERATOR_GLOBAL_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -437,7 +438,7 @@ impl Context {
     }
 
     /// %IteratorHelperPrototype%: shared parent of every lazy helper object.
-    fn iterator_helper_prototype_id(&self) -> Result<ObjectId> {
+    pub(in crate::runtime::native) fn iterator_helper_prototype_id(&self) -> Result<ObjectId> {
         self.iterator_intrinsic_prototype_ids()
             .map(|(helper, _wrapped, _collection)| helper)
     }

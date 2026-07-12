@@ -7,6 +7,7 @@ mod function_constructor;
 mod global;
 mod iterator;
 mod iterator_consumers;
+mod iterator_static;
 mod iterator_stepping;
 mod json;
 mod json_meta;
