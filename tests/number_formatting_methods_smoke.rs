@@ -91,6 +91,35 @@ fn methods_reject_out_of_range_digit_arguments() -> TestResult {
 }
 
 #[test]
+fn non_finite_formatting_converts_arguments_before_returning() -> TestResult {
+    eval_is_42(
+        r#"
+        let calls = 0;
+        let digit = {
+            valueOf() {
+                calls += 1;
+                return Infinity;
+            }
+        };
+        let symbolError = false;
+        try {
+            NaN.toExponential(Symbol("digits"));
+        } catch (error) {
+            symbolError = error.constructor === TypeError;
+        }
+
+        NaN.toExponential(digit) === "NaN" &&
+            NaN.toPrecision(digit) === "NaN" &&
+            Infinity.toExponential(1000) === "Infinity" &&
+            (-Infinity).toPrecision(1000) === "-Infinity" &&
+            calls === 2 && symbolError
+            ? 42
+            : 0
+        "#,
+    )
+}
+
+#[test]
 fn number_to_string_uses_ecmascript_notation() -> TestResult {
     eval_is_42(
         r#"
