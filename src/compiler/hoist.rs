@@ -63,6 +63,7 @@ impl<'a> HoistCollector<'a> {
                 | Stmt::If { .. }
                 | Stmt::While { .. }
                 | Stmt::DoWhile { .. }
+                | Stmt::With { .. }
                 | Stmt::Label { .. }
                 | Stmt::For { .. }
                 | Stmt::ForIn { .. }
