@@ -586,10 +586,8 @@ impl Context {
     }
 
     fn date_to_primitive_hint(value: &Value) -> Result<&str> {
-        let hint = match value {
-            Value::String(value) => value.as_str(),
-            Value::HeapString(value) => value.as_str(),
-            _ => return Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR)),
+        let Some(hint) = value.string_text() else {
+            return Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR));
         };
         match hint {
             DATE_TO_PRIMITIVE_HINT_DEFAULT
@@ -618,11 +616,10 @@ impl Context {
             return Ok(existing);
         }
         let primitive = self.to_primitive(value, PreferredType::Default)?;
-        match &primitive {
-            Value::String(text) => parse_date_string(text),
-            Value::HeapString(text) => parse_date_string(text.as_str()),
-            _ => time_clip(self.to_number(&primitive)?),
+        if let Some(text) = primitive.string_text() {
+            return parse_date_string(text);
         }
+        time_clip(self.to_number(&primitive)?)
     }
 
     fn date_value_from_components(&mut self, args: &[Value]) -> Result<DateValue> {

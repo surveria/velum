@@ -42,13 +42,10 @@ impl Context {
             return Ok(Value::Undefined);
         };
 
-        match argument {
-            Value::String(source) => self.eval_string_source(source, strict_mode, direct),
-            Value::HeapString(source) => {
-                self.eval_string_source(source.as_str(), strict_mode, direct)
-            }
-            value => Ok(value.clone()),
+        if let Some(source) = argument.string_text() {
+            return self.eval_string_source(source, strict_mode, direct);
         }
+        Ok(argument.clone())
     }
 
     fn eval_string_source(

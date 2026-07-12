@@ -155,11 +155,13 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let realm = self.shadow_realm_receiver(this_value)?;
-        let source = match args.as_slice().first().unwrap_or(&Value::Undefined) {
-            Value::String(source) => source.clone(),
-            Value::HeapString(source) => source.as_str().to_owned(),
-            _ => return Err(Error::type_error(SOURCE_ERROR)),
-        };
+        let source = args
+            .as_slice()
+            .first()
+            .unwrap_or(&Value::Undefined)
+            .string_text()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::type_error(SOURCE_ERROR))?;
         let script =
             CompiledScript::compile_eval(&source, self.limits.clone(), false, false, false)
                 .map_err(dynamic_compilation_error)?;
@@ -190,11 +192,13 @@ impl Context {
     ) -> Result<Value> {
         let realm = self.shadow_realm_receiver(this_value)?;
         let specifier = self.to_string(args.as_slice().first().unwrap_or(&Value::Undefined))?;
-        let export_name = match args.as_slice().get(1).unwrap_or(&Value::Undefined) {
-            Value::String(name) => name.clone(),
-            Value::HeapString(name) => name.as_str().to_owned(),
-            _ => return Err(Error::type_error(EXPORT_NAME_ERROR)),
-        };
+        let export_name = args
+            .as_slice()
+            .get(1)
+            .unwrap_or(&Value::Undefined)
+            .string_text()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::type_error(EXPORT_NAME_ERROR))?;
         let (promise, promise_object) = self.create_pending_promise()?;
         let imported = self.with_realm(realm, |context| {
             context.load_dynamic_module_export(&specifier, &export_name)

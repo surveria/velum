@@ -312,8 +312,7 @@ impl Context {
 
     fn json_replacer_property_name(&mut self, value: &Value) -> Result<Option<String>> {
         match value {
-            Value::String(value) => Ok(Some(value.clone())),
-            Value::HeapString(value) => Ok(Some(value.as_str().to_owned())),
+            Value::String(_) | Value::HeapString(_) => Ok(value.string_text().map(str::to_owned)),
             Value::Number(value) => Ok(Some(Self::json_number_property_name(*value))),
             Value::Object(id) if self.objects.string_object_value(*id)?.is_some() => {
                 self.json_object_to_string(value).map(Some)
@@ -344,8 +343,9 @@ impl Context {
         };
         let gap = match value {
             Value::Number(value) => JSON_SPACE.repeat(Self::json_gap_space_count(*value)),
-            Value::String(value) => Self::json_gap_string(value),
-            Value::HeapString(value) => Self::json_gap_string(value.as_str()),
+            Value::String(_) | Value::HeapString(_) => {
+                Self::json_gap_string(value.string_text().unwrap_or_default())
+            }
             Value::Object(id) if self.objects.string_object_value(*id)?.is_some() => {
                 Self::json_gap_string(&self.json_object_to_string(value)?)
             }
@@ -445,8 +445,10 @@ impl Context {
             Value::Bool(value) => Ok(Some(Self::stringify_json_bool(*value))),
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
             Value::BigInt(_) => Err(Error::type_error("Do not know how to serialize a BigInt")),
-            Value::String(value) => self.stringify_json_string(value).map(Some),
-            Value::HeapString(value) => self.stringify_json_string(value.as_str()).map(Some),
+            Value::String(_) | Value::HeapString(_) => value.string_text().map_or_else(
+                || Ok(None),
+                |value| self.stringify_json_string(value).map(Some),
+            ),
             Value::Object(id) => {
                 if let Some(text) = self.raw_json_text(*id)? {
                     return Ok(Some(text));

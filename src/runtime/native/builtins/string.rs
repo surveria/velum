@@ -433,13 +433,14 @@ impl Context {
             return Ok(Vec::new());
         };
         let primitive = self.to_primitive(value, PreferredType::String)?;
-        let units = match primitive {
-            Value::Symbol(symbol) => symbol.display_name().encode_utf16().collect(),
-            Value::String(text) => text.encode_utf16().collect(),
-            Value::HeapString(text) => text.as_utf16().to_vec(),
-            primitive => to_string_primitive(&primitive)?
+        let units = if let Value::Symbol(symbol) = &primitive {
+            symbol.display_name().encode_utf16().collect()
+        } else if let Some(units) = primitive.string_units() {
+            units.into_owned()
+        } else {
+            to_string_primitive(&primitive)?
                 .encode_utf16()
-                .collect::<Vec<_>>(),
+                .collect::<Vec<_>>()
         };
         self.check_utf16_string_len(&units)?;
         Ok(units)
