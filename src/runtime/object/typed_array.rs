@@ -655,6 +655,9 @@ impl ObjectHeap {
         id: ObjectId,
         property: &str,
     ) -> Result<Option<TypedArrayPropertyIndex>> {
+        if typed_array_property_index(property, usize::MAX).is_none() {
+            return Ok(None);
+        }
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(None);
         };
@@ -666,6 +669,9 @@ impl ObjectHeap {
         id: ObjectId,
         property: &str,
     ) -> Result<bool> {
+        if typed_array_property_index(property, usize::MAX).is_none() {
+            return Ok(false);
+        }
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(false);
         };

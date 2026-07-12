@@ -213,9 +213,8 @@ fn execute_variant_result(
 ) -> anyhow::Result<()> {
     let runtime = Runtime::with_limits(test262_limits());
     let mut context = runtime.context();
-    test262_compat_harness::install_host(&mut context).map_err(|error| {
-        anyhow::anyhow!("failed to install Test262 host capabilities: {error}")
-    })?;
+    test262_compat_harness::install_host(&mut context)
+        .map_err(|error| anyhow::anyhow!("failed to install Test262 host capabilities: {error}"))?;
     if !metadata.has_flag(FLAG_RAW) {
         for harness in harness_sources(test262_dir, metadata)? {
             context.eval(&harness.source).map_err(|error| {

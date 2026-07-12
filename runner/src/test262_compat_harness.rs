@@ -2,7 +2,7 @@ use rs_quickjs::{Context, HostOperation};
 
 const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
 
-const HOST_SOURCE: &str = r#"
+const HOST_SOURCE: &str = r"
 var $262 = {
     global: globalThis,
     detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
@@ -10,7 +10,7 @@ var $262 = {
         return (0, eval)(source);
     }
 };
-"#;
+";
 
 pub const STA_SOURCE: &str = r#"
 let Test262Error = function Test262Error(message) {
