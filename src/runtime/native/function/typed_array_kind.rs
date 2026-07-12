@@ -15,6 +15,8 @@ pub(in crate::runtime) enum TypedArrayFunctionKind {
     FindLastIndex,
     ForEach,
     From,
+    FromBase64,
+    FromHex,
     Includes,
     IndexOf,
     Join,
@@ -27,11 +29,15 @@ pub(in crate::runtime) enum TypedArrayFunctionKind {
     ReduceRight,
     Reverse,
     Set,
+    SetFromBase64,
+    SetFromHex,
     Slice,
     Some,
     Sort,
     Subarray,
     ToLocaleString,
+    ToBase64,
+    ToHex,
     ToReversed,
     ToSorted,
     ToString,
@@ -54,6 +60,8 @@ impl TypedArrayFunctionKind {
             | Self::FindLastIndex
             | Self::ForEach
             | Self::From
+            | Self::FromBase64
+            | Self::FromHex
             | Self::Includes
             | Self::IndexOf
             | Self::Join
@@ -62,6 +70,8 @@ impl TypedArrayFunctionKind {
             | Self::Reduce
             | Self::ReduceRight
             | Self::Set
+            | Self::SetFromBase64
+            | Self::SetFromHex
             | Self::Some
             | Self::Sort
             | Self::Subarray
@@ -75,6 +85,8 @@ impl TypedArrayFunctionKind {
             | Self::Of
             | Self::Reverse
             | Self::ToLocaleString
+            | Self::ToBase64
+            | Self::ToHex
             | Self::ToReversed
             | Self::ToString
             | Self::ToStringTagGetter
@@ -99,6 +111,8 @@ impl TypedArrayFunctionKind {
             Self::FindLastIndex => "findLastIndex",
             Self::ForEach => "forEach",
             Self::From => "from",
+            Self::FromBase64 => "fromBase64",
+            Self::FromHex => "fromHex",
             Self::Includes => "includes",
             Self::IndexOf => "indexOf",
             Self::Join => "join",
@@ -111,11 +125,15 @@ impl TypedArrayFunctionKind {
             Self::ReduceRight => "reduceRight",
             Self::Reverse => "reverse",
             Self::Set => "set",
+            Self::SetFromBase64 => "setFromBase64",
+            Self::SetFromHex => "setFromHex",
             Self::Slice => "slice",
             Self::Some => "some",
             Self::Sort => "sort",
             Self::Subarray => "subarray",
             Self::ToLocaleString => "toLocaleString",
+            Self::ToBase64 => "toBase64",
+            Self::ToHex => "toHex",
             Self::ToReversed => "toReversed",
             Self::ToSorted => "toSorted",
             Self::ToString => "toString",

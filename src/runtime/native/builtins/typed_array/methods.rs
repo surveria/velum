@@ -56,6 +56,8 @@ impl Context {
             TypedArrayFunctionKind::Filter => {
                 self.eval_typed_array_callback_copy(values, this_value, false)
             }
+            TypedArrayFunctionKind::FromBase64 => self.eval_uint8_array_from_base64(values),
+            TypedArrayFunctionKind::FromHex => self.eval_uint8_array_from_hex(values),
             TypedArrayFunctionKind::Keys => {
                 self.eval_typed_array_iterator(this_value, IterationTarget::Keys)
             }
@@ -63,6 +65,12 @@ impl Context {
                 self.eval_typed_array_callback_copy(values, this_value, true)
             }
             TypedArrayFunctionKind::Set => self.eval_typed_array_set(values, this_value),
+            TypedArrayFunctionKind::SetFromBase64 => {
+                self.eval_uint8_array_set_from_base64(values, this_value)
+            }
+            TypedArrayFunctionKind::SetFromHex => {
+                self.eval_uint8_array_set_from_hex(values, this_value)
+            }
             TypedArrayFunctionKind::Slice => self.eval_typed_array_slice(values, this_value),
             TypedArrayFunctionKind::Sort => self.eval_typed_array_sort(values, this_value),
             TypedArrayFunctionKind::Subarray => self.eval_typed_array_subarray(values, this_value),
@@ -70,6 +78,8 @@ impl Context {
                 self.eval_typed_array_copy_method(values, this_value, CopyMethod::Reversed)
             }
             TypedArrayFunctionKind::ToSorted => self.eval_typed_array_to_sorted(values, this_value),
+            TypedArrayFunctionKind::ToBase64 => self.eval_uint8_array_to_base64(values, this_value),
+            TypedArrayFunctionKind::ToHex => self.eval_uint8_array_to_hex(this_value),
             TypedArrayFunctionKind::Values => {
                 self.eval_typed_array_iterator(this_value, IterationTarget::Values)
             }
@@ -257,7 +267,7 @@ impl Context {
         }
     }
 
-    fn typed_array_receiver(&self, value: &Value) -> Result<(ObjectId, TypedArrayView)> {
+    pub(super) fn typed_array_receiver(&self, value: &Value) -> Result<(ObjectId, TypedArrayView)> {
         let (id, view) = self.typed_array_branded_receiver(value)?;
         if view.is_out_of_bounds() {
             return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
@@ -265,7 +275,10 @@ impl Context {
         Ok((id, view))
     }
 
-    fn typed_array_branded_receiver(&self, value: &Value) -> Result<(ObjectId, TypedArrayView)> {
+    pub(super) fn typed_array_branded_receiver(
+        &self,
+        value: &Value,
+    ) -> Result<(ObjectId, TypedArrayView)> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
         };

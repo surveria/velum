@@ -121,6 +121,43 @@ impl Context {
         self.install_species_accessor(id)
     }
 
+    pub(super) fn install_uint8_array_codecs(
+        &mut self,
+        id: NativeFunctionId,
+        prototype: ObjectId,
+    ) -> Result<()> {
+        for (name, kind) in [
+            ("fromBase64", TypedArrayFunctionKind::FromBase64),
+            ("fromHex", TypedArrayFunctionKind::FromHex),
+        ] {
+            let method = self.create_native_function(
+                NativeFunctionKind::TypedArrayPrototype(kind),
+                Value::Undefined,
+            )?;
+            let key = self.intern_property_key(name)?;
+            self.define_native_function_property_key(
+                id,
+                name,
+                key,
+                DataPropertyUpdate::new(
+                    Some(method),
+                    Some(PropertyWritable::Yes),
+                    Some(PropertyEnumerable::No),
+                    Some(PropertyConfigurable::Yes),
+                ),
+            )?;
+        }
+        for (name, kind) in [
+            ("setFromBase64", TypedArrayFunctionKind::SetFromBase64),
+            ("setFromHex", TypedArrayFunctionKind::SetFromHex),
+            ("toBase64", TypedArrayFunctionKind::ToBase64),
+            ("toHex", TypedArrayFunctionKind::ToHex),
+        ] {
+            self.define_typed_array_method(prototype, name, kind)?;
+        }
+        Ok(())
+    }
+
     fn install_typed_array_prototype(&mut self, prototype: ObjectId) -> Result<()> {
         for (name, kind) in ACCESSORS {
             self.define_typed_array_accessor(prototype, name, *kind)?;

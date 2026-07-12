@@ -455,6 +455,58 @@ fn rejects_short_typed_array_static_results() -> TestResult {
     )
 }
 
+#[test]
+fn supports_uint8_array_base64_and_hex_codecs() -> TestResult {
+    ensure_eval(
+        r#"
+        let decoded = Uint8Array.fromBase64("x+/y");
+        let decodedUrl = Uint8Array.fromBase64("x-_y", { alphabet: "base64url" });
+        let decodedHex = Uint8Array.fromHex("666F6f");
+
+        let base = new Uint8Array([255, 255, 255, 255, 255, 255]);
+        let partial = base.subarray(1, 4);
+        let base64Result = partial.setFromBase64("Zm9vYmFy");
+        let hexResult = base.subarray(4).setFromHex("aabbcc");
+
+        let wroteBeforeError = false;
+        let errorTarget = new Uint8Array([255, 255, 255, 255, 255]);
+        try {
+            errorTarget.setFromBase64("MjYyZg===");
+        } catch (error) {
+            wroteBeforeError = error instanceof SyntaxError &&
+                errorTarget.join(",") === "50,54,50,255,255";
+        }
+
+        let descriptors = Object.getOwnPropertyDescriptor(Uint8Array, "fromBase64");
+        let failures = 0;
+        try { Uint8Array.fromHex("abc"); }
+        catch (error) { if (error instanceof SyntaxError) failures += 1; }
+        try { Uint8Array.fromBase64("x-_y"); }
+        catch (error) { if (error instanceof SyntaxError) failures += 1; }
+        try { Uint8Array.fromBase64({ toString: () => "Zg==" }); }
+        catch (error) { if (error instanceof TypeError) failures += 1; }
+
+        decoded.join(",") === "199,239,242" &&
+            decodedUrl.join(",") === "199,239,242" &&
+            decodedHex.join(",") === "102,111,111" &&
+            base64Result.read === 4 && base64Result.written === 3 &&
+            hexResult.read === 4 && hexResult.written === 2 &&
+            base.join(",") === "255,102,111,111,170,187" &&
+            new Uint8Array([199, 239, 242]).toBase64({ alphabet: "base64url" }) === "x-_y" &&
+            new Uint8Array([255]).toBase64({ omitPadding: true }) === "/w" &&
+            decodedHex.toHex() === "666f6f" &&
+            Uint8Array.fromBase64.length === 1 && Uint8Array.fromHex.length === 1 &&
+            Uint8Array.prototype.setFromBase64.length === 1 &&
+            Uint8Array.prototype.setFromHex.length === 1 &&
+            Uint8Array.prototype.toBase64.length === 0 &&
+            Uint8Array.prototype.toHex.length === 0 &&
+            descriptors.writable && !descriptors.enumerable && descriptors.configurable &&
+            wroteBeforeError && failures === 3 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

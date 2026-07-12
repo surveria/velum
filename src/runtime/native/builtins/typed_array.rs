@@ -14,6 +14,7 @@ use crate::{
     value::{ErrorName, ObjectId, Value},
 };
 
+mod codec;
 mod install;
 mod methods;
 
@@ -81,6 +82,9 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        if element_kind == TypedArrayElementKind::Uint8 {
+            self.install_uint8_array_codecs(id, prototype)?;
+        }
         self.insert_global_builtin(element_kind.name(), constructor.clone())?;
         Ok(constructor)
     }
