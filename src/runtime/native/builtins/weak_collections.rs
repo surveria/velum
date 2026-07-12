@@ -44,7 +44,10 @@ impl Context {
         let constructor_kind = match kind {
             CollectionKind::WeakMap => NativeFunctionKind::WeakMap,
             CollectionKind::WeakSet => NativeFunctionKind::WeakSet,
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet",
                 ));
@@ -75,7 +78,10 @@ impl Context {
         let global_name = match kind {
             CollectionKind::WeakMap => WEAK_MAP_NAME,
             CollectionKind::WeakSet => WEAK_SET_NAME,
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet",
                 ));
@@ -115,7 +121,10 @@ impl Context {
                     NativeFunctionKind::WeakSetDelete,
                 ),
             ],
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet",
                 ));
@@ -161,7 +170,10 @@ impl Context {
         let tag = match kind {
             CollectionKind::WeakMap => WEAK_MAP_NAME,
             CollectionKind::WeakSet => WEAK_SET_NAME,
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet tag",
                 ));
@@ -226,7 +238,10 @@ impl Context {
         let adder_name = match kind {
             CollectionKind::WeakMap => WEAK_COLLECTION_SET_NAME,
             CollectionKind::WeakSet => WEAK_COLLECTION_ADD_NAME,
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet seeding",
                 ));
@@ -270,7 +285,10 @@ impl Context {
                 vec![key, value]
             }
             CollectionKind::WeakSet => vec![item],
-            CollectionKind::Map | CollectionKind::Set | CollectionKind::DisposableStack => {
+            CollectionKind::Map
+            | CollectionKind::Set
+            | CollectionKind::AsyncDisposableStack
+            | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
                     "strong collection routed to WeakMap or WeakSet seeding",
                 ));

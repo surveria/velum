@@ -277,6 +277,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     AsyncGeneratorNext,
     AsyncGeneratorReturn,
     AsyncGeneratorThrow,
+    AsyncDisposableStack(super::async_disposable_stack_kind::AsyncDisposableStackFunctionKind),
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
@@ -559,6 +560,9 @@ impl NativeFunctionKind {
         if let Self::DisposableStack(kind) = self {
             return kind.length();
         }
+        if let Self::AsyncDisposableStack(kind) = self {
+            return kind.length();
+        }
         if let Self::ArrayBufferPrototype(kind) = self {
             return kind.length();
         }
@@ -615,6 +619,9 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::DisposableStack(kind) = self {
+            return kind.name();
+        }
+        if let Self::AsyncDisposableStack(kind) = self {
             return kind.name();
         }
         if let Self::ArrayBufferPrototype(kind) = self {

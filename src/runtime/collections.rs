@@ -18,6 +18,9 @@ impl CollectionData {
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
     {
+        if let Some(stack) = &self.async_disposable_stack {
+            return stack.visit_edges(visitor);
+        }
         if let Some(stack) = &self.disposable_stack {
             return stack.visit_edges(visitor);
         }
@@ -42,7 +45,7 @@ impl CollectionData {
                     VmAsyncEdgeKind::WeakCollectionKey,
                     WeakEdgeReference::Value(key),
                 )?,
-                CollectionKind::DisposableStack => {}
+                CollectionKind::AsyncDisposableStack | CollectionKind::DisposableStack => {}
             }
         }
         Ok(())

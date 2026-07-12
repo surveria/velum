@@ -21,6 +21,7 @@ mod abstract_operations;
 mod accounting;
 mod activation;
 mod arena;
+mod async_disposable_stack;
 mod async_operation;
 mod async_trace;
 pub mod binding;
