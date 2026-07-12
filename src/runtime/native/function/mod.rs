@@ -28,6 +28,7 @@ mod primitive;
 mod primitive_kind;
 mod reflect_kind;
 mod registry;
+mod registry_error;
 mod string_annexb_kind;
 mod string_kind;
 mod typed_array_kind;

@@ -1,10 +1,13 @@
 use crate::{
     error::{Error, Result},
     runtime::{object::TypedArrayElementKind, promise::PromiseCombinatorKind},
-    value::{ErrorName, NativeFunctionId},
+    value::NativeFunctionId,
 };
 
-use super::{DataViewFunctionKind, DateFunctionKind, IteratorFunctionKind, NativeFunctionKind};
+use super::{
+    DataViewFunctionKind, DateFunctionKind, IteratorFunctionKind, NativeFunctionKind,
+    registry_error::error_constructor_slot_index as error_slot,
+};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -64,14 +67,6 @@ const OBJECT_GET_PROTOTYPE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new
 const OBJECT_HAS_OWN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(55);
 const OBJECT_KEYS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(56);
 const STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(57);
-const ERROR_BASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(58);
-const ERROR_EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(59);
-const ERROR_RANGE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(60);
-const ERROR_REFERENCE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(61);
-const ERROR_SYNTAX_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(62);
-const ERROR_TEST262_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(63);
-const ERROR_TYPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(64);
-const ERROR_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(65);
 const PROMISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(66);
 const PROMISE_RESOLVE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(67);
 const PROMISE_REJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(68);
@@ -118,7 +113,6 @@ const STRING_PROTOTYPE_TRIM_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1
 const STRING_PROTOTYPE_TRIM_END_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(109);
 const STRING_PROTOTYPE_TRIM_START_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(110);
 const ERROR_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(111);
-const ERROR_AGGREGATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(112);
 const STRING_FROM_CHAR_CODE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(113);
 const STRING_FROM_CODE_POINT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(114);
 const STRING_RAW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(115);
@@ -267,7 +261,6 @@ const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
 const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
 const ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 273;
 const DISPOSABLE_STACK_SLOT_BASE: usize = 282;
-const ERROR_SUPPRESSED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(289);
 const NATIVE_FUNCTION_SLOT_COUNT: usize = 290;
 
 #[derive(Debug, Clone)]
@@ -364,6 +357,10 @@ impl NativeFunctionSlot {
     const fn index(self) -> usize {
         self.0
     }
+
+    const fn error(name: crate::value::ErrorName) -> Self {
+        Self::new(error_slot(name))
+    }
 }
 
 const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
@@ -407,7 +404,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::AsyncGeneratorThrow => Some(ASYNC_GENERATOR_THROW_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
-        NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
+        NativeFunctionKind::ErrorConstructor(name) => Some(NativeFunctionSlot::error(name)),
         NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
         NativeFunctionKind::GeneratorNext => Some(GENERATOR_NEXT_SLOT),
@@ -794,20 +791,5 @@ const fn string_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunctio
         NativeFunctionKind::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_TRIM_START_SLOT),
         NativeFunctionKind::StringPrototypeValueOf => Some(STRING_PROTOTYPE_VALUE_OF_SLOT),
         _ => None,
-    }
-}
-
-const fn error_constructor_slot(name: ErrorName) -> NativeFunctionSlot {
-    match name {
-        ErrorName::AggregateError => ERROR_AGGREGATE_SLOT,
-        ErrorName::Base => ERROR_BASE_SLOT,
-        ErrorName::EvalError => ERROR_EVAL_SLOT,
-        ErrorName::RangeError => ERROR_RANGE_SLOT,
-        ErrorName::ReferenceError => ERROR_REFERENCE_SLOT,
-        ErrorName::SyntaxError => ERROR_SYNTAX_SLOT,
-        ErrorName::SuppressedError => ERROR_SUPPRESSED_SLOT,
-        ErrorName::Test262Error => ERROR_TEST262_SLOT,
-        ErrorName::TypeError => ERROR_TYPE_SLOT,
-        ErrorName::UriError => ERROR_URI_SLOT,
     }
 }
