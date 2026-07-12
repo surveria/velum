@@ -62,6 +62,21 @@ const EQUIVALENCE_CASES: &[(&str, &str)] = &[
         "#,
     ),
     (
+        "function-array-specializers",
+        r#"
+        let add = function namedAdd(left, right) {
+            return left + right;
+        };
+        let mapped = [1, 2, 3].flatMap(function(value) {
+            return [value + 1, value + 2];
+        });
+        let sorted = [4, 1, 3, 2].toSorted(function(left, right) {
+            return left - right;
+        });
+        add(20, 22) + "|" + mapped.join(",") + "|" + sorted.join(",")
+        "#,
+    ),
+    (
         "proxy-completion",
         r#"
         let writes = 0;

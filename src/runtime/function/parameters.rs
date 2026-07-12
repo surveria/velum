@@ -289,9 +289,11 @@ impl Context {
         function: FunctionId,
         bytecode: &BytecodeFunction,
     ) -> Result<Completion> {
-        if self.current_with_environments().is_empty()
+        if self.optional_optimizations_enabled()
+            && self.current_with_environments().is_empty()
             && let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)?
         {
+            self.charge_runtime_steps(bytecode.body().instructions().len())?;
             return Ok(completion);
         }
         self.eval_bytecode_function_body::<CAN_SUSPEND>(function, bytecode.body())

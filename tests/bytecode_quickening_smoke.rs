@@ -652,6 +652,37 @@ fn bytecode_function_fast_paths_preserve_runtime_step_limits() -> TestResult {
 }
 
 #[test]
+fn after_setup_function_fast_paths_preserve_runtime_step_limits() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_runtime_steps: 24,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let error = context
+        .eval(
+            r"
+            var next = function namedNext(left, right) {
+                return left + right;
+            };
+
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            next(1, 1);
+            ",
+        )
+        .err()
+        .ok_or("expected after-setup runtime step limit to fail")?;
+    ensure_resource_limit(&error)
+}
+
+#[test]
 fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

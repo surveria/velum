@@ -10,6 +10,7 @@ use crate::{
         CompiledBindingFrame, Context,
         binding::scope::BindingCell,
         control::{Completion, reference_error_undefined},
+        numeric::number_exponentiate,
     },
     syntax::{DeclKind, StaticString},
     value::Value,
@@ -477,7 +478,7 @@ impl Context {
             BytecodeNumericBinaryOp::Mul => left * right,
             BytecodeNumericBinaryOp::Div => left / right,
             BytecodeNumericBinaryOp::Rem => left % right,
-            BytecodeNumericBinaryOp::Pow => left.powf(*right),
+            BytecodeNumericBinaryOp::Pow => number_exponentiate(*left, *right),
             BytecodeNumericBinaryOp::BitAnd
             | BytecodeNumericBinaryOp::BitOr
             | BytecodeNumericBinaryOp::BitXor

@@ -181,6 +181,9 @@ impl Context {
         &self,
         comparator: Option<&Value>,
     ) -> Result<Option<NumericSortOrder>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Some(Value::Function(callback)) = comparator else {
             return Ok(None);
         };

@@ -78,7 +78,7 @@ fn apply_number_binary(op: BinaryOp, left: f64, right: f64) -> Result<f64> {
         BinaryOp::Mul => left * right,
         BinaryOp::Div => left / right,
         BinaryOp::Rem => left % right,
-        BinaryOp::Pow => left.powf(right),
+        BinaryOp::Pow => number_exponentiate(left, right),
         BinaryOp::BitAnd => f64::from(number_to_i32(left, "&")? & number_to_i32(right, "&")?),
         BinaryOp::BitOr => f64::from(number_to_i32(left, "|")? | number_to_i32(right, "|")?),
         BinaryOp::BitXor => f64::from(number_to_i32(left, "^")? ^ number_to_i32(right, "^")?),
@@ -110,6 +110,20 @@ fn apply_number_binary(op: BinaryOp, left: f64, right: f64) -> Result<f64> {
             ));
         }
     })
+}
+
+pub(crate) fn number_exponentiate(base: f64, exponent: f64) -> f64 {
+    if exponent.is_nan() || (is_exact_abs_one(base) && exponent.is_infinite()) {
+        return f64::NAN;
+    }
+    base.powf(exponent)
+}
+
+const fn is_exact_abs_one(value: f64) -> bool {
+    matches!(
+        value.to_bits(),
+        bits if bits == 1.0_f64.to_bits() || bits == (-1.0_f64).to_bits()
+    )
 }
 
 fn apply_bigint_binary(
