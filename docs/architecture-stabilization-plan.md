@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09v completes `Promise.prototype.finally` over shared species, capability, reaction, and thenable-job owners. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09w extends the shared Promise combinator owner to enumerable string/Symbol-keyed dictionaries. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2815,7 +2815,7 @@ AS-09u canonical evidence from PR #483:
   `7f200dd`, reaching 68,553 passing variants and 35,357 conforming files;
   AS-09u is complete.
 
-AS-09v profile evidence in draft PR #485:
+AS-09v canonical evidence from PR #485:
 
 - `Promise.prototype.finally` uses the shared `SpeciesConstructor`,
   `NewPromiseCapability`, observable `then`, and Promise reaction paths. One
@@ -2835,8 +2835,33 @@ AS-09v profile evidence in draft PR #485:
   variants and from 2/29 to 29/29 conforming files. The dependent standard
   `allSettled/` and `race/` profiles gain their four previously blocked
   variants; only separately owned BigInt syntax cases remain there;
+- exact-tree run `29180709996` certifies 98 added variants with no removals.
+  PR #485 merged as `180e5be`; post-merge run `29180795284` published canonical
+  report `20260712T051106Z` in report commit `7cd2799`, reaching 68,651 passing
+  variants and 35,406 conforming files; AS-09v is complete.
+
+AS-09w profile evidence in draft PR #486:
+
+- `PromiseCombinatorKind` now owns `allKeyed` and `allSettledKeyed` beside the
+  four iterable combinators, while the existing traced element-function state
+  owns keyed first-settlement and settled-pair idempotence;
+- input discovery uses shared semantic `[[OwnPropertyKeys]]` and
+  `[[GetOwnProperty]]` owners, preserves string/Symbol order, filters current
+  enumerable descriptors, and performs observable `Get`, constructor
+  `resolve`, and `then` calls in order;
+- one shared keys/value state materializes the final null-prototype dictionary
+  with ordinary writable, enumerable, configurable data properties. Settled
+  entries reuse the standard `status` plus `value`/`reason` object owner;
+- four direct engine cases cover settlement order, mixed settled records,
+  descriptor/Symbol behavior, invalid input, and abrupt getters;
+- exact `allKeyed/` coverage advances from 2/90 to 88/90 variants and from
+  1/45 to 44/45 files. Exact `allSettledKeyed/` coverage advances from 2/88 to
+  84/88 variants and from 1/44 to 42/44 files. Four residual variants require
+  unavailable BigInt syntax; the remaining two are an upstream destructive
+  `verifyProperty` ordering case that deletes outer configurable properties
+  before dereferencing them again;
 - exact-tree correctness and canonical publication remain required before
-  AS-09v can close.
+  AS-09w can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

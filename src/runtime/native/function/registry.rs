@@ -260,7 +260,9 @@ const PROMISE_ALL_SETTLED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(264
 const PROMISE_ANY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(265);
 const PROMISE_RACE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(266);
 const PROMISE_FINALLY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(267);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 268;
+const PROMISE_ALL_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(268);
+const PROMISE_ALL_SETTLED_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(269);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 270;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -434,8 +436,14 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::All) => Some(PROMISE_ALL_SLOT),
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::AllKeyed) => {
+            Some(PROMISE_ALL_KEYED_SLOT)
+        }
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::AllSettled) => {
             Some(PROMISE_ALL_SETTLED_SLOT)
+        }
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::AllSettledKeyed) => {
+            Some(PROMISE_ALL_SETTLED_KEYED_SLOT)
         }
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::Any) => Some(PROMISE_ANY_SLOT),
         NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::Race) => {
