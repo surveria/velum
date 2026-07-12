@@ -125,6 +125,7 @@ impl Parser {
             && self.check(&TokenKind::Let)
             && (self.peek_has_line_terminator_before(1)
                 || self.peek_kind_is(1, &TokenKind::Equal))
+            && !self.peek_kind_is(1, &TokenKind::Let)
             && !self.peek_kind_is(1, &TokenKind::LBracket)
             && !self.peek_kind_is(1, &TokenKind::Await)
             && !self.peek_token(1).is_some_and(|token| {

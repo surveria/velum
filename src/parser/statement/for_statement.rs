@@ -38,6 +38,7 @@ impl Parser {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.with_iteration_statement(Self::statement)?);
             self.reject_invalid_single_statement(&body)?;
+            self.validate_for_in_of_declarations(&target, &body)?;
             return Ok(match head {
                 ForHeadKind::In => Stmt::ForIn {
                     target,

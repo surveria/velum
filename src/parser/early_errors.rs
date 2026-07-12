@@ -1,13 +1,43 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ast::{BindingPattern, DeclKind, FunctionParam, Statement, Stmt, SwitchCase},
+    ast::{BindingPattern, DeclKind, ForInTarget, FunctionParam, Statement, Stmt, SwitchCase},
     error::Result,
+    syntax::FunctionKind,
 };
 
 use super::Parser;
 
 impl Parser {
+    pub(super) fn validate_for_in_of_declarations(
+        &self,
+        target: &ForInTarget,
+        body: &Statement,
+    ) -> Result<()> {
+        let mut lexical_names = Vec::new();
+        match target {
+            ForInTarget::Binding { name, kind } if *kind != DeclKind::Var => {
+                lexical_names.push(name.name().as_str().to_owned());
+            }
+            ForInTarget::PatternBinding { pattern, kind } if *kind != DeclKind::Var => {
+                Self::collect_pattern_names(pattern, &mut lexical_names)?;
+            }
+            ForInTarget::Binding { .. }
+            | ForInTarget::PatternBinding { .. }
+            | ForInTarget::PatternAssignment { .. }
+            | ForInTarget::Assignment(_) => {}
+        }
+        let mut var_names = Vec::new();
+        Self::collect_var_names(body, &mut var_names)?;
+        if lexical_names
+            .iter()
+            .any(|name| var_names.iter().any(|var_name| var_name == name))
+        {
+            return Err(self.parse_error("for head declaration conflicts with a body var"));
+        }
+        Ok(())
+    }
+
     pub(super) fn reject_invalid_single_statement(&self, statement: &Statement) -> Result<()> {
         if (self.is_strict_mode() && matches!(statement.kind(), Stmt::FunctionDecl { .. }))
             || matches!(
@@ -34,14 +64,14 @@ impl Parser {
         &self,
         statements: &[Statement],
     ) -> Result<()> {
-        self.validate_lexical_var_declarations(statements, true)
+        self.validate_lexical_var_declarations(statements, true, true)
     }
 
     pub(super) fn validate_static_block_declarations(
         &self,
         statements: &[Statement],
     ) -> Result<()> {
-        self.validate_lexical_var_declarations(statements, true)
+        self.validate_lexical_var_declarations(statements, true, true)
     }
 
     pub(super) fn validate_generator_switch_declarations(
@@ -60,7 +90,7 @@ impl Parser {
         }) {
             return Ok(());
         }
-        self.validate_statement_refs(&statements, true)
+        self.validate_statement_refs(&statements, true, false)
     }
 
     pub(super) fn validate_generator_parameter_lexicals(
@@ -90,15 +120,21 @@ impl Parser {
         &self,
         statements: &[Statement],
         functions_are_lexical: bool,
+        allow_duplicate_sloppy_functions: bool,
     ) -> Result<()> {
         let statements = statements.iter().collect::<Vec<_>>();
-        self.validate_statement_refs(&statements, functions_are_lexical)
+        self.validate_statement_refs(
+            &statements,
+            functions_are_lexical,
+            allow_duplicate_sloppy_functions,
+        )
     }
 
     fn validate_statement_refs(
         &self,
         statements: &[&Statement],
         functions_are_lexical: bool,
+        allow_duplicate_sloppy_functions: bool,
     ) -> Result<()> {
         let mut lexical_names = Vec::new();
         for statement in statements {
@@ -114,6 +150,7 @@ impl Parser {
                 && !self.allows_duplicate_sloppy_block_functions(
                     statements,
                     functions_are_lexical,
+                    allow_duplicate_sloppy_functions,
                     &name,
                 )?
             {
@@ -138,9 +175,10 @@ impl Parser {
         &self,
         statements: &[&Statement],
         functions_are_lexical: bool,
+        allow_duplicate_sloppy_functions: bool,
         name: &str,
     ) -> Result<bool> {
-        if self.is_strict_mode() || !functions_are_lexical {
+        if self.is_strict_mode() || !functions_are_lexical || !allow_duplicate_sloppy_functions {
             return Ok(false);
         }
         let mut function_count = 0usize;
@@ -168,6 +206,7 @@ impl Parser {
             }
             Stmt::FunctionDecl {
                 name: function_name,
+                kind: FunctionKind::Ordinary,
                 ..
             } if function_name.name().as_str() == name => {
                 *function_count = function_count
