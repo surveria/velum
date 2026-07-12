@@ -117,6 +117,9 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             NativeFunctionKind::String => Some(self.eval_string_constructor(args)),
+            NativeFunctionKind::StringPrototypeAnnexB(kind) => {
+                Some(self.eval_string_prototype_annex_b(kind, args, this_value))
+            }
             NativeFunctionKind::StringFromCharCode => Some(self.eval_string_from_char_code(args)),
             NativeFunctionKind::StringFromCodePoint => Some(self.eval_string_from_code_point(args)),
             NativeFunctionKind::StringRaw => Some(self.eval_string_raw(args)),

@@ -32,6 +32,7 @@ impl NativeFunctionKind {
         self,
     ) -> Option<&'static str> {
         match self {
+            Self::StringPrototypeAnnexB(kind) => Some(kind.name()),
             Self::StringPrototypeAt => Some(STRING_PROTOTYPE_AT_NAME),
             Self::StringPrototypeCharAt => Some(STRING_PROTOTYPE_CHAR_AT_NAME),
             Self::StringPrototypeCharCodeAt => Some(STRING_PROTOTYPE_CHAR_CODE_AT_NAME),

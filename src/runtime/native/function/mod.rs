@@ -27,6 +27,7 @@ mod primitive;
 mod primitive_kind;
 mod reflect_kind;
 mod registry;
+mod string_annexb_kind;
 mod string_kind;
 mod typed_array_kind;
 
@@ -107,6 +108,7 @@ pub(in crate::runtime::native) use primitive_kind::{
 };
 pub(in crate::runtime::native) use reflect_kind::REFLECT_NAME;
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
+pub(in crate::runtime::native) use string_annexb_kind::StringAnnexBFunctionKind;
 pub(in crate::runtime) use typed_array_kind::TypedArrayFunctionKind;
 
 #[derive(Debug, Clone)]

@@ -450,6 +450,7 @@ impl Context {
             let function = self.create_native_function(*kind, Value::Undefined)?;
             self.define_non_enumerable_object_property(prototype, name, function)?;
         }
+        self.install_string_annex_b_prototype_methods(prototype)?;
         self.install_string_extra_prototype_methods(prototype)?;
         self.install_string_modern_prototype_methods(prototype)
     }
