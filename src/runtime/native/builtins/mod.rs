@@ -42,6 +42,7 @@ mod string_methods;
 mod string_modern;
 mod string_regexp;
 mod symbol;
+mod temporal;
 mod typed_array;
 mod weak_collections;
 

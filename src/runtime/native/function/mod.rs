@@ -37,6 +37,7 @@ mod shadow_realm_kind;
 mod shared_array_buffer_kind;
 mod string_annexb_kind;
 mod string_kind;
+mod temporal_kind;
 mod typed_array_kind;
 
 use super::number_intrinsic_property;
@@ -132,6 +133,7 @@ pub(in crate::runtime) use shadow_realm_kind::{SHADOW_REALM_NAME, ShadowRealmFun
 pub(in crate::runtime::native) use shared_array_buffer_kind::SHARED_ARRAY_BUFFER_NAME;
 pub(in crate::runtime) use shared_array_buffer_kind::SharedArrayBufferFunctionKind;
 pub(in crate::runtime::native) use string_annexb_kind::StringAnnexBFunctionKind;
+pub(in crate::runtime) use temporal_kind::{TEMPORAL_NAME, TemporalFunctionKind};
 pub(in crate::runtime) use typed_array_kind::TypedArrayFunctionKind;
 
 #[derive(Debug, Clone)]

@@ -76,7 +76,7 @@ impl ObjectHeap {
 
 impl super::Object {
     pub(super) fn storage_payload_bytes(&self) -> Result<(usize, usize, usize)> {
-        let object_payload_bytes = if let Some(regexp) = &self.regexp_value {
+        let regexp_payload_bytes = if let Some(regexp) = &self.regexp_value {
             regexp
                 .pattern()
                 .len()
@@ -85,6 +85,13 @@ impl super::Object {
         } else {
             0
         };
+        let temporal_payload_bytes = self
+            .temporal_value
+            .as_ref()
+            .map_or(0, super::TemporalValue::storage_payload_bytes);
+        let object_payload_bytes = regexp_payload_bytes
+            .checked_add(temporal_payload_bytes)
+            .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
         let byte_buffer_count = usize::from(self.byte_buffer.is_some());
         let byte_buffer_payload_bytes = self
             .byte_buffer

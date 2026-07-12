@@ -17,6 +17,7 @@ mod proxy;
 mod regexp;
 mod shape;
 mod string;
+mod temporal;
 mod trace;
 mod typed_array;
 
@@ -41,6 +42,7 @@ pub(in crate::runtime) use property::{
 pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
+pub(in crate::runtime) use temporal::TemporalValue;
 use typed_array::typed_array_property_index;
 pub use typed_array::{ByteBuffer, ByteBufferOrigin};
 pub(in crate::runtime) use typed_array::{
@@ -112,6 +114,7 @@ struct Object {
     primitive_value: Option<ObjectPrimitiveValue>,
     error_metadata: Option<JavaScriptErrorMetadata>,
     date_value: Option<DateValue>,
+    temporal_value: Option<TemporalValue>,
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
     byte_buffer: Option<ByteBuffer>,
@@ -148,6 +151,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            temporal_value: None,
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
@@ -218,6 +222,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            temporal_value: None,
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
@@ -244,6 +249,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            temporal_value: None,
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
@@ -270,6 +276,7 @@ impl Object {
             primitive_value: Some(value),
             error_metadata: None,
             date_value: None,
+            temporal_value: None,
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,

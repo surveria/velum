@@ -41,6 +41,7 @@ pub(in crate::runtime) const DEFAULT_GLOBAL_BINDING_NAMES: &[&str] = &[
     "SharedArrayBuffer",
     "String",
     "Symbol",
+    "Temporal",
     "SyntaxError",
     "TypeError",
     "Uint8Array",

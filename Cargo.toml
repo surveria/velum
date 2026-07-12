@@ -31,6 +31,7 @@ num-traits = "0.2"
 parking_lot = "0.12"
 regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+temporal_rs = { version = "0.2.4", default-features = false, features = ["compiled_data", "float64_representable_durations", "std"] }
 thiserror = "2"
 unicode-ident = "1"
 
