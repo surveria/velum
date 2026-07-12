@@ -10,14 +10,15 @@ use crate::{
 };
 
 use super::{
-    ARRAY_BUFFER_NAME, ARRAY_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME, DISPOSABLE_STACK_NAME,
-    DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind, EVAL_NAME, FUNCTION_NAME,
-    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
-    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
-    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME,
-    MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind,
-    OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME,
-    REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    ARRAY_BUFFER_NAME, ARRAY_NAME, BIGINT_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME,
+    DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
+    EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
+    GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
+    GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
+    INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
+    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
+    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
+    WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -38,6 +39,7 @@ impl Context {
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             DATA_VIEW_NAME => self.data_view_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
+            BIGINT_NAME => self.bigint_constructor_value().map(Some),
             EVAL_NAME => self.eval_function_value().map(Some),
             FUNCTION_NAME => self.function_constructor_value().map(Some),
             GLOBAL_DECODE_URI_NAME => self
@@ -112,6 +114,7 @@ impl Context {
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             DATA_VIEW_NAME => self.data_view_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
+            BIGINT_NAME => self.bigint_constructor_value().map(Some),
             EVAL_NAME => self.eval_function_value().map(Some),
             FUNCTION_NAME => self.function_constructor_value().map(Some),
             GLOBAL_DECODE_URI_NAME => self
@@ -203,6 +206,7 @@ impl Context {
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
+            NativeFunctionKind::BigInt => Err(Error::type_error("BigInt is not a constructor")),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),

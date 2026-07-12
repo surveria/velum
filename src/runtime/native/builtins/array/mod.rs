@@ -20,6 +20,7 @@ mod prototype_registry;
 mod sort;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
+const ARRAY_JOIN_PROPERTY: &str = "join";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_FROM_PROPERTY: &str = "from";
 const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
@@ -94,6 +95,7 @@ impl Context {
                 | Value::Null
                 | Value::Bool(_)
                 | Value::Number(_)
+                | Value::BigInt(_)
                 | Value::String(_)
                 | Value::HeapString(_)
                 | Value::Symbol(_)
@@ -286,6 +288,18 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         self.eval_direct_array_join(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_array_to_string(
+        &mut self,
+        _args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let join = self.get_named(this_value, ARRAY_JOIN_PROPERTY)?;
+        if self.semantic_is_callable(&join)? {
+            return self.call_value(&join, &[], this_value.clone());
+        }
+        self.eval_object_prototype_to_string(RuntimeCallArgs::values(&[]), this_value)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_join(

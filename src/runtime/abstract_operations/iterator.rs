@@ -178,6 +178,7 @@ impl Context {
             | Value::HostFunction(_)
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::Symbol(_) => {
                 let Some(method) = self.iterator_method(iterable)? else {
                     return Err(not_iterable_error(iterable));

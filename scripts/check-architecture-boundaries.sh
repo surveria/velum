@@ -66,7 +66,7 @@ check_value_representation() {
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected='Undefined,Null,Bool(bool),Number(f64),String(String),HeapString(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
+  expected='Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(String),HeapString(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
   if [[ "${actual}" != "${expected}" ]]; then
     fail "Value representation changed; AS-02 owns object-like representation changes"
   fi
@@ -83,7 +83,7 @@ check_owned_value_boundary() {
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  if [[ "${actual}" != 'Undefined,Null,Bool(bool),Number(f64),String(String),' ]]; then
+  if [[ "${actual}" != 'Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(String),' ]]; then
     fail "OwnedValue boundary changed; portable values must not retain VM-local ids or identity"
   fi
   if ! grep -F -q 'pub fn to_owned_value(self) -> Result<OwnedValue>' \
@@ -1127,7 +1127,7 @@ check_update_numeric_coercion_boundary() {
     'src/runtime/bytecode/ops/assignment.rs:bytecode_update_values'
 
   for source in \
-    'let number = self.to_number(value)?;' \
+    'match self.to_numeric(value)? {' \
     'context.bytecode_update_values(value, op)' \
     'context.bytecode_update_values(old_value, op)' \
     'let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;' \

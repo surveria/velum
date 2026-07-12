@@ -183,9 +183,12 @@ impl Context {
             Value::Bool(value) => Ok(*value),
             Value::Object(id) => match self.objects.primitive_value(*id)? {
                 Some(ObjectPrimitiveValue::Bool(value)) => Ok(*value),
-                Some(ObjectPrimitiveValue::Number(_) | ObjectPrimitiveValue::Symbol(_)) | None => {
-                    Err(Error::type_error(BOOLEAN_VALUE_RECEIVER_ERROR))
-                }
+                Some(
+                    ObjectPrimitiveValue::Number(_)
+                    | ObjectPrimitiveValue::BigInt(_)
+                    | ObjectPrimitiveValue::Symbol(_),
+                )
+                | None => Err(Error::type_error(BOOLEAN_VALUE_RECEIVER_ERROR)),
             },
             _ => Err(Error::type_error(BOOLEAN_VALUE_RECEIVER_ERROR)),
         }

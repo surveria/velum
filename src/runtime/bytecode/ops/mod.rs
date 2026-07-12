@@ -110,7 +110,14 @@ impl Context {
     pub(super) fn eval_bytecode_unary(&mut self, op: UnaryOp, value: &Value) -> Result<Value> {
         match op {
             UnaryOp::Not => Ok(Value::Bool(!to_boolean(value))),
-            UnaryOp::Negate => self.to_number(value).map(|value| Value::Number(-value)),
+            UnaryOp::Negate => match self.to_numeric(value)? {
+                crate::runtime::abstract_operations::NumericValue::Number(value) => {
+                    Ok(Value::Number(-value))
+                }
+                crate::runtime::abstract_operations::NumericValue::BigInt(value) => {
+                    self.bigint_value(value.negated())
+                }
+            },
             UnaryOp::Plus => self.to_number(value).map(Value::Number),
             UnaryOp::BitNot => bitwise_not(self, value),
             UnaryOp::Void => Ok(Value::Undefined),
@@ -147,11 +154,9 @@ impl Context {
     ) -> Result<Value> {
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
-            BinaryOp::Sub => numeric_binary(self, left, right, "-", |left, right| left - right)?,
-            BinaryOp::Mul => numeric_binary(self, left, right, "*", |left, right| left * right)?,
-            BinaryOp::Div => numeric_binary(self, left, right, "/", |left, right| left / right)?,
-            BinaryOp::Rem => numeric_binary(self, left, right, "%", |left, right| left % right)?,
-            BinaryOp::Pow => numeric_binary(self, left, right, "**", f64::powf)?,
+            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem | BinaryOp::Pow => {
+                numeric_binary(self, left, right, op)?
+            }
             BinaryOp::Equal => Value::Bool(abstract_equality(self, left, right)?),
             BinaryOp::NotEqual => Value::Bool(!abstract_equality(self, left, right)?),
             BinaryOp::StrictEqual => Value::Bool(strict_equality(left, right)),
@@ -339,6 +344,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
@@ -380,6 +386,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Ok(false),

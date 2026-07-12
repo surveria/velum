@@ -330,6 +330,7 @@ impl Context {
             | Value::Undefined
             | Value::Null
             | Value::Bool(_)
+            | Value::BigInt(_)
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
@@ -362,6 +363,7 @@ impl Context {
             | Value::Undefined
             | Value::Null
             | Value::Bool(_)
+            | Value::BigInt(_)
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
@@ -442,6 +444,7 @@ impl Context {
             Value::Null => Ok(Some(JSON_NULL.to_owned())),
             Value::Bool(value) => Ok(Some(Self::stringify_json_bool(*value))),
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
+            Value::BigInt(_) => Err(Error::type_error("Do not know how to serialize a BigInt")),
             Value::String(value) => self.stringify_json_string(value).map(Some),
             Value::HeapString(value) => self.stringify_json_string(value.as_str()).map(Some),
             Value::Object(id) => {

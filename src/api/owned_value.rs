@@ -2,7 +2,7 @@ use crate::{
     compiled_script::CompiledScript,
     error::{Error, Result},
     runtime::Context,
-    value::Value,
+    value::{JsBigInt, Value},
 };
 
 const VM_LOCAL_VALUE_ERROR: &str = "VM-local value cannot be converted to OwnedValue";
@@ -17,6 +17,7 @@ pub enum OwnedValue {
     Null,
     Bool(bool),
     Number(f64),
+    BigInt(JsBigInt),
     String(String),
 }
 
@@ -29,6 +30,7 @@ impl OwnedValue {
             Self::Null => "object",
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
+            Self::BigInt(_) => "bigint",
             Self::String(_) => "string",
         }
     }
@@ -43,6 +45,7 @@ impl TryFrom<&Value> for OwnedValue {
             Value::Null => Ok(Self::Null),
             Value::Bool(value) => Ok(Self::Bool(*value)),
             Value::Number(value) => Ok(Self::Number(*value)),
+            Value::BigInt(value) => Ok(Self::BigInt(value.clone())),
             Value::String(value) => Ok(Self::String(value.clone())),
             Value::HeapString(value) => value
                 .as_utf8()
@@ -67,6 +70,7 @@ impl TryFrom<Value> for OwnedValue {
             Value::Null => Ok(Self::Null),
             Value::Bool(value) => Ok(Self::Bool(value)),
             Value::Number(value) => Ok(Self::Number(value)),
+            Value::BigInt(value) => Ok(Self::BigInt(value)),
             Value::String(value) => Ok(Self::String(value)),
             Value::HeapString(value) => value
                 .into_utf8()
@@ -88,6 +92,7 @@ impl From<OwnedValue> for Value {
             OwnedValue::Null => Self::Null,
             OwnedValue::Bool(value) => Self::Bool(value),
             OwnedValue::Number(value) => Self::Number(value),
+            OwnedValue::BigInt(value) => Self::BigInt(value),
             OwnedValue::String(value) => Self::String(value),
         }
     }

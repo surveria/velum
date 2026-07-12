@@ -28,6 +28,8 @@ const ARRAY_IS_ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_IS_ARRAY_NAME: &str = "isArray";
 const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_JOIN_NAME: &str = "join";
+const ARRAY_TO_STRING_FUNCTION_LENGTH: f64 = 0.0;
+const ARRAY_TO_STRING_NAME: &str = "toString";
 const ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
 const ARRAY_MAP_FUNCTION_LENGTH: f64 = 1.0;
@@ -108,6 +110,7 @@ impl NativeFunctionKind {
             Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_FUNCTION_LENGTH),
             Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_FUNCTION_LENGTH),
             Self::ArrayJoin => Some(ARRAY_JOIN_FUNCTION_LENGTH),
+            Self::ArrayToString => Some(ARRAY_TO_STRING_FUNCTION_LENGTH),
             Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH),
             Self::ArrayMap => Some(ARRAY_MAP_FUNCTION_LENGTH),
             Self::ArrayPop => Some(ARRAY_POP_FUNCTION_LENGTH),
@@ -155,6 +158,7 @@ impl NativeFunctionKind {
             Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_NAME),
             Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_NAME),
             Self::ArrayJoin => Some(ARRAY_JOIN_NAME),
+            Self::ArrayToString => Some(ARRAY_TO_STRING_NAME),
             Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_NAME),
             Self::ArrayMap => Some(ARRAY_MAP_NAME),
             Self::ArrayPop => Some(ARRAY_POP_NAME),

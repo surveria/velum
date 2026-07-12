@@ -707,6 +707,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::Symbol(_) => Err(Error::type_error(ITERATOR_FROM_PRIMITIVE_ERROR)),
             Value::Object(_)
             | Value::Function(_)

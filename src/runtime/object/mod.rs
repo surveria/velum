@@ -67,6 +67,7 @@ impl ObjectPropertyValue {
 pub(in crate::runtime) enum ObjectPrimitiveValue {
     Bool(bool),
     Number(f64),
+    BigInt(crate::value::JsBigInt),
     Symbol(JsSymbol),
 }
 
@@ -281,6 +282,7 @@ impl Object {
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)

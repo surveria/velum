@@ -67,6 +67,7 @@ impl SemanticObjectRef<'_> {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
@@ -97,6 +98,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
@@ -157,6 +159,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),
@@ -240,6 +243,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => return Ok(None),

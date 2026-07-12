@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Error, OwnedValue, Value};
+use rs_quickjs::{Engine, Error, JsBigInt, OwnedValue, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -11,6 +11,7 @@ fn evaluates_every_portable_primitive_kind() -> TestResult {
         ("null", OwnedValue::Null),
         ("true", OwnedValue::Bool(true)),
         ("42", OwnedValue::Number(42.0)),
+        ("42n", OwnedValue::BigInt(JsBigInt::from_u64(42))),
         (r#""camera""#, OwnedValue::String("camera".to_owned())),
     ] {
         let actual = vm.eval_owned(source)?;
@@ -78,6 +79,10 @@ fn owned_values_convert_back_to_plain_runtime_primitives() -> TestResult {
         (OwnedValue::Null, Value::Null),
         (OwnedValue::Bool(true), Value::Bool(true)),
         (OwnedValue::Number(42.0), Value::Number(42.0)),
+        (
+            OwnedValue::BigInt(JsBigInt::from_u64(42)),
+            Value::BigInt(JsBigInt::from_u64(42)),
+        ),
         (
             OwnedValue::String("camera".to_owned()),
             Value::String("camera".to_owned()),

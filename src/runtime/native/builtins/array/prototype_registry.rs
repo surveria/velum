@@ -23,6 +23,7 @@ const ARRAY_PROTOTYPE_FOR_EACH_PROPERTY: &str = "forEach";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
+const ARRAY_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
 const ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY: &str = "lastIndexOf";
 const ARRAY_PROTOTYPE_MAP_PROPERTY: &str = "map";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
@@ -70,7 +71,7 @@ const ARRAY_UNSCOPABLE_PROPERTIES: &[&str] = &[
 ];
 
 /// `Array.prototype` method table installed as non-enumerable data properties.
-const ARRAY_PROTOTYPE_METHODS: [(&str, NativeFunctionKind); 33] = [
+const ARRAY_PROTOTYPE_METHODS: [(&str, NativeFunctionKind); 34] = [
     (
         ARRAY_PROTOTYPE_CONCAT_PROPERTY,
         NativeFunctionKind::ArrayConcat,
@@ -106,6 +107,10 @@ const ARRAY_PROTOTYPE_METHODS: [(&str, NativeFunctionKind); 33] = [
         NativeFunctionKind::ArrayIndexOf,
     ),
     (ARRAY_PROTOTYPE_JOIN_PROPERTY, NativeFunctionKind::ArrayJoin),
+    (
+        ARRAY_PROTOTYPE_TO_STRING_PROPERTY,
+        NativeFunctionKind::ArrayToString,
+    ),
     (
         ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY,
         NativeFunctionKind::ArrayLastIndexOf,

@@ -409,9 +409,12 @@ impl Context {
             Value::Symbol(value) => Ok(value.clone()),
             Value::Object(id) => match self.objects.primitive_value(*id)? {
                 Some(ObjectPrimitiveValue::Symbol(value)) => Ok(value.clone()),
-                Some(ObjectPrimitiveValue::Bool(_) | ObjectPrimitiveValue::Number(_)) | None => {
-                    Err(Error::type_error(SYMBOL_VALUE_RECEIVER_ERROR))
-                }
+                Some(
+                    ObjectPrimitiveValue::Bool(_)
+                    | ObjectPrimitiveValue::Number(_)
+                    | ObjectPrimitiveValue::BigInt(_),
+                )
+                | None => Err(Error::type_error(SYMBOL_VALUE_RECEIVER_ERROR)),
             },
             _ => Err(Error::type_error(SYMBOL_VALUE_RECEIVER_ERROR)),
         }

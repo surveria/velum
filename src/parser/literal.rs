@@ -359,6 +359,10 @@ impl Parser {
                 key: self.static_name(Value::Number(value).to_string())?,
                 shorthand_name: None,
             }),
+            TokenKind::BigInt(value) => Ok(ObjectPropertyName::Static {
+                key: self.static_name(value.to_string())?,
+                shorthand_name: None,
+            }),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
                     return Err(Error::parse_at("expected object property name", token_span));
@@ -391,6 +395,7 @@ pub(super) const fn is_object_property_name_start(kind: &TokenKind) -> bool {
         TokenKind::Identifier(_)
             | TokenKind::String(_)
             | TokenKind::Number(_)
+            | TokenKind::BigInt(_)
             | TokenKind::LBracket
     ) || keyword_property_name(kind).is_some()
 }

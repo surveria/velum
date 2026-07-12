@@ -289,6 +289,7 @@ impl Context {
                 }
                 Value::Bool(_)
                 | Value::Number(_)
+                | Value::BigInt(_)
                 | Value::String(_)
                 | Value::HeapString(_)
                 | Value::Symbol(_) => Ok(target),
@@ -352,6 +353,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(
@@ -445,6 +447,7 @@ impl Context {
             )),
             Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => {
@@ -461,6 +464,7 @@ impl Context {
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::type_error(
@@ -482,6 +486,7 @@ impl Context {
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Err(Error::runtime(

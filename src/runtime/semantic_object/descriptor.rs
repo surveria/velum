@@ -121,6 +121,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => {
@@ -148,6 +149,7 @@ impl Context {
                 )),
                 Value::Bool(_)
                 | Value::Number(_)
+                | Value::BigInt(_)
                 | Value::Symbol(_)
                 | Value::Object(_)
                 | Value::Function(_)
@@ -186,6 +188,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Ok(None),

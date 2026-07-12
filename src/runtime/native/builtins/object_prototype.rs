@@ -29,6 +29,7 @@ const ENTRY_KEY_PROPERTY: &str = "0";
 const ENTRY_VALUE_PROPERTY: &str = "1";
 const ENTRY_NOT_OBJECT_ERROR: &str = "Object.fromEntries iterator value must be an object";
 const OBJECT_RECEIVER_ERROR: &str = "Object.prototype method called on null or undefined";
+const TAG_BIGINT: &str = "BigInt";
 
 impl Context {
     pub(in crate::runtime::native) fn eval_object_prototype_to_string(
@@ -52,6 +53,7 @@ impl Context {
             }
             Value::Bool(_) => TAG_BOOLEAN.to_owned(),
             Value::Number(_) => TAG_NUMBER.to_owned(),
+            Value::BigInt(_) => TAG_BIGINT.to_owned(),
             Value::String(_) | Value::HeapString(_) => TAG_STRING.to_owned(),
             Value::Symbol(_) => TAG_OBJECT.to_owned(),
         };
@@ -157,6 +159,7 @@ impl Context {
             | Value::HostFunction(_) => Ok(this_value.clone()),
             Value::Bool(value) => self.create_boolean_object_from_value(*value),
             Value::Number(value) => self.create_number_object_from_value(*value),
+            Value::BigInt(value) => self.create_bigint_object_from_value(value.clone()),
             Value::String(_) | Value::HeapString(_) => {
                 self.create_string_object_from_value(this_value)
             }
@@ -196,6 +199,7 @@ impl Context {
         match self.objects.primitive_value(id)? {
             Some(ObjectPrimitiveValue::Bool(_)) => Ok(TAG_BOOLEAN),
             Some(ObjectPrimitiveValue::Number(_)) => Ok(TAG_NUMBER),
+            Some(ObjectPrimitiveValue::BigInt(_)) => Ok(TAG_BIGINT),
             Some(ObjectPrimitiveValue::Symbol(_)) | None => Ok(TAG_OBJECT),
         }
     }

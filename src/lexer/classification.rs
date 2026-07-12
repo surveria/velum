@@ -73,6 +73,7 @@ pub(super) const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
     !matches!(
         kind,
         TokenKind::Number(_)
+            | TokenKind::BigInt(_)
             | TokenKind::String(_)
             | TokenKind::TemplateTail(_)
             | TokenKind::RegExp { .. }

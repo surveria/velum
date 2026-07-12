@@ -4,7 +4,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{PreferredType, to_string_primitive},
+        abstract_operations::{NumericValue, PreferredType, to_string_primitive},
     },
     syntax::StaticString,
     value::Value,
@@ -12,6 +12,7 @@ use crate::{
 
 const STRING_CONCAT_INTERMEDIATE_EXTRA_CAPACITY: usize = 24;
 const FOREIGN_VM_VALUE_ERROR: &str = "value belongs to another VM";
+const BIGINT_BIT_LIMIT_ERROR: &str = "BigInt bit length exceeded the configured limit";
 
 impl Context {
     pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
@@ -43,9 +44,20 @@ impl Context {
             let value = self.concat_utf16_values(&left, &right)?;
             return self.heap_utf16_string_value(&value);
         }
-        let left = self.to_number(&left)?;
-        let right = self.to_number(&right)?;
-        Ok(Value::Number(left + right))
+        let left = self.to_numeric(&left)?;
+        let right = self.to_numeric(&right)?;
+        match (left, right) {
+            (NumericValue::Number(left), NumericValue::Number(right)) => {
+                Ok(Value::Number(left + right))
+            }
+            (NumericValue::BigInt(left), NumericValue::BigInt(right)) => {
+                self.bigint_value(left.add(&right))
+            }
+            (NumericValue::Number(_), NumericValue::BigInt(_))
+            | (NumericValue::BigInt(_), NumericValue::Number(_)) => {
+                Err(Error::type_error("Cannot mix BigInt and other types"))
+            }
+        }
     }
 
     pub(crate) fn string_concat_step(
@@ -184,6 +196,7 @@ impl Context {
                 }
             }
             Value::Number(_) => 24,
+            Value::BigInt(value) => value.to_string().len(),
             Value::NativeFunction(_) | Value::HostFunction(_) => "function()".len(),
             Value::Object(_) => "[object Object]".len(),
             Value::Function(_) | Value::Symbol(_) => 0,
@@ -238,6 +251,7 @@ impl Context {
                 }
                 self.symbols.get(symbol.id())?;
             }
+            Value::BigInt(value) => self.check_bigint_len(value)?,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -248,6 +262,23 @@ impl Context {
             | Value::Object(_) => {}
         }
         Ok(value)
+    }
+
+    pub(in crate::runtime) fn bigint_value(&self, value: crate::value::JsBigInt) -> Result<Value> {
+        self.check_bigint_len(&value)?;
+        Ok(Value::BigInt(value))
+    }
+
+    fn check_bigint_len(&self, value: &crate::value::JsBigInt) -> Result<()> {
+        let bits =
+            usize::try_from(value.bit_len()).map_err(|_| Error::limit(BIGINT_BIT_LIMIT_ERROR))?;
+        if bits > self.limits.max_bigint_bits {
+            return Err(Error::limit(format!(
+                "BigInt bit length {bits} exceeded {}",
+                self.limits.max_bigint_bits
+            )));
+        }
+        Ok(())
     }
 
     pub(crate) fn current_this(&mut self) -> Result<Value> {

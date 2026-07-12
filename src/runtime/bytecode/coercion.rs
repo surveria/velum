@@ -1,6 +1,11 @@
+use std::cmp::Ordering;
+
 use crate::{
     error::Result,
-    runtime::{Context, abstract_operations::PreferredType},
+    runtime::{
+        Context,
+        abstract_operations::{NumericValue, PreferredType},
+    },
     syntax::BinaryOp,
     value::Value,
 };
@@ -16,9 +21,45 @@ pub(super) fn relational_compare(
     let result = if let (Some(left), Some(right)) = (string_value(&left), string_value(&right)) {
         string_relational_compare(op, left, right)
     } else {
-        number_relational_compare(op, context.to_number(&left)?, context.to_number(&right)?)
+        match bigint_string_ordering(&left, &right) {
+            BigIntStringOrdering::Ordered(ordering) => ordering_matches(op, ordering),
+            BigIntStringOrdering::Unordered => false,
+            BigIntStringOrdering::NotApplicable => numeric_relational_compare(
+                op,
+                context.to_numeric(&left)?,
+                context.to_numeric(&right)?,
+            ),
+        }
     };
     Ok(Value::Bool(result))
+}
+
+enum BigIntStringOrdering {
+    NotApplicable,
+    Unordered,
+    Ordered(Ordering),
+}
+
+fn bigint_string_ordering(left: &Value, right: &Value) -> BigIntStringOrdering {
+    let ordering = match (left, right) {
+        (Value::BigInt(left), Value::String(right)) => {
+            crate::value::JsBigInt::parse_string(right).map(|right| left.cmp(&right))
+        }
+        (Value::BigInt(left), Value::HeapString(right)) => {
+            crate::value::JsBigInt::parse_string(right.as_str()).map(|right| left.cmp(&right))
+        }
+        (Value::String(left), Value::BigInt(right)) => {
+            crate::value::JsBigInt::parse_string(left).map(|left| left.cmp(right))
+        }
+        (Value::HeapString(left), Value::BigInt(right)) => {
+            crate::value::JsBigInt::parse_string(left.as_str()).map(|left| left.cmp(right))
+        }
+        _ => return BigIntStringOrdering::NotApplicable,
+    };
+    ordering.map_or(
+        BigIntStringOrdering::Unordered,
+        BigIntStringOrdering::Ordered,
+    )
 }
 
 fn string_value(value: &Value) -> Option<&str> {
@@ -65,6 +106,50 @@ fn number_relational_compare(op: BinaryOp, left: f64, right: f64) -> bool {
         BinaryOp::LessEqual => left <= right,
         BinaryOp::Greater => left > right,
         BinaryOp::GreaterEqual => left >= right,
+        BinaryOp::Add
+        | BinaryOp::Sub
+        | BinaryOp::Mul
+        | BinaryOp::Div
+        | BinaryOp::Rem
+        | BinaryOp::Pow
+        | BinaryOp::Equal
+        | BinaryOp::NotEqual
+        | BinaryOp::StrictEqual
+        | BinaryOp::StrictNotEqual
+        | BinaryOp::In
+        | BinaryOp::InstanceOf
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
+        | BinaryOp::ShiftRightUnsigned
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => false,
+    }
+}
+
+fn numeric_relational_compare(op: BinaryOp, left: NumericValue, right: NumericValue) -> bool {
+    let ordering = match (left, right) {
+        (NumericValue::Number(left), NumericValue::Number(right)) => {
+            return number_relational_compare(op, left, right);
+        }
+        (NumericValue::BigInt(left), NumericValue::BigInt(right)) => Some(left.cmp(&right)),
+        (NumericValue::BigInt(left), NumericValue::Number(right)) => left.compare_number(right),
+        (NumericValue::Number(left), NumericValue::BigInt(right)) => {
+            right.compare_number(left).map(Ordering::reverse)
+        }
+    };
+    ordering.is_some_and(|ordering| ordering_matches(op, ordering))
+}
+
+fn ordering_matches(op: BinaryOp, ordering: Ordering) -> bool {
+    match op {
+        BinaryOp::Less => ordering == Ordering::Less,
+        BinaryOp::LessEqual => ordering != Ordering::Greater,
+        BinaryOp::Greater => ordering == Ordering::Greater,
+        BinaryOp::GreaterEqual => ordering != Ordering::Less,
         BinaryOp::Add
         | BinaryOp::Sub
         | BinaryOp::Mul

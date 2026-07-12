@@ -132,6 +132,7 @@ pub fn enumerable_property_keys(
         Value::HeapString(value) => utf16_string_enumerable_keys(value.as_utf16()),
         Value::Bool(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
@@ -166,6 +167,7 @@ pub fn delete_property(
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
         Value::Bool(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::String(_)
         | Value::HeapString(_)
         | Value::Symbol(_)

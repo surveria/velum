@@ -96,6 +96,7 @@ impl Context {
                 Value::Undefined
                 | Value::Null
                 | Value::Bool(_)
+                | Value::BigInt(_)
                 | Value::String(_)
                 | Value::HeapString(_)
                 | Value::Symbol(_)
@@ -121,6 +122,7 @@ impl Context {
                 Value::Undefined
                 | Value::Null
                 | Value::Bool(_)
+                | Value::BigInt(_)
                 | Value::String(_)
                 | Value::HeapString(_)
                 | Value::Symbol(_)

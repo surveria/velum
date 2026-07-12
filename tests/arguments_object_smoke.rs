@@ -34,6 +34,21 @@ fn exposes_indexed_arguments_and_length() -> TestResult {
 }
 
 #[test]
+fn keeps_arguments_on_the_object_prototype_and_outside_is_array() -> TestResult {
+    ensure_string(
+        r#"
+        function probe() {
+            return (Object.getPrototypeOf(arguments) === Object.prototype)
+                + ":" + Array.isArray(arguments)
+                + ":" + String.prototype.trim.call(arguments);
+        }
+        probe(1, 2, true)
+        "#,
+        "true:false:[object Arguments]",
+    )
+}
+
+#[test]
 fn reflects_actual_call_arity() -> TestResult {
     ensure_string(
         r#"

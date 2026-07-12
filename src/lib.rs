@@ -41,4 +41,4 @@ pub use crate::runtime::{
 pub use crate::source::{SourceId, SourceSpan};
 pub use crate::storage::string_heap::{JsString, StringId};
 pub use crate::storage::symbol::{JsSymbol, SymbolId};
-pub use crate::value::Value;
+pub use crate::value::{JsBigInt, Value};

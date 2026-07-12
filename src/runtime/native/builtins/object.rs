@@ -74,6 +74,7 @@ impl Context {
             | Value::HostFunction(_) => Ok(value.clone()),
             Value::Bool(value) => self.create_boolean_object_from_value(*value),
             Value::Number(value) => self.create_number_object_from_value(*value),
+            Value::BigInt(value) => self.create_bigint_object_from_value(value.clone()),
             Value::String(_) | Value::HeapString(_) => self.create_string_object_from_value(value),
             Value::Symbol(value) => self.create_symbol_object_from_value(value.clone()),
             Value::Undefined | Value::Null => self.create_object_from_constructor(),
@@ -610,7 +611,7 @@ impl Context {
             Value::String(_) | Value::HeapString(_) => {
                 has_property(&self.objects, target, property.lookup())
             }
-            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(false),
+            Value::Bool(_) | Value::Number(_) | Value::BigInt(_) | Value::Symbol(_) => Ok(false),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.hasOwn target cannot be converted to an object",
             )),

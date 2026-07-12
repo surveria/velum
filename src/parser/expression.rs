@@ -414,6 +414,9 @@ impl Parser {
             TokenKind::Number(value) => {
                 Expression::new(Expr::Literal(Value::Number(value)), token_span)
             }
+            TokenKind::BigInt(value) => {
+                Expression::new(Expr::Literal(Value::BigInt(value)), token_span)
+            }
             TokenKind::String(value) => {
                 Expression::new(Expr::StringLiteral(self.static_string(value)?), token_span)
             }

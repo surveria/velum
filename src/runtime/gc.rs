@@ -351,6 +351,7 @@ impl Reachability {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_) => Ok(false),
         }
     }
@@ -482,6 +483,7 @@ impl Reachability {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
+            | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Function(_)
