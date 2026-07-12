@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T090503Z.md`
-- Task: PR #499: runtime: implement residual weak collection semantics
-- Performance: 9.02x (4/5 >1.00x) (from `rsqjs-test-report-20260712T090503Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T090503Z.md`)
+- `rsqjs-test-report-20260712T092242Z.md`
+- Task: PR #497: bytecode: preserve strict property-write references
+- Performance: 9.60x (4/5 >1.00x) (from `rsqjs-test-report-20260712T092242Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T092242Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 71842 passed / 30736 failed (70.04%) (from `rsqjs-test-report-20260712T090503Z.md`)
+- Full Test262: 72049 passed / 30529 failed (70.24%) (from `rsqjs-test-report-20260712T092242Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -480,3 +480,4 @@ Latest report:
 | `20260712T082725Z` `edc4a3b` PR #495: runtime: complete residual Set semantics | 8.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71692 passed / 30886 failed (69.89%) |
 | `20260712T084645Z` `d53d7bf` PR #498: runtime: implement modern Map APIs | 8.96x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71765 passed / 30813 failed (69.96%) |
 | `20260712T090503Z` `75068cb` PR #499: runtime: implement residual weak collection semantics | 9.02x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 71842 passed / 30736 failed (70.04%) |
+| `20260712T092242Z` `78b09c5` PR #497: bytecode: preserve strict property-write references | 9.60x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 72049 passed / 30529 failed (70.24%) |
