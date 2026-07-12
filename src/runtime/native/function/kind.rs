@@ -460,6 +460,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ReflectSet,
     ReflectSetPrototypeOf,
     RegExp,
+    RegExpEscape,
     RegExpPrototypeCompile,
     RegExpPrototypeDotAllGetter,
     RegExpPrototypeExec,

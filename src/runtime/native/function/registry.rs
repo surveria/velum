@@ -285,7 +285,8 @@ const SHARED_ARRAY_BUFFER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(310
 const SHARED_ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 311;
 const ATOMICS_METHOD_SLOT_BASE: usize = 316;
 const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 331;
+const REGEXP_ESCAPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(331);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 332;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -618,10 +619,10 @@ const fn math_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         _ => None,
     }
 }
-
 const fn regexp_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
+        NativeFunctionKind::RegExpEscape => Some(REGEXP_ESCAPE_SLOT),
         NativeFunctionKind::RegExpPrototypeDotAllGetter => Some(REGEXP_DOT_ALL_GETTER_SLOT),
         NativeFunctionKind::RegExpPrototypeExec => Some(REGEXP_EXEC_SLOT),
         NativeFunctionKind::RegExpPrototypeFlagsGetter => Some(REGEXP_FLAGS_GETTER_SLOT),
@@ -644,7 +645,6 @@ const fn regexp_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         _ => None,
     }
 }
-
 const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         NativeFunctionKind::Date(DateFunctionKind::Constructor) => Some(DATE_SLOT),
