@@ -5,27 +5,25 @@ use crate::{
         call::RuntimeCallArgs,
         numeric::number_to_uint32,
         object::{PropertyKey, PropertyLookup},
+        roots::VmRootKind,
     },
     value::Value,
 };
 
-const REGEXP_LAST_INDEX_PROPERTY: &str = "lastIndex";
-const REGEXP_MATCH_INDEX_PROPERTY: &str = "index";
-const REGEXP_MATCH_GROUPS_PROPERTY: &str = "groups";
-const REGEXP_MATCH_LENGTH_PROPERTY: &str = "length";
-const FIRST_MATCH_PROPERTY: &str = "0";
+const MATCH_SYMBOL_DISPLAY: &str = "[Symbol.match]";
+const MATCH_SYMBOL_PROPERTY: &str = "match";
 const REPLACE_SYMBOL_DISPLAY: &str = "[Symbol.replace]";
 const REPLACE_SYMBOL_PROPERTY: &str = "replace";
+const SEARCH_SYMBOL_DISPLAY: &str = "[Symbol.search]";
+const SEARCH_SYMBOL_PROPERTY: &str = "search";
 const SPLIT_SYMBOL_DISPLAY: &str = "[Symbol.split]";
 const SPLIT_SYMBOL_PROPERTY: &str = "split";
-const ZERO_INDEX: f64 = 0.0;
 
 #[derive(Debug)]
 pub(super) struct StringRegExpMatch {
     pub(super) byte_start: usize,
     pub(super) byte_end: usize,
     pub(super) code_unit_start: usize,
-    pub(super) code_unit_end: usize,
     pub(super) text: String,
     pub(super) captures: Vec<Value>,
     pub(super) groups: Value,
@@ -37,36 +35,12 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let Some(pattern) = args.as_slice().first() else {
-            return self.string_match_plain(&text, "");
-        };
-        if !self.string_regexp_is_object(pattern)? {
-            let pattern = self.string_argument_text(pattern)?;
-            return self.string_match_plain(&text, &pattern);
-        }
-        if !self.string_regexp_is_global(pattern)? {
-            return self.regexp_exec(pattern, &text);
-        }
-        self.string_regexp_set_last_index(pattern, 0)?;
-        let mut matches = Vec::new();
-        while let Some(matched) = self.string_regexp_exec_match(pattern, &text)? {
-            let match_end = matched.code_unit_end;
-            let is_empty_match = matched.text.is_empty();
-            matches.push(matched.text);
-            if matches.len() > self.limits.max_object_properties {
-                return Err(Error::limit(
-                    "String.prototype.match result exceeded array limit",
-                ));
-            }
-            if is_empty_match {
-                self.string_regexp_advance_last_index(pattern, &text, match_end)?;
-            }
-        }
-        if matches.is_empty() {
-            return Ok(Value::Null);
-        }
-        self.string_values_array(matches)
+        self.eval_string_regexp_protocol(
+            args,
+            this_value,
+            MATCH_SYMBOL_PROPERTY,
+            MATCH_SYMBOL_DISPLAY,
+        )
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_search(
@@ -74,23 +48,67 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let Some(pattern) = args.as_slice().first() else {
-            return Ok(Value::Number(ZERO_INDEX));
-        };
-        if !self.string_regexp_is_object(pattern)? {
-            return Ok(Value::Number(optional_index_to_number(
-                text.find(&self.string_argument_text(pattern)?),
-            )?));
+        self.eval_string_regexp_protocol(
+            args,
+            this_value,
+            SEARCH_SYMBOL_PROPERTY,
+            SEARCH_SYMBOL_DISPLAY,
+        )
+    }
+
+    fn eval_string_regexp_protocol(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        symbol_property: &str,
+        symbol_display: &str,
+    ) -> Result<Value> {
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "String RegExp protocol requires a non-nullish receiver",
+            ));
         }
-        let previous = self.get_named(pattern, REGEXP_LAST_INDEX_PROPERTY)?;
-        self.string_regexp_set_last_index(pattern, 0)?;
-        let matched = self.string_regexp_exec_match(pattern, &text)?;
-        self.string_regexp_set_last_index_value(pattern, previous)?;
-        Ok(Value::Number(match matched {
-            Some(matched) => index_to_number(matched.code_unit_start)?,
-            None => -1.0,
-        }))
+        let pattern = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        if self.semantic_object_ref(&pattern)?.is_some()
+            && let Some(method) =
+                self.string_regexp_protocol_method(&pattern, symbol_property, symbol_display)?
+        {
+            return self.call_value(&method, std::slice::from_ref(this_value), pattern);
+        }
+
+        let string = self.string_receiver_utf16(this_value)?;
+        let string = self.heap_utf16_string_value(&string)?;
+        let _string_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&string))?;
+        let constructor = self.regexp_constructor_value()?;
+        let regexp = self.semantic_construct(&constructor, &[pattern], constructor.clone())?;
+        let _regexp_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&regexp))?;
+        let method = self
+            .string_regexp_protocol_method(&regexp, symbol_property, symbol_display)?
+            .ok_or_else(|| {
+                Error::type_error(format!("RegExp {symbol_display} method is not callable"))
+            })?;
+        self.call_value(&method, &[string], regexp)
+    }
+
+    fn string_regexp_protocol_method(
+        &mut self,
+        value: &Value,
+        symbol_property: &str,
+        symbol_display: &str,
+    ) -> Result<Option<Value>> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_named(&symbol_constructor, symbol_property)?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime(format!(
+                "Symbol.{symbol_property} is not initialized"
+            )));
+        };
+        self.get_method(
+            value,
+            PropertyLookup::from_key(symbol_display, PropertyKey::symbol(symbol.id())),
+        )
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_replace(
@@ -130,14 +148,10 @@ impl Context {
             .ok_or_else(|| Error::runtime("String replacement prefix is invalid"))?
             .encode_utf16()
             .count();
-        let code_unit_end = code_unit_start
-            .checked_add(needle.encode_utf16().count())
-            .ok_or_else(|| Error::limit("String replacement index overflowed"))?;
         let matched = StringRegExpMatch {
             byte_start,
             byte_end,
             code_unit_start,
-            code_unit_end,
             text: needle,
             captures: Vec::new(),
             groups: Value::Undefined,
@@ -203,41 +217,6 @@ impl Context {
             separator,
             PropertyLookup::from_key(SPLIT_SYMBOL_DISPLAY, PropertyKey::symbol(symbol.id())),
         )
-    }
-
-    fn string_regexp_is_object(&self, value: &Value) -> Result<bool> {
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        self.objects
-            .regexp_value(*id)
-            .map(|regexp| regexp.is_some())
-    }
-
-    fn string_regexp_is_global(&self, value: &Value) -> Result<bool> {
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(self
-            .objects
-            .regexp_value(*id)?
-            .is_some_and(|regexp| regexp.flags().contains('g')))
-    }
-
-    fn string_regexp_exec_match(
-        &mut self,
-        pattern: &Value,
-        text: &str,
-    ) -> Result<Option<StringRegExpMatch>> {
-        let result = self.regexp_exec(pattern, text)?;
-        self.string_regexp_match_from_value(text, &result)
-    }
-
-    fn string_match_plain(&mut self, text: &str, needle: &str) -> Result<Value> {
-        if !needle.is_empty() && !text.contains(needle) {
-            return Ok(Value::Null);
-        }
-        self.string_values_array(vec![needle.to_owned()])
     }
 
     pub(super) fn regexp_replacement_text(
@@ -387,111 +366,6 @@ impl Context {
         Ok(relative_end.saturating_add(3))
     }
 
-    pub(super) fn string_regexp_match_from_value(
-        &mut self,
-        text: &str,
-        result: &Value,
-    ) -> Result<Option<StringRegExpMatch>> {
-        let Value::Object(id) = result else {
-            return Ok(None);
-        };
-        let length_value = self.get_named(&Value::Object(*id), REGEXP_MATCH_LENGTH_PROPERTY)?;
-        let length = Self::length_to_usize(
-            self.to_length(&length_value)?,
-            "RegExp match capture count exceeded supported range",
-        )?;
-        let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
-        let matched = self.to_string(&matched_value)?;
-        let index = self.get_named(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?;
-        let index = self.to_integer_or_infinity(&index)?;
-        let input_length = text.encode_utf16().count();
-        let code_unit_start = if index <= 0.0 {
-            0
-        } else if index.is_infinite() {
-            input_length
-        } else {
-            Self::finite_nonnegative_integer_to_usize(
-                index,
-                "RegExp match index exceeded supported range",
-            )?
-            .min(input_length)
-        };
-        let mut captures = Vec::with_capacity(length.saturating_sub(1));
-        for capture in 1..length {
-            let capture = self.get_named(&Value::Object(*id), &capture.to_string())?;
-            if matches!(capture, Value::Undefined) {
-                captures.push(capture);
-            } else {
-                let capture = self.to_string(&capture)?;
-                captures.push(self.heap_string_value(&capture)?);
-            }
-        }
-        let groups = self.get_named(&Value::Object(*id), REGEXP_MATCH_GROUPS_PROPERTY)?;
-        let byte_start = utf16_index_to_byte_boundary(text, code_unit_start).ok_or_else(|| {
-            Error::runtime("RegExp match index is not a valid UTF-16 string boundary")
-        })?;
-        let byte_end = byte_start
-            .checked_add(matched.len())
-            .ok_or_else(|| Error::limit("RegExp match end overflowed"))?;
-        let code_unit_end = code_unit_start
-            .checked_add(matched.encode_utf16().count())
-            .ok_or_else(|| Error::limit("RegExp match code-unit end overflowed"))?;
-        Ok(Some(StringRegExpMatch {
-            byte_start,
-            byte_end,
-            code_unit_start,
-            code_unit_end,
-            text: matched,
-            captures,
-            groups,
-        }))
-    }
-
-    fn string_regexp_set_last_index(&mut self, pattern: &Value, index: usize) -> Result<()> {
-        self.string_regexp_set_last_index_value(pattern, Value::Number(index_to_number(index)?))
-    }
-
-    fn string_regexp_set_last_index_value(&mut self, pattern: &Value, value: Value) -> Result<()> {
-        let lookup = self.property_lookup(REGEXP_LAST_INDEX_PROPERTY);
-        self.set(
-            pattern,
-            lookup,
-            value,
-            pattern,
-            crate::runtime::abstract_operations::SetFailureBehavior::Throw,
-        )
-        .map(|_| ())
-    }
-
-    fn string_regexp_advance_last_index(
-        &mut self,
-        pattern: &Value,
-        text: &str,
-        index: usize,
-    ) -> Result<()> {
-        let unicode = self.string_regexp_is_unicode(pattern)?;
-        let next = advance_utf16_index(text, index, unicode)?;
-        self.string_regexp_set_last_index(pattern, next)
-    }
-
-    fn string_regexp_is_unicode(&self, value: &Value) -> Result<bool> {
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(self
-            .objects
-            .regexp_value(*id)?
-            .is_some_and(|regexp| regexp.flags().contains('u') || regexp.flags().contains('v')))
-    }
-
-    fn string_values_array(&mut self, values: Vec<String>) -> Result<Value> {
-        let mut elements = Vec::with_capacity(values.len());
-        for value in values {
-            elements.push(self.heap_string_value(&value)?);
-        }
-        self.string_value_array(elements)
-    }
-
     fn string_utf16_values_array(&mut self, values: Vec<Vec<u16>>) -> Result<Value> {
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
@@ -575,52 +449,6 @@ fn push_checked_slice(output: &mut String, text: &str, start: usize, end: usize)
             .ok_or_else(|| Error::runtime("String.prototype RegExp span is invalid"))?,
     );
     Ok(())
-}
-
-fn utf16_index_to_byte_boundary(text: &str, index: usize) -> Option<usize> {
-    let mut code_units = 0usize;
-    for (byte_index, ch) in text.char_indices() {
-        if code_units == index {
-            return Some(byte_index);
-        }
-        code_units = code_units.checked_add(ch.len_utf16())?;
-        if code_units == index {
-            return byte_index.checked_add(ch.len_utf8());
-        }
-        if code_units > index {
-            return None;
-        }
-    }
-    (code_units == index).then_some(text.len())
-}
-
-fn advance_utf16_index(text: &str, index: usize, unicode: bool) -> Result<usize> {
-    let units = text.encode_utf16().collect::<Vec<_>>();
-    let Some(first) = units.get(index).copied() else {
-        return index
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("RegExp string index overflowed"));
-    };
-    let width = if unicode
-        && (0xD800..=0xDBFF).contains(&first)
-        && units
-            .get(index.saturating_add(1))
-            .is_some_and(|second| (0xDC00..=0xDFFF).contains(second))
-    {
-        2
-    } else {
-        1
-    };
-    index
-        .checked_add(width)
-        .ok_or_else(|| Error::limit("RegExp string index overflowed"))
-}
-
-fn optional_index_to_number(index: Option<usize>) -> Result<f64> {
-    let Some(index) = index else {
-        return Ok(-1.0);
-    };
-    index_to_number(index)
 }
 
 fn index_to_number(index: usize) -> Result<f64> {
