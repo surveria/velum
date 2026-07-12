@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T201405Z.md`
-- Task: PR #530: parser: complete RegExp modifier semantics
-- Performance: 11.85x (4/5 >1.00x) (from `rsqjs-test-report-20260712T201405Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T201405Z.md`)
+- `rsqjs-test-report-20260712T201507Z.md`
+- Task: PR #529: runtime: implement Object legacy accessor semantics
+- Performance: 10.23x (4/5 >1.00x) (from `rsqjs-test-report-20260712T201507Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T201507Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 80131 passed / 22447 failed (78.12%) (from `rsqjs-test-report-20260712T201405Z.md`)
+- Full Test262: 80422 passed / 22156 failed (78.40%) (from `rsqjs-test-report-20260712T201507Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -502,3 +502,4 @@ Latest report:
 | `20260712T191839Z` `92ce78e` PR #527: runtime: complete RegExp.escape semantics | 9.61x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80019 passed / 22559 failed (78.01%) |
 | `20260712T194307Z` `e1492c3` PR #531: runtime: restore optimization semantic contract | 10.35x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80097 passed / 22481 failed (78.08%) |
 | `20260712T201405Z` `cb5a9a3` PR #530: parser: complete RegExp modifier semantics | 11.85x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80131 passed / 22447 failed (78.12%) |
+| `20260712T201507Z` `f6f4b36` PR #529: runtime: implement Object legacy accessor semantics | 10.23x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80422 passed / 22156 failed (78.40%) |
