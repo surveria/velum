@@ -6,6 +6,8 @@ use crate::{
     value::Value,
 };
 
+use super::callback_state::{ArrayCallbackAction, ReduceDirection, ReduceState};
+
 const ARRAY_CALLBACK_NOT_CALLABLE_ERROR: &str = "Array.prototype callback must be callable";
 const ARRAY_REDUCE_EMPTY_ERROR: &str = "Reduce of empty array with no initial value";
 const INDEX_NOT_FOUND: f64 = -1.0;
@@ -768,60 +770,5 @@ impl Context {
             return Ok(callback);
         }
         Err(Error::type_error(ARRAY_CALLBACK_NOT_CALLABLE_ERROR))
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ArrayCallbackAction {
-    Continue,
-    Stop,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ReduceDirection {
-    Forward,
-    Reverse,
-}
-
-#[derive(Debug, Clone)]
-struct ReduceState {
-    accumulator: Value,
-    next: usize,
-    end: usize,
-    started: bool,
-}
-
-impl ReduceState {
-    const fn with_next(accumulator: Value, next: usize, end: usize, started: bool) -> Self {
-        Self {
-            accumulator,
-            next,
-            end,
-            started,
-        }
-    }
-
-    const fn next_index(&mut self, direction: ReduceDirection) -> Option<usize> {
-        match direction {
-            ReduceDirection::Forward => self.next_forward_index(),
-            ReduceDirection::Reverse => self.next_reverse_index(),
-        }
-    }
-
-    const fn next_forward_index(&mut self) -> Option<usize> {
-        if self.next >= self.end {
-            return None;
-        }
-        let index = self.next;
-        self.next = self.next.saturating_add(1);
-        Some(index)
-    }
-
-    const fn next_reverse_index(&mut self) -> Option<usize> {
-        if self.next == 0 {
-            return None;
-        }
-        self.next = self.next.saturating_sub(1);
-        Some(self.next)
     }
 }
