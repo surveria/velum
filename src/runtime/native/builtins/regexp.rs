@@ -15,6 +15,7 @@ use crate::{
 
 mod compile;
 mod engine;
+mod escape;
 mod flags;
 mod match_iterator;
 mod match_result;
@@ -32,6 +33,7 @@ use super::{
     REGEXP_PROTOTYPE_TEST_NAME, REGEXP_PROTOTYPE_TO_STRING_NAME,
 };
 
+const REGEXP_ESCAPE_NAME: &str = "escape";
 const REGEXP_DOT_ALL_PROPERTY: &str = "dotAll";
 const REGEXP_COMPILE_PROPERTY: &str = "compile";
 const REGEXP_SOURCE_PROPERTY: &str = "source";
@@ -68,6 +70,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::RegExp)?;
         self.push_native_function_with_id(id, NativeFunctionKind::RegExp, prototype, name)?;
         self.install_species_accessor(id)?;
+        self.install_regexp_static_methods(id)?;
         self.install_regexp_prototype_methods(prototype_id)?;
         self.install_regexp_prototype_symbol_methods(prototype_id)?;
         self.insert_global_builtin(REGEXP_NAME, constructor.clone())?;

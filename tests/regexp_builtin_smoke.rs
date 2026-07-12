@@ -322,6 +322,59 @@ fn supports_observable_regexp_match_search_and_match_all_protocols() -> TestResu
 }
 
 #[test]
+fn supports_regexp_escape_utf16_and_metadata_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let rejected = 0;
+        for (const value of [undefined, null, true, 1, {}, []]) {
+            try {
+                RegExp.escape(value);
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        try {
+            Reflect.construct(RegExp.escape, []);
+        } catch (error) {
+            if (error instanceof TypeError) rejected += 1;
+        }
+
+        let descriptor = Object.getOwnPropertyDescriptor(RegExp, "escape");
+        let pair = "\uD83D\uDE00";
+        typeof RegExp.escape === "function" &&
+            RegExp.escape.name === "escape" &&
+            RegExp.escape.length === 1 &&
+            descriptor.writable && !descriptor.enumerable && descriptor.configurable &&
+            RegExp.escape("foo.bar/baz-qux") === "\\x66oo\\.bar\\/baz\\x2dqux" &&
+            RegExp.escape("\t\n\v\f\r") === "\\t\\n\\v\\f\\r" &&
+            RegExp.escape(" \u00A0\u2028\uFEFF") === "\\x20\\xa0\\u2028\\ufeff" &&
+            RegExp.escape("\uD800") === "\\ud800" &&
+            RegExp.escape(pair) === pair &&
+            RegExp.escape("你好!") === "你好\\x21" &&
+            rejected === 7 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_oversized_regexp_escape_before_materialization() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_string_len: 256,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    if context.eval(r#"RegExp.escape("!".repeat(80))"#).is_ok() {
+        return Err("expected RegExp.escape string limit to fail".into());
+    }
+    Ok(())
+}
+
+#[test]
 fn rejects_oversized_regexp_substitution_before_materialization() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_string_len: 256,
