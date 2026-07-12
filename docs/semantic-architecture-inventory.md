@@ -512,8 +512,11 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   explicit `VmGeneration`. Independent owners cannot alias and no mutable
   process-global JavaScript state or wrapping numeric allocator is required;
 - `StringHeap` and `SymbolTable` clone that owner capability into every
-  `JsString` and `JsSymbol`. `checked_value` rejects a foreign identity before
-  validating the numeric slot, and Symbol equality includes owner identity;
+  heap-admitted `JsString` and every `JsSymbol`. Portable `JsString` values
+  carry the same exact UTF-16/Rc payload without an owner until the central
+  runtime admission boundary interns them. `checked_value` rejects a foreign
+  identity before validating the numeric slot, and Symbol equality includes
+  owner identity;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
 - `HostCall` exposes callback-borrowed `LocalValue` arguments containing the
   active owner identity and the raw Value. Arbitrary host JavaScript throws
@@ -758,7 +761,7 @@ must fail on growth.
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | one direct optimizer-state owner, eight recorded linear modules, three function fast-path files, and four reusable control modules; zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler/runtime source-shape recognizer without reusable plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
-| VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
+| VM primitive owner boundary | one identity on each StringHeap, SymbolTable, and JsSymbol plus owner metadata on every heap-admitted JsString and central admission/checked-value validation | removing an admitted primitive owner stamp/check, retaining a detached string, or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/BigInt/String and copies local heap text; BigInt is an immutable ownerless mathematical payload | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |

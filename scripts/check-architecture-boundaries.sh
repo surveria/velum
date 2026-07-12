@@ -1845,7 +1845,7 @@ storage_ledger'
   if [[ "${primitive_owner_fields}" != "4" ]]; then
     fail "VM primitive owner boundary changed; JsString, StringHeap, JsSymbol, and SymbolTable require identity"
   fi
-  if ! grep -F -q 'if text.identity() != self.identity()' \
+  if ! grep -F -q 'if text.identity() != Some(self.identity())' \
       "${repo_root}/src/runtime/values.rs" \
     || ! grep -F -q 'if symbol.identity() != self.identity()' \
       "${repo_root}/src/runtime/values.rs"; then

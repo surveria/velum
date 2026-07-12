@@ -69,8 +69,8 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     let concat_value = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&concat_value, &Value::String("front-door".to_owned()))?;
     let after_concat = vm.resource_usage();
-    ensure_usize(after_concat.string_count, 2)?;
-    ensure_usize(after_concat.string_bytes, "undefined".len() + "front".len())?;
+    ensure_usize(after_concat.string_count, 3)?;
+    ensure_usize(after_concat.string_bytes, "undefinedfrontfront-door".len())?;
 
     let repeated_concat = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&repeated_concat, &Value::String("front-door".to_owned()))?;
@@ -165,7 +165,7 @@ fn string_concat_uses_heap_dedup_and_respects_limits() -> TestResult {
 }
 
 #[test]
-fn bytecode_string_concat_chain_skips_intermediate_heap_value() -> TestResult {
+fn bytecode_string_concat_chain_interns_only_the_final_result() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(r#"var name = "camera"; name + "-stream-" + 7"#)?;
@@ -174,8 +174,8 @@ fn bytecode_string_concat_chain_skips_intermediate_heap_value() -> TestResult {
     ensure_value(&value, &Value::String("camera-stream-7".to_owned()))?;
     let usage = vm.resource_usage();
 
-    ensure_usize(usage.string_count, 1)?;
-    ensure_usize(usage.string_bytes, "camera".len())
+    ensure_usize(usage.string_count, 2)?;
+    ensure_usize(usage.string_bytes, "camera".len() + "camera-stream-7".len())
 }
 
 #[test]

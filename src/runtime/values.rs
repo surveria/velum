@@ -96,9 +96,10 @@ impl Context {
             left => self.concat_values(&left, right)?,
         };
 
-        if !final_result {
-            self.reserve_string_concat_tail(&mut text)?;
+        if final_result {
+            return self.heap_string_owned_value(text);
         }
+        self.reserve_string_concat_tail(&mut text)?;
         Ok(Value::HeapString(text.into()))
     }
 
@@ -131,9 +132,10 @@ impl Context {
             left => self.concat_value_with_static(&left, right)?,
         };
 
-        if !final_result {
-            self.reserve_string_concat_tail(&mut text)?;
+        if final_result {
+            return self.heap_string_owned_value(text);
         }
+        self.reserve_string_concat_tail(&mut text)?;
         Ok(Value::HeapString(text.into()))
     }
 
