@@ -12,6 +12,7 @@ use crate::{
         },
         bytecode::BytecodeOutcome,
         control::Completion,
+        object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit},
         property::static_names::StaticNameAtomCacheHandle,
     },
     value::Value,
@@ -177,9 +178,8 @@ impl Context {
                         self.resolve_export_cell(graph, dependency, name, &mut BTreeSet::new())?
                     }
                     ModuleImportName::Namespace => {
-                        return Err(Error::runtime(
-                            "module namespace imports are not linked yet",
-                        ));
+                        let namespace = self.create_module_namespace(graph, dependency)?;
+                        BindingCell::new(namespace, false, crate::syntax::DeclKind::Const)
                     }
                 };
                 linked.push((import.local_name().to_owned(), cell));
@@ -194,6 +194,74 @@ impl Context {
             }
         }
         Ok(())
+    }
+
+    fn create_module_namespace(
+        &mut self,
+        graph: &[PendingModule],
+        module_index: usize,
+    ) -> Result<Value> {
+        let names = Self::module_export_names(graph, module_index, &mut BTreeSet::new())?;
+        let mut properties = Vec::with_capacity(names.len());
+        for name in &names {
+            let cell = self.resolve_export_cell(graph, module_index, name, &mut BTreeSet::new())?;
+            let getter_name = format!("%module-namespace:{module_index}:{name}%");
+            let binding_name = name.clone();
+            let getter = self.create_internal_host_function(getter_name, move |_call| {
+                cell.value(&binding_name)
+            })?;
+            let key = self.intern_property_key(name)?;
+            properties.push(ObjectPropertyInit::new_accessor(
+                key,
+                name,
+                getter,
+                crate::syntax::AccessorKind::Getter,
+            ));
+        }
+        let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
+        self.objects.create(
+            properties,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn module_export_names(
+        graph: &[PendingModule],
+        module_index: usize,
+        visiting: &mut BTreeSet<usize>,
+    ) -> Result<BTreeSet<String>> {
+        if !visiting.insert(module_index) {
+            return Ok(BTreeSet::new());
+        }
+        let module = graph
+            .get(module_index)
+            .ok_or_else(|| Error::runtime("module namespace owner is missing"))?;
+        let mut names = BTreeSet::new();
+        for export in module.module.exports() {
+            match export {
+                ModuleExport::Local { export_name, .. }
+                | ModuleExport::Indirect { export_name, .. }
+                | ModuleExport::Namespace { export_name, .. } => {
+                    names.insert(export_name.clone());
+                }
+                ModuleExport::Star { request } => {
+                    let dependency =
+                        module.dependencies.get(request).copied().ok_or_else(|| {
+                            Error::runtime("star namespace dependency is missing")
+                        })?;
+                    let dependency_names = Self::module_export_names(graph, dependency, visiting)?;
+                    names.extend(
+                        dependency_names
+                            .into_iter()
+                            .filter(|name| name != "default"),
+                    );
+                }
+            }
+        }
+        visiting.remove(&module_index);
+        Ok(names)
     }
 
     fn resolve_export_cell(

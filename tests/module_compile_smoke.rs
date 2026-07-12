@@ -108,6 +108,23 @@ fn links_and_evaluates_named_imports_with_live_cells() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn namespace_import_properties_read_live_export_cells() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([("dep.js", "export let value = 1; value = 2;".to_owned())]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import * as namespace from 'dep.js'; namespace.value;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(2.0),
+        "namespace export did not stay live",
+    )
+}
+
 struct MapLoader {
     sources: BTreeMap<String, String>,
 }

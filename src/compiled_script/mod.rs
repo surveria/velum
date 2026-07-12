@@ -41,6 +41,13 @@ enum EvalSuperContext {
     PropertyAndCall,
 }
 
+type CompiledModuleParts = (
+    CompiledScript,
+    Box<[String]>,
+    Box<[ModuleImport]>,
+    Box<[ModuleExport]>,
+);
+
 impl CompileMode {
     const SCRIPT: Self = Self::Script;
 
@@ -104,12 +111,7 @@ impl CompiledScript {
         source_name: &str,
         source: &str,
         limits: RuntimeLimits,
-    ) -> Result<(
-        Self,
-        Box<[String]>,
-        Box<[ModuleImport]>,
-        Box<[ModuleExport]>,
-    )> {
+    ) -> Result<CompiledModuleParts> {
         let (script, module) = Self::compile_with_name_and_mode_parts(
             Some(source_name),
             source,
