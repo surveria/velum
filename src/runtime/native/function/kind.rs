@@ -520,6 +520,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     WeakMap,
     WeakMapDelete,
     WeakMapGet,
+    WeakMapGetOrInsert,
+    WeakMapGetOrInsertComputed,
     WeakMapHas,
     WeakMapSet,
     WeakSet,

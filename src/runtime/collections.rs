@@ -326,10 +326,6 @@ impl Context {
                     .map(|(key, value)| (index, key.clone(), value.clone()))
             }))
     }
-
-    pub(in crate::runtime) const fn can_be_held_weakly(value: &Value) -> bool {
-        matches!(value, Value::Object(_) | Value::Symbol(_))
-    }
 }
 
 /// VM-local index of one live collection iterator snapshot.
