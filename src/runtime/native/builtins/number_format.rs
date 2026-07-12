@@ -47,23 +47,26 @@ impl Context {
     ) -> Result<Value> {
         let argument = args.as_slice().first().cloned();
         let value = self.number_receiver_value(this_value)?;
+        let requested = match argument {
+            None | Some(Value::Undefined) => None,
+            Some(value) => Some(self.number_digit_value(&value)?),
+        };
         if value.is_nan() {
             return self.heap_string_value(NAN_TEXT);
         }
         if !value.is_finite() {
             return self.heap_string_value(&format_ecmascript_number(value));
         }
-        let fraction = match argument {
-            None | Some(Value::Undefined) => None,
-            Some(value) => {
-                let requested = self.number_digit_value(&value)?;
-                if !(0.0..=f64::from(DIGIT_LIMIT)).contains(&requested) {
-                    return Err(Error::exception(
-                        ErrorName::RangeError,
-                        TO_EXPONENTIAL_RANGE_ERROR,
-                    ));
-                }
+        let fraction = match requested {
+            None => None,
+            Some(requested) if (0.0..=f64::from(DIGIT_LIMIT)).contains(&requested) => {
                 Some(Self::count_from_digits(requested))
+            }
+            Some(_) => {
+                return Err(Error::exception(
+                    ErrorName::RangeError,
+                    TO_EXPONENTIAL_RANGE_ERROR,
+                ));
             }
         };
         let text = Self::format_to_exponential(value, fraction);
@@ -80,13 +83,13 @@ impl Context {
         if matches!(argument, None | Some(Value::Undefined)) {
             return self.heap_string_value(&format_ecmascript_number(value));
         }
+        let precision = self.number_digit_value(&argument.unwrap_or(Value::Undefined))?;
         if value.is_nan() {
             return self.heap_string_value(NAN_TEXT);
         }
         if !value.is_finite() {
             return self.heap_string_value(&format_ecmascript_number(value));
         }
-        let precision = self.number_digit_value(&argument.unwrap_or(Value::Undefined))?;
         if !(1.0..=f64::from(DIGIT_LIMIT)).contains(&precision) {
             return Err(Error::exception(
                 ErrorName::RangeError,

@@ -124,6 +124,8 @@ fn supports_number_prototype_value_methods() -> TestResult {
         );
 
         constructed.valueOf() === 7 &&
+            Number.prototype.valueOf() === 0 &&
+            Object.prototype.toString.call(Number.prototype) === "[object Number]" &&
             objectBox.valueOf() === 255 &&
             objectBox.toString(16) === "ff" &&
             Number.prototype.toString.call(15, 2) === "1111" &&
