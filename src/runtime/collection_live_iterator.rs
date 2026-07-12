@@ -43,7 +43,9 @@ impl Context {
             Some(CollectionIteratorState::LiveCollection(state)) => Ok(match state.kind {
                 CollectionKind::Map => CollectionIteratorBrand::Map,
                 CollectionKind::Set => CollectionIteratorBrand::Set,
-                CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                CollectionKind::WeakMap
+                | CollectionKind::WeakSet
+                | CollectionKind::DisposableStack => {
                     return Err(Error::runtime(
                         "weak collection cannot have a live iterator",
                     ));

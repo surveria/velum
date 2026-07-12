@@ -55,8 +55,9 @@ pub(in crate::runtime::native) use function::{
 };
 pub(in crate::runtime) use function::{
     ArrayBufferFunctionKind, DATA_VIEW_NAME, DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME,
-    DATE_UTC_NAME, DataViewFunctionKind, DateFunctionKind, ITERATOR_NAME, IteratorFunctionKind,
-    NativeFunction, NativeFunctionKind, NativeFunctionRegistry, TypedArrayFunctionKind,
+    DATE_UTC_NAME, DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind,
+    DisposableStackFunctionKind, ITERATOR_NAME, IteratorFunctionKind, NativeFunction,
+    NativeFunctionKind, NativeFunctionRegistry, TypedArrayFunctionKind,
 };
 pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,

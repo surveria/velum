@@ -8,6 +8,7 @@ pub enum ErrorName {
     RangeError,
     ReferenceError,
     SyntaxError,
+    SuppressedError,
     Test262Error,
     TypeError,
     UriError,
@@ -22,6 +23,7 @@ impl ErrorName {
             Self::RangeError => "RangeError",
             Self::ReferenceError => "ReferenceError",
             Self::SyntaxError => "SyntaxError",
+            Self::SuppressedError => "SuppressedError",
             Self::Test262Error => "Test262Error",
             Self::TypeError => "TypeError",
             Self::UriError => "URIError",
@@ -36,6 +38,7 @@ impl ErrorName {
             "RangeError" => Some(Self::RangeError),
             "ReferenceError" => Some(Self::ReferenceError),
             "SyntaxError" => Some(Self::SyntaxError),
+            "SuppressedError" => Some(Self::SuppressedError),
             "Test262Error" => Some(Self::Test262Error),
             "TypeError" => Some(Self::TypeError),
             "URIError" => Some(Self::UriError),
@@ -48,10 +51,11 @@ impl ErrorName {
     }
 
     pub(crate) const fn constructor_length(self) -> f64 {
-        if matches!(self, Self::AggregateError) {
-            return 2.0;
+        match self {
+            Self::AggregateError => 2.0,
+            Self::SuppressedError => 3.0,
+            _ => 1.0,
         }
-        1.0
     }
 }
 

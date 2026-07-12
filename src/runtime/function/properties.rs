@@ -460,7 +460,7 @@ impl FunctionProperties {
                 PropertyUpdate::Data(_) => {}
             }
         }
-        if property_kind.is_prototype() {
+        if property_kind.is_prototype() && self.intrinsic_defaults.prototype.is_some() {
             if let PropertyUpdate::Data(update) = update
                 && let Some(value) = update.value()
             {

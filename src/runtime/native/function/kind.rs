@@ -9,6 +9,7 @@ use crate::runtime::{
 };
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
+mod core;
 mod math;
 mod promise;
 mod regexp;
@@ -277,6 +278,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     BoundFunction(BoundFunctionId),
     DataView(DataViewFunctionKind),
     Date(DateFunctionKind),
+    DisposableStack(super::disposable_stack_kind::DisposableStackFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     Iterator(IteratorFunctionKind),
     IteratorSelf,
@@ -437,6 +439,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ReflectSet,
     ReflectSetPrototypeOf,
     RegExp,
+    RegExpPrototypeCompile,
     RegExpPrototypeDotAllGetter,
     RegExpPrototypeExec,
     RegExpPrototypeFlagsGetter,
@@ -560,6 +563,9 @@ impl NativeFunctionKind {
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::Date(DateFunctionKind::Constructor)
+                | Self::DisposableStack(
+                    super::disposable_stack_kind::DisposableStackFunctionKind::Constructor,
+                )
         )
     }
 
@@ -568,6 +574,9 @@ impl NativeFunctionKind {
             return kind.length();
         }
         if let Self::DataView(kind) = self {
+            return kind.length();
+        }
+        if let Self::DisposableStack(kind) = self {
             return kind.length();
         }
         if let Self::ArrayBufferPrototype(kind) = self {
@@ -618,56 +627,14 @@ impl NativeFunctionKind {
         FUNCTION_FUNCTION_LENGTH
     }
 
-    const fn core_length(self) -> Option<f64> {
-        if let Some(length) = self.promise_length() {
-            return Some(length);
-        }
-        match self {
-            Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
-            Self::TypedArray(_)
-            | Self::AsyncGeneratorNext
-            | Self::AsyncGeneratorReturn
-            | Self::AsyncGeneratorThrow
-            | Self::GeneratorNext
-            | Self::GeneratorReturn
-            | Self::GeneratorThrow
-            | Self::PromiseCombinatorElement { .. } => Some(1.0),
-            Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
-            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
-            Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
-            Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
-            Self::Eval => Some(EVAL_FUNCTION_LENGTH),
-            Self::ErrorConstructor(name) => Some(name.constructor_length()),
-            Self::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_LENGTH),
-            Self::Function => Some(FUNCTION_FUNCTION_LENGTH),
-            Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_LENGTH),
-            Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
-            Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
-            Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
-            Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
-            Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
-            Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
-            Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
-            Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
-            Self::Number => Some(NUMBER_FUNCTION_LENGTH),
-            Self::Print | Self::ThrowTypeError | Self::TypedArrayIntrinsic => Some(0.0),
-            Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
-            Self::ProxyRevocable => Some(PROXY_REVOCABLE_FUNCTION_LENGTH),
-            Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
-            Self::SpeciesGetter => Some(SPECIES_GETTER_FUNCTION_LENGTH),
-            Self::String => Some(STRING_FUNCTION_LENGTH),
-            Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
-            Self::SymbolFor => Some(SYMBOL_FOR_FUNCTION_LENGTH),
-            Self::SymbolKeyFor => Some(SYMBOL_KEY_FOR_FUNCTION_LENGTH),
-            _ => None,
-        }
-    }
-
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         if let Self::Date(kind) = self {
             return kind.name();
         }
         if let Self::DataView(kind) = self {
+            return kind.name();
+        }
+        if let Self::DisposableStack(kind) = self {
             return kind.name();
         }
         if let Self::ArrayBufferPrototype(kind) = self {
@@ -751,49 +718,6 @@ impl NativeFunctionKind {
             Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_NAME),
             Self::ObjectSeal => Some(OBJECT_SEAL_NAME),
             Self::ObjectValues => Some(OBJECT_VALUES_NAME),
-            _ => None,
-        }
-    }
-
-    const fn core_name(self) -> Option<&'static str> {
-        if let Some(name) = self.promise_name() {
-            return Some(name);
-        }
-        match self {
-            Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
-            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_NAME),
-            Self::AsyncGeneratorNext | Self::GeneratorNext => Some("next"),
-            Self::AsyncGeneratorReturn | Self::GeneratorReturn => Some("return"),
-            Self::AsyncGeneratorThrow | Self::GeneratorThrow => Some("throw"),
-            Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
-            Self::Boolean => Some(BOOLEAN_NAME),
-            Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
-            Self::Eval => Some(EVAL_NAME),
-            Self::ErrorConstructor(name) => Some(name.as_str()),
-            Self::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_NAME),
-            Self::Function => Some(FUNCTION_NAME),
-            Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_NAME),
-            Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),
-            Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
-            Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
-            Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
-            Self::ThrowTypeError | Self::PromiseCombinatorElement { .. } => Some(""),
-            Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
-            Self::JsonParse => Some(JSON_PARSE_NAME),
-            Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),
-            Self::JsonStringify => Some(JSON_STRINGIFY_NAME),
-            Self::Number => Some(NUMBER_NAME),
-            Self::Print => Some("print"),
-            Self::Proxy => Some(PROXY_NAME),
-            Self::ProxyRevocable => Some(PROXY_REVOCABLE_NAME),
-            Self::ProxyRevoke(_) => Some(PROXY_REVOKE_NAME),
-            Self::SpeciesGetter => Some(SPECIES_GETTER_NAME),
-            Self::String => Some(STRING_NAME),
-            Self::Symbol => Some(SYMBOL_NAME),
-            Self::SymbolFor => Some("for"),
-            Self::SymbolKeyFor => Some("keyFor"),
-            Self::TypedArrayIntrinsic => Some("TypedArray"),
-            Self::TypedArray(kind) => Some(kind.name()),
             _ => None,
         }
     }

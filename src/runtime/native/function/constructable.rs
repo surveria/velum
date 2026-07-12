@@ -1,4 +1,7 @@
-use super::{DataViewFunctionKind, DateFunctionKind, IteratorFunctionKind, NativeFunctionKind};
+use super::{
+    DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind, IteratorFunctionKind,
+    NativeFunctionKind,
+};
 
 impl NativeFunctionKind {
     pub(in crate::runtime) const fn is_constructable(self) -> bool {
@@ -25,6 +28,7 @@ impl NativeFunctionKind {
                 | Self::WeakSet
                 | Self::TypedArray(_)
                 | Self::Date(DateFunctionKind::Constructor)
+                | Self::DisposableStack(DisposableStackFunctionKind::Constructor)
         )
     }
 }

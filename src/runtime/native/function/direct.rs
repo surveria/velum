@@ -531,6 +531,9 @@ impl Context {
             NativeFunctionKind::DataView(kind) => {
                 self.eval_data_view_native_function_kind(kind, args, this_value)
             }
+            NativeFunctionKind::DisposableStack(method) => {
+                self.eval_disposable_stack_function(method, args, this_value)
+            }
             NativeFunctionKind::TypedArrayIntrinsic => {
                 Err(Error::type_error("%TypedArray% is an abstract constructor"))
             }
