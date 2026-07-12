@@ -75,6 +75,9 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::HoistLexicalBinding { name, kind } => {
+                self.eval_bytecode_lexical_hoist(state, name, *kind, next)
+            }
             BytecodeInstruction::ResolveBinding(_)
             | BytecodeInstruction::StoreResolvedBinding(_) => {
                 self.eval_bytecode_resolved_binding_instruction(state, instruction, next)
@@ -112,6 +115,18 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_lexical_hoist(
+        &mut self,
+        state: &mut BytecodeState,
+        name: &crate::bytecode::BytecodeBinding,
+        kind: crate::syntax::DeclKind,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        self.hoist_bytecode_lexical_binding(name, kind)?;
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_typeof_instruction(

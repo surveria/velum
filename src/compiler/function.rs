@@ -70,6 +70,7 @@ impl BytecodeCompiler<'_> {
         &mut self,
         statements: &[Statement],
     ) -> Result<()> {
+        self.compile_block_lexical_hoists(statements)?;
         for statement in statements {
             let Stmt::FunctionDecl {
                 name,
@@ -87,11 +88,6 @@ impl BytecodeCompiler<'_> {
                 continue;
             };
             let binding = self.compile_binding(name)?;
-            self.emit(BytecodeInstruction::DeclareBinding {
-                name: binding.clone(),
-                kind: crate::syntax::DeclKind::Let,
-                has_init: false,
-            });
             self.emit(BytecodeInstruction::CreateFunction {
                 id: *id,
                 name: Some(name.name().clone()),
@@ -108,9 +104,53 @@ impl BytecodeCompiler<'_> {
                 kind: *kind,
                 new_target_mode: BytecodeNewTargetMode::Own,
             });
-            self.emit(BytecodeInstruction::StoreBinding(binding));
-            self.emit(BytecodeInstruction::Pop);
+            self.emit(BytecodeInstruction::DeclareBinding {
+                name: binding,
+                kind: crate::syntax::DeclKind::Let,
+                has_init: true,
+            });
         }
+        Ok(())
+    }
+
+    fn compile_block_lexical_hoists(&mut self, statements: &[Statement]) -> Result<()> {
+        for statement in statements {
+            match statement.kind() {
+                Stmt::DeclList(declarations) => {
+                    self.compile_block_lexical_hoists(declarations)?;
+                }
+                Stmt::VarDecl {
+                    name,
+                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    ..
+                } => self.emit_lexical_hoist(name, *kind)?,
+                Stmt::PatternDecl {
+                    pattern,
+                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    ..
+                } => pattern
+                    .for_each_binding(&mut |binding| self.emit_lexical_hoist(binding, *kind))?,
+                Stmt::ClassDecl { name, .. }
+                | Stmt::FunctionDecl {
+                    name,
+                    block_scoped: true,
+                    ..
+                } => self.emit_lexical_hoist(name, crate::syntax::DeclKind::Let)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_lexical_hoist(
+        &mut self,
+        name: &StaticBinding,
+        kind: crate::syntax::DeclKind,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::HoistLexicalBinding {
+            name: self.compile_binding(name)?,
+            kind,
+        });
         Ok(())
     }
 

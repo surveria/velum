@@ -480,6 +480,10 @@ pub enum BytecodeInstruction {
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),
     StoreAnnexBVar(StaticName),
+    HoistLexicalBinding {
+        name: BytecodeBinding,
+        kind: DeclKind,
+    },
     ResolveBinding(BytecodeBinding),
     StoreResolvedBinding(BytecodeBinding),
     DeclareBinding {

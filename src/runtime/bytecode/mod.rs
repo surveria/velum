@@ -59,6 +59,7 @@ impl Context {
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
             | BytecodeInstruction::StoreAnnexBVar(_)
+            | BytecodeInstruction::HoistLexicalBinding { .. }
             | BytecodeInstruction::ResolveBinding(_)
             | BytecodeInstruction::StoreResolvedBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }

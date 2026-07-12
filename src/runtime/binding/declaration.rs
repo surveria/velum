@@ -121,8 +121,9 @@ impl Context {
     pub(crate) fn hoist_bytecode_lexical_binding(
         &mut self,
         binding: &BytecodeBinding,
+        kind: DeclKind,
     ) -> Result<()> {
-        self.hoist_lexical(binding.name(), DeclKind::Let)
+        self.hoist_lexical(binding.name(), kind)
     }
 
     pub(crate) fn hoist_bytecode_var_declarations(

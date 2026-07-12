@@ -93,10 +93,10 @@ impl BytecodeInstruction {
             | Self::StoreResolvedBinding(binding)
             | Self::TypeOfBinding(binding)
             | Self::DeleteBinding(binding) => binding.direct_operand_count(),
-            Self::DeclareBinding { name, .. } => name.direct_operand_count(),
-            Self::UpdateBinding { name, .. } | Self::CompoundStoreBinding { name, .. } => {
-                name.direct_operand_count()
-            }
+            Self::DeclareBinding { name, .. }
+            | Self::HoistLexicalBinding { name, .. }
+            | Self::UpdateBinding { name, .. }
+            | Self::CompoundStoreBinding { name, .. } => name.direct_operand_count(),
             Self::CallBinding { callee, .. } | Self::CallBindingSpread { callee, .. } => {
                 callee.direct_operand_count()
             }

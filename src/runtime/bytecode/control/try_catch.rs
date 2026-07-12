@@ -208,10 +208,9 @@ impl Context {
         let resumes = state.is_resuming();
         if !resumes {
             self.push_lexical_scope()?;
-            let hoist_result = catch
-                .param_bindings
-                .iter()
-                .try_for_each(|binding| self.hoist_bytecode_lexical_binding(binding));
+            let hoist_result = catch.param_bindings.iter().try_for_each(|binding| {
+                self.hoist_bytecode_lexical_binding(binding, DeclKind::Let)
+            });
             if let Err(error) = hoist_result {
                 let removed = self.pop_lexical_scope()?;
                 if removed.is_none() {
