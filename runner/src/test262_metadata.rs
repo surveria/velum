@@ -29,7 +29,7 @@ const NEGATIVE_PHASE_PARSE: &str = "parse";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
-const TEST262_MAX_OBJECTS: usize = 65_536;
+const TEST262_MAX_OBJECTS: usize = 65_600;
 const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 1_048_576;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
@@ -49,6 +49,38 @@ let $DONOTEVALUATE = function () {
 };
 "#;
 const COMPAT_ASSERT_SOURCE: &str = r#"
+function isNegativeZero(value) {
+    return value === 0 && 1 / value === -Infinity;
+}
+function isPrimitive(value) {
+    return !value || (typeof value !== "object" && typeof value !== "function");
+}
+function formatIdentityFreeValue(value) {
+    if (typeof value === "string") {
+        return typeof JSON === "undefined" ? "\"" + value + "\"" : JSON.stringify(value);
+    }
+    if (typeof value === "number" && isNegativeZero(value)) {
+        return "-0";
+    }
+    if (isPrimitive(value)) {
+        return String(value);
+    }
+    return undefined;
+}
+function formatSimpleValue(value) {
+    let basic = formatIdentityFreeValue(value);
+    if (basic !== undefined) {
+        return basic;
+    }
+    try {
+        return String(value);
+    } catch (error) {
+        if (error.name === "TypeError") {
+            return Object.prototype.toString.call(value);
+        }
+        throw error;
+    }
+}
 let assert = function assert(mustBeTrue, message) {
     if (mustBeTrue === true) {
         return;
@@ -70,9 +102,9 @@ assert.notSameValue = function (actual, unexpected, message) {
     }
     throw new Test262Error(message || "Expected different values");
 };
-assert.compareArray = function (actual, expected, message) {
+function compareArray(actual, expected) {
     if (actual.length !== expected.length) {
-        throw new Test262Error(message || "Expected arrays to have the same length");
+        return false;
     }
     for (let index = 0; index < actual.length; index = index + 1) {
         if (actual[index] === expected[index]) {
@@ -81,8 +113,21 @@ assert.compareArray = function (actual, expected, message) {
         if (actual[index] !== actual[index] && expected[index] !== expected[index]) {
             continue;
         }
-        throw new Test262Error(message || "Expected arrays to contain the same values");
+        return false;
     }
+    return true;
+}
+compareArray.format = function (arrayLike) {
+    return "[" + Array.prototype.map.call(arrayLike, String).join(", ") + "]";
+};
+assert.compareArray = function (actual, expected, message) {
+    if (isPrimitive(actual) || isPrimitive(expected)) {
+        throw new Test262Error(message || "Expected non-primitive array-like values");
+    }
+    if (compareArray(actual, expected)) {
+        return;
+    }
+    throw new Test262Error(message || "Expected arrays to contain the same values");
 };
 assert.throws = function (expectedErrorConstructor, func, message) {
     let threw = false;
@@ -101,6 +146,8 @@ assert.throws = function (expectedErrorConstructor, func, message) {
     }
     throw new Test262Error(message || "Unexpected thrown error type");
 };
+assert._formatIdentityFreeValue = formatIdentityFreeValue;
+assert._toString = formatSimpleValue;
 "#;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -484,14 +531,14 @@ struct HarnessSource {
 
 #[cfg(test)]
 mod tests {
-    use rs_quickjs::{Error, Runtime};
+    use rs_quickjs::{Error, Runtime, Value};
 
     use super::{
-        ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE,
-        FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW, HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE,
-        HARNESS_STA, MODULE_VARIANT, RAW_VARIANT, STRICT_VARIANT, Test262Metadata, VariantPlan,
-        ensure_async_completion, execution_error_matches, harness_names, parse_metadata,
-        variant_id, variant_plans,
+        ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_ASSERT_SOURCE, COMPAT_STA_SOURCE,
+        DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE, FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW,
+        HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE, HARNESS_STA, MODULE_VARIANT, RAW_VARIANT,
+        STRICT_VARIANT, Test262Metadata, VariantPlan, ensure_async_completion,
+        execution_error_matches, harness_names, parse_metadata, variant_id, variant_plans,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -620,6 +667,31 @@ bad source
     }
 
     #[test]
+    fn compatibility_assert_preserves_mandatory_global_helpers() -> TestResult {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        context.eval(COMPAT_STA_SOURCE)?;
+        context.eval(COMPAT_ASSERT_SOURCE)?;
+        let result = context.eval(
+            r#"
+                isNegativeZero(-0) &&
+                !isNegativeZero(0) &&
+                isPrimitive(undefined) &&
+                isPrimitive(null) &&
+                isPrimitive(false) &&
+                isPrimitive(1) &&
+                isPrimitive("value") &&
+                !isPrimitive({}) &&
+                !isPrimitive(function () {}) &&
+                compareArray([1, NaN], [1, NaN]) &&
+                compareArray.format([1, 2]) === "[1, 2]" &&
+                assert._formatIdentityFreeValue(-0) === "-0"
+            "#,
+        )?;
+        ensure_value(&result, &Value::Bool(true))
+    }
+
+    #[test]
     fn accepts_single_async_completion_signal() -> TestResult {
         ensure_unit(ensure_async_completion(
             "test/example.js",
@@ -705,6 +777,13 @@ bad source
             return Ok(());
         }
         Err("expected true".into())
+    }
+
+    fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("expected {expected:?}, got {actual:?}").into())
     }
 
     fn ensure_unit(result: anyhow::Result<()>) -> TestResult {

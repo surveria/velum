@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09y adds one shared resizable and detachable ArrayBuffer lifecycle owner for buffers and every typed view. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09z restores the mandatory Test262 assertion-harness contract at the runner boundary without adding engine semantics. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2891,7 +2891,7 @@ AS-09x profile evidence in draft PR #489:
 - required exact-tree correctness and canonical publication remain before
   AS-09x can close.
 
-AS-09y profile evidence in draft PR #492:
+AS-09y canonical evidence from PR #492:
 
 - `ByteBuffer` retains one `Rc<RefCell<ByteBufferState>>` across the owning
   ArrayBuffer object and every TypedArray/DataView clone. The state owns the
@@ -2905,16 +2905,43 @@ AS-09y profile evidence in draft PR #492:
   `ArrayBuffer.isView` checks the existing typed internal slots. Slice reuses
   semantic species lookup and construction instead of adding a parallel
   constructor path;
-- three direct lifecycle cases cover metadata and view detection, resizable
+- five direct lifecycle cases cover metadata and view detection, resizable
   growth/shrink over shared bytes, slicing, transfer, detachment, zero fill,
   and resizability preservation;
-- the exact focused ArrayBuffer profile advances from 56/442 to 320/442
-  variants and from 28/221 to 160/221 files. Residuals belong to immutable
+- the exact focused ArrayBuffer profile advances from 56/442 to 322/442
+  variants and from 28/221 to 161/221 files. Residuals belong to immutable
   ArrayBuffer proposal methods, SharedArrayBuffer, `$262` realm/detach hooks,
   BigInt syntax, allocation ceilings, and the separately owned native-subclass
   `newTarget` boundary;
+- exact-tree run `29184135161` certifies tree `9164b514` with no lost pass.
+  PR #492 merged as `b3a2cc8`; trusted recovery run `29184321537` supplied the
+  exact merged-tree correctness artifact, and post-merge run `29184282439`
+  published canonical report `20260712T073236Z` in `e1c3ef7`, reaching 70,658
+  passing variants and 36,650 conforming files; AS-09y is complete.
+
+AS-09z profile evidence in draft PR #494:
+
+- the runner intentionally uses syntax-compatible replacements for mandatory
+  Test262 `sta.js` and `assert.js`, but the assertion replacement exposed only
+  the `assert` object and omitted the upstream file's global helper contract;
+- the compatibility source now owns `isNegativeZero`, `isPrimitive`,
+  `formatIdentityFreeValue`, `formatSimpleValue`, and `compareArray`, while
+  the global and assertion array-comparison surfaces share the same compatible
+  equality behavior;
+- an executable runner unit test evaluates the compatibility harness in the
+  local engine and covers primitives, objects, functions, NaN, negative-zero
+  detection,
+  formatting, and the global comparison function;
+- the per-case object ceiling reserves 64 records above the prior 65,536-case
+  budget for the restored mandatory harness functions. This keeps existing
+  allocation-heavy URI cases stable without weakening engine storage limits;
+- the exact `built-ins/TypedArray/` profile advances from 702/2,876 to
+  1,368/2,876 variants and from 351/1,446 to 688/1,446 conforming files. The
+  538 `isPrimitive` and 120 `compareArray` missing-binding diagnostic groups
+  disappear, leaving engine-owned BigInt, `$262`, SharedArrayBuffer, resource,
+  and TypedArray semantic gaps visible;
 - required exact-tree correctness and canonical publication remain before
-  AS-09y can close.
+  AS-09z can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
