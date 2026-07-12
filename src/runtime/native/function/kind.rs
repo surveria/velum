@@ -130,6 +130,7 @@ pub(in crate::runtime::native) const MATH_TANH_NAME: &str = "tanh";
 pub(in crate::runtime::native) const MATH_TRUNC_NAME: &str = "trunc";
 const MATH_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime) const NAN_NAME: &str = "NaN";
+pub(in crate::runtime) const UNDEFINED_NAME: &str = "undefined";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_IS_FINITE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const NUMBER_IS_FINITE_NAME: &str = "isFinite";

@@ -41,7 +41,6 @@ pub(super) const fn keyword_property_name(kind: &TokenKind) -> Option<&'static s
         TokenKind::True => Some("true"),
         TokenKind::False => Some("false"),
         TokenKind::Null => Some("null"),
-        TokenKind::Undefined => Some("undefined"),
         _ => None,
     }
 }

@@ -1,15 +1,16 @@
 use crate::{
     binding_metadata::BindingOperand,
     bytecode::{
-        BytecodeBinding, BytecodeFunction, BytecodeFunctionParam, BytecodeInstruction,
-        BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-        BytecodeNumericEqualityOp,
+        BytecodeBinding, BytecodeCompletion, BytecodeFunction, BytecodeFunctionParam,
+        BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
+        BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     },
     error::{Error, Result},
     runtime::{
         CompiledBindingFrame, Context,
         binding::scope::BindingCell,
         control::{Completion, reference_error_undefined},
+        native::UNDEFINED_NAME,
         numeric::number_exponentiate,
     },
     syntax::{DeclKind, StaticString},
@@ -249,23 +250,23 @@ impl Context {
             [
                 BytecodeInstruction::PushLiteral(value),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() => {
+            ] if is_return(completion) => {
                 Ok(Some(Completion::Return(self.runtime_value(value.clone())?)))
             }
             [
                 BytecodeInstruction::PushString(value),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() => {
+            ] if is_return(completion) => {
                 Ok(Some(Completion::Return(self.static_string_value(value)?)))
             }
             [
                 BytecodeInstruction::PushUndefined,
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() => Ok(Some(Completion::Return(Value::Undefined))),
+            ] if is_return(completion) => Ok(Some(Completion::Return(Value::Undefined))),
             [
                 BytecodeInstruction::LoadBinding(binding),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() => {
+            ] if is_return(completion) => {
                 let value = self.fast_function_load_binding(binding)?;
                 Ok(Some(Completion::Return(value)))
             }
@@ -274,7 +275,7 @@ impl Context {
                 BytecodeInstruction::LoadBinding(right),
                 BytecodeInstruction::NumberBinary(op),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() => self.fast_function_return_binary(*op, left, right),
+            ] if is_return(completion) => self.fast_function_return_binary(*op, left, right),
             [
                 BytecodeInstruction::LoadBinding(left),
                 BytecodeInstruction::LoadBinding(right),
@@ -286,7 +287,7 @@ impl Context {
                 },
                 BytecodeInstruction::LoadBinding(returned),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() && same_bytecode_binding(returned, name) => {
+            ] if is_return(completion) && same_bytecode_binding(returned, name) => {
                 self.fast_function_declare_binary_return(*op, left, right, name)
             }
             [
@@ -297,7 +298,7 @@ impl Context {
                 BytecodeInstruction::StoreLast,
                 BytecodeInstruction::LoadBinding(returned),
                 BytecodeInstruction::Complete(completion),
-            ] if completion.is_return() && same_bytecode_binding(returned, target) => {
+            ] if is_return(completion) && same_bytecode_binding(returned, target) => {
                 self.fast_function_store_binary_return(*op, left, right, target)
             }
             [
@@ -513,25 +514,25 @@ fn compile_function_fast_path_kind(
         [
             BytecodeInstruction::PushLiteral(value),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             Ok(Some(FunctionFastPathKind::ReturnLiteral(value.clone())))
         }
         [
             BytecodeInstruction::PushString(value),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             Ok(Some(FunctionFastPathKind::ReturnString(value.clone())))
         }
         [
             BytecodeInstruction::PushUndefined,
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             Ok(Some(FunctionFastPathKind::ReturnUndefined))
         }
         [
             BytecodeInstruction::LoadBinding(binding),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             Ok(source_for_binding(param_frames, binding)?.map(FunctionFastPathKind::ReturnSource))
         }
         [
@@ -539,7 +540,7 @@ fn compile_function_fast_path_kind(
             BytecodeInstruction::LoadBinding(right),
             BytecodeInstruction::NumberBinary(op),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             compile_return_binary_kind(param_frames, *op, left, right)
         }
         [
@@ -547,7 +548,7 @@ fn compile_function_fast_path_kind(
             BytecodeInstruction::PushLiteral(Value::Number(right)),
             BytecodeInstruction::NumberCompare(op),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             compile_return_compare_number_kind(param_frames, *op, left, *right)
         }
         [
@@ -555,7 +556,7 @@ fn compile_function_fast_path_kind(
             BytecodeInstruction::PushLiteral(Value::Number(right)),
             BytecodeInstruction::NumberEquality(op),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             compile_return_equality_number_kind(param_frames, *op, left, *right)
         }
         [
@@ -565,7 +566,7 @@ fn compile_function_fast_path_kind(
             BytecodeInstruction::PushLiteral(Value::Number(expected)),
             BytecodeInstruction::NumberEquality(equality_op),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+        ] if is_return(completion) && has_empty_hoist(bytecode) => {
             compile_return_binary_number_equality_kind(
                 param_frames,
                 *binary_op,
@@ -586,7 +587,7 @@ fn compile_function_fast_path_kind(
             },
             BytecodeInstruction::LoadBinding(returned),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return()
+        ] if is_return(completion)
             && same_bytecode_binding(returned, name)
             && has_single_var_hoist(bytecode, name) =>
         {
@@ -600,7 +601,7 @@ fn compile_function_fast_path_kind(
             BytecodeInstruction::StoreLast,
             BytecodeInstruction::LoadBinding(returned),
             BytecodeInstruction::Complete(completion),
-        ] if completion.is_return()
+        ] if is_return(completion)
             && same_bytecode_binding(returned, target)
             && has_empty_hoist(bytecode) =>
         {
@@ -711,6 +712,10 @@ fn source_for_binding(
     param_frames: &[Option<CompiledBindingFrame>],
     binding: &BytecodeBinding,
 ) -> Result<Option<FastValueSource>> {
+    if binding.operand() == BindingOperand::Unresolved && binding.name().as_str() == UNDEFINED_NAME
+    {
+        return Ok(Some(FastValueSource::Literal(Value::Undefined)));
+    }
     if let Some(index) = param_index_for_operand(param_frames, binding.operand())? {
         return Ok(Some(FastValueSource::Param(index)));
     }
@@ -788,12 +793,6 @@ fn fast_upvalue_cell(upvalues: &[BindingCell], slot: usize) -> Result<BindingCel
         .ok_or_else(|| Error::runtime("function fast path upvalue slot is not defined"))
 }
 
-trait BytecodeCompletionExt {
-    fn is_return(&self) -> bool;
-}
-
-impl BytecodeCompletionExt for crate::bytecode::BytecodeCompletion {
-    fn is_return(&self) -> bool {
-        matches!(self, Self::Return)
-    }
+const fn is_return(completion: &BytecodeCompletion) -> bool {
+    matches!(completion, BytecodeCompletion::Return)
 }

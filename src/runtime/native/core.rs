@@ -19,8 +19,8 @@ use super::{
     INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
     PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
-    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, WEAK_MAP_NAME,
-    WEAK_SET_NAME,
+    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, UNDEFINED_NAME,
+    WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -86,6 +86,9 @@ impl Context {
             MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
                 .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
+                .map(Some),
+            UNDEFINED_NAME => self
+                .global_constant_value(UNDEFINED_NAME, Value::Undefined)
                 .map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
@@ -309,7 +312,13 @@ impl Context {
     }
 
     fn global_constant_value(&mut self, name: &str, value: Value) -> Result<Value> {
-        self.insert_global_builtin(name, value.clone())?;
+        let atom = self.intern_atom(name)?;
+        if !self.realm.builtin_globals.contains(atom) {
+            self.ensure_extra_binding_capacity(1)?;
+            self.realm
+                .builtin_globals
+                .insert(atom, BindingCell::immutable_global(value.clone()))?;
+        }
         Ok(value)
     }
 

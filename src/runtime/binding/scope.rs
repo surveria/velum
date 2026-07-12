@@ -548,6 +548,15 @@ impl BindingCell {
         })))
     }
 
+    pub(in crate::runtime) fn immutable_global(value: Value) -> Self {
+        Self(Rc::new(Mutex::new(Binding {
+            state: BindingState::Initialized(value),
+            mutable: false,
+            immutable_assignment: ImmutableAssignment::ThrowIfStrict,
+            kind: DeclKind::Const,
+        })))
+    }
+
     pub fn uninitialized(mutable: bool, kind: DeclKind) -> Self {
         Self(Rc::new(Mutex::new(Binding {
             state: BindingState::Uninitialized,

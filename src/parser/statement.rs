@@ -205,6 +205,10 @@ impl Parser {
     }
 
     pub(super) fn function_body(&mut self, inherited_strict: bool) -> Result<ParsedFunctionBody> {
+        self.function_body_depth = self
+            .function_body_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("function body nesting overflowed"))?;
         let previous_strict = self.is_strict_mode();
         let previous_function_scope = self.function_declaration_context;
         self.set_strict_mode(inherited_strict);
@@ -212,6 +216,7 @@ impl Parser {
         let result = self.function_body_inner();
         self.function_declaration_context = previous_function_scope;
         self.set_strict_mode(previous_strict);
+        self.function_body_depth = self.function_body_depth.saturating_sub(1);
         result
     }
 
@@ -599,21 +604,43 @@ impl Parser {
     }
 
     fn throw_statement(&mut self) -> Result<Stmt> {
+        if self.peek_has_line_terminator_before(0) {
+            return Err(self.parse_error("line terminator is not allowed after 'throw'"));
+        }
         let value = self.expression()?;
-        self.consume_optional_semicolon();
+        self.consume_restricted_statement_terminator(
+            "expected statement terminator after throw expression",
+        )?;
         Ok(Stmt::Throw(value))
     }
 
     fn return_statement(&mut self) -> Result<Stmt> {
-        let value =
-            if self.check(&TokenKind::Semicolon) || self.check(&TokenKind::RBrace) || self.at_end()
-            {
-                None
-            } else {
-                Some(self.expression()?)
-            };
-        self.consume_optional_semicolon();
+        if self.function_body_depth == 0 {
+            return Err(self.parse_error("return statement outside function"));
+        }
+        let value = if self.peek_has_line_terminator_before(0)
+            || self.check(&TokenKind::Semicolon)
+            || self.check(&TokenKind::RBrace)
+            || self.at_end()
+        {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume_restricted_statement_terminator(
+            "expected statement terminator after return statement",
+        )?;
         Ok(Stmt::Return(value))
+    }
+
+    fn consume_restricted_statement_terminator(&mut self, message: &str) -> Result<()> {
+        // Tagged templates are a documented deferred grammar. The expression
+        // parser leaves their TemplateHead suffix at the cursor, so it must not
+        // be misclassified as a separate statement missing a terminator.
+        if matches!(self.peek_kind(0), Some(TokenKind::TemplateHead(_))) {
+            return Ok(());
+        }
+        self.consume_statement_terminator(message)
     }
 
     pub(super) fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {

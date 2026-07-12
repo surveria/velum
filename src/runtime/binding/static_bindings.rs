@@ -10,7 +10,7 @@ use crate::{
     runtime::binding::scope::{BindingCell, BindingScope, BindingSlot},
     runtime::control::reference_error_undefined,
     runtime::native::NativeFunctionKind,
-    runtime::native::{INFINITY_NAME, NAN_NAME},
+    runtime::native::{INFINITY_NAME, NAN_NAME, UNDEFINED_NAME},
     runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
     storage::atom::AtomId,
     syntax::{DeclKind, StaticBinding, StaticBindingId},
@@ -389,7 +389,10 @@ impl Context {
         if let Some(builtin) = self.realm.builtin_globals.get(atom)
             && builtin.same_cell(cell)
         {
-            if matches!(binding.name().as_str(), NAN_NAME | INFINITY_NAME) {
+            if matches!(
+                binding.name().as_str(),
+                NAN_NAME | INFINITY_NAME | UNDEFINED_NAME
+            ) {
                 return cell.assign_bytecode(binding.name(), value, binding.strict_write());
             }
             if builtin.kind() == DeclKind::Var {

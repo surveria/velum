@@ -1,7 +1,7 @@
 use crate::{
     error::Result,
     runtime::binding::scope::BindingCell,
-    runtime::native::{GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME},
+    runtime::native::{GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, UNDEFINED_NAME},
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
         OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
@@ -355,12 +355,12 @@ impl Context {
         let Some(value) = self.global_binding_property_value(lookup.name())? else {
             return Ok(None);
         };
-        let writable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME) {
+        let writable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
             PropertyWritable::No
         } else {
             PropertyWritable::Yes
         };
-        let configurable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME) {
+        let configurable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
             PropertyConfigurable::No
         } else {
             PropertyConfigurable::Yes

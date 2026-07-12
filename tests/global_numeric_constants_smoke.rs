@@ -47,13 +47,16 @@ fn exposes_global_numeric_constants_as_immutable_bindings() -> TestResult {
         &["number true true true", "false false false true"],
     )?;
 
-    let Err(error) = context.eval("NaN = 7") else {
-        return Err("expected assigning NaN to fail".into());
+    let value = context.eval("NaN = 7; Infinity += 1; NaN !== NaN && Infinity > 1e300")?;
+    ensure_value(&value, &Value::Bool(true))?;
+
+    let Err(error) = context.eval(r#""use strict"; NaN = 7"#) else {
+        return Err("expected strict assignment to NaN to fail".into());
     };
     ensure_error_contains(&error, "assignment to constant 'NaN'")?;
 
-    let Err(error) = context.eval("Infinity += 1") else {
-        return Err("expected compound-assigning Infinity to fail".into());
+    let Err(error) = context.eval(r#""use strict"; Infinity += 1"#) else {
+        return Err("expected strict compound assignment to Infinity to fail".into());
     };
     ensure_error_contains(&error, "assignment to constant 'Infinity'")
 }

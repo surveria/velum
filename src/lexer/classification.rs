@@ -64,7 +64,6 @@ pub(super) fn identifier_kind(text: String, escaped: bool) -> TokenKind {
         "true" => TokenKind::True,
         "false" => TokenKind::False,
         "null" => TokenKind::Null,
-        "undefined" => TokenKind::Undefined,
         _ => TokenKind::Identifier(text),
     }
 }
@@ -83,7 +82,6 @@ pub(super) const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
             | TokenKind::True
             | TokenKind::False
             | TokenKind::Null
-            | TokenKind::Undefined
             | TokenKind::PlusPlus
             | TokenKind::MinusMinus
             | TokenKind::RParen

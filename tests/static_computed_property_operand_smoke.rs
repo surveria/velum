@@ -29,7 +29,7 @@ fn static_computed_literal_reads_do_not_intern_missing_property_names() -> TestR
     let atom_count = vm.resource_usage().atom_count;
     let script = vm.compile(
         r#"
-        holder["present"] + (holder["missingStaticComputedSlot"] === undefined ? 1 : 0)
+        holder["present"] + (holder["missingStaticComputedSlot"] === void 0 ? 1 : 0)
         "#,
     )?;
     ensure_usize(script.usage().static_property_access_count(), 2)?;
