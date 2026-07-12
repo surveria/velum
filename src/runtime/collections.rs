@@ -10,6 +10,7 @@ use crate::{
 };
 
 use super::collection_array_iterator::LiveArrayIteratorState;
+use super::collection_regexp_iterator::RegExpStringIteratorState;
 
 pub(in crate::runtime) use super::collection_storage::{CollectionData, CollectionKind};
 
@@ -334,10 +335,10 @@ impl CollectionIteratorId {
 const ITERATOR_HELPER_ITEM_CHARGE: usize = 5;
 /// Fixed ledger charge for a wrapped iterator: the target and its `next`.
 const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
+const REGEXP_STRING_ITERATOR_ITEM_CHARGE: usize = 2;
 
-/// One live runtime iterator record. The arena also hosts lazy iterator-helper and
-/// `Iterator.from` wrapper states because the storage field and ledger kinds
-/// (`CollectionIterator` / `IteratorItem`) are frozen accounting categories.
+/// One live iterator record, including lazy helpers and `Iterator.from` wrappers.
+/// Its frozen ledger categories are `CollectionIterator` and `IteratorItem`.
 #[derive(Debug, Clone)]
 pub(in crate::runtime) enum CollectionIteratorState {
     Snapshot(SnapshotIteratorState),
@@ -346,6 +347,7 @@ pub(in crate::runtime) enum CollectionIteratorState {
     Helper(IteratorHelperState),
     Static(IteratorStaticState),
     Wrap(WrappedIteratorState),
+    RegExpString(RegExpStringIteratorState),
 }
 
 #[derive(Debug, Clone)]
@@ -490,6 +492,15 @@ impl CollectionIteratorState {
                 }
                 Ok(())
             }
+            Self::RegExpString(state) => {
+                for value in [&state.matcher, &state.input] {
+                    visitor.visit(
+                        VmAsyncEdgeKind::IteratorItem,
+                        StrongEdgeReference::Value(value),
+                    )?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -503,6 +514,7 @@ impl CollectionIteratorState {
             Self::Helper(_) => Ok(ITERATOR_HELPER_ITEM_CHARGE),
             Self::Static(state) => state.item_charge(),
             Self::Wrap(_) => Ok(WRAPPED_ITERATOR_ITEM_CHARGE),
+            Self::RegExpString(_) => Ok(REGEXP_STRING_ITERATOR_ITEM_CHARGE),
         }
     }
 }

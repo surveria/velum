@@ -89,14 +89,41 @@ pub(super) fn escaped_regexp_source_utf16(pattern: &[u16]) -> Vec<u16> {
         return "(?:)".encode_utf16().collect();
     }
     let mut escaped = Vec::new();
+    let mut escaped_by_backslash = false;
     for unit in pattern {
         match *unit {
-            0x002F => escaped.extend("\\/".encode_utf16()),
-            0x000A => escaped.extend("\\n".encode_utf16()),
-            0x000D => escaped.extend("\\r".encode_utf16()),
-            0x2028 => escaped.extend("\\u2028".encode_utf16()),
-            0x2029 => escaped.extend("\\u2029".encode_utf16()),
-            unit => escaped.push(unit),
+            0x005C => {
+                escaped.push(*unit);
+                escaped_by_backslash = !escaped_by_backslash;
+            }
+            0x002F => {
+                if escaped_by_backslash {
+                    escaped.push(*unit);
+                } else {
+                    escaped.extend("\\/".encode_utf16());
+                }
+                escaped_by_backslash = false;
+            }
+            0x000A => {
+                escaped.extend("\\n".encode_utf16());
+                escaped_by_backslash = false;
+            }
+            0x000D => {
+                escaped.extend("\\r".encode_utf16());
+                escaped_by_backslash = false;
+            }
+            0x2028 => {
+                escaped.extend("\\u2028".encode_utf16());
+                escaped_by_backslash = false;
+            }
+            0x2029 => {
+                escaped.extend("\\u2029".encode_utf16());
+                escaped_by_backslash = false;
+            }
+            unit => {
+                escaped.push(unit);
+                escaped_by_backslash = false;
+            }
         }
     }
     escaped

@@ -30,6 +30,7 @@ pub mod call;
 mod clock;
 pub(in crate::runtime) mod collection_array_iterator;
 mod collection_live_iterator;
+mod collection_regexp_iterator;
 mod collection_storage;
 pub mod collections;
 pub mod control;

@@ -561,9 +561,17 @@ impl Context {
         items: Vec<Value>,
         tag: &str,
     ) -> Result<Value> {
+        let iterator_id = self.create_collection_iterator(items)?;
+        self.create_tagged_iterator_state_object(iterator_id, tag)
+    }
+
+    pub(in crate::runtime::native) fn create_tagged_iterator_state_object(
+        &mut self,
+        iterator_id: CollectionIteratorId,
+        tag: &str,
+    ) -> Result<Value> {
         // Tagged per-kind prototypes chain to the shared iterator helpers.
         let iterator_prototype = self.iterator_prototype_object_id()?;
-        let iterator_id = self.create_collection_iterator(items)?;
         let next = self.create_native_function(
             NativeFunctionKind::CollectionIteratorNext(iterator_id),
             Value::Undefined,
