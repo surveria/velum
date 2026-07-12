@@ -122,20 +122,112 @@ fn supports_array_concat_method() -> TestResult {
 }
 
 #[test]
-fn rejects_array_concat_on_non_array_receiver() -> TestResult {
+fn supports_array_concat_on_non_array_receiver() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
-        r"
-        let object = {};
+    let value = context.eval(
+        r#"
+        let object = { 0: "first", length: 1 };
         object.concat = Array.prototype.concat;
-        object.concat([]);
-        ",
-    ) else {
-        return Err("expected Array.prototype.concat on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&error, "requires an array receiver")
+        let result = object.concat(["second"]);
+        result.length === 2 && result[0] === object && result[1] === "second" ? 42 : 0;
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn honors_concat_spreadability_and_sparse_array_like_values() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const sparse = { 1: "one", 3: "three", length: 4 };
+        sparse[Symbol.isConcatSpreadable] = true;
+        const nested = ["nested"];
+        nested[Symbol.isConcatSpreadable] = false;
+        const result = ["zero"].concat(sparse, nested, "tail");
+        "" + result.length + ":" + result[0]
+            + ":" + (1 in result) + ":" + result[2]
+            + ":" + (3 in result) + ":" + result[4]
+            + ":" + (result[5] === nested) + ":" + result[6]
+        "#,
+    )?;
+    ensure_value(
+        &value,
+        &Value::String("7:zero:false:one:false:three:true:tail".to_owned()),
+    )
+}
+
+#[test]
+fn uses_array_species_before_spreadability_lookup() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const calls = [];
+        const source = [];
+        function Result(length) {
+            calls.push("species:" + length);
+            this.length = length;
+            this.marker = "custom";
+        }
+        Object.defineProperty(source, "constructor", {
+            configurable: true,
+            get: function () {
+                calls.push("constructor");
+                return { [Symbol.species]: Result };
+            }
+        });
+        Object.defineProperty(source, Symbol.isConcatSpreadable, {
+            configurable: true,
+            get: function () {
+                calls.push("spreadable");
+                return true;
+            }
+        });
+        const result = source.concat("value");
+        "" + result.marker + ":" + result.length + ":" + result[0]
+            + ":" + calls.join(",")
+        "#,
+    )?;
+    ensure_value(
+        &value,
+        &Value::String("custom:1:value:constructor,species:0,spreadable".to_owned()),
+    )
+}
+
+#[test]
+fn propagates_spreadable_and_length_getter_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function kind(callback) {
+            try {
+                callback();
+                return "none";
+            } catch (error) {
+                return error.name;
+            }
+        }
+        const spreadableError = {};
+        Object.defineProperty(spreadableError, Symbol.isConcatSpreadable, {
+            get: function () { throw new RangeError("spreadable"); }
+        });
+        const lengthError = { [Symbol.isConcatSpreadable]: true };
+        Object.defineProperty(lengthError, "length", {
+            get: function () { throw new SyntaxError("length"); }
+        });
+        "" + kind(function () { [].concat(spreadableError); })
+            + ":" + kind(function () { [].concat(lengthError); })
+        "#,
+    )?;
+    ensure_value(&value, &Value::String("RangeError:SyntaxError".to_owned()))
 }
 
 #[test]

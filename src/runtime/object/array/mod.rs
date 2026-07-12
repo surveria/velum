@@ -22,7 +22,6 @@ pub(super) use storage::ArrayStorage;
 use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty, ShapeTable};
 use fast::ArrayCopyLimits;
 
-const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
 const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
@@ -33,12 +32,6 @@ const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array 
 const ARRAY_REVERSE_RECEIVER_ERROR: &str = "Array.prototype.reverse requires an array receiver";
 const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
 const INDEX_NOT_FOUND: f64 = -1.0;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct ArrayCopyProgress {
-    pub(super) next_index: usize,
-    pub(super) source_index: usize,
-}
 
 impl ObjectHeap {
     pub(crate) fn array_push(
@@ -191,57 +184,6 @@ impl ObjectHeap {
             self.reverse_array_pair(id, lower_index, upper_index, max_properties)?;
         }
         Ok(Value::Object(id))
-    }
-
-    pub(crate) fn array_concat(
-        &mut self,
-        id: ObjectId,
-        values: &[Value],
-        prototype: ObjectId,
-        max_objects: usize,
-        max_properties: usize,
-    ) -> Result<Value> {
-        let this_length = self.array_length_for_method(id, ARRAY_CONCAT_RECEIVER_ERROR)?;
-        if let Some(value) = self.create_packed_array_concat(
-            id,
-            this_length,
-            values,
-            prototype,
-            max_objects,
-            max_properties,
-        )? {
-            return Ok(value);
-        }
-        let result = self.create_array_with_length(0, prototype, max_objects)?;
-        let Value::Object(result_id) = result else {
-            return Err(Error::runtime("array concat result is not an object"));
-        };
-
-        let mut next_index = 0;
-        self.concat_array_source(result_id, &mut next_index, id, this_length, max_properties)?;
-
-        for value in values {
-            if let Value::Object(source_id) = value
-                && let Some(length) = self.array_length_if_array(*source_id)?
-            {
-                self.concat_array_source(
-                    result_id,
-                    &mut next_index,
-                    *source_id,
-                    length,
-                    max_properties,
-                )?;
-            } else {
-                self.concat_single_value(
-                    result_id,
-                    &mut next_index,
-                    value.clone(),
-                    max_properties,
-                )?;
-            }
-        }
-        self.object_mut(result_id)?.array_length = Some(ArrayLength::from_usize(next_index)?);
-        Ok(Value::Object(result_id))
     }
 
     pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
@@ -550,89 +492,6 @@ impl ObjectHeap {
         Ok(object.array_length)
     }
 
-    fn concat_array_source(
-        &mut self,
-        result_id: ObjectId,
-        next_index: &mut usize,
-        source_id: ObjectId,
-        length: ArrayLength,
-        max_properties: usize,
-    ) -> Result<()> {
-        let length = length.to_usize()?;
-        let progress = self.concat_own_array_prefix(
-            result_id,
-            *next_index,
-            source_id,
-            length,
-            max_properties,
-        )?;
-        *next_index = progress.next_index;
-
-        for source_index in progress.source_index..length {
-            let source_index = ArrayIndex::from_usize(source_index)?;
-            if let Some(value) = self.array_property_value_by_index(source_id, source_index)? {
-                self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
-            }
-            *next_index = Self::next_concat_index(*next_index)?;
-        }
-        Ok(())
-    }
-
-    fn concat_own_array_prefix(
-        &mut self,
-        result_id: ObjectId,
-        start_index: usize,
-        source_id: ObjectId,
-        length: usize,
-        max_properties: usize,
-    ) -> Result<ArrayCopyProgress> {
-        if let Some(progress) = self.holey_concat_array_prefix_without_indexed_prototype(
-            result_id,
-            start_index,
-            source_id,
-            length,
-            max_properties,
-        )? {
-            return Ok(progress);
-        }
-
-        let shapes = &self.shapes;
-        let (source, result) =
-            Self::object_pair_for_concat(&mut self.objects, source_id, result_id)?;
-        if result.array_length.is_none() {
-            return Err(Error::runtime("array concat result is not an array"));
-        }
-        if let Some(properties) = source.packed_array_properties(length) {
-            let mut next_index = start_index;
-            for property in properties {
-                let target_index = ArrayIndex::from_usize(next_index)?;
-                result.set_array_index(target_index, property.value(), max_properties)?;
-                next_index = Self::next_concat_index(next_index)?;
-            }
-            return Ok(ArrayCopyProgress {
-                next_index,
-                source_index: length,
-            });
-        }
-        let mut next_index = start_index;
-        for source_position in 0..length {
-            let source_index = ArrayIndex::from_usize(source_position)?;
-            let Some(value) = source.get_own_array_index(shapes, source_index)? else {
-                return Ok(ArrayCopyProgress {
-                    next_index,
-                    source_index: source_position,
-                });
-            };
-            let target_index = ArrayIndex::from_usize(next_index)?;
-            result.set_array_index(target_index, value, max_properties)?;
-            next_index = Self::next_concat_index(next_index)?;
-        }
-        Ok(ArrayCopyProgress {
-            next_index,
-            source_index: length,
-        })
-    }
-
     fn object_pair_for_concat(
         objects: &mut crate::runtime::arena::SlotArena<Object>,
         source_id: ObjectId,
@@ -645,39 +504,6 @@ impl ObjectHeap {
             .get_pair_mut(source_id.index(), result_id.index())
             .ok_or_else(|| Error::runtime("object id is not defined"))?;
         Ok((source, result))
-    }
-
-    fn concat_single_value(
-        &mut self,
-        result_id: ObjectId,
-        next_index: &mut usize,
-        value: Value,
-        max_properties: usize,
-    ) -> Result<()> {
-        self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
-        *next_index = Self::next_concat_index(*next_index)?;
-        Ok(())
-    }
-
-    fn set_concat_result_index(
-        &mut self,
-        result_id: ObjectId,
-        index: usize,
-        value: Value,
-        max_properties: usize,
-    ) -> Result<()> {
-        let index = ArrayIndex::from_usize(index)?;
-        let object = self.object_mut(result_id)?;
-        if object.array_length.is_none() {
-            return Err(Error::runtime("array concat result is not an array"));
-        }
-        object.set_array_index(index, value, max_properties)
-    }
-
-    fn next_concat_index(index: usize) -> Result<usize> {
-        index
-            .checked_add(1)
-            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))
     }
 }
 

@@ -2,7 +2,9 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{SetFailureBehavior, same_value_zero, strict_equality},
+        abstract_operations::{SetFailureBehavior, same_value_zero, strict_equality, to_boolean},
+        object::{PropertyKey, PropertyLookup},
+        roots::VmRootKind,
     },
     value::Value,
 };
@@ -11,9 +13,134 @@ const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_LIKE_RECEIVER_ERROR: &str = "Array.prototype method requires an object receiver";
 const ARRAY_LIKE_LENGTH_LIMIT_ERROR: &str = "array-like length exceeded supported range";
 const ARRAY_LIKE_INDEX_LIMIT_ERROR: &str = "array-like index exceeded supported range";
+const ARRAY_CONCAT_LENGTH_ERROR: &str = "Array.prototype.concat result exceeds safe integer range";
+const ARRAY_SPECIES_ERROR: &str = "Array species value must be a constructor";
+const ARRAY_CONSTRUCTOR_PROPERTY: &str = "constructor";
+const IS_CONCAT_SPREADABLE_PROPERTY: &str = "isConcatSpreadable";
+const IS_CONCAT_SPREADABLE_DISPLAY: &str = "[Symbol.isConcatSpreadable]";
+const SPECIES_PROPERTY: &str = "species";
+const SPECIES_DISPLAY: &str = "[Symbol.species]";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
+    pub(super) fn generic_array_concat(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::ensure_array_like_object(this_value)?;
+        let result = self.array_species_create(this_value, 0)?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&result))?;
+        let spreadable_key = self.array_concat_spreadable_key()?;
+        let mut next_index = 0_usize;
+        for item in std::iter::once(this_value).chain(args.iter()) {
+            if self.array_concat_is_spreadable(item, spreadable_key)? {
+                let length = self.array_like_length(item)?;
+                let end = concat_checked_length(next_index, length)?;
+                for source_index in 0..length {
+                    self.step()?;
+                    if self.has_array_like_index(item, source_index)? {
+                        let value = self.get_array_like_index(item, source_index)?;
+                        self.array_from_create_data_property(&result, next_index, value)?;
+                    }
+                    next_index = next_index
+                        .checked_add(1)
+                        .ok_or_else(|| Error::type_error(ARRAY_CONCAT_LENGTH_ERROR))?;
+                }
+                if next_index != end {
+                    return Err(Error::runtime("Array concat index accounting drifted"));
+                }
+            } else {
+                let end = concat_checked_length(next_index, 1)?;
+                self.array_from_create_data_property(&result, next_index, item.clone())?;
+                next_index = end;
+            }
+        }
+        self.set_array_like_length(&result, next_index)?;
+        Ok(result)
+    }
+
+    fn array_species_create(&mut self, original: &Value, length: usize) -> Result<Value> {
+        let is_array = match original {
+            Value::Object(id) => self.objects.array_len_if_array(*id)?.is_some(),
+            _ => false,
+        };
+        if !is_array {
+            return self.create_intrinsic_array_with_length(length);
+        }
+
+        let mut constructor = self.get_named(original, ARRAY_CONSTRUCTOR_PROPERTY)?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&constructor))?;
+        if self.semantic_object_ref(&constructor)?.is_some() {
+            let species_key = self.array_species_key()?;
+            constructor = self.get(
+                &constructor,
+                PropertyLookup::from_key(SPECIES_DISPLAY, species_key),
+            )?;
+            roots.add_values(std::iter::once(&constructor))?;
+            if matches!(constructor, Value::Null) {
+                constructor = Value::Undefined;
+            }
+        }
+        if matches!(constructor, Value::Undefined) {
+            return self.create_intrinsic_array_with_length(length);
+        }
+        if !self.semantic_is_constructor(&constructor)? {
+            return Err(Error::type_error(ARRAY_SPECIES_ERROR));
+        }
+        let length = Self::array_like_length_value(length)?;
+        self.semantic_construct(
+            &constructor,
+            std::slice::from_ref(&length),
+            constructor.clone(),
+        )
+    }
+
+    fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
+        let prototype = self.existing_array_constructor_prototype()?;
+        self.objects
+            .create_array_with_length(length, prototype, self.limits.max_objects)
+    }
+
+    fn array_species_key(&mut self) -> Result<PropertyKey> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let value = self.get_named(&symbol_constructor, SPECIES_PROPERTY)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime("Symbol.species is not initialized"));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
+    }
+
+    fn array_concat_spreadable_key(&mut self) -> Result<PropertyKey> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let value = self.get_named(&symbol_constructor, IS_CONCAT_SPREADABLE_PROPERTY)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime(
+                "Symbol.isConcatSpreadable is not initialized",
+            ));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
+    }
+
+    fn array_concat_is_spreadable(&mut self, value: &Value, key: PropertyKey) -> Result<bool> {
+        if self.semantic_object_ref(value)?.is_none() {
+            return Ok(false);
+        }
+        let spreadable = self.get(
+            value,
+            PropertyLookup::from_key(IS_CONCAT_SPREADABLE_DISPLAY, key),
+        )?;
+        if !matches!(spreadable, Value::Undefined) {
+            return Ok(to_boolean(&spreadable));
+        }
+        let Value::Object(id) = value else {
+            return Ok(false);
+        };
+        Ok(self.objects.array_len_if_array(*id)?.is_some())
+    }
+
     pub(super) fn generic_array_push(
         &mut self,
         args: &[Value],
@@ -422,4 +549,16 @@ impl Context {
     fn nonnegative_integer_to_usize(value: f64) -> Result<usize> {
         Self::finite_nonnegative_integer_to_usize(value, ARRAY_LIKE_LENGTH_LIMIT_ERROR)
     }
+}
+
+fn concat_checked_length(current: usize, additional: usize) -> Result<usize> {
+    let length = current
+        .checked_add(additional)
+        .ok_or_else(|| Error::type_error(ARRAY_CONCAT_LENGTH_ERROR))?;
+    let max = usize::try_from(9_007_199_254_740_991_u64)
+        .map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
+    if length > max {
+        return Err(Error::type_error(ARRAY_CONCAT_LENGTH_ERROR));
+    }
+    Ok(length)
 }
