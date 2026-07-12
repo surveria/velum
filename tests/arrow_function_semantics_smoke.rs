@@ -7,7 +7,7 @@ fn arrow_functions_capture_lexical_this() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(
-        r#"
+        r"
         function Holder() {
             this.arrow = () => this;
         }
@@ -17,7 +17,7 @@ fn arrow_functions_capture_lexical_this() -> TestResult {
             holder.arrow.call(usurper) === holder &&
             holder.arrow.apply(usurper) === holder &&
             holder.arrow.bind(usurper)() === holder
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Bool(true))
 }
@@ -63,7 +63,7 @@ fn arrow_super_call_reuses_the_constructor_environment() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(
-        r#"
+        r"
         let calls = 0;
         class Base { constructor() { calls++; } }
         class Derived extends Base {
@@ -78,7 +78,7 @@ fn arrow_super_call_reuses_the_constructor_environment() -> TestResult {
             threw = error instanceof ReferenceError;
         }
         threw && calls === 2
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Bool(true))
 }

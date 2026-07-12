@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
-    BytecodeInstruction, BytecodeNewTargetMode,
+    BytecodeInstruction, BytecodeNewTargetMode, FunctionCompileMode,
 };
 
 struct FunctionCompileSpec<'a> {
@@ -55,9 +55,8 @@ impl BytecodeCompiler<'_> {
                 spec.arguments_binding,
                 spec.params,
                 spec.body,
-                spec.kind,
                 spec.parameter_prologue_count,
-                spec.strict,
+                FunctionCompileMode::new(spec.kind, spec.strict),
                 self.layout,
             )?,
             constructable: spec.constructable,
@@ -69,14 +68,13 @@ impl BytecodeCompiler<'_> {
 }
 
 impl BytecodeFunction {
-    pub fn compile(
+    pub(super) fn compile(
         self_binding: Option<StaticBinding>,
         arguments_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
-        kind: FunctionKind,
         parameter_prologue_count: usize,
-        strict: bool,
+        mode: FunctionCompileMode,
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
@@ -87,14 +85,14 @@ impl BytecodeFunction {
             param_defaults: compile_param_defaults(params, layout)?,
             body: BytecodeBlock::compile_function_statements(
                 statements,
-                kind,
+                mode.kind,
                 parameter_prologue_count,
                 layout,
             )?,
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments: collected.uses_arguments,
-            strict,
+            strict: mode.strict,
         }))
     }
 }

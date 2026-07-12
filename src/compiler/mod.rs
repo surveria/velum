@@ -33,6 +33,18 @@ mod pattern;
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 
+#[derive(Clone, Copy)]
+struct FunctionCompileMode {
+    kind: crate::syntax::FunctionKind,
+    strict: bool,
+}
+
+impl FunctionCompileMode {
+    const fn new(kind: crate::syntax::FunctionKind, strict: bool) -> Self {
+        Self { kind, strict }
+    }
+}
+
 pub fn compile_program(program: &Program, layout: &BindingLayout) -> Result<BytecodeProgram> {
     Ok(BytecodeProgram::new(
         BytecodeBlock::compile_statements(&program.statements, StatementValue::Store, layout)?,
@@ -359,9 +371,8 @@ impl<'a> BytecodeCompiler<'a> {
                     class.constructor.arguments_binding.clone(),
                     &class.constructor.params,
                     &class.constructor.body,
-                    crate::syntax::FunctionKind::Ordinary,
                     0,
-                    true,
+                    FunctionCompileMode::new(crate::syntax::FunctionKind::Ordinary, true),
                     self.layout,
                 )?,
                 members: members.into(),
@@ -399,9 +410,8 @@ impl<'a> BytecodeCompiler<'a> {
                     member.arguments_binding.clone(),
                     &member.params,
                     &member.body,
-                    member.function_kind,
                     member.parameter_prologue_count,
-                    true,
+                    FunctionCompileMode::new(member.function_kind, true),
                     self.layout,
                 )?,
             });

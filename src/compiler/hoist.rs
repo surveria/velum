@@ -7,6 +7,8 @@ use crate::{
     error::Result,
 };
 
+use super::FunctionCompileMode;
+
 impl BytecodeHoistPlan {
     pub fn compile(statements: &[Statement], layout: &BindingLayout) -> Result<Self> {
         let mut collector = HoistCollector::new(layout);
@@ -48,8 +50,7 @@ impl<'a> HoistCollector<'a> {
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
         parameter_prologue_count: usize,
-        kind: crate::syntax::FunctionKind,
-        strict: bool,
+        mode: FunctionCompileMode,
     ) -> Result<()> {
         let (name, arguments_binding) = bindings;
         self.var_declarations.push(name.clone());
@@ -62,12 +63,11 @@ impl<'a> HoistCollector<'a> {
                 arguments_binding.cloned(),
                 params,
                 body,
-                kind,
                 parameter_prologue_count,
-                strict,
+                mode,
                 self.layout,
             )?,
-            kind,
+            mode.kind,
         );
         self.function_declarations.push(declaration);
         Ok(())
@@ -183,15 +183,13 @@ impl<'a> HoistCollector<'a> {
                 parameter_prologue_count,
                 kind,
                 strict,
-                ..
             } => self.collect_function_declaration(
                 (name, arguments_binding.as_ref()),
                 *id,
                 params,
                 body,
                 *parameter_prologue_count,
-                *kind,
-                *strict,
+                FunctionCompileMode::new(*kind, *strict),
             ),
             Stmt::Empty
             | Stmt::Break(_)
