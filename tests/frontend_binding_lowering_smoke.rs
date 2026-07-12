@@ -25,6 +25,36 @@ fn parses_multiline_let_as_a_lexical_declaration() -> TestResult {
 }
 
 #[test]
+fn distinguishes_statement_let_from_statement_list_declarations() -> TestResult {
+    ensure_value(
+        &eval(
+            r"
+            globalThis.let = { value: 42 };
+            if (false) let
+            skippedBinding = 1;
+            l\u0065t.value
+            ",
+        )?,
+        &Value::Number(42.0),
+    )?;
+
+    ensure_value(
+        &eval(
+            r"
+            letLabel: {
+                break letLabel;
+            }
+            l\u0065t: {
+                break l\u0065t;
+            }
+            42
+            ",
+        )?,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn materializes_destructuring_for_init_scope() -> TestResult {
     ensure_value(
         &eval(

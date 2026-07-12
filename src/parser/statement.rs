@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ast::{CatchClause, DeclKind, Expr, Expression, FunctionKind, Statement, Stmt, SwitchCase},
+    ast::{CatchClause, DeclKind, Expression, FunctionKind, Statement, Stmt, SwitchCase},
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -18,12 +18,21 @@ struct ParsedLabel {
 
 impl Parser {
     pub(super) fn statement(&mut self) -> Result<Statement> {
+        self.parse_statement(false)
+    }
+
+    pub(super) fn statement_list_item(&mut self) -> Result<Statement> {
+        self.parse_statement(true)
+    }
+
+    fn parse_statement(&mut self, lexical_declaration_allowed: bool) -> Result<Statement> {
         let start = self.current_span();
-        let kind = self.with_statement_depth(Self::statement_inner)?;
+        let kind = self
+            .with_statement_depth(|parser| parser.statement_inner(lexical_declaration_allowed))?;
         Ok(self.statement_node(start, kind))
     }
 
-    fn statement_inner(&mut self) -> Result<Stmt> {
+    fn statement_inner(&mut self, lexical_declaration_allowed: bool) -> Result<Stmt> {
         if self.match_kind(&TokenKind::LBrace) {
             return self.block();
         }
@@ -93,7 +102,7 @@ impl Parser {
         if self.match_kind(&TokenKind::Class) {
             return self.class_declaration();
         }
-        if self.let_starts_expression_statement() {
+        if self.let_starts_expression_statement(lexical_declaration_allowed) {
             return self.let_expression_statement();
         }
         if self.await_using_declaration_start() {
@@ -120,8 +129,17 @@ impl Parser {
         Ok(Stmt::Expr(expr))
     }
 
-    fn let_starts_expression_statement(&self) -> bool {
-        !self.is_strict_mode() && self.check(&TokenKind::Let) && !self.let_declaration_lookahead()
+    fn let_starts_expression_statement(&self, lexical_declaration_allowed: bool) -> bool {
+        if self.is_strict_mode() || !self.check(&TokenKind::Let) {
+            return false;
+        }
+        if self.peek().is_some_and(|token| token.identifier_escaped) {
+            return true;
+        }
+        if !lexical_declaration_allowed {
+            return !self.peek_kind_is(1, &TokenKind::LBracket);
+        }
+        !self.let_declaration_lookahead()
     }
 
     fn let_declaration_lookahead(&self) -> bool {
@@ -132,30 +150,19 @@ impl Parser {
                 matches!(
                     token.kind,
                     TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Super
-                ) || (token.kind == TokenKind::Await && !self.await_identifier_is_reserved())
+                ) || token.kind == TokenKind::Await
             })
     }
 
+    fn let_starts_disallowed_declaration(&self) -> bool {
+        self.check(&TokenKind::Let)
+            && !self.peek().is_some_and(|token| token.identifier_escaped)
+            && (!self.let_starts_expression_statement(false)
+                || (!self.peek_has_line_terminator_before(1) && self.let_declaration_lookahead()))
+    }
+
     fn let_expression_statement(&mut self) -> Result<Stmt> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected 'let' identifier"))?;
-        let name = self.static_name_borrowed_at("let", token.offset())?;
-        let binding = self.static_binding(name)?;
-        let expression = if self.match_kind(&TokenKind::Equal) {
-            let value = self.assignment()?;
-            self.expression_node(
-                token.span,
-                Expr::Assignment {
-                    name: binding,
-                    strict: false,
-                    infer_name: true,
-                    expr: Box::new(value),
-                },
-            )
-        } else {
-            Expression::new(Expr::Identifier(binding), token.span)
-        };
+        let expression = self.expression()?;
         self.consume_statement_terminator("expected statement terminator after 'let'")?;
         Ok(Stmt::Expr(expression))
     }
@@ -186,7 +193,7 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after block"));
             }
-            statements.push(self.with_lexical_function_declarations(Self::statement)?);
+            statements.push(self.with_lexical_function_declarations(Self::statement_list_item)?);
         }
         self.consume(&TokenKind::RBrace, "expected '}' after block")?;
         self.validate_generator_block_declarations(&statements)?;
@@ -217,7 +224,7 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after block"));
             }
-            let statement = self.statement()?;
+            let statement = self.statement_list_item()?;
             if directive_prologue && Self::is_use_strict_directive(&statement) {
                 contains_use_strict = true;
             }
@@ -266,7 +273,7 @@ impl Parser {
     }
 
     fn do_while_statement(&mut self) -> Result<Stmt> {
-        if self.check(&TokenKind::Let)
+        if self.let_starts_disallowed_declaration()
             || self.check(&TokenKind::Const)
             || self.check(&TokenKind::Function)
             || (self.check(&TokenKind::Async)
@@ -412,7 +419,7 @@ impl Parser {
     }
 
     fn reject_invalid_labeled_item(&self) -> Result<()> {
-        if self.check(&TokenKind::Let) || self.check(&TokenKind::Const) {
+        if self.let_starts_disallowed_declaration() || self.check(&TokenKind::Const) {
             return Err(self.parse_error("lexical declaration is not allowed as a label body"));
         }
         if self.check(&TokenKind::Async)
@@ -523,7 +530,7 @@ impl Parser {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after switch body"));
             }
-            let statement = self.with_lexical_function_declarations(Self::statement)?;
+            let statement = self.with_lexical_function_declarations(Self::statement_list_item)?;
             if Self::direct_resource_declaration(&statement) {
                 return Err(self.parse_error(
                     "resource declaration is not allowed directly in a switch clause",

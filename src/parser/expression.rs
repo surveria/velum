@@ -489,7 +489,7 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
-            TokenKind::Let => self.contextual_let(token_span, token.identifier_escaped)?,
+            TokenKind::Let => self.contextual_let(token_span)?,
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -533,12 +533,8 @@ impl Parser {
         Ok(expr)
     }
 
-    fn contextual_let(
-        &mut self,
-        span: crate::SourceSpan,
-        identifier_escaped: bool,
-    ) -> Result<Expression> {
-        if identifier_escaped || self.is_strict_mode() {
+    fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
+        if self.is_strict_mode() {
             return Err(Error::parse_at("expected expression", span));
         }
         let name = self.static_name_borrowed_at("let", span.start())?;
