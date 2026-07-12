@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T051106Z.md`
-- Task: PR #485: runtime: complete Promise.prototype.finally semantics
-- Performance: 9.52x (4/5 >1.00x) (from `rsqjs-test-report-20260712T051106Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T051106Z.md`)
+- `rsqjs-test-report-20260712T054408Z.md`
+- Task: PR #484: runtime: implement eval lexical environments
+- Performance: 8.93x (4/5 >1.00x) (from `rsqjs-test-report-20260712T054408Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T054408Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 68651 passed / 33927 failed (66.93%) (from `rsqjs-test-report-20260712T051106Z.md`)
+- Full Test262: 68758 passed / 33820 failed (67.03%) (from `rsqjs-test-report-20260712T054408Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -470,3 +470,4 @@ Latest report:
 | `20260712T043039Z` `5227ef2` PR #482: runtime: implement with statement environments | 8.66x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 67892 passed / 34686 failed (66.19%) |
 | `20260712T044049Z` `ca0f073` PR #483: AS-09u: complete Promise settlement combinators | 8.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68553 passed / 34025 failed (66.83%) |
 | `20260712T051106Z` `180e5be` PR #485: runtime: complete Promise.prototype.finally semantics | 9.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68651 passed / 33927 failed (66.93%) |
+| `20260712T054408Z` `10ad681` PR #484: runtime: implement eval lexical environments | 8.93x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68758 passed / 33820 failed (67.03%) |
