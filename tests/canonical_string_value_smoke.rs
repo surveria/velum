@@ -7,7 +7,7 @@ fn admits_portable_utf16_string_without_losing_surrogates() -> TestResult {
     let mut context = Context::new(RuntimeLimits::default());
     let portable = JsString::from_utf16(vec![0xD800]);
     context.register_host_function("portableString", move |_call| {
-        Ok(Value::HeapString(portable.clone()))
+        Ok(Value::from(portable.clone()))
     })?;
 
     let value = context.eval("portableString().length + ':' + portableString().charCodeAt(0)")?;

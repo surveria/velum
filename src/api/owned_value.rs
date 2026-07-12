@@ -93,7 +93,7 @@ impl From<OwnedValue> for Value {
             OwnedValue::Bool(value) => Self::Bool(value),
             OwnedValue::Number(value) => Self::Number(value),
             OwnedValue::BigInt(value) => Self::BigInt(value),
-            OwnedValue::String(value) => Self::HeapString(value.into()),
+            OwnedValue::String(value) => Self::from(value),
         }
     }
 }

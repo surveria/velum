@@ -43,6 +43,24 @@ impl Value {
     }
 }
 
+impl From<JsString> for Value {
+    fn from(value: JsString) -> Self {
+        Self::HeapString(value)
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::HeapString(value.into())
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Self::HeapString(value.into())
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
