@@ -46,13 +46,74 @@ impl Context {
     }
 
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
+        let mut declarations = Vec::new();
+        for (binding, kind) in plan.lexical_declarations() {
+            let slot = self
+                .compiled_active_binding_frame(binding)?
+                .map(CompiledBindingFrame::slot)
+                .map(crate::runtime::binding::scope::BindingSlot::index);
+            declarations.push((slot, binding, *kind));
+        }
         for binding in plan.var_declarations() {
-            self.hoist_var(binding)?;
+            let slot = self
+                .compiled_active_binding_frame(binding)?
+                .map(CompiledBindingFrame::slot)
+                .map(crate::runtime::binding::scope::BindingSlot::index);
+            declarations.push((slot, binding, DeclKind::Var));
+        }
+        declarations.sort_by_key(|(slot, _, _)| slot.unwrap_or(usize::MAX));
+        for (_, binding, kind) in declarations {
+            match kind {
+                DeclKind::Var => self.hoist_var(binding)?,
+                DeclKind::Let | DeclKind::Const => self.hoist_lexical(binding, kind)?,
+            }
         }
         for declaration in plan.function_declarations() {
             self.hoist_function(declaration)?;
         }
         Ok(())
+    }
+
+    fn hoist_lexical(&mut self, name: &StaticBinding, kind: DeclKind) -> Result<()> {
+        let atom = self.intern_static_name_atom(name.name())?;
+        if self.active_bindings().contains(atom) {
+            return Err(Error::exception(
+                ErrorName::SyntaxError,
+                format!("'{name}' has already been declared"),
+            ));
+        }
+        self.ensure_binding_capacity_for_atom(atom)?;
+        let frame = self.compiled_active_binding_frame(name)?;
+        let inserted = self
+            .active_bindings_mut()
+            .insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::uninitialized(kind != DeclKind::Const, kind),
+                frame.map(CompiledBindingFrame::slot),
+            )?;
+        self.mark_active_binding_frame_slot(frame, inserted)?;
+        self.remember_active_static_binding(name, atom)
+    }
+
+    pub(crate) fn initialize_bytecode_lexical(
+        &mut self,
+        name: &BytecodeBinding,
+        value: Value,
+        kind: DeclKind,
+    ) -> Result<()> {
+        let atom = self.intern_static_name_atom(name.name().name())?;
+        let Some(cell) = self.active_bindings().get(atom) else {
+            return self.define_static(name.name(), value, kind);
+        };
+        if cell.kind() != kind {
+            return Err(Error::runtime(format!(
+                "lexical declaration kind mismatch for '{}'",
+                name.name()
+            )));
+        }
+        let value = self.runtime_value(value)?;
+        cell.initialize(value)?;
+        self.remember_active_static_binding(name.name(), atom)
     }
 
     fn hoist_function(

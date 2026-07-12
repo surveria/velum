@@ -581,7 +581,10 @@ impl Context {
         }
     }
 
-    fn iterator_method(&mut self, iterable: &Value) -> Result<Option<Value>> {
+    pub(in crate::runtime) fn iterator_method(
+        &mut self,
+        iterable: &Value,
+    ) -> Result<Option<Value>> {
         let Some(symbol) = self.iterator_symbol() else {
             return Ok(None);
         };
@@ -592,7 +595,10 @@ impl Context {
         self.get_method(iterable, key.lookup())
     }
 
-    fn async_iterator_method(&mut self, iterable: &Value) -> Result<Option<Value>> {
+    pub(in crate::runtime) fn async_iterator_method(
+        &mut self,
+        iterable: &Value,
+    ) -> Result<Option<Value>> {
         let constructor = self.symbol_constructor_value()?;
         let symbol = self.get_named(&constructor, "asyncIterator")?;
         let Value::Symbol(symbol) = symbol else {

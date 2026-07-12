@@ -1,37 +1,51 @@
 use std::rc::Rc;
 
-use crate::{bytecode::BytecodeFunctionDeclaration, syntax::StaticBinding};
+use crate::{
+    bytecode::BytecodeFunctionDeclaration,
+    syntax::{DeclKind, StaticBinding},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeHoistPlan {
-    var_declarations: Rc<[StaticBinding]>,
-    function_declarations: Rc<[BytecodeFunctionDeclaration]>,
+    lexical: Rc<[(StaticBinding, DeclKind)]>,
+    vars: Rc<[StaticBinding]>,
+    functions: Rc<[BytecodeFunctionDeclaration]>,
 }
 
 impl BytecodeHoistPlan {
     pub(crate) const fn new(
+        lexical_declarations: Rc<[(StaticBinding, DeclKind)]>,
         var_declarations: Rc<[StaticBinding]>,
         function_declarations: Rc<[BytecodeFunctionDeclaration]>,
     ) -> Self {
         Self {
-            var_declarations,
-            function_declarations,
+            lexical: lexical_declarations,
+            vars: var_declarations,
+            functions: function_declarations,
         }
     }
 
+    pub fn lexical_declarations(&self) -> &[(StaticBinding, DeclKind)] {
+        &self.lexical
+    }
+
     pub fn var_declarations(&self) -> &[StaticBinding] {
-        &self.var_declarations
+        &self.vars
     }
 
     pub fn function_declarations(&self) -> &[BytecodeFunctionDeclaration] {
-        &self.function_declarations
+        &self.functions
     }
 
     pub fn var_declaration_count(&self) -> usize {
-        self.var_declarations.len()
+        self.vars.len()
+    }
+
+    pub fn lexical_declaration_count(&self) -> usize {
+        self.lexical.len()
     }
 
     pub fn function_declaration_count(&self) -> usize {
-        self.function_declarations.len()
+        self.functions.len()
     }
 }

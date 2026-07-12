@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{same_value_zero, strict_equality},
+        abstract_operations::{SetFailureBehavior, same_value_zero, strict_equality},
     },
     value::Value,
 };
@@ -293,22 +293,27 @@ impl Context {
         Ok(())
     }
 
-    pub(super) fn array_like_length(&mut self, object: &Value) -> Result<usize> {
+    pub(in crate::runtime) fn array_like_length(&mut self, object: &Value) -> Result<usize> {
         let length = self.get_named(object, ARRAY_LENGTH_PROPERTY)?;
         self.length_value_to_usize(&length)
     }
 
-    pub(super) fn set_array_like_length(&mut self, object: &Value, length: usize) -> Result<()> {
-        if let Value::Object(id) = object
-            && self.objects.array_len_if_array(*id)?.is_some()
-        {
-            return self.objects.set_array_length(*id, length);
-        }
+    pub(in crate::runtime) fn set_array_like_length(
+        &mut self,
+        object: &Value,
+        length: usize,
+    ) -> Result<()> {
         let value = Self::array_like_length_value(length)?;
-        self.set_array_like_property(object, ARRAY_LENGTH_PROPERTY, value)
+        let lookup = self.property_lookup(ARRAY_LENGTH_PROPERTY);
+        self.set(object, lookup, value, object, SetFailureBehavior::Throw)
+            .map(|_| ())
     }
 
-    pub(super) fn get_array_like_index(&mut self, object: &Value, index: usize) -> Result<Value> {
+    pub(in crate::runtime) fn get_array_like_index(
+        &mut self,
+        object: &Value,
+        index: usize,
+    ) -> Result<Value> {
         let property = Self::array_like_index_name(index)?;
         self.get_named(object, &property)
     }
@@ -388,7 +393,7 @@ impl Context {
         Self::usize_to_number(length, ARRAY_LIKE_LENGTH_LIMIT_ERROR).map(Value::Number)
     }
 
-    pub(super) fn array_like_index_value(index: usize) -> Result<Value> {
+    pub(in crate::runtime) fn array_like_index_value(index: usize) -> Result<Value> {
         Self::usize_to_number(index, ARRAY_LIKE_INDEX_LIMIT_ERROR).map(Value::Number)
     }
 

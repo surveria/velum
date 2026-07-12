@@ -85,7 +85,7 @@ fn supports_basic_var_hoisting() -> TestResult {
     let Err(error) = eval("let lexical = 1; var lexical;") else {
         return Err("expected var and lexical redeclaration conflict".into());
     };
-    ensure_error_kind(&error, "runtime")
+    ensure_error_kind(&error, "javascript")
 }
 
 #[test]

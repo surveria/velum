@@ -11,6 +11,7 @@ mod copy;
 mod find_last;
 mod flatten;
 mod from;
+mod from_async;
 mod generic;
 mod mutate;
 mod prototype_registry;
@@ -19,6 +20,7 @@ mod sort;
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_FROM_PROPERTY: &str = "from";
+const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
 const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
@@ -542,6 +544,12 @@ impl Context {
         self.native_function_mut(constructor)?
             .properties_mut()
             .define_builtin(key, from, PropertyEnumerable::No)?;
+        let from_async =
+            self.create_native_function(NativeFunctionKind::ArrayFromAsync, Value::Undefined)?;
+        let key = self.intern_property_key(ARRAY_FROM_ASYNC_PROPERTY)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, from_async, PropertyEnumerable::No)?;
         let is_array =
             self.create_native_function(NativeFunctionKind::ArrayIsArray, Value::Undefined)?;
         let key = self.intern_property_key(ARRAY_IS_ARRAY_PROPERTY)?;

@@ -263,7 +263,8 @@ impl Context {
     ) -> Result<Option<FlatMapArrayCallback>> {
         let function = self.function(callback)?;
         let bytecode = &function.bytecode;
-        if bytecode.hoist_plan().var_declaration_count() != 0
+        if bytecode.hoist_plan().lexical_declaration_count() != 0
+            || bytecode.hoist_plan().var_declaration_count() != 0
             || bytecode.hoist_plan().function_declaration_count() != 0
         {
             return Ok(None);

@@ -12,8 +12,10 @@ use super::FunctionCompileMode;
 impl BytecodeHoistPlan {
     pub fn compile(statements: &[Statement], layout: &BindingLayout) -> Result<Self> {
         let mut collector = HoistCollector::new(layout);
+        collector.collect_direct_lexical_declarations(statements);
         collector.collect_statements(statements)?;
         Ok(Self::new(
+            Rc::from(collector.lexical_declarations.into_boxed_slice()),
             Rc::from(collector.var_declarations.into_boxed_slice()),
             Rc::from(collector.function_declarations.into_boxed_slice()),
         ))
@@ -23,6 +25,7 @@ impl BytecodeHoistPlan {
 #[derive(Debug)]
 struct HoistCollector<'a> {
     layout: &'a BindingLayout,
+    lexical_declarations: Vec<(StaticBinding, DeclKind)>,
     var_declarations: Vec<StaticBinding>,
     function_declarations: Vec<BytecodeFunctionDeclaration>,
 }
@@ -31,8 +34,62 @@ impl<'a> HoistCollector<'a> {
     const fn new(layout: &'a BindingLayout) -> Self {
         Self {
             layout,
+            lexical_declarations: Vec::new(),
             var_declarations: Vec::new(),
             function_declarations: Vec::new(),
+        }
+    }
+
+    fn collect_direct_lexical_declarations(&mut self, statements: &[Statement]) {
+        for statement in statements {
+            match statement.kind() {
+                Stmt::DeclList(declarations) => {
+                    self.collect_direct_lexical_declarations(declarations);
+                }
+                Stmt::VarDecl {
+                    name,
+                    kind: kind @ (DeclKind::Let | DeclKind::Const),
+                    ..
+                } => self.lexical_declarations.push((name.clone(), *kind)),
+                Stmt::PatternDecl {
+                    pattern,
+                    kind: kind @ (DeclKind::Let | DeclKind::Const),
+                    ..
+                } => self.collect_pattern_lexical_declarations(pattern, *kind),
+                Stmt::ClassDecl { name, .. } => self
+                    .lexical_declarations
+                    .push((name.clone(), DeclKind::Let)),
+                Stmt::Block(_)
+                | Stmt::If { .. }
+                | Stmt::While { .. }
+                | Stmt::DoWhile { .. }
+                | Stmt::Label { .. }
+                | Stmt::For { .. }
+                | Stmt::ForIn { .. }
+                | Stmt::ForOf { .. }
+                | Stmt::Switch { .. }
+                | Stmt::Try { .. }
+                | Stmt::Throw(_)
+                | Stmt::Return(_)
+                | Stmt::FunctionDecl { .. }
+                | Stmt::VarDecl { .. }
+                | Stmt::PatternDecl { .. }
+                | Stmt::Empty
+                | Stmt::Break(_)
+                | Stmt::Continue(_)
+                | Stmt::Expr(_) => {}
+            }
+        }
+    }
+
+    fn collect_pattern_lexical_declarations(&mut self, pattern: &BindingPattern, kind: DeclKind) {
+        let mut visit =
+            |binding: &StaticBinding| -> std::result::Result<(), std::convert::Infallible> {
+                self.lexical_declarations.push((binding.clone(), kind));
+                Ok(())
+            };
+        match pattern.for_each_binding(&mut visit) {
+            Ok(()) => {}
         }
     }
 

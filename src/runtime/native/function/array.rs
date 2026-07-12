@@ -80,6 +80,9 @@ impl Context {
             NativeFunctionKind::ArrayFlatMap => Some(self.eval_array_flat_map(args, this_value)),
             NativeFunctionKind::ArrayForEach => Some(self.eval_array_for_each(args, this_value)),
             NativeFunctionKind::ArrayFrom => Some(self.eval_array_from(args, this_value)),
+            NativeFunctionKind::ArrayFromAsync => {
+                Some(self.eval_array_from_async(args, this_value))
+            }
             NativeFunctionKind::ArrayIncludes => Some(self.eval_array_includes(args, this_value)),
             NativeFunctionKind::ArrayIndexOf => Some(self.eval_array_index_of(args, this_value)),
             NativeFunctionKind::ArrayIsArray => Some(self.eval_array_is_array(args)),
