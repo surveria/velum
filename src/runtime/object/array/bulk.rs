@@ -1,6 +1,5 @@
 use super::{
-    ARRAY_INDEX_LIMIT_ERROR, ArrayCopyLimits, ArrayLength, Object, ObjectHeap, ObjectId,
-    ObjectProperty,
+    ARRAY_INDEX_LIMIT_ERROR, ArrayCopyLimits, Object, ObjectHeap, ObjectId, ObjectProperty,
 };
 use crate::error::{Error, Result};
 use crate::value::Value;
@@ -26,73 +25,6 @@ impl ObjectHeap {
         };
         self.append_packed_array_range(result_id, id, length, start, count, limits.max_properties)?;
         Ok(Some(Value::Object(result_id)))
-    }
-
-    pub(in crate::runtime::object) fn create_packed_array_concat(
-        &mut self,
-        id: ObjectId,
-        this_length: ArrayLength,
-        values: &[Value],
-        prototype: ObjectId,
-        max_objects: usize,
-        max_properties: usize,
-    ) -> Result<Option<Value>> {
-        let this_len = this_length.to_usize()?;
-        if self.object(id)?.packed_array_properties(this_len).is_none() {
-            return Ok(None);
-        }
-        let mut result_len = this_len;
-        for value in values {
-            let value_len = self.concat_value_length(value)?;
-            result_len = result_len
-                .checked_add(value_len)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            if let Value::Object(source_id) = value
-                && self.array_length_if_array(*source_id)?.is_some()
-                && !self.value_is_packed_array(*source_id, value_len)?
-            {
-                return Ok(None);
-            }
-        }
-        Self::ensure_packed_result_property_limit(result_len, max_properties)?;
-
-        let result = self.create_array_with_length(result_len, prototype, max_objects)?;
-        let Value::Object(result_id) = result else {
-            return Err(Error::runtime("array concat result is not an object"));
-        };
-        self.append_packed_array_range(result_id, id, this_len, 0, this_len, max_properties)?;
-        for value in values {
-            if let Value::Object(source_id) = value
-                && let Some(length) = self.array_length_if_array(*source_id)?
-            {
-                let length = length.to_usize()?;
-                self.append_packed_array_range(
-                    result_id,
-                    *source_id,
-                    length,
-                    0,
-                    length,
-                    max_properties,
-                )?;
-            } else {
-                self.object_mut(result_id)?
-                    .append_packed_default_value(value.clone(), max_properties)?;
-            }
-        }
-        Ok(Some(Value::Object(result_id)))
-    }
-
-    fn concat_value_length(&self, value: &Value) -> Result<usize> {
-        if let Value::Object(id) = value
-            && let Some(length) = self.array_length_if_array(*id)?
-        {
-            return length.to_usize();
-        }
-        Ok(1)
-    }
-
-    fn value_is_packed_array(&self, id: ObjectId, length: usize) -> Result<bool> {
-        Ok(self.object(id)?.packed_array_properties(length).is_some())
     }
 
     fn packed_property_range(
@@ -169,21 +101,6 @@ impl Object {
             count,
             max_properties,
         )?;
-        if let Some(reservation) = reservation {
-            reservation.commit()?;
-        }
-        self.add_enumerable_properties(count)
-    }
-
-    pub(in crate::runtime::object) fn append_packed_default_value(
-        &mut self,
-        value: Value,
-        max_properties: usize,
-    ) -> Result<()> {
-        let reservation = self.reserve_property_growth()?;
-        let count = self
-            .array_storage
-            .append_packed_default_value(value, max_properties)?;
         if let Some(reservation) = reservation {
             reservation.commit()?;
         }

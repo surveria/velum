@@ -496,23 +496,6 @@ impl ArrayStorage {
         Ok(count)
     }
 
-    pub(in crate::runtime::object) fn append_packed_default_value(
-        &mut self,
-        value: Value,
-        max_properties: usize,
-    ) -> Result<usize> {
-        self.reserve_packed_append(1, max_properties)?;
-        let ArrayElements::Packed(elements) = &mut self.elements else {
-            return Err(Error::runtime("array storage is not packed"));
-        };
-        elements.push(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
-        self.property_count = self
-            .property_count
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("object property count overflowed"))?;
-        Ok(1)
-    }
-
     pub(in crate::runtime::object) const fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),

@@ -165,19 +165,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.concat requires an array receiver",
-            ));
-        };
-        let prototype = self.existing_array_constructor_prototype()?;
-        self.objects.array_concat(
-            *id,
-            args,
-            prototype,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        self.generic_array_concat(args, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_reverse(

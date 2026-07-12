@@ -7,7 +7,6 @@ use crate::{
 };
 
 use super::super::property::PrototypeTraversalBudget;
-use super::ArrayCopyProgress;
 use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, Object, ObjectHeap, ObjectProperty};
 
 impl ObjectHeap {
@@ -247,38 +246,6 @@ impl ObjectHeap {
             )?;
         }
         Ok(Some(Value::Object(result_id)))
-    }
-
-    pub(in crate::runtime::object) fn holey_concat_array_prefix_without_indexed_prototype(
-        &mut self,
-        result_id: ObjectId,
-        start_index: usize,
-        source_id: ObjectId,
-        length: usize,
-        max_properties: usize,
-    ) -> Result<Option<ArrayCopyProgress>> {
-        if self.object(result_id)?.array_length.is_none() {
-            return Err(Error::runtime("array concat result is not an array"));
-        }
-        let Some(values) =
-            self.holey_values_without_indexed_prototype(source_id, length, 0, length)?
-        else {
-            return Ok(None);
-        };
-        for (source_offset, value) in values {
-            let target = start_index
-                .checked_add(source_offset)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            let target_index = ArrayIndex::from_usize(target)?;
-            self.object_mut(result_id)?
-                .set_array_index(target_index, value, max_properties)?;
-        }
-        Ok(Some(ArrayCopyProgress {
-            next_index: start_index
-                .checked_add(length)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?,
-            source_index: length,
-        }))
     }
 
     fn holey_values_without_indexed_prototype(
