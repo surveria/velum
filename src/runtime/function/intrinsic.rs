@@ -48,21 +48,6 @@ impl FunctionIntrinsicProperty {
             .map(|descriptor| descriptor.value())
     }
 
-    pub(super) fn set_value(&mut self, default: DataPropertyDescriptor, value: Value) -> bool {
-        let Some(descriptor) = self.descriptor(default) else {
-            return false;
-        };
-        if descriptor.writable().is_yes() {
-            self.descriptor = Some(DataPropertyDescriptor::new(
-                value,
-                descriptor.writable(),
-                descriptor.enumerable(),
-                descriptor.configurable(),
-            ));
-        }
-        true
-    }
-
     pub(super) fn define(
         &mut self,
         default: DataPropertyDescriptor,
@@ -129,8 +114,8 @@ impl FunctionProperty {
         self.property.is_configurable()
     }
 
-    pub(super) const fn is_enumerable(&self) -> bool {
-        self.property.is_enumerable()
+    pub(super) const fn is_frozen(&self) -> bool {
+        self.property.is_frozen()
     }
 
     pub(super) fn descriptor(&self) -> OwnPropertyDescriptor {
@@ -143,6 +128,14 @@ impl FunctionProperty {
 
     pub(super) fn define(&mut self, update: PropertyUpdate) -> Result<()> {
         self.property.define(update)
+    }
+
+    pub(super) const fn seal(&mut self) {
+        self.property.seal();
+    }
+
+    pub(super) const fn freeze(&mut self) {
+        self.property.freeze();
     }
 
     pub(super) const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {

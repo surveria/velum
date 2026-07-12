@@ -219,10 +219,10 @@ impl AccessorPropertyDescriptor {
 /// existing state or fall back to defineProperty defaults for new properties.
 #[derive(Debug, Clone)]
 pub struct AccessorPropertyUpdate {
-    get: Option<Value>,
-    set: Option<Value>,
-    enumerable: Option<PropertyEnumerable>,
-    configurable: Option<PropertyConfigurable>,
+    pub(in crate::runtime) get: Option<Value>,
+    pub(in crate::runtime) set: Option<Value>,
+    pub(in crate::runtime) enumerable: Option<PropertyEnumerable>,
+    pub(in crate::runtime) configurable: Option<PropertyConfigurable>,
 }
 
 impl AccessorPropertyUpdate {
@@ -469,7 +469,7 @@ impl ObjectProperty {
         Ok(())
     }
 
-    pub(in crate::runtime::object) const fn seal(&mut self) {
+    pub(in crate::runtime) const fn seal(&mut self) {
         match &mut self.payload {
             ObjectPropertyPayload::Data(descriptor) => {
                 descriptor.configurable = PropertyConfigurable::No;
@@ -481,7 +481,7 @@ impl ObjectProperty {
         self.version = self.version.saturating_add(1);
     }
 
-    pub(in crate::runtime::object) const fn freeze(&mut self) {
+    pub(in crate::runtime) const fn freeze(&mut self) {
         match &mut self.payload {
             ObjectPropertyPayload::Data(descriptor) => {
                 descriptor.writable = PropertyWritable::No;

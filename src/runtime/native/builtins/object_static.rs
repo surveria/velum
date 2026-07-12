@@ -83,14 +83,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let target = Self::argument_or_undefined(args.as_slice().first());
-        let keys = self.own_enumerable_keys(&target)?;
+        let target =
+            self.object_to_object(&Self::argument_or_undefined(args.as_slice().first()))?;
+        let properties = self.semantic_enumerable_own_string_entries(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
-        let mut entries = Vec::with_capacity(keys.len());
-        for key in keys {
+        let mut entries = Vec::with_capacity(properties.len());
+        for (key, value) in properties {
             let key_value = self.heap_string_value(&key)?;
-            let value = self.get_named(&target, &key)?;
             let entry = self.create_array_with_prototype(vec![key_value, value], prototype)?;
             entries.push(entry);
         }
@@ -122,16 +122,17 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let target = Self::argument_or_undefined(args.as_slice().first());
-        let names = self.own_property_names(&target)?;
+        let target =
+            self.object_to_object(&Self::argument_or_undefined(args.as_slice().first()))?;
+        let keys = self.semantic_own_property_keys(&target)?;
         let result = self.create_object_from_constructor()?;
         let Value::Object(result_id) = result else {
             return Err(Error::runtime(
                 "Object result allocation did not return an object",
             ));
         };
-        for name in names {
-            let mut property = self.named_dynamic_property(name);
+        for key in keys {
+            let mut property = self.dynamic_property_key(&key)?;
             let Some(descriptor) = self.own_property_descriptor_value(&target, &property)? else {
                 continue;
             };
@@ -269,6 +270,11 @@ impl Context {
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
         let prototype = Self::argument_or_undefined(args.get(1));
+        if matches!(target, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "Object.setPrototypeOf target cannot be converted to an object",
+            ));
+        }
         Self::validate_prototype_value(&prototype)?;
         match self.semantic_try_set_prototype(&target, prototype)? {
             Some(true) => Ok(target),
@@ -279,7 +285,7 @@ impl Context {
                 Value::Object(_) => Err(Error::runtime(
                     "Object.setPrototypeOf lost its semantic object target",
                 )),
-                Value::Undefined | Value::Null => Err(Error::runtime(
+                Value::Undefined | Value::Null => Err(Error::type_error(
                     "Object.setPrototypeOf target cannot be converted to an object",
                 )),
                 Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
@@ -301,14 +307,12 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let target = Self::argument_or_undefined(args.as_slice().first());
-        let keys = self.own_enumerable_keys(&target)?;
+        let target =
+            self.object_to_object(&Self::argument_or_undefined(args.as_slice().first()))?;
+        let properties = self.semantic_enumerable_own_string_entries(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
-        let mut values = Vec::with_capacity(keys.len());
-        for key in keys {
-            values.push(self.get_named(&target, &key)?);
-        }
+        let values = properties.into_iter().map(|(_, value)| value).collect();
         self.create_array_with_prototype(values, prototype)
     }
 
@@ -489,7 +493,7 @@ impl Context {
             | Value::BigInt(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_) => Err(Error::runtime(
+            | Value::Symbol(_) => Err(Error::type_error(
                 "Object.setPrototypeOf prototype must be an object or null",
             )),
         }
@@ -530,10 +534,5 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
-    }
-
-    fn named_dynamic_property(&self, name: String) -> DynamicPropertyKey {
-        let key = self.known_property_key(&name);
-        DynamicPropertyKey::new(name, key)
     }
 }

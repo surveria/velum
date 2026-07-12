@@ -318,11 +318,6 @@ impl Context {
         function.properties.delete(property, property_kind)
     }
 
-    pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
-        let function = self.function(id)?;
-        function.properties.keys(&self.atoms)
-    }
-
     pub(crate) fn function_own_keys(
         &self,
         id: FunctionId,
@@ -337,6 +332,77 @@ impl Context {
     ) -> Result<(Vec<String>, Vec<crate::storage::symbol::SymbolId>)> {
         let function = self.native_function(id)?;
         function.properties().own_keys(&self.atoms)
+    }
+
+    pub(in crate::runtime) fn function_is_extensible(&self, id: FunctionId) -> Result<bool> {
+        Ok(self.function(id)?.properties.is_extensible())
+    }
+
+    pub(in crate::runtime) fn prevent_function_extensions(&mut self, id: FunctionId) -> Result<()> {
+        self.function_mut(id)?.properties.prevent_extensions();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn seal_function(&mut self, id: FunctionId) -> Result<()> {
+        self.function_mut(id)?.properties.seal();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn freeze_function(&mut self, id: FunctionId) -> Result<()> {
+        self.function_mut(id)?.properties.freeze();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn function_is_sealed(&self, id: FunctionId) -> Result<bool> {
+        Ok(self.function(id)?.properties.is_sealed())
+    }
+
+    pub(in crate::runtime) fn function_is_frozen(&self, id: FunctionId) -> Result<bool> {
+        Ok(self.function(id)?.properties.is_frozen())
+    }
+
+    pub(in crate::runtime) fn native_function_is_extensible(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<bool> {
+        Ok(self.native_function(id)?.properties().is_extensible())
+    }
+
+    pub(in crate::runtime) fn prevent_native_function_extensions(
+        &mut self,
+        id: NativeFunctionId,
+    ) -> Result<()> {
+        self.native_function_mut(id)?
+            .properties_mut()
+            .prevent_extensions();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn seal_native_function(&mut self, id: NativeFunctionId) -> Result<()> {
+        self.native_function_mut(id)?.properties_mut().seal();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn freeze_native_function(
+        &mut self,
+        id: NativeFunctionId,
+    ) -> Result<()> {
+        self.native_function_mut(id)?.properties_mut().freeze();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn native_function_is_sealed(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<bool> {
+        Ok(self.native_function(id)?.properties().is_sealed())
+    }
+
+    pub(in crate::runtime) fn native_function_is_frozen(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<bool> {
+        Ok(self.native_function(id)?.properties().is_frozen())
     }
 
     pub(in crate::runtime) fn set_function_static_parent(

@@ -4,7 +4,10 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{Object, ObjectHeap, PropertyEnumerable, PropertyKey};
+use super::{
+    DataPropertyUpdate, Object, ObjectHeap, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+    PropertyUpdate, PropertyWritable,
+};
 
 const STRING_LENGTH_PROPERTY: &str = "length";
 const STRING_LENGTH_LIMIT_ERROR: &str = "string length exceeded supported object range";
@@ -22,11 +25,15 @@ impl ObjectHeap {
         let length = string_code_unit_count(value.as_utf16())?;
         let mut object = Object::string(value);
         object.prototype = Some(prototype);
-        object.define(
+        object.define_property(
             length_key,
             STRING_LENGTH_PROPERTY,
-            Value::Number(length_to_value(length)?),
-            PropertyEnumerable::No,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Number(length_to_value(length)?)),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
             &mut self.shapes,
             max_properties,
         )?;

@@ -39,38 +39,73 @@ impl Context {
         &mut self,
         target: &Value,
     ) -> Result<Vec<String>> {
-        let Some(object_ref) = self.semantic_object_ref(target)? else {
-            return match target {
-                Value::String(_) | Value::HeapString(_) => self.enumerable_keys(target),
-                Value::Undefined | Value::Null => Err(Error::type_error(
-                    "Object.keys target cannot be converted to an object",
-                )),
-                Value::Bool(_)
-                | Value::Number(_)
-                | Value::BigInt(_)
-                | Value::Symbol(_)
-                | Value::Object(_)
-                | Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_) => Ok(Vec::new()),
+        if let Value::Object(id) = target
+            && self.objects.is_proxy(*id)
+        {
+            return self.proxy_enumerable_keys(*id);
+        }
+        let keys = self.semantic_own_property_keys(target)?;
+        let roots = self
+            .active_transient_root_scope(crate::runtime::roots::VmRootKind::TransientTemporary)?;
+        roots.add_values(keys.iter())?;
+        let mut names = Vec::new();
+        for key in keys {
+            self.step()?;
+            if matches!(key, Value::Symbol(_)) {
+                continue;
+            }
+            let property = self.dynamic_property_key(&key)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(target, &property)? else {
+                continue;
             };
-        };
-        match object_ref.value {
-            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_enumerable_keys(*id),
-            Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
-            Value::Function(id) => self.function_enumerable_keys(*id),
-            Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
-            Value::HostFunction(_) => Err(Error::runtime(
-                "Object.keys target cannot be converted to an object",
-            )),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::BigInt(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => Ok(Vec::new()),
+            if Self::semantic_descriptor_is_enumerable(&descriptor) {
+                names.push(property.name().to_owned());
+            }
+        }
+        Ok(names)
+    }
+
+    /// Shared `EnumerableOwnProperties` value path. Descriptor checks and
+    /// property reads remain interleaved so earlier getters can affect later
+    /// keys observably.
+    pub(in crate::runtime) fn semantic_enumerable_own_string_entries(
+        &mut self,
+        target: &Value,
+    ) -> Result<Vec<(String, Value)>> {
+        let keys = self.semantic_own_property_keys(target)?;
+        let roots = self
+            .active_transient_root_scope(crate::runtime::roots::VmRootKind::TransientTemporary)?;
+        roots.add_values(keys.iter())?;
+        let mut entries = Vec::new();
+        for key in keys {
+            self.step()?;
+            if matches!(key, Value::Symbol(_)) {
+                continue;
+            }
+            let property = self.dynamic_property_key(&key)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(target, &property)? else {
+                continue;
+            };
+            if !Self::semantic_descriptor_is_enumerable(&descriptor) {
+                continue;
+            }
+            let value = self.get(target, property.lookup())?;
+            roots.add_values(std::iter::once(&value))?;
+            entries.push((property.name().to_owned(), value));
+        }
+        Ok(entries)
+    }
+
+    const fn semantic_descriptor_is_enumerable(
+        descriptor: &crate::runtime::object::OwnPropertyDescriptor,
+    ) -> bool {
+        match descriptor {
+            crate::runtime::object::OwnPropertyDescriptor::Data(descriptor) => {
+                descriptor.enumerable().is_yes()
+            }
+            crate::runtime::object::OwnPropertyDescriptor::Accessor(descriptor) => {
+                descriptor.enumerable().is_yes()
+            }
         }
     }
 

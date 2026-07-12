@@ -3,6 +3,7 @@ use crate::{
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
+        is_compatible_property_update,
     },
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
     runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
@@ -25,6 +26,18 @@ pub(in crate::runtime) enum FunctionPropertyKind {
     Custom,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FunctionExtensibility {
+    Extensible,
+    NonExtensible,
+}
+
+impl FunctionExtensibility {
+    const fn is_extensible(self) -> bool {
+        matches!(self, Self::Extensible)
+    }
+}
+
 impl FunctionPropertyKind {
     #[must_use]
     pub(in crate::runtime) fn from_name(property: &str) -> Self {
@@ -45,15 +58,6 @@ impl FunctionPropertyKind {
     pub(in crate::runtime) const fn is_prototype(self) -> bool {
         matches!(self, Self::Prototype)
     }
-
-    #[must_use]
-    const fn enumerable_name(self) -> Option<&'static str> {
-        match self {
-            Self::Length => Some(FUNCTION_LENGTH_PROPERTY),
-            Self::Name => Some(FUNCTION_NAME_PROPERTY),
-            Self::Prototype | Self::Custom => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +68,7 @@ pub(in crate::runtime) struct FunctionProperties {
     name: FunctionIntrinsicProperty,
     properties: Vec<FunctionPropertyEntry>,
     property_order: Vec<PropertyKey>,
+    extensibility: FunctionExtensibility,
     storage_ledger: Option<VmStorageLedger>,
 }
 
@@ -126,6 +131,22 @@ impl FunctionIntrinsicDefaults {
             descriptor.configurable(),
         );
     }
+
+    fn set_prototype_integrity(&mut self, frozen: bool) {
+        let Some(descriptor) = &self.prototype else {
+            return;
+        };
+        self.prototype = Some(DataPropertyDescriptor::new(
+            descriptor.value(),
+            if frozen {
+                PropertyWritable::No
+            } else {
+                descriptor.writable()
+            },
+            descriptor.enumerable(),
+            PropertyConfigurable::No,
+        ));
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -164,6 +185,7 @@ impl FunctionProperties {
             name: FunctionIntrinsicProperty::new(),
             properties: Vec::new(),
             property_order: Vec::new(),
+            extensibility: FunctionExtensibility::Extensible,
             storage_ledger: None,
         }
     }
@@ -290,38 +312,6 @@ impl FunctionProperties {
         self.intrinsic_descriptor(property).is_some()
     }
 
-    pub(in crate::runtime) fn set(
-        &mut self,
-        property: PropertyKey,
-        property_kind: FunctionPropertyKind,
-        value: Value,
-        max_properties: usize,
-    ) -> Result<()> {
-        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
-            && self.set_intrinsic_value(property_kind, default, value.clone())
-        {
-            return Ok(());
-        }
-        if property_kind.is_prototype() {
-            self.intrinsic_defaults.set_prototype_value(value.clone());
-            self.prototype = value;
-            return Ok(());
-        }
-        if let Some(existing) = self.function_property_mut(property) {
-            existing.set_value(value);
-            return Ok(());
-        }
-        if self.property_order.len() >= max_properties {
-            return Err(Error::limit(format!(
-                "function property count exceeded {max_properties}"
-            )));
-        }
-        self.push_function_property(
-            property,
-            FunctionProperty::new(value, PropertyEnumerable::Yes),
-        )
-    }
-
     pub(in crate::runtime) fn delete(
         &mut self,
         property: PropertyLookup<'_>,
@@ -353,24 +343,6 @@ impl FunctionProperties {
         self.property_order.retain(|stored_key| *stored_key != key);
         self.release_removed_storage(previous_property_count, previous_cache_count)?;
         Ok(true)
-    }
-
-    pub(in crate::runtime) fn keys(&self, atoms: &AtomTable) -> Result<Vec<String>> {
-        let mut keys = Vec::new();
-        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Length);
-        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Name);
-        for key in &self.property_order {
-            if self
-                .function_property(*key)
-                .is_some_and(FunctionProperty::is_enumerable)
-            {
-                let Some(atom) = key.atom() else {
-                    continue;
-                };
-                keys.push(atoms.name(atom)?.to_owned());
-            }
-        }
-        Ok(keys)
     }
 
     pub(in crate::runtime) fn own_keys(
@@ -430,6 +402,31 @@ impl FunctionProperties {
         update: PropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
+        let current = self
+            .intrinsic_defaults
+            .descriptor(property_kind)
+            .and_then(|default| {
+                if property_kind.is_prototype() {
+                    Some(default)
+                } else {
+                    self.intrinsic(property_kind)
+                        .and_then(|intrinsic| intrinsic.descriptor(default))
+                }
+            })
+            .map(OwnPropertyDescriptor::Data)
+            .or_else(|| {
+                self.function_property(property)
+                    .map(FunctionProperty::descriptor)
+            });
+        if !is_compatible_property_update(
+            self.extensibility.is_extensible(),
+            &update,
+            current.as_ref(),
+        ) {
+            return Err(Error::type_error(
+                "incompatible function property definition",
+            ));
+        }
         if let Some(default) = self.intrinsic_defaults.descriptor(property_kind) {
             match &update {
                 PropertyUpdate::Data(data)
@@ -473,12 +470,93 @@ impl FunctionProperties {
             existing.define(update)?;
             return Ok(());
         }
+        if !self.extensibility.is_extensible() {
+            return Err(Error::type_error(
+                "cannot define property on non-extensible function",
+            ));
+        }
         if self.property_order.len() >= max_properties {
             return Err(Error::limit(format!(
                 "function property count exceeded {max_properties}"
             )));
         }
         self.push_function_property(property, FunctionProperty::from_update(update))
+    }
+
+    pub(in crate::runtime) const fn is_extensible(&self) -> bool {
+        self.extensibility.is_extensible()
+    }
+
+    pub(in crate::runtime) const fn prevent_extensions(&mut self) {
+        self.extensibility = FunctionExtensibility::NonExtensible;
+    }
+
+    pub(in crate::runtime) fn seal(&mut self) {
+        self.prevent_extensions();
+        self.update_intrinsic_integrity(false);
+        self.intrinsic_defaults.set_prototype_integrity(false);
+        for entry in &mut self.properties {
+            entry.property_mut().seal();
+        }
+    }
+
+    pub(in crate::runtime) fn freeze(&mut self) {
+        self.prevent_extensions();
+        self.update_intrinsic_integrity(true);
+        self.intrinsic_defaults.set_prototype_integrity(true);
+        for entry in &mut self.properties {
+            entry.property_mut().freeze();
+        }
+    }
+
+    pub(in crate::runtime) fn is_sealed(&self) -> bool {
+        !self.is_extensible()
+            && self
+                .intrinsic_descriptors()
+                .all(|descriptor| !descriptor.configurable().is_yes())
+            && self
+                .properties
+                .iter()
+                .all(|entry| !entry.property().is_configurable())
+    }
+
+    pub(in crate::runtime) fn is_frozen(&self) -> bool {
+        self.is_sealed()
+            && self
+                .intrinsic_descriptors()
+                .all(|descriptor| !descriptor.writable().is_yes())
+            && self
+                .properties
+                .iter()
+                .all(|entry| entry.property().is_frozen())
+    }
+
+    fn update_intrinsic_integrity(&mut self, frozen: bool) {
+        for property in [FunctionPropertyKind::Length, FunctionPropertyKind::Name] {
+            let Some(default) = self.intrinsic_defaults.descriptor(property) else {
+                continue;
+            };
+            let Some(intrinsic) = self.intrinsic_mut(property) else {
+                continue;
+            };
+            let update = DataPropertyUpdate::new(
+                None,
+                frozen.then_some(PropertyWritable::No),
+                None,
+                Some(PropertyConfigurable::No),
+            );
+            intrinsic.define(default, &update);
+        }
+    }
+
+    fn intrinsic_descriptors(&self) -> impl Iterator<Item = DataPropertyDescriptor> + '_ {
+        [
+            FunctionPropertyKind::Length,
+            FunctionPropertyKind::Name,
+            FunctionPropertyKind::Prototype,
+        ]
+        .into_iter()
+        .filter_map(|property| self.intrinsic_descriptor(property))
     }
 
     const fn intrinsic(
@@ -503,18 +581,6 @@ impl FunctionProperties {
         }
     }
 
-    fn set_intrinsic_value(
-        &mut self,
-        property: FunctionPropertyKind,
-        default: DataPropertyDescriptor,
-        value: Value,
-    ) -> bool {
-        let Some(intrinsic) = self.intrinsic_mut(property) else {
-            return false;
-        };
-        intrinsic.set_value(default, value)
-    }
-
     fn define_intrinsic(
         &mut self,
         property: FunctionPropertyKind,
@@ -534,18 +600,6 @@ impl FunctionProperties {
     ) -> Option<bool> {
         self.intrinsic_mut(property)
             .and_then(|intrinsic| intrinsic.delete(default))
-    }
-
-    fn push_intrinsic_key(&self, keys: &mut Vec<String>, property: FunctionPropertyKind) {
-        let Some(name) = property.enumerable_name() else {
-            return;
-        };
-        let Some(descriptor) = self.intrinsic_descriptor(property) else {
-            return;
-        };
-        if descriptor.enumerable().is_yes() {
-            keys.push(name.to_owned());
-        }
     }
 
     fn contains_function_property(&self, property: PropertyKey) -> bool {

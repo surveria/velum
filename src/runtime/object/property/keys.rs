@@ -18,13 +18,6 @@ impl ObjectHeap {
         Ok(keys)
     }
 
-    pub(crate) fn own_keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
-        let object = self.object(id)?;
-        let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
-        object.extend_enumerable_keys(atoms, &self.shapes, &mut keys)?;
-        Ok(keys)
-    }
-
     pub(crate) fn own_property_names(
         &self,
         id: ObjectId,

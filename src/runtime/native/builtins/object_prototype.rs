@@ -5,9 +5,9 @@ use crate::{
         call::RuntimeCallArgs,
         control::Completion,
         object::{
-            AccessorPropertyDescriptor, AccessorPropertyUpdate, ObjectPrimitiveValue,
-            ObjectPropertyInit, OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable,
-            PropertyKey, PropertyUpdate,
+            AccessorPropertyDescriptor, AccessorPropertyUpdate, DataPropertyUpdate,
+            ObjectPrimitiveValue, ObjectPropertyInit, OwnPropertyDescriptor, PropertyConfigurable,
+            PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
         },
         property::DynamicPropertyKey,
         roots::VmRootKind,
@@ -404,9 +404,22 @@ impl Context {
         let key = self.get_named(entry, ENTRY_KEY_PROPERTY)?;
         let value = self.get_named(entry, ENTRY_VALUE_PROPERTY)?;
         let mut dynamic = self.object_property_key(Some(&key))?;
-        let name = dynamic.name().to_owned();
-        let property_key = self.intern_dynamic_property_key(&mut dynamic)?;
-        self.set_property_value_with_accessors(result, property_key, &name, value)
+        let updated = self.semantic_define_own_property_update(
+            result,
+            &mut dynamic,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::Yes),
+                Some(PropertyConfigurable::Yes),
+            )),
+        )?;
+        if !updated {
+            return Err(Error::type_error(
+                "Object.fromEntries could not define result property",
+            ));
+        }
+        Ok(())
     }
 
     /// Coerce a receiver to an object (`ToObject`), boxing primitives.

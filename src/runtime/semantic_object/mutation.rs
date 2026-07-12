@@ -56,8 +56,15 @@ impl Context {
             }
             Value::NativeFunction(id) => {
                 let key = self.semantic_property_key(property)?;
-                self.set_native_function_property_key(*id, property.name(), key, value)?;
-                SemanticPropertyWrite::Resolved(true)
+                let mut dynamic = DynamicPropertyKey::new(property.name().to_owned(), Some(key));
+                let receiver = Value::NativeFunction(*id);
+                let updated = self.write_native_function_property_with_receiver(
+                    *id,
+                    &mut dynamic,
+                    value,
+                    &receiver,
+                )?;
+                SemanticPropertyWrite::Resolved(updated)
             }
             Value::HostFunction(_) => {
                 let key = self.semantic_property_key(property)?;
@@ -114,6 +121,34 @@ impl Context {
                 .semantic_reflect_property_write(&parent, property, value, receiver)
                 .map(|updated| updated.unwrap_or(false)),
         }
+    }
+
+    fn write_native_function_property_with_receiver(
+        &mut self,
+        target: crate::value::NativeFunctionId,
+        property: &mut DynamicPropertyKey,
+        value: Value,
+        receiver: &Value,
+    ) -> Result<bool> {
+        if let Some(descriptor) =
+            self.native_function_own_property_descriptor_lookup(target, property.lookup())?
+        {
+            return self.reflect_write_with_descriptor(property, value, receiver, descriptor);
+        }
+        let kind = self.native_function(target)?.kind();
+        if !matches!(
+            kind,
+            crate::runtime::native::NativeFunctionKind::TypedArray(_)
+        ) && !self.should_materialize_function_prototype_for(property.lookup())
+        {
+            return self.reflect_define_receiver_property(property, value, receiver);
+        }
+        let parent = self.native_function_object_prototype_value(target)?;
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return self.reflect_define_receiver_property(property, value, receiver);
+        }
+        self.semantic_reflect_property_write(&parent, property, value, receiver)
+            .map(|updated| updated.unwrap_or(false))
     }
 
     /// Finishes an object-like write after an optimizer declines the ordinary

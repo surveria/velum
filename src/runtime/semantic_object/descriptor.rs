@@ -59,7 +59,7 @@ impl Context {
         update: PropertyUpdate,
     ) -> Result<bool> {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
-            return Err(Error::runtime(
+            return Err(Error::type_error(
                 "property definition target must be an object",
             ));
         };
@@ -135,7 +135,7 @@ impl Context {
                 }
             },
             Value::HostFunction(_) => {
-                return Err(Error::runtime(
+                return Err(Error::type_error(
                     "property definition target is not supported",
                 ));
             }
@@ -147,7 +147,7 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => {
-                return Err(Error::runtime(
+                return Err(Error::type_error(
                     "property definition target must be an object",
                 ));
             }
@@ -196,7 +196,7 @@ impl Context {
                 Value::String(_) | Value::HeapString(_) => {
                     self.primitive_own_property_descriptor(target, property)
                 }
-                Value::Undefined | Value::Null => Err(Error::runtime(
+                Value::Undefined | Value::Null => Err(Error::type_error(
                     "property descriptor target cannot be converted to an object",
                 )),
                 Value::Bool(_)

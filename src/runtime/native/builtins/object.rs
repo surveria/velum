@@ -90,6 +90,11 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
+        if self.semantic_object_ref(&target)?.is_none() {
+            return Err(Error::type_error(
+                "Object.defineProperty target must be an object",
+            ));
+        }
         let mut property = self.object_property_key(values.get(1))?;
         let descriptor_value = Self::argument_or_undefined(values.get(2));
         if !self.semantic_define_own_property_from_value(
@@ -109,7 +114,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
-        let target = Self::argument_or_undefined(values.first());
+        let target = self.object_to_object(&Self::argument_or_undefined(values.first()))?;
         let property = self.object_property_key(values.get(1))?;
         let Some(descriptor) = self.own_property_descriptor_value(&target, &property)? else {
             return Ok(Value::Undefined);
@@ -133,7 +138,8 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let target = Self::argument_or_undefined(args.as_slice().first());
+        let target =
+            self.object_to_object(&Self::argument_or_undefined(args.as_slice().first()))?;
         let symbols = self.semantic_own_property_symbols(&target)?;
         let mut values = Vec::with_capacity(symbols.len());
         for symbol in symbols {
@@ -164,7 +170,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
-        let target = Self::argument_or_undefined(values.first());
+        let target = self.object_to_object(&Self::argument_or_undefined(values.first()))?;
         let property = self.object_property_key(values.get(1))?;
         self.has_own_property_value(&target, &property)
             .map(Value::Bool)
@@ -175,7 +181,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
-        let target = Self::argument_or_undefined(values.first());
+        let target = self.object_to_object(&Self::argument_or_undefined(values.first()))?;
         let keys = self.semantic_own_enumerable_string_keys(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
@@ -196,7 +202,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
-        let target = Self::argument_or_undefined(values.first());
+        let target = self.object_to_object(&Self::argument_or_undefined(values.first()))?;
         let keys = self.semantic_own_property_names(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
@@ -601,6 +607,84 @@ impl Context {
         )
     }
 
+    pub(in crate::runtime) fn create_property_update_object(
+        &mut self,
+        update: &PropertyUpdate,
+    ) -> Result<Value> {
+        let keys = self.descriptor_property_keys()?;
+        let mut properties = Vec::new();
+        match update {
+            PropertyUpdate::Data(update) => {
+                if let Some(value) = update.value() {
+                    let value = self.runtime_value(value)?;
+                    properties.push(Self::descriptor_object_property(
+                        keys.value(),
+                        DESCRIPTOR_VALUE_PROPERTY,
+                        value,
+                    ));
+                }
+                if let Some(writable) = update.writable() {
+                    properties.push(Self::descriptor_object_property(
+                        keys.writable(),
+                        DESCRIPTOR_WRITABLE_PROPERTY,
+                        Value::Bool(writable.is_yes()),
+                    ));
+                }
+                if let Some(enumerable) = update.enumerable() {
+                    properties.push(Self::descriptor_object_property(
+                        keys.enumerable(),
+                        DESCRIPTOR_ENUMERABLE_PROPERTY,
+                        Value::Bool(enumerable.is_yes()),
+                    ));
+                }
+                if let Some(configurable) = update.configurable() {
+                    properties.push(Self::descriptor_object_property(
+                        keys.configurable(),
+                        DESCRIPTOR_CONFIGURABLE_PROPERTY,
+                        Value::Bool(configurable.is_yes()),
+                    ));
+                }
+            }
+            PropertyUpdate::Accessor(update) => {
+                if let Some(getter) = update.get.clone() {
+                    properties.push(Self::descriptor_object_property(
+                        keys.get(),
+                        DESCRIPTOR_GET_PROPERTY,
+                        getter,
+                    ));
+                }
+                if let Some(setter) = update.set.clone() {
+                    properties.push(Self::descriptor_object_property(
+                        keys.set(),
+                        DESCRIPTOR_SET_PROPERTY,
+                        setter,
+                    ));
+                }
+                if let Some(enumerable) = update.enumerable {
+                    properties.push(Self::descriptor_object_property(
+                        keys.enumerable(),
+                        DESCRIPTOR_ENUMERABLE_PROPERTY,
+                        Value::Bool(enumerable.is_yes()),
+                    ));
+                }
+                if let Some(configurable) = update.configurable {
+                    properties.push(Self::descriptor_object_property(
+                        keys.configurable(),
+                        DESCRIPTOR_CONFIGURABLE_PROPERTY,
+                        Value::Bool(configurable.is_yes()),
+                    ));
+                }
+            }
+        }
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_data_object(
+            properties,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
     const fn descriptor_object_property(
         key: PropertyKey,
         name: &'static str,
@@ -694,13 +778,6 @@ impl Context {
         target: &Value,
     ) -> Result<Vec<String>> {
         self.semantic_own_enumerable_string_keys(target)
-    }
-
-    pub(in crate::runtime::native) fn own_property_names(
-        &mut self,
-        target: &Value,
-    ) -> Result<Vec<String>> {
-        self.semantic_own_property_names(target)
     }
 
     pub(in crate::runtime::native) fn create_object_from_constructor(&mut self) -> Result<Value> {

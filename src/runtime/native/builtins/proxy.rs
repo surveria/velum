@@ -513,8 +513,7 @@ impl Context {
     }
 
     /// Enumerable own string keys of a proxy: the `ownKeys` trap result
-    /// filtered by each key's `getOwnPropertyDescriptor` enumerability. Backs
-    /// Object.keys/entries/values over a proxy.
+    /// filtered by each key's `getOwnPropertyDescriptor` enumerability.
     pub(in crate::runtime) fn proxy_enumerable_keys(
         &mut self,
         id: ObjectId,
