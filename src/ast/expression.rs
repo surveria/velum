@@ -110,6 +110,12 @@ pub enum Expr {
         target: Box<Expression>,
         expr: Box<Expression>,
     },
+    /// Annex B call assignment targets evaluate the call and then throw a
+    /// `ReferenceError` before evaluating the optional right-hand expression.
+    WebCompatCallAssignment {
+        target: Box<Expression>,
+        discarded: Option<Box<Expression>>,
+    },
     PropertyAssignment {
         object: Box<Expression>,
         property: StaticName,

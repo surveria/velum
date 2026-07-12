@@ -2,41 +2,15 @@ use crate::{
     binding_metadata::BindingOperand,
     bytecode::{
         BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass, BytecodeForInTarget,
-        BytecodeInstruction, BytecodePattern, BytecodePatternKey, BytecodeProgram,
-        BytecodeSwitchCase,
+        BytecodeInstruction, BytecodePattern, BytecodePatternKey, BytecodeSwitchCase,
     },
 };
 
+mod program;
 mod targets;
 mod traversal;
 
 use traversal::{count_blocks_2, count_for_blocks, count_switch, count_try};
-
-impl BytecodeProgram {
-    pub fn instruction_count(&self) -> usize {
-        self.block().instruction_count()
-    }
-
-    pub fn binding_operand_count(&self) -> usize {
-        self.block().binding_operand_count()
-    }
-
-    pub fn property_operand_count(&self) -> usize {
-        self.block().property_operand_count()
-    }
-
-    pub fn direct_native_call_count(&self) -> usize {
-        self.block().direct_native_call_count()
-    }
-
-    pub fn array_native_call_count(&self) -> usize {
-        self.block().array_native_call_count()
-    }
-
-    pub fn numeric_instruction_count(&self) -> usize {
-        self.block().numeric_instruction_count()
-    }
-}
 
 impl BytecodeBlock {
     pub fn instruction_count(&self) -> usize {
@@ -105,6 +79,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .binding_operand_count()
                 .saturating_add(value.binding_operand_count()),
+            Self::WebCompatCallAssignment { target } => target.binding_operand_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::binding_operand_count),
@@ -203,6 +178,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .property_operand_count()
                 .saturating_add(value.property_operand_count()),
+            Self::WebCompatCallAssignment { target } => target.property_operand_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::property_operand_count),
@@ -275,6 +251,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .direct_native_call_count()
                 .saturating_add(value.direct_native_call_count()),
+            Self::WebCompatCallAssignment { target } => target.direct_native_call_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count),
@@ -349,6 +326,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .array_native_call_count()
                 .saturating_add(value.array_native_call_count()),
+            Self::WebCompatCallAssignment { target } => target.array_native_call_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::array_native_call_count),
@@ -421,6 +399,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .numeric_instruction_count()
                 .saturating_add(value.numeric_instruction_count()),
+            Self::WebCompatCallAssignment { target } => target.numeric_instruction_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count),
@@ -489,6 +468,7 @@ impl BytecodeInstruction {
             Self::LogicalAssignment { target, value, .. } => target
                 .nested_instruction_count()
                 .saturating_add(value.instruction_count()),
+            Self::WebCompatCallAssignment { target } => target.instruction_count(),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::instruction_count),

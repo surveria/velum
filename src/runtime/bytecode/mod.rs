@@ -102,6 +102,7 @@ impl Context {
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::LogicalAssignment { .. }
+            | BytecodeInstruction::WebCompatCallAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
@@ -190,6 +191,7 @@ impl Context {
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::LogicalAssignment { .. }
+            | BytecodeInstruction::WebCompatCallAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
@@ -448,6 +450,10 @@ impl Context {
                     .push(self.eval_bytecode_logical_assignment(*op, target, value)?);
                 state.pc = next;
                 Ok(None)
+            }
+            BytecodeInstruction::WebCompatCallAssignment { target } => {
+                self.eval_bytecode_expression(target)?;
+                Err(ops::web_compat_call_assignment_error())
             }
             BytecodeInstruction::StaticMember { property } => {
                 self.eval_bytecode_static_member_instruction(state, property, next)

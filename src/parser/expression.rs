@@ -25,7 +25,10 @@ struct ArrowSignature {
 impl Parser {
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
-        if self.await_expression_is_allowed() && self.match_kind(&TokenKind::Await) {
+        if self.await_expression_is_allowed()
+            && !self.await_starts_identifier_assignment()
+            && self.match_kind(&TokenKind::Await)
+        {
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -178,20 +181,6 @@ impl Parser {
         Ok(expr)
     }
 
-    pub(super) fn assignment_target(expr: Expression) -> Option<Expression> {
-        let span = expr.span();
-        match expr.into_kind() {
-            kind @ (Expr::Identifier(_)
-            | Expr::Member { .. }
-            | Expr::ComputedMember { .. }
-            | Expr::SuperMember { .. }
-            | Expr::SuperComputedMember { .. }
-            | Expr::PrivateMember { .. }) => Some(Expression::new(kind, span)),
-            Expr::Parenthesized(inner) => Self::assignment_target(*inner),
-            _ => None,
-        }
-    }
-
     fn new_expr(&mut self) -> Result<Expression> {
         let new_span = self.previous_span();
         if self.match_kind(&TokenKind::Dot) {
@@ -297,9 +286,19 @@ impl Parser {
         operator: crate::SourceSpan,
     ) -> Result<Expression> {
         let start = if prefix { operator } else { expr.span() };
-        let expr = Self::assignment_target(expr)
+        let expr = self
+            .assignment_target(expr)
             .ok_or_else(|| Error::parse_at("invalid update target", operator))?;
         self.validate_assignment_target(&expr)?;
+        if matches!(expr.kind(), Expr::Call { .. }) {
+            return Ok(self.expression_node(
+                start,
+                Expr::WebCompatCallAssignment {
+                    target: Box::new(expr),
+                    discarded: None,
+                },
+            ));
+        }
         Ok(self.expression_node(
             start,
             Expr::Update {

@@ -10,7 +10,7 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::for_init_needs_lexical_scope;
+use super::{RootLayoutMode, for_init_needs_lexical_scope};
 
 mod annex_b;
 mod function;
@@ -26,12 +26,6 @@ pub(super) struct LayoutBuilder {
     local_slot_count: usize,
     pub(super) upvalue_slot_count: usize,
     with_scopes: Vec<ScopeId>,
-}
-
-pub(super) enum RootLayoutMode {
-    Script,
-    SloppyEval,
-    StrictEval,
 }
 
 impl LayoutBuilder {
@@ -572,10 +566,7 @@ impl LayoutBuilder {
                 self.analyze_expr(expr, scope, function)
             }
             Expr::Yield { expr, .. } => {
-                if let Some(expr) = expr {
-                    self.analyze_expr(expr, scope, function)?;
-                }
-                Ok(())
+                self.analyze_optional_expr(expr.as_deref(), scope, function)
             }
             Expr::Binary { left, right, .. } => {
                 self.analyze_expr(left, scope, function)?;
@@ -601,6 +592,9 @@ impl LayoutBuilder {
             Expr::CompoundAssignment { target, expr, .. } => {
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_expr(expr, scope, function)
+            }
+            Expr::WebCompatCallAssignment { target, discarded } => {
+                self.analyze_web_compat(target, discarded.as_deref(), scope, function)
             }
             Expr::PropertyAssignment { object, expr, .. }
             | Expr::PrivateAssignment { object, expr, .. } => {
@@ -644,6 +638,32 @@ impl LayoutBuilder {
                 self.analyze_exprs(args, scope, function)
             }
         }
+    }
+
+    fn analyze_web_compat(
+        &mut self,
+        target: &Expression,
+        discarded: Option<&Expression>,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        self.analyze_expr(target, scope, function)?;
+        if let Some(discarded) = discarded {
+            self.analyze_expr(discarded, scope, function)?;
+        }
+        Ok(())
+    }
+
+    fn analyze_optional_expr(
+        &mut self,
+        expr: Option<&Expression>,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        if let Some(expr) = expr {
+            self.analyze_expr(expr, scope, function)?;
+        }
+        Ok(())
     }
 
     fn declare(&mut self, scope: ScopeId, binding: &StaticBinding) -> Result<()> {

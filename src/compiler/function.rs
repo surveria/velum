@@ -648,6 +648,9 @@ impl CaptureBindingCollector {
                 self.collect_expr(target);
                 self.collect_expr(expr);
             }
+            Expr::WebCompatCallAssignment { target, discarded } => {
+                self.collect_web_compat_call_assignment(target, discarded.as_deref());
+            }
             Expr::PropertyAssignment { object, expr, .. }
             | Expr::PrivateAssignment { object, expr, .. } => {
                 self.collect_expr(object);
@@ -683,6 +686,17 @@ impl CaptureBindingCollector {
             }
             Expr::Object(properties) => self.collect_object_properties(properties),
             Expr::Array(elements) => self.collect_exprs(elements),
+        }
+    }
+
+    fn collect_web_compat_call_assignment(
+        &mut self,
+        target: &Expression,
+        discarded: Option<&Expression>,
+    ) {
+        self.collect_expr(target);
+        if let Some(discarded) = discarded {
+            self.collect_expr(discarded);
         }
     }
 

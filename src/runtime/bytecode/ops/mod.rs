@@ -1,7 +1,7 @@
 mod assignment;
 mod object_literal;
 
-pub(super) use assignment::BytecodeAssignmentReference;
+pub(super) use assignment::{BytecodeAssignmentReference, web_compat_call_assignment_error};
 
 use crate::{
     bytecode::{

@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use super::BytecodeCompletion;
+
 use crate::{
     api::native_call::NativeCallTarget,
     bytecode::BytecodeHoistPlan,
@@ -398,6 +400,7 @@ pub struct BytecodePatternTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeAssignmentTarget {
     Binding(BytecodeBinding),
+    WebCompatCall(BytecodeBlock),
     StaticProperty {
         object: BytecodeBlock,
         property: BytecodeProperty,
@@ -576,6 +579,9 @@ pub enum BytecodeInstruction {
         op: BinaryOp,
         target: BytecodeAssignmentTarget,
         value: BytecodeBlock,
+    },
+    WebCompatCallAssignment {
+        target: BytecodeBlock,
     },
     StaticMember {
         property: BytecodeProperty,
@@ -788,13 +794,4 @@ pub enum BytecodeInstruction {
     JumpIfFalseKeep(BytecodeAddress),
     JumpIfTrueKeep(BytecodeAddress),
     Complete(BytecodeCompletion),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum BytecodeCompletion {
-    Break(Option<StaticName>),
-    Continue(Option<StaticName>),
-    Return,
-    ReturnDirect,
-    Throw,
 }

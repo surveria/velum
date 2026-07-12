@@ -135,7 +135,7 @@ impl Parser {
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
         };
-        let Some(target) = Self::assignment_target(target) else {
+        let Some(target) = self.assignment_target(target) else {
             return Err(self.parse_error("invalid for-in assignment target"));
         };
         let object = self.for_head_rhs(head)?;

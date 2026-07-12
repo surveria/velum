@@ -4,6 +4,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn for_each_block(&self, visit: &mut impl FnMut(&BytecodeBlock)) {
         match self {
             Self::Binding(_) => {}
+            Self::WebCompatCall(target) => visit(target),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => {
@@ -21,6 +22,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn property_operand_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
+            Self::WebCompatCall(target) => target.property_operand_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => {
@@ -37,6 +39,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn direct_native_call_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
+            Self::WebCompatCall(target) => target.direct_native_call_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => object.direct_native_call_count(),
@@ -51,6 +54,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn array_native_call_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
+            Self::WebCompatCall(target) => target.array_native_call_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => object.array_native_call_count(),
@@ -65,6 +69,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn numeric_instruction_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
+            Self::WebCompatCall(target) => target.numeric_instruction_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => object.numeric_instruction_count(),
@@ -79,6 +84,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn binding_operand_count(&self) -> usize {
         match self {
             Self::Binding(binding) => binding.direct_operand_count(),
+            Self::WebCompatCall(target) => target.binding_operand_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => object.binding_operand_count(),
@@ -93,6 +99,7 @@ impl BytecodeAssignmentTarget {
     pub(super) fn nested_instruction_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
+            Self::WebCompatCall(target) => target.instruction_count(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => object.instruction_count(),
