@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T191839Z.md`
-- Task: PR #527: runtime: complete RegExp.escape semantics
-- Performance: 9.61x (4/5 >1.00x) (from `rsqjs-test-report-20260712T191839Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T191839Z.md`)
+- `rsqjs-test-report-20260712T194307Z.md`
+- Task: PR #531: runtime: restore optimization semantic contract
+- Performance: 10.35x (4/5 >1.00x) (from `rsqjs-test-report-20260712T194307Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T194307Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 80019 passed / 22559 failed (78.01%) (from `rsqjs-test-report-20260712T191839Z.md`)
+- Full Test262: 80097 passed / 22481 failed (78.08%) (from `rsqjs-test-report-20260712T194307Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -500,3 +500,4 @@ Latest report:
 | `20260712T174919Z` `d0b7b92` PR #520: runtime: complete string and RegExp replace semantics | 9.75x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 79227 passed / 23351 failed (77.24%) |
 | `20260712T185035Z` `ec717f1` PR #523: runtime: complete RegExp match and iterator protocols | 9.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 79819 passed / 22759 failed (77.81%) |
 | `20260712T191839Z` `92ce78e` PR #527: runtime: complete RegExp.escape semantics | 9.61x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80019 passed / 22559 failed (78.01%) |
+| `20260712T194307Z` `e1492c3` PR #531: runtime: restore optimization semantic contract | 10.35x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 80097 passed / 22481 failed (78.08%) |
