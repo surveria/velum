@@ -252,6 +252,67 @@ fn supports_observable_string_and_regexp_replace_protocols() -> TestResult {
 }
 
 #[test]
+fn supports_observable_regexp_match_search_and_match_all_protocols() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let matchCalls = 0;
+        let matcher = {
+            flags: "g",
+            lastIndex: 0,
+            exec: function() {
+                matchCalls += 1;
+                return matchCalls === 1 ? { 0: "", length: 1 } : null;
+            }
+        };
+        let matches = RegExp.prototype[Symbol.match].call(matcher, "ab");
+
+        let searchReceiver = {
+            lastIndex: 7,
+            exec: function() {
+                this.lastIndex = 3;
+                return { index: "marker" };
+            }
+        };
+        let search = RegExp.prototype[Symbol.search].call(searchReceiver, "ab");
+
+        let iteratorCalls = [];
+        function IteratorMatcher(pattern, flags) {
+            iteratorCalls.push("construct:" + flags);
+            this.lastIndex = 0;
+            this.execCount = 0;
+            this.exec = function(input) {
+                iteratorCalls.push("exec:" + input);
+                this.execCount += 1;
+                return this.execCount === 1 ? { 0: "a", index: 0, length: 1 } : null;
+            };
+        }
+        let source = {
+            flags: "g",
+            lastIndex: 0,
+            constructor: { [Symbol.species]: IteratorMatcher }
+        };
+        let iterator = RegExp.prototype[Symbol.matchAll].call(source, "ab");
+        let lazy = iteratorCalls.join("|") === "construct:g";
+        let first = iterator.next();
+        let second = iterator.next();
+
+        matches.length === 1 && matches[0] === "" && matchCalls === 2 &&
+            matcher.lastIndex === 1 &&
+            search === "marker" && searchReceiver.lastIndex === 7 &&
+            lazy && first.done === false && first.value[0] === "a" &&
+            second.done === true &&
+            iteratorCalls.join("|") === "construct:g|exec:ab|exec:ab" &&
+            Object.prototype.toString.call(iterator) === "[object RegExp String Iterator]" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_oversized_regexp_substitution_before_materialization() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_string_len: 256,

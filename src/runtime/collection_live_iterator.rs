@@ -16,6 +16,7 @@ enum CollectionIteratorBrand {
     Snapshot,
     Map,
     Set,
+    RegExpString,
 }
 
 impl Context {
@@ -30,6 +31,9 @@ impl Context {
         }
         if requested_brand == CollectionIteratorBrand::Snapshot {
             return self.collection_iterator_step(actual);
+        }
+        if requested_brand == CollectionIteratorBrand::RegExpString {
+            return self.regexp_string_iterator_step(actual);
         }
         self.live_collection_iterator_step(actual)
     }
@@ -52,6 +56,9 @@ impl Context {
                     ));
                 }
             }),
+            Some(CollectionIteratorState::RegExpString(_)) => {
+                Ok(CollectionIteratorBrand::RegExpString)
+            }
             Some(_) => Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR)),
             None => Err(Error::runtime("collection iterator disappeared")),
         }

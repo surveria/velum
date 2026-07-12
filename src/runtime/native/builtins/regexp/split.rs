@@ -29,7 +29,7 @@ impl Context {
         }
 
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
-        let constructor = self.regexp_split_species_constructor(this_value)?;
+        let constructor = self.regexp_species_constructor(this_value)?;
         let flags_value = self.get_named(this_value, REGEXP_FLAGS_PROPERTY)?;
         let mut flags = self.to_string(&flags_value)?;
         let unicode_matching = flags.contains('u') || flags.contains('v');
@@ -47,7 +47,7 @@ impl Context {
         self.regexp_split_array(values)
     }
 
-    fn regexp_split_species_constructor(&mut self, receiver: &Value) -> Result<Value> {
+    pub(super) fn regexp_species_constructor(&mut self, receiver: &Value) -> Result<Value> {
         let default = self.regexp_constructor_value()?;
         let constructor = self.get_named(receiver, "constructor")?;
         if matches!(constructor, Value::Undefined) {
