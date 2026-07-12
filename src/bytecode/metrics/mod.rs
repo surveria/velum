@@ -194,8 +194,11 @@ impl BytecodeInstruction {
             | Self::CallStaticMemberSpread { .. }
             | Self::CallComputedMemberSpread { .. }
             | Self::SuperMember { .. }
+            | Self::ComputedSuperMember { .. }
             | Self::CallSuperMember { .. }
-            | Self::CallSuperMemberSpread { .. } => 1,
+            | Self::CallSuperMemberSpread { .. }
+            | Self::CallComputedSuperMember { .. }
+            | Self::CallComputedSuperMemberSpread { .. } => 1,
             Self::NullishCoalescing { right } => right.property_operand_count(),
             Self::LogicalAssignment { target, value, .. } => target
                 .property_operand_count()
@@ -584,8 +587,11 @@ impl BytecodeInstruction {
                 | Self::CallSuper { .. }
                 | Self::CallSuperSpread
                 | Self::SuperMember { .. }
+                | Self::ComputedSuperMember { .. }
                 | Self::CallSuperMember { .. }
                 | Self::CallSuperMemberSpread { .. }
+                | Self::CallComputedSuperMember { .. }
+                | Self::CallComputedSuperMemberSpread { .. }
                 | Self::CreateRegExp { .. }
                 | Self::PushUndefined
                 | Self::LoadThis

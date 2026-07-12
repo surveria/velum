@@ -56,6 +56,19 @@ pub fn parse_with_usage_in_mode(
     Parser::new(tokens, limits, strict_mode).parse()
 }
 
+pub fn parse_eval_with_usage_in_context(
+    tokens: Vec<Token>,
+    limits: RuntimeLimits,
+    strict_mode: bool,
+    allow_super_property: bool,
+    allow_super_call: bool,
+) -> Result<ParsedProgram> {
+    let mut parser = Parser::new(tokens, limits, strict_mode);
+    parser.allow_super_property = allow_super_property;
+    parser.allow_super_call = allow_super_call;
+    parser.parse()
+}
+
 pub struct ParsedProgram {
     pub program: Program,
     pub usage: ParseUsage,

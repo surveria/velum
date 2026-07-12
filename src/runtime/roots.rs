@@ -206,7 +206,10 @@ impl Context {
                 if let Some(constructor) = &super_binding.constructor {
                     visitor.visit_value(VmRootKind::ActiveSuper, constructor)?;
                 }
-                visitor.visit_value(VmRootKind::ActiveSuper, &super_binding.home_prototype)?;
+                visitor.visit_value(VmRootKind::ActiveSuper, &super_binding.home_object)?;
+                if let Some(this_value) = super_binding.this_value.borrow().as_ref() {
+                    visitor.visit_value(VmRootKind::ActiveSuper, this_value)?;
+                }
             }
             if let Some(continuation) = frame.continuation() {
                 if let Some(function) = continuation.function_id() {

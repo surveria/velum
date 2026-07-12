@@ -3,11 +3,11 @@ use std::rc::Rc;
 use crate::{
     bytecode::BytecodeObjectProperty,
     error::{Error, Result},
-    runtime::Context,
     runtime::object::{
         OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, OwnPropertyDescriptor, PropertyEnumerable,
         PropertyKey,
     },
+    runtime::{Context, function::FunctionSuperBinding},
     syntax::AccessorKind,
     value::Value,
 };
@@ -28,7 +28,8 @@ impl Context {
         let mut entries = Vec::with_capacity(properties.len());
         for property in properties.iter() {
             match property {
-                BytecodeObjectProperty::Static(name) => {
+                BytecodeObjectProperty::Static(name)
+                | BytecodeObjectProperty::StaticMethod(name) => {
                     let value = next_object_literal_stack_value(&mut values)?;
                     let key = self.intern_static_property_key(name)?;
                     entries.push(RuntimeObjectLiteralEntry {
@@ -36,6 +37,7 @@ impl Context {
                         name: RuntimeObjectLiteralName::Static(name.as_str()),
                         value,
                         accessor: None,
+                        method: matches!(property, BytecodeObjectProperty::StaticMethod(_)),
                     });
                 }
                 BytecodeObjectProperty::StaticAccessor { key: name, kind } => {
@@ -47,6 +49,7 @@ impl Context {
                         name: RuntimeObjectLiteralName::Static(name.as_str()),
                         value,
                         accessor: Some(*kind),
+                        method: true,
                     });
                 }
                 BytecodeObjectProperty::Spread => {
@@ -57,6 +60,11 @@ impl Context {
                 | BytecodeObjectProperty::ComputedInferredName
                 | BytecodeObjectProperty::ComputedMethod
                 | BytecodeObjectProperty::ComputedAccessor { .. } => {
+                    let method = matches!(
+                        property,
+                        BytecodeObjectProperty::ComputedMethod
+                            | BytecodeObjectProperty::ComputedAccessor { .. }
+                    );
                     let set_method_name = matches!(
                         property,
                         BytecodeObjectProperty::ComputedInferredName
@@ -81,6 +89,7 @@ impl Context {
                         name: RuntimeObjectLiteralName::Dynamic(name_index),
                         value,
                         accessor,
+                        method,
                     });
                 }
             }
@@ -90,8 +99,20 @@ impl Context {
                 "bytecode object literal stack arity mismatch",
             ));
         }
+        self.finish_bytecode_object_literal(&dynamic_names, entries)
+    }
+
+    fn finish_bytecode_object_literal(
+        &mut self,
+        dynamic_names: &[String],
+        entries: Vec<RuntimeObjectLiteralEntry<'_>>,
+    ) -> Result<Value> {
         let mut inits = Vec::with_capacity(entries.len());
+        let mut methods = Vec::new();
         for entry in entries {
+            if entry.method {
+                methods.push(entry.value.clone());
+            }
             let is_dynamic = entry.name.is_dynamic();
             let name = match entry.name {
                 RuntimeObjectLiteralName::Static(name) => name,
@@ -110,12 +131,28 @@ impl Context {
             inits.push(init);
         }
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
-        self.objects.create(
+        let object = self.objects.create(
             inits,
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
-        )
+        )?;
+        for method in methods {
+            let Value::Function(function) = method else {
+                return Err(Error::runtime("object method is not a function"));
+            };
+            self.set_function_super_binding(
+                function,
+                Rc::new(FunctionSuperBinding {
+                    constructor: None,
+                    home_object: object.clone(),
+                    own_constructor: None,
+                    this_value: std::cell::RefCell::new(None),
+                    allow_direct_eval_super_call: std::cell::Cell::new(false),
+                }),
+            )?;
+        }
+        Ok(object)
     }
 
     fn push_spread_literal_entries(
@@ -148,6 +185,7 @@ impl Context {
                 name: RuntimeObjectLiteralName::Dynamic(name_index),
                 value,
                 accessor: None,
+                method: false,
             });
         }
         Ok(())
@@ -172,6 +210,7 @@ struct RuntimeObjectLiteralEntry<'a> {
     name: RuntimeObjectLiteralName<'a>,
     value: Value,
     accessor: Option<AccessorKind>,
+    method: bool,
 }
 
 fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {

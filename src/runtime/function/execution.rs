@@ -1,10 +1,27 @@
 use crate::{
+    bytecode::BytecodeNewTargetMode,
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, control::Completion},
+    runtime::{
+        Context, call::RuntimeCallArgs, control::Completion, function::FunctionSuperBinding,
+    },
     value::{FunctionId, Value},
 };
 
 impl Context {
+    pub(super) fn capture_function_lexical_this(
+        &mut self,
+        mode: BytecodeNewTargetMode,
+        super_binding: Option<&FunctionSuperBinding>,
+    ) -> Result<Option<Value>> {
+        if mode != BytecodeNewTargetMode::Lexical {
+            return Ok(None);
+        }
+        if super_binding.is_some_and(|binding| binding.constructor.is_some()) {
+            return Ok(None);
+        }
+        self.current_this().map(Some)
+    }
+
     pub(super) fn function_direct_call_this(
         &mut self,
         id: FunctionId,
@@ -13,6 +30,13 @@ impl Context {
         let function = self.function(id)?;
         if let Some(lexical_this) = &function.lexical_this {
             return Ok(lexical_this.clone());
+        }
+        if function
+            .super_binding
+            .as_ref()
+            .is_some_and(|binding| binding.constructor.is_some())
+        {
+            return Ok(Value::Undefined);
         }
         if function.bytecode.strict() {
             return Ok(call_this);

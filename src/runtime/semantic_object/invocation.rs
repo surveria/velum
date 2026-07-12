@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::same_value,
         call::RuntimeCallArgs,
         control::Completion,
         native::{IteratorFunctionKind, NativeFunctionKind},
@@ -152,7 +153,7 @@ impl Context {
                 if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
                     return self.construct_iterator_object(constructor, &new_target);
                 }
-                self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))
+                self.construct_native_with_new_target(kind, args, constructor, &new_target)
             }
             Value::Object(id) if self.objects.proxy_constructability(*id)? => {
                 self.proxy_construct(*id, args, new_target)
@@ -167,6 +168,39 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_) => Err(Self::not_constructor_error(constructor)),
+        }
+    }
+
+    fn construct_native_with_new_target(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        constructor: &Value,
+        new_target: &Value,
+    ) -> Result<Value> {
+        if kind == NativeFunctionKind::Object && !same_value(constructor, new_target) {
+            let prototype = self.constructor_instance_prototype(new_target)?;
+            let constructor_key = self.object_constructor_property_key()?;
+            return self.objects.create_with_prototype(
+                prototype,
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
+        }
+
+        let value = self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))?;
+        if same_value(constructor, new_target) || kind == NativeFunctionKind::Proxy {
+            return Ok(value);
+        }
+        let Some(prototype) = self.constructor_instance_prototype(new_target)? else {
+            return Ok(value);
+        };
+        match self.semantic_try_set_prototype(&value, Value::Object(prototype))? {
+            Some(true) => Ok(value),
+            Some(false) | None => Err(Error::runtime(
+                "native construction could not apply the new.target prototype",
+            )),
         }
     }
 

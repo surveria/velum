@@ -309,7 +309,10 @@ impl DetachedFunctionExecution {
                 if let Some(constructor) = &super_binding.constructor {
                     visitor.visit_value(kind, constructor)?;
                 }
-                visitor.visit_value(kind, &super_binding.home_prototype)?;
+                visitor.visit_value(kind, &super_binding.home_object)?;
+                if let Some(this_value) = super_binding.this_value.borrow().as_ref() {
+                    visitor.visit_value(kind, this_value)?;
+                }
             }
             if let Some(continuation) = frame.continuation() {
                 if let Some(function) = continuation.function_id() {
@@ -369,10 +372,10 @@ impl DetachedFunctionExecution {
                 if let Some(constructor) = &super_binding.constructor {
                     visitor.visit(kind, StrongEdgeReference::Value(constructor))?;
                 }
-                visitor.visit(
-                    kind,
-                    StrongEdgeReference::Value(&super_binding.home_prototype),
-                )?;
+                visitor.visit(kind, StrongEdgeReference::Value(&super_binding.home_object))?;
+                if let Some(this_value) = super_binding.this_value.borrow().as_ref() {
+                    visitor.visit(kind, StrongEdgeReference::Value(this_value))?;
+                }
             }
             if let Some(continuation) = frame.continuation() {
                 if let Some(function) = continuation.function_id() {

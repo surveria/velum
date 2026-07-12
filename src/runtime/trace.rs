@@ -359,8 +359,14 @@ impl Function {
             }
             visitor.visit(
                 VmCallableEdgeKind::JavaScriptFunctionInternal,
-                StrongEdgeReference::Value(&binding.home_prototype),
+                StrongEdgeReference::Value(&binding.home_object),
             )?;
+            if let Some(this_value) = binding.this_value.borrow().as_ref() {
+                visitor.visit(
+                    VmCallableEdgeKind::JavaScriptFunctionInternal,
+                    StrongEdgeReference::Value(this_value),
+                )?;
+            }
             if let Some(constructor) = binding.own_constructor {
                 visitor.visit(
                     VmCallableEdgeKind::JavaScriptFunctionInternal,

@@ -159,7 +159,7 @@ impl Parser {
         }
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(false, false, |parser| {
+            parser.with_super_context(true, false, |parser| {
                 parser.with_await_context(false, false, |parser| {
                     parser.function_body(inherited_strict)
                 })
@@ -238,7 +238,7 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(false, false, |parser| {
+            parser.with_super_context(true, false, |parser| {
                 parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
                     parser.with_yield_expression(kind.is_generator(), |parser| {
                         parser.function_body(inherited_strict)

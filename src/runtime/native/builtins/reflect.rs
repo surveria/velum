@@ -291,16 +291,17 @@ impl Context {
 
     fn validate_reflect_prototype_value(value: &Value) -> Result<()> {
         match value {
-            Value::Object(_) | Value::Null => Ok(()),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Null => Ok(()),
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_) => Err(Error::type_error(REFLECT_PROTOTYPE_NOT_OBJECT_ERROR)),
+            | Value::Symbol(_) => Err(Error::type_error(REFLECT_PROTOTYPE_NOT_OBJECT_ERROR)),
         }
     }
 

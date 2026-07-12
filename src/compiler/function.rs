@@ -585,6 +585,7 @@ impl CaptureBindingCollector {
             | Expr::SuperMember { .. }
             | Expr::NewTarget
             | Expr::ArrayHole => {}
+            Expr::SuperComputedMember { property, .. } => self.collect_expr(property),
             Expr::TemplateLiteral { expressions, .. } | Expr::Sequence(expressions) => {
                 self.collect_exprs(expressions);
             }
@@ -647,6 +648,11 @@ impl CaptureBindingCollector {
                 ..
             } => {
                 self.collect_expr(object);
+                self.collect_expr(property);
+                self.collect_expr(expr);
+            }
+            Expr::SuperPropertyAssignment { expr, .. } => self.collect_expr(expr),
+            Expr::SuperComputedPropertyAssignment { property, expr, .. } => {
                 self.collect_expr(property);
                 self.collect_expr(expr);
             }

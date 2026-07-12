@@ -553,6 +553,9 @@ impl LayoutBuilder {
             | Expr::SuperMember { .. }
             | Expr::NewTarget
             | Expr::ArrayHole => Ok(()),
+            Expr::SuperComputedMember { property, .. } => {
+                self.analyze_expr(property, scope, function)
+            }
             Expr::TemplateLiteral { expressions, .. } => {
                 self.analyze_exprs(expressions, scope, function)
             }
@@ -564,7 +567,10 @@ impl LayoutBuilder {
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Await(expr)
-            | Expr::Update { expr, .. } => self.analyze_expr(expr, scope, function),
+            | Expr::Update { expr, .. }
+            | Expr::SuperPropertyAssignment { expr, .. } => {
+                self.analyze_expr(expr, scope, function)
+            }
             Expr::Yield { expr, .. } => {
                 if let Some(expr) = expr {
                     self.analyze_expr(expr, scope, function)?;
@@ -608,6 +614,10 @@ impl LayoutBuilder {
                 ..
             } => {
                 self.analyze_expr(object, scope, function)?;
+                self.analyze_expr(property, scope, function)?;
+                self.analyze_expr(expr, scope, function)
+            }
+            Expr::SuperComputedPropertyAssignment { property, expr, .. } => {
                 self.analyze_expr(property, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }

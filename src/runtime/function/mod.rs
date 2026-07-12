@@ -34,7 +34,9 @@ use crate::runtime::native::{
     OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
     OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME,
 };
+pub(in crate::runtime) use class_support::FunctionSuperBinding;
 pub(in crate::runtime) use class_support::ResolvedClassField;
+use class_support::activation_super_bindings;
 
 /// Per-call snapshot of the callee's shared metadata, extracted in one
 /// borrow of the function table before the call frame is assembled.
@@ -87,19 +89,6 @@ fn expected_function_local_count(
         .checked_add(usize::from(has_arguments_binding))
         .and_then(|count| count.checked_add(usize::from(has_self_binding)))
         .ok_or_else(|| Error::limit("function local scope count overflowed"))
-}
-
-/// Super references available to a class constructor or method body: the
-/// callable parent constructor (derived constructors only) and the home
-/// prototype used by `super.property` lookups.
-#[derive(Debug)]
-pub(in crate::runtime) struct FunctionSuperBinding {
-    pub(in crate::runtime) constructor: Option<Value>,
-    pub(in crate::runtime) home_prototype: Value,
-    /// The derived constructor owning this binding; its instance fields
-    /// initialize after `super()` completes.
-    pub(in crate::runtime) own_constructor: Option<FunctionId>,
-    pub(in crate::runtime) this_initialized: std::cell::Cell<bool>,
 }
 
 pub(super) struct BytecodeFunctionInit<'a> {
@@ -216,11 +205,8 @@ impl Context {
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
         let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
-        let lexical_this = if init.new_target_mode == BytecodeNewTargetMode::Lexical {
-            Some(self.current_this()?)
-        } else {
-            None
-        };
+        let lexical_this =
+            self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         self.functions.insert_at_next(
             id.index(),
             super::Function {
@@ -405,13 +391,7 @@ impl Context {
             remember_params,
             scope_template,
         } = self.function_call_setup(id)?;
-        let super_binding = super_binding.map(|binding| {
-            if binding.own_constructor == Some(id) {
-                binding.fresh_activation()
-            } else {
-                binding
-            }
-        });
+        let (super_binding, derived_super_binding) = activation_super_bindings(id, super_binding);
         let packed_args = if bytecode.has_rest_parameter() {
             Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
         } else {
@@ -463,7 +443,7 @@ impl Context {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
-        let result = self.eval_function_body::<CAN_SUSPEND>(
+        let mut result = self.eval_function_body::<CAN_SUSPEND>(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -471,6 +451,9 @@ impl Context {
             &bytecode,
             remember_params,
         );
+        if let (Ok(completion), Some(binding)) = (&result, &derived_super_binding) {
+            result = self.normalize_derived_constructor_completion(completion.clone(), binding);
+        }
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }

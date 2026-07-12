@@ -167,6 +167,8 @@ impl Parser {
             kind @ (Expr::Identifier(_)
             | Expr::Member { .. }
             | Expr::ComputedMember { .. }
+            | Expr::SuperMember { .. }
+            | Expr::SuperComputedMember { .. }
             | Expr::PrivateMember { .. }) => Some(Expression::new(kind, span)),
             Expr::Parenthesized(inner) => Self::assignment_target(*inner),
             _ => None,
@@ -347,9 +349,30 @@ impl Parser {
                     start,
                 ));
             }
-            let property = self.consume_identifier("expected property name after 'super.'")?;
+            let property = self.consume_property_name("expected property name after 'super.'")?;
             let access = self.static_property_access()?;
             return Ok(self.expression_node(start, Expr::SuperMember { property, access }));
+        }
+        if self.match_kind(&TokenKind::LBracket) {
+            if !self.allow_super_property {
+                return Err(Error::parse_at(
+                    "super property access is only valid inside methods",
+                    start,
+                ));
+            }
+            let property = self.expression()?;
+            self.consume(
+                &TokenKind::RBracket,
+                "expected ']' after super property expression",
+            )?;
+            let access = self.static_property_access()?;
+            return Ok(self.expression_node(
+                start,
+                Expr::SuperComputedMember {
+                    property: Box::new(property),
+                    access,
+                },
+            ));
         }
         Err(Error::parse_at(
             "super is only valid in super() calls and super.property access",

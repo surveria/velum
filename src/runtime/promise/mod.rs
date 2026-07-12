@@ -86,19 +86,6 @@ impl Context {
         Ok((id, object))
     }
 
-    pub(in crate::runtime) fn create_pending_promise_for_object(
-        &mut self,
-        object: ObjectId,
-    ) -> Result<PromiseId> {
-        self.objects.validate_id(object)?;
-        let id = self.allocate_pending_promise_record()?;
-        if let Err(error) = self.remember_promise_object(object, id) {
-            self.rollback_pending_promise_record(id)?;
-            return Err(error);
-        }
-        Ok(id)
-    }
-
     fn allocate_pending_promise_record(&mut self) -> Result<PromiseId> {
         self.promises.reserve_insert()?;
         self.promises.reserve_removals(1)?;

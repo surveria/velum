@@ -1,23 +1,54 @@
 use std::rc::Rc;
 
-use super::FunctionSuperBinding;
-
 use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     value::{FunctionId, Value},
 };
+
+/// Super references available to a class constructor or method body.
+#[derive(Debug)]
+pub(in crate::runtime) struct FunctionSuperBinding {
+    pub(in crate::runtime) constructor: Option<Value>,
+    pub(in crate::runtime) home_object: Value,
+    pub(in crate::runtime) own_constructor: Option<FunctionId>,
+    pub(in crate::runtime) this_value: std::cell::RefCell<Option<Value>>,
+    pub(in crate::runtime) allow_direct_eval_super_call: std::cell::Cell<bool>,
+}
+
+pub(super) fn activation_super_bindings(
+    id: FunctionId,
+    binding: Option<Rc<FunctionSuperBinding>>,
+) -> (
+    Option<Rc<FunctionSuperBinding>>,
+    Option<Rc<FunctionSuperBinding>>,
+) {
+    let binding = binding.map(|binding| {
+        if binding.own_constructor == Some(id) {
+            binding.fresh_activation()
+        } else {
+            binding
+        }
+    });
+    let derived = binding
+        .as_ref()
+        .filter(|binding| binding.constructor.is_some())
+        .cloned();
+    (binding, derived)
+}
 
 impl FunctionSuperBinding {
     pub(super) fn fresh_activation(&self) -> Rc<Self> {
         Rc::new(Self {
             constructor: self.constructor.clone(),
-            home_prototype: self.home_prototype.clone(),
+            home_object: self.home_object.clone(),
             own_constructor: self.own_constructor,
-            this_initialized: std::cell::Cell::new(false),
+            this_value: std::cell::RefCell::new(None),
+            allow_direct_eval_super_call: std::cell::Cell::new(
+                self.allow_direct_eval_super_call.get(),
+            ),
         })
     }
 }
@@ -48,6 +79,37 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(super) fn normalize_derived_constructor_completion(
+        &self,
+        completion: Completion,
+        binding: &FunctionSuperBinding,
+    ) -> Result<Completion> {
+        match completion {
+            Completion::Return(value) | Completion::ReturnDirect(value)
+                if self.semantic_object_ref(&value)?.is_some() =>
+            {
+                Ok(Completion::Return(value))
+            }
+            Completion::Return(Value::Undefined)
+            | Completion::ReturnDirect(Value::Undefined)
+            | Completion::Normal(_) => binding
+                .this_value
+                .borrow()
+                .clone()
+                .map(Completion::Return)
+                .ok_or_else(|| {
+                    Error::exception(
+                        crate::value::ErrorName::ReferenceError,
+                        "derived constructor did not initialize this",
+                    )
+                }),
+            Completion::Return(_) | Completion::ReturnDirect(_) => Err(Error::type_error(
+                "derived constructor can only return an object or undefined",
+            )),
+            completion => Ok(completion),
+        }
+    }
+
     pub(in crate::runtime) fn add_function_private_slot(
         &mut self,
         id: FunctionId,
@@ -126,38 +188,6 @@ impl Context {
             .ok_or_else(|| Error::runtime("private slot disappeared"))?;
         slot.value = value;
         Ok(())
-    }
-
-    /// Runs a parent class constructor for `super(...)`: the current `this`
-    /// is initialized in place, the parent's return-object override is
-    /// ignored, and throws propagate as completions.
-    pub(in crate::runtime) fn eval_class_super_constructor_completion(
-        &mut self,
-        id: FunctionId,
-        args: &[Value],
-        this_value: &Value,
-        new_target: Value,
-    ) -> Result<Completion> {
-        self.initialize_class_fields(id, this_value)?;
-        match self.eval_function_completion_with_this_and_new_target(
-            id,
-            RuntimeCallArgs::values(args),
-            this_value.clone(),
-            new_target,
-        )? {
-            Completion::Normal(_) | Completion::Return(_) | Completion::ReturnDirect(_) => {
-                Ok(Completion::Normal(Value::Undefined))
-            }
-            completion @ Completion::Throw(_) => Ok(completion),
-            Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            completion @ (Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => completion
-                .into_function_result()
-                .map(|_| Completion::Normal(Value::Undefined)),
-        }
     }
 
     pub(in crate::runtime) fn set_function_super_binding(
@@ -242,6 +272,10 @@ impl Context {
         };
         for field in fields.iter() {
             self.push_temporary_this(instance.clone())?;
+            let super_binding = self.current_super_frame();
+            let previous_super_call_permission = super_binding
+                .as_ref()
+                .map(|binding| binding.allow_direct_eval_super_call.replace(false));
             let initializer = match field {
                 ResolvedClassField::Public { initializer, .. }
                 | ResolvedClassField::Private { initializer, .. } => initializer,
@@ -251,6 +285,11 @@ impl Context {
                 .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
                     self.eval_bytecode_block(initializer)
                 });
+            if let (Some(binding), Some(previous)) =
+                (&super_binding, previous_super_call_permission)
+            {
+                binding.allow_direct_eval_super_call.set(previous);
+            }
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
             match field {
