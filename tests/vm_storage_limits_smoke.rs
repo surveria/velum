@@ -18,7 +18,14 @@ fn enforces_atom_and_heap_string_limits_before_interning() -> TestResult {
 
     let string_limits = VmStorageLimits::unlimited()
         .with_max_count(VmStorageKind::HeapString, 1)
-        .with_max_payload_bytes(VmStorageKind::HeapString, "camera".len());
+        .with_max_payload_bytes(
+            VmStorageKind::HeapString,
+            "camera"
+                .encode_utf16()
+                .count()
+                .saturating_mul(std::mem::size_of::<u16>())
+                .saturating_add("camera".len()),
+        );
     let mut vm = vm_with_storage_limits(string_limits);
     vm.eval(r#""camera";"#)?;
     let before = vm.storage_snapshot()?;

@@ -16,6 +16,14 @@ const HOST_SCORE_NAME: &str = "hostScore";
 const HOST_READY_NAME: &str = "hostReady";
 const CAMERA_LABEL: &str = "camera";
 
+fn string_payload_bytes(value: &str) -> usize {
+    value
+        .encode_utf16()
+        .count()
+        .saturating_mul(std::mem::size_of::<u16>())
+        .saturating_add(value.len())
+}
+
 #[test]
 fn registers_typed_host_functions() -> TestResult {
     let engine = Engine::new();
@@ -94,7 +102,10 @@ fn interns_host_returned_strings_in_vm_heap() -> TestResult {
     ensure_value(&static_label, &Value::from(CAMERA_LABEL))?;
     let after_static_label = vm.resource_usage();
     ensure_usize(after_static_label.string_count, 1)?;
-    ensure_usize(after_static_label.string_bytes, CAMERA_LABEL.len())?;
+    ensure_usize(
+        after_static_label.string_bytes,
+        string_payload_bytes(CAMERA_LABEL),
+    )?;
 
     let owned_label = vm.context().eval("hostOwned()")?;
     ensure_value(&owned_label, &Value::from(CAMERA_LABEL))?;

@@ -1,6 +1,8 @@
 use std::{
+    cell::OnceCell,
     collections::{BTreeSet, HashMap},
     fmt,
+    mem::size_of,
     rc::Rc,
 };
 
@@ -8,6 +10,9 @@ use crate::{
     error::{Error, Result},
     ownership::VmIdentity,
 };
+
+const UTF16_UNIT_BYTES: usize = size_of::<u16>();
+const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct StringId(u32);
@@ -42,10 +47,10 @@ impl JsString {
 
     /// Creates a VM-independent JavaScript string from well-formed UTF-8.
     #[must_use]
-    pub fn from_utf8(text: String) -> Self {
+    pub fn from_utf8(text: &str) -> Self {
         let units = text.encode_utf16().collect::<Vec<_>>();
         Self {
-            data: StringDataRef::new(units, Some(text)),
+            data: StringDataRef::new(units),
         }
     }
 
@@ -53,7 +58,7 @@ impl JsString {
     #[must_use]
     pub fn from_utf16(units: Vec<u16>) -> Self {
         Self {
-            data: StringDataRef::new(units, None),
+            data: StringDataRef::new(units),
         }
     }
 
@@ -115,23 +120,26 @@ impl JsString {
         }
         match Rc::try_unwrap(self.data.0) {
             Ok(data) => match Rc::try_unwrap(data.payload.0) {
-                Ok(payload) => Some(payload.text),
-                Err(payload) => Some(payload.text.clone()),
+                Ok(payload) => payload
+                    .text
+                    .into_inner()
+                    .or_else(|| String::from_utf16(payload.units.as_ref()).ok()),
+                Err(payload) => Some(payload.as_str().to_owned()),
             },
-            Err(data) => Some(data.payload.0.text.clone()),
+            Err(data) => Some(data.payload.as_str().to_owned()),
         }
     }
 }
 
 impl From<String> for JsString {
     fn from(value: String) -> Self {
-        Self::from_utf8(value)
+        Self::from_utf8(&value)
     }
 }
 
 impl From<&str> for JsString {
     fn from(value: &str) -> Self {
-        Self::from_utf8(value.to_owned())
+        Self::from_utf8(value)
     }
 }
 
@@ -150,10 +158,11 @@ struct StringData {
 #[derive(Debug)]
 struct StringPayload {
     units: Rc<[u16]>,
-    /// UTF-8 for well-formed strings and replacement-character rendering for
-    /// strings containing lone surrogates. JavaScript semantics use `units`.
-    text: String,
+    /// Lazily materialized UTF-8 for well-formed strings or replacement-text
+    /// diagnostics for strings containing lone surrogates.
+    text: OnceCell<String>,
     well_formed: bool,
+    rendered_bytes: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -163,16 +172,13 @@ struct StringPayloadRef(Rc<StringPayload>);
 struct StringDataRef(Rc<StringData>);
 
 impl StringDataRef {
-    fn new(units: Vec<u16>, utf8: Option<String>) -> Self {
-        let decoded = String::from_utf16(&units);
-        let (text, well_formed) = decoded.map_or_else(
-            |_| (String::from_utf16_lossy(&units), false),
-            |text| (utf8.unwrap_or(text), true),
-        );
+    fn new(units: Vec<u16>) -> Self {
+        let (well_formed, rendered_bytes) = utf16_rendering_metadata(&units);
         let payload = StringPayloadRef(Rc::new(StringPayload {
             units: Rc::from(units.into_boxed_slice()),
-            text,
+            text: OnceCell::new(),
             well_formed,
+            rendered_bytes,
         }));
         Self(Rc::new(StringData {
             owner: None,
@@ -196,7 +202,7 @@ impl StringDataRef {
     }
 
     fn as_str(&self) -> &str {
-        self.0.payload.0.text.as_str()
+        self.0.payload.as_str()
     }
 
     fn as_utf16(&self) -> &[u16] {
@@ -207,9 +213,47 @@ impl StringDataRef {
         self.0.payload.0.well_formed
     }
 
-    fn storage_bytes(&self) -> usize {
-        self.0.payload.0.text.len()
+    fn storage_bytes(&self) -> Result<usize> {
+        let utf16_bytes = self
+            .as_utf16()
+            .len()
+            .checked_mul(UTF16_UNIT_BYTES)
+            .ok_or_else(|| Error::limit("string UTF-16 byte count overflowed"))?;
+        utf16_bytes
+            .checked_add(self.0.payload.0.rendered_bytes)
+            .ok_or_else(|| Error::limit("string payload byte count overflowed"))
     }
+}
+
+impl StringPayload {
+    fn as_str(&self) -> &str {
+        self.text.get_or_init(|| {
+            String::from_utf16(self.units.as_ref())
+                .unwrap_or_else(|_| String::from_utf16_lossy(self.units.as_ref()))
+        })
+    }
+}
+
+impl StringPayloadRef {
+    fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+fn utf16_rendering_metadata(units: &[u16]) -> (bool, usize) {
+    let mut well_formed = true;
+    let mut rendered_bytes = 0_usize;
+    for decoded in char::decode_utf16(units.iter().copied()) {
+        let width = decoded.map_or_else(
+            |_| {
+                well_formed = false;
+                REPLACEMENT_CHARACTER.len_utf8()
+            },
+            char::len_utf8,
+        );
+        rendered_bytes = rendered_bytes.saturating_add(width);
+    }
+    (well_formed, rendered_bytes)
 }
 
 impl PartialEq for StringDataRef {
@@ -274,15 +318,11 @@ impl StringHeap {
     }
 
     pub fn intern(&mut self, text: &str) -> Result<JsString> {
-        self.intern_owned(text.to_owned())
-    }
-
-    pub fn intern_owned(&mut self, text: String) -> Result<JsString> {
         let units = text.encode_utf16().collect::<Vec<_>>();
         if let Some(id) = self.entries.get(units.as_slice()).copied() {
             return self.js_string(id);
         }
-        self.insert_string(units, Some(text))
+        self.insert_string(units)
     }
 
     pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
@@ -296,7 +336,7 @@ impl StringHeap {
         if let Some(id) = self.entries.get(units).copied() {
             return self.js_string(id);
         }
-        self.insert_string(units.to_vec(), None)
+        self.insert_string(units.to_vec())
     }
 
     pub fn get(&self, id: StringId) -> Result<&str> {
@@ -317,8 +357,8 @@ impl StringHeap {
         Ok(JsString::new(data))
     }
 
-    fn insert_string(&mut self, units: Vec<u16>, utf8: Option<String>) -> Result<JsString> {
-        self.insert_data(&StringDataRef::new(units, utf8))
+    fn insert_string(&mut self, units: Vec<u16>) -> Result<JsString> {
+        self.insert_data(&StringDataRef::new(units))
     }
 
     fn insert_data(&mut self, data: &StringDataRef) -> Result<JsString> {
@@ -338,7 +378,7 @@ impl StringHeap {
         let data = data.with_owner(self.identity.clone(), id);
         let updated_bytes = self
             .bytes
-            .checked_add(data.storage_bytes())
+            .checked_add(data.storage_bytes()?)
             .ok_or_else(|| Error::limit("string heap byte count overflowed"))?;
         if updated_bytes > self.max_bytes {
             return Err(Error::limit(format!(
@@ -388,7 +428,7 @@ impl StringHeap {
             };
             self.bytes = self
                 .bytes
-                .checked_sub(data.storage_bytes())
+                .checked_sub(data.storage_bytes()?)
                 .ok_or_else(|| Error::runtime("string heap byte count underflowed"))?;
             let removed_id = self.entries.remove(data.as_utf16());
             if removed_id != Some(id) {

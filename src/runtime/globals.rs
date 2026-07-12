@@ -142,23 +142,6 @@ impl Context {
         Ok(string)
     }
 
-    pub(crate) fn intern_owned_heap_string(&mut self, text: String) -> Result<JsString> {
-        self.check_string_len(&text)?;
-        let reservation = if self.strings.contains(&text) {
-            None
-        } else {
-            Some(
-                self.storage_ledger
-                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
-            )
-        };
-        let string = self.strings.intern_owned(text)?;
-        if let Some(reservation) = reservation {
-            reservation.commit()?;
-        }
-        Ok(string)
-    }
-
     pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
         self.check_utf16_string_len(string.as_utf16())?;
         let reservation = if self.strings.contains_utf16(string.as_utf16()) {
@@ -195,10 +178,6 @@ impl Context {
 
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
         self.intern_heap_string(text).map(Value::String)
-    }
-
-    pub(crate) fn heap_string_owned_value(&mut self, text: String) -> Result<Value> {
-        self.intern_owned_heap_string(text).map(Value::String)
     }
 
     pub(crate) fn heap_js_string_value(&mut self, string: &JsString) -> Result<Value> {

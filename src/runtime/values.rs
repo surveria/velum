@@ -87,7 +87,7 @@ impl Context {
         };
 
         if final_result {
-            return self.heap_string_owned_value(text);
+            return self.heap_string_value(&text);
         }
         self.reserve_string_concat_tail(&mut text)?;
         Ok(Value::String(text.into()))
@@ -119,7 +119,7 @@ impl Context {
         };
 
         if final_result {
-            return self.heap_string_owned_value(text);
+            return self.heap_string_value(&text);
         }
         self.reserve_string_concat_tail(&mut text)?;
         Ok(Value::String(text.into()))

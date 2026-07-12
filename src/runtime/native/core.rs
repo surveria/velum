@@ -740,7 +740,7 @@ impl Context {
             text.push_str(&message);
             text
         };
-        self.heap_string_owned_value(text)
+        self.heap_string_value(&text)
     }
 
     fn error_constructor_message_argument(name: ErrorName, args: &[Value]) -> Option<&Value> {

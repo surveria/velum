@@ -1273,10 +1273,13 @@ AS-05b2b local implementation evidence:
   totals for logical records and variable-size payload bytes. The original
   count semantics remain unchanged;
 - payload bytes have a stable cross-platform meaning: owned UTF-8 length and
-  raw buffer length, excluding allocator headers, pointer width, fixed record
-  layout, spare capacity, and duplicate references to shared payload;
+  raw buffer length for ordinary text/buffer owners, while heap strings reserve
+  exact UTF-16 content bytes plus the exact size of their possible lazy UTF-8
+  or replacement-character rendering. Allocator headers, pointer width, fixed
+  record layout, spare capacity, and duplicate references to shared payload
+  remain excluded;
 - the current non-zero sources are canonical atom names, interned heap-string
-  text, host callback names, RegExp pattern/flag text, `ArrayBuffer` backing
+  UTF-16 plus reserved renderings, host callback names, RegExp pattern/flag text, `ArrayBuffer` backing
   bytes, captured output text, and retained Function-constructor source;
 - fixed-size bindings, functions, properties, collections, Promise records,
   roots, frames, caches, associations, and future modules remain represented

@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value};
+use rs_quickjs::{Engine, Value, VmResourceUsage};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -19,6 +19,22 @@ const ECHO_LABEL_SCRIPT: &str = r#"
 })("camera")
 "#;
 
+fn string_payload_bytes(value: &str) -> usize {
+    value
+        .encode_utf16()
+        .count()
+        .saturating_mul(std::mem::size_of::<u16>())
+        .saturating_add(value.len())
+}
+
+fn ensure_string_usage_unchanged(
+    actual: &VmResourceUsage,
+    expected: &VmResourceUsage,
+) -> TestResult {
+    ensure_usize(actual.string_count, expected.string_count)?;
+    ensure_usize(actual.string_bytes, expected.string_bytes)
+}
+
 #[test]
 fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestResult {
     let engine = Engine::new();
@@ -31,19 +47,12 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     ensure_value(&typeof_value, &Value::from("undefined"))?;
     let after_typeof = vm.resource_usage();
     ensure_usize(after_typeof.string_count, 1)?;
-    ensure_usize(after_typeof.string_bytes, "undefined".len())?;
+    ensure_usize(after_typeof.string_bytes, string_payload_bytes("undefined"))?;
 
     let repeated_typeof = vm.context().eval("typeof anotherMissing")?;
     ensure_value(&repeated_typeof, &Value::from("undefined"))?;
     let after_repeated_typeof = vm.resource_usage();
-    ensure_usize(
-        after_repeated_typeof.string_count,
-        after_typeof.string_count,
-    )?;
-    ensure_usize(
-        after_repeated_typeof.string_bytes,
-        after_typeof.string_bytes,
-    )?;
+    ensure_string_usage_unchanged(&after_repeated_typeof, &after_typeof)?;
 
     let literal_value = vm.context().eval(r#""front""#)?;
     ensure_value(&literal_value, &Value::from("front"))?;
@@ -51,7 +60,7 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     ensure_usize(after_literal.string_count, 2)?;
     ensure_usize(
         after_literal.string_bytes,
-        "undefined".len() + "front".len(),
+        string_payload_bytes("undefinedfront"),
     )?;
 
     let repeated_literal = vm.context().eval("`front`")?;
@@ -70,7 +79,10 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     ensure_value(&concat_value, &Value::from("front-door"))?;
     let after_concat = vm.resource_usage();
     ensure_usize(after_concat.string_count, 3)?;
-    ensure_usize(after_concat.string_bytes, "undefinedfrontfront-door".len())?;
+    ensure_usize(
+        after_concat.string_bytes,
+        string_payload_bytes("undefinedfrontfront-door"),
+    )?;
 
     let repeated_concat = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&repeated_concat, &Value::from("front-door"))?;
@@ -93,7 +105,9 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     )?;
     ensure_usize(
         after_static_index.string_bytes,
-        after_concat.string_bytes + "r".len(),
+        after_concat
+            .string_bytes
+            .saturating_add(string_payload_bytes("r")),
     )?;
 
     let repeated_static_index = vm.context().eval(r#""front"[1]"#)?;
@@ -129,7 +143,10 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     )?;
     ensure_usize(
         after_unicode_index.string_bytes,
-        after_static_index.string_bytes + "\u{00e9}x".len() + "\u{00e9}".len(),
+        after_static_index
+            .string_bytes
+            .saturating_add(string_payload_bytes("\u{00e9}x"))
+            .saturating_add(string_payload_bytes("\u{00e9}")),
     )
 }
 
@@ -175,7 +192,10 @@ fn bytecode_string_concat_chain_interns_only_the_final_result() -> TestResult {
     let usage = vm.resource_usage();
 
     ensure_usize(usage.string_count, 2)?;
-    ensure_usize(usage.string_bytes, "camera".len() + "camera-stream-7".len())
+    ensure_usize(
+        usage.string_bytes,
+        string_payload_bytes("cameracamera-stream-7"),
+    )
 }
 
 #[test]
@@ -203,7 +223,8 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
     ensure_at_least(after_name.string_count, 2, "error property strings")?;
     ensure_at_least(
         after_name.string_bytes,
-        REFERENCE_ERROR_NAME.len() + MISSING_REFERENCE_MESSAGE.len(),
+        string_payload_bytes(REFERENCE_ERROR_NAME)
+            .saturating_add(string_payload_bytes(MISSING_REFERENCE_MESSAGE)),
         "error property string bytes",
     )?;
 
@@ -237,7 +258,9 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
     )?;
     ensure_usize(
         after_dynamic_message.string_bytes,
-        after_message.string_bytes + ERROR_MESSAGE_PROPERTY.len(),
+        after_message
+            .string_bytes
+            .saturating_add(string_payload_bytes(ERROR_MESSAGE_PROPERTY)),
     )
 }
 
@@ -262,7 +285,7 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
         after_construct.string_bytes,
         after_constructor
             .string_bytes
-            .saturating_add(CAMERA_LABEL.len()),
+            .saturating_add(string_payload_bytes(CAMERA_LABEL)),
     )?;
 
     let first = vm.context().eval("boxed[0]")?;
@@ -276,7 +299,7 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
         after_first.string_bytes,
         after_construct
             .string_bytes
-            .saturating_add(CAMERA_FIRST_CHAR.len()),
+            .saturating_add(string_payload_bytes(CAMERA_FIRST_CHAR)),
     )?;
 
     let repeated_first = vm.context().eval("boxed[0]")?;
@@ -338,8 +361,8 @@ fn inherited_string_wrapper_indices_are_heap_backed() -> TestResult {
         after_first.string_bytes,
         after_constructor
             .string_bytes
-            .saturating_add(CAMERA_LABEL.len())
-            .saturating_add(CAMERA_FIRST_CHAR.len()),
+            .saturating_add(string_payload_bytes(CAMERA_LABEL))
+            .saturating_add(string_payload_bytes(CAMERA_FIRST_CHAR)),
     )?;
 
     let repeated = vm.context().eval("child[0]")?;
@@ -380,8 +403,8 @@ fn interns_string_wrapper_descriptor_values_in_vm_heap() -> TestResult {
         after_descriptor.string_bytes,
         after_warmup
             .string_bytes
-            .saturating_add(CAMERA_LABEL.len())
-            .saturating_add(CAMERA_FIRST_CHAR.len()),
+            .saturating_add(string_payload_bytes(CAMERA_LABEL))
+            .saturating_add(string_payload_bytes(CAMERA_FIRST_CHAR)),
     )?;
 
     let value = vm.context().eval("descriptorValue.value")?;
@@ -413,7 +436,10 @@ fn normalizes_context_owned_strings_after_storage_boundaries() -> TestResult {
     ensure_heap_string(&retained, CAMERA_LABEL)?;
     let after_retained = vm.resource_usage();
     ensure_usize(after_retained.string_count, 1)?;
-    ensure_usize(after_retained.string_bytes, CAMERA_LABEL.len())?;
+    ensure_usize(
+        after_retained.string_bytes,
+        string_payload_bytes(CAMERA_LABEL),
+    )?;
 
     let repeated = vm.context().eval("retained")?;
     ensure_heap_string(&repeated, CAMERA_LABEL)?;
@@ -454,7 +480,7 @@ fn compiled_string_literals_use_script_local_constants() -> TestResult {
     ensure_heap_string(&value, "front")?;
     let after_first = vm.resource_usage();
     ensure_usize(after_first.string_count, 1)?;
-    ensure_usize(after_first.string_bytes, "front".len())?;
+    ensure_usize(after_first.string_bytes, string_payload_bytes("front"))?;
 
     let value = vm.eval_compiled(&script)?;
     ensure_heap_string(&value, "front")?;

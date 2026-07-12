@@ -43,9 +43,11 @@ distinguishable from accidental vendor drift.
 Heap strings own their authoritative ECMAScript value as a sequence of UTF-16
 code units. This permits lone surrogates, makes indexed properties and
 `length` code-unit based, and lets string iteration combine only valid
-surrogate pairs. A cached UTF-8 rendering is exact for well-formed strings and
-replacement-character based only for diagnostics that cannot carry arbitrary
-UTF-16.
+surrogate pairs. UTF-8 rendering is materialized lazily: it is exact for
+well-formed strings and replacement-character based only for diagnostics that
+cannot carry arbitrary UTF-16. The heap byte budget reserves both the exact
+UTF-16 payload and the exact size of that possible rendering before admission,
+so later cache materialization cannot escape the configured limit.
 
 `JsString` is also the portable admission payload. A detached value keeps the
 same exact UTF-16/Rc representation without a VM owner; the central runtime
