@@ -21,7 +21,7 @@ const SPECIES_PROPERTY: &str = "species";
 const SPECIES_SYMBOL_DISPLAY: &str = "[Symbol.species]";
 const TYPED_ARRAY_RECEIVER_ERROR: &str = "TypedArray method receiver is not a typed array";
 const TYPED_ARRAY_RESULT_ERROR: &str = "TypedArray constructor did not create a typed array";
-const TYPED_ARRAY_LENGTH_ERROR: &str = "typed array length exceeded supported range";
+pub(super) const TYPED_ARRAY_LENGTH_ERROR: &str = "typed array length exceeded supported range";
 const TYPED_ARRAY_SET_RANGE_ERROR: &str = "source array exceeds target typed array";
 const TYPED_ARRAY_OFFSET_RANGE_ERROR: &str = "typed array offset is out of range";
 const TYPED_ARRAY_SPECIES_ERROR: &str = "TypedArray species is not a constructor";
@@ -155,25 +155,16 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Option<Result<Value>> {
+        if let Some(result) = self.eval_typed_array_iteration_kind(kind, args, this_value) {
+            return Some(result);
+        }
         if !matches!(
             kind,
             TypedArrayFunctionKind::At
                 | TypedArrayFunctionKind::CopyWithin
-                | TypedArrayFunctionKind::Every
                 | TypedArrayFunctionKind::Fill
-                | TypedArrayFunctionKind::Find
-                | TypedArrayFunctionKind::FindIndex
-                | TypedArrayFunctionKind::FindLast
-                | TypedArrayFunctionKind::FindLastIndex
-                | TypedArrayFunctionKind::ForEach
-                | TypedArrayFunctionKind::Includes
-                | TypedArrayFunctionKind::IndexOf
                 | TypedArrayFunctionKind::Join
-                | TypedArrayFunctionKind::LastIndexOf
-                | TypedArrayFunctionKind::Reduce
-                | TypedArrayFunctionKind::ReduceRight
                 | TypedArrayFunctionKind::Reverse
-                | TypedArrayFunctionKind::Some
                 | TypedArrayFunctionKind::ToLocaleString
                 | TypedArrayFunctionKind::ToString
         ) {
@@ -187,38 +178,14 @@ impl Context {
             TypedArrayFunctionKind::CopyWithin => {
                 self.eval_direct_array_copy_within(args, this_value)
             }
-            TypedArrayFunctionKind::Every => self.eval_direct_array_every(args, this_value, true),
             TypedArrayFunctionKind::Fill => self.eval_typed_array_fill(args, this_value),
-            TypedArrayFunctionKind::Find => self.eval_direct_array_find(args, this_value),
-            TypedArrayFunctionKind::FindIndex => {
-                self.eval_direct_array_find_index(args, this_value)
-            }
-            TypedArrayFunctionKind::FindLast => self.eval_direct_array_find_last(args, this_value),
-            TypedArrayFunctionKind::FindLastIndex => {
-                self.eval_direct_array_find_last_index(args, this_value)
-            }
-            TypedArrayFunctionKind::ForEach => {
-                self.eval_direct_array_for_each(args, this_value, true)
-            }
-            TypedArrayFunctionKind::Includes => self.eval_direct_array_includes(args, this_value),
-            TypedArrayFunctionKind::IndexOf => self.eval_direct_array_index_of(args, this_value),
             TypedArrayFunctionKind::Join => match self.typed_array_receiver(this_value) {
                 Ok((_, view)) => {
                     self.eval_direct_array_join_with_length(args, this_value, Some(view.length()))
                 }
                 Err(error) => Err(error),
             },
-            TypedArrayFunctionKind::LastIndexOf => {
-                self.eval_direct_array_last_index_of(args, this_value)
-            }
-            TypedArrayFunctionKind::Reduce => {
-                self.eval_direct_typed_array_reduce(args, this_value, false)
-            }
-            TypedArrayFunctionKind::ReduceRight => {
-                self.eval_direct_typed_array_reduce(args, this_value, true)
-            }
             TypedArrayFunctionKind::Reverse => self.eval_direct_array_reverse(args, this_value),
-            TypedArrayFunctionKind::Some => self.eval_direct_array_some(args, this_value, true),
             TypedArrayFunctionKind::ToLocaleString | TypedArrayFunctionKind::ToString => {
                 self.eval_direct_array_join(&[], this_value)
             }
@@ -505,7 +472,7 @@ impl Context {
         Ok(result)
     }
 
-    fn typed_array_relative_index(
+    pub(super) fn typed_array_relative_index(
         &mut self,
         value: Option<&Value>,
         length: usize,
@@ -727,11 +694,11 @@ impl Context {
         Ok(())
     }
 
-    fn typed_array_usize_value(value: usize) -> Result<Value> {
+    pub(super) fn typed_array_usize_value(value: usize) -> Result<Value> {
         Self::typed_array_usize_number(value).map(Value::Number)
     }
 
-    fn typed_array_usize_number(value: usize) -> Result<f64> {
+    pub(super) fn typed_array_usize_number(value: usize) -> Result<f64> {
         let value = u32::try_from(value).map_err(|_| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
         Ok(f64::from(value))
     }

@@ -313,6 +313,56 @@ fn supports_typed_array_callbacks_search_and_copy_methods() -> TestResult {
 }
 
 #[test]
+fn typed_array_iteration_uses_internal_length_and_live_view_values() -> TestResult {
+    ensure_eval(
+        r#"
+        let source = new Uint8Array([1, 2, 3, 4]);
+        let lengthReads = 0;
+        Object.defineProperty(source, "length", {
+            get() {
+                lengthReads += 1;
+                return 0;
+            }
+        });
+        let visits = 0;
+        let internalLength = source.every(() => {
+            visits += 1;
+            return true;
+        }) && source.includes(3) && source.indexOf(2) === 1 &&
+            source.lastIndexOf(4) === 3 &&
+            source.reduce((sum, value) => sum + value, 0) === 10;
+
+        let growBuffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let growing = new Uint8Array(growBuffer);
+        growing.set([1, 2, 3, 4]);
+        let growSeen = [];
+        growing.some((value, index) => {
+            growSeen.push(value);
+            if (index === 1) growBuffer.resize(6);
+            return false;
+        });
+
+        let shrinkBuffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let shrinking = new Uint8Array(shrinkBuffer);
+        shrinking.set([1, 2, 3, 4]);
+        let shrinkSeen = [];
+        shrinking.reduce((sum, value, index) => {
+            shrinkSeen.push(value);
+            if (index === 1) shrinkBuffer.resize(3);
+            return sum;
+        }, 0);
+
+        internalLength && lengthReads === 0 && visits === 4 &&
+            growSeen.join(",") === "1,2,3,4" &&
+            shrinkSeen.length === 4 && shrinkSeen[0] === 1 &&
+            shrinkSeen[1] === 2 && shrinkSeen[2] === 3 &&
+            shrinkSeen[3] === undefined ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn supports_typed_array_mutation_sort_iteration_and_statics() -> TestResult {
     ensure_eval(
         r#"

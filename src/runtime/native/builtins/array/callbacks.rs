@@ -319,20 +319,6 @@ impl Context {
         )
     }
 
-    pub(in crate::runtime::native) fn eval_direct_typed_array_reduce(
-        &mut self,
-        args: &[Value],
-        this_value: &Value,
-        reverse: bool,
-    ) -> Result<Value> {
-        let direction = if reverse {
-            ReduceDirection::Reverse
-        } else {
-            ReduceDirection::Forward
-        };
-        self.eval_direct_array_reduce_with_direction(args, this_value, direction, true)
-    }
-
     fn eval_packed_numeric_array_some(
         &mut self,
         callback: &Value,
