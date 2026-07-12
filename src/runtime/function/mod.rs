@@ -73,6 +73,7 @@ const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 const FUNCTION_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
 const FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY: &str = "arguments";
 const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
+pub(in crate::runtime) const NATIVE_FUNCTION_SOURCE_TEXT: &str = "function () { [native code] }";
 
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
@@ -521,7 +522,7 @@ impl Context {
 
     pub(in crate::runtime) fn function_source_text(&self, id: FunctionId) -> Result<String> {
         let Some(source) = &self.function(id)?.source else {
-            return Ok("function()".to_owned());
+            return Ok(NATIVE_FUNCTION_SOURCE_TEXT.to_owned());
         };
         Ok(source.to_string())
     }
