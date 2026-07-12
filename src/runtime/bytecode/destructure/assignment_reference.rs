@@ -4,7 +4,10 @@ use crate::{
     runtime::Context,
 };
 
-use super::{super::ops::BytecodeAssignmentReference, PatternStep};
+use super::{
+    super::ops::{BytecodeAssignmentReference, web_compat_call_assignment_error},
+    PatternStep,
+};
 
 impl Context {
     pub(super) fn assignment_reference_for_pattern(
@@ -40,6 +43,9 @@ impl Context {
                     name: name.clone(),
                     cell,
                 }))
+            }
+            BytecodeAssignmentTarget::WebCompatCall(target) => {
+                self.eval_web_compat_reference(target)
             }
             BytecodeAssignmentTarget::StaticProperty {
                 object,
@@ -111,17 +117,33 @@ impl Context {
                 ))
             }
             BytecodeAssignmentTarget::PrivateProperty { object, property } => {
-                let object = match self.eval_pattern_block(object)? {
-                    PatternStep::Value(object) => object,
-                    PatternStep::Abrupt(completion) => {
-                        return Ok(PatternStep::Abrupt(completion));
-                    }
-                };
-                let name = self.resolve_private_name(property)?;
-                Ok(PatternStep::Value(
-                    BytecodeAssignmentReference::PrivateProperty { object, name },
-                ))
+                self.eval_resumable_private_reference(object, property)
             }
         }
+    }
+
+    fn eval_web_compat_reference(
+        &mut self,
+        target: &crate::bytecode::BytecodeBlock,
+    ) -> Result<PatternStep<BytecodeAssignmentReference>> {
+        match self.eval_pattern_block(target)? {
+            PatternStep::Value(_) => Err(web_compat_call_assignment_error()),
+            PatternStep::Abrupt(completion) => Ok(PatternStep::Abrupt(completion)),
+        }
+    }
+
+    fn eval_resumable_private_reference(
+        &mut self,
+        object: &crate::bytecode::BytecodeBlock,
+        property: &crate::bytecode::BytecodePrivateName,
+    ) -> Result<PatternStep<BytecodeAssignmentReference>> {
+        let object = match self.eval_pattern_block(object)? {
+            PatternStep::Value(object) => object,
+            PatternStep::Abrupt(completion) => return Ok(PatternStep::Abrupt(completion)),
+        };
+        let name = self.resolve_private_name(property)?;
+        Ok(PatternStep::Value(
+            BytecodeAssignmentReference::PrivateProperty { object, name },
+        ))
     }
 }

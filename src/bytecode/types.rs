@@ -398,6 +398,7 @@ pub struct BytecodePatternTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeAssignmentTarget {
     Binding(BytecodeBinding),
+    WebCompatCall(BytecodeBlock),
     StaticProperty {
         object: BytecodeBlock,
         property: BytecodeProperty,
@@ -576,6 +577,9 @@ pub enum BytecodeInstruction {
         op: BinaryOp,
         target: BytecodeAssignmentTarget,
         value: BytecodeBlock,
+    },
+    WebCompatCallAssignment {
+        target: BytecodeBlock,
     },
     StaticMember {
         property: BytecodeProperty,

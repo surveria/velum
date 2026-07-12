@@ -86,6 +86,7 @@ impl BytecodeCompiler<'_> {
             | Expr::DestructuringAssignment { .. }
             | Expr::Update { .. }
             | Expr::CompoundAssignment { .. }
+            | Expr::WebCompatCallAssignment { .. }
             | Expr::PropertyAssignment { .. }
             | Expr::ComputedPropertyAssignment { .. }
             | Expr::SuperPropertyAssignment { .. }
@@ -200,6 +201,12 @@ impl BytecodeCompiler<'_> {
                 target,
                 expr,
             } => self.compile_compound_assignment(*op, *strict, target, expr),
+            Expr::WebCompatCallAssignment { target, .. } => {
+                self.emit(BytecodeInstruction::WebCompatCallAssignment {
+                    target: BytecodeBlock::compile_expression(target, self.layout)?,
+                });
+                Ok(())
+            }
             Expr::PropertyAssignment {
                 object,
                 property,

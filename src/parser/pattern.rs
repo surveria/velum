@@ -225,7 +225,7 @@ impl Parser {
 
     fn assignment_pattern_target(&mut self) -> Result<AssignmentPattern> {
         let target = self.conditional()?;
-        let Some(target) = Self::assignment_target(target) else {
+        let Some(target) = Self::simple_assignment_target(target) else {
             return Err(self.parse_error("invalid destructuring assignment target"));
         };
         self.validate_assignment_target(&target)?;

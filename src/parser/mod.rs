@@ -8,6 +8,7 @@ use crate::runtime::limits::RuntimeLimits;
 use crate::source::{SourceId, SourceSpan};
 
 mod assignment;
+mod assignment_target;
 mod await_context;
 mod binary;
 mod class;

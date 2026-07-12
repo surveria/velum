@@ -18,10 +18,15 @@ use crate::{
         object::PropertyLookup,
     },
     syntax::{BinaryOp, StaticName, StaticPropertyAccessId, UpdateOp},
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 const LEGACY_PROTO_PROPERTY: &str = "__proto__";
+const CALL_ASSIGNMENT_ERROR: &str = "function call is not a valid assignment target";
+
+pub(in crate::runtime::bytecode) fn web_compat_call_assignment_error() -> Error {
+    Error::exception(ErrorName::ReferenceError, CALL_ASSIGNMENT_ERROR)
+}
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
@@ -528,6 +533,10 @@ impl Context {
                     cell,
                 })
             }
+            BytecodeAssignmentTarget::WebCompatCall(target) => {
+                self.eval_bytecode_expression(target)?;
+                Err(web_compat_call_assignment_error())
+            }
             BytecodeAssignmentTarget::StaticProperty {
                 object,
                 property,
@@ -581,6 +590,10 @@ impl Context {
         match target {
             BytecodeAssignmentTarget::Binding(name) => {
                 self.assign_bytecode_or_create_sloppy_global(name, value)
+            }
+            BytecodeAssignmentTarget::WebCompatCall(target) => {
+                self.eval_bytecode_expression(target)?;
+                Err(web_compat_call_assignment_error())
             }
             BytecodeAssignmentTarget::StaticProperty {
                 object,

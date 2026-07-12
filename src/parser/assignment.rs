@@ -187,10 +187,13 @@ impl Parser {
         }
         let start = target.span();
         let infer_name = matches!(target.kind(), Expr::Identifier(_));
-        let Some(target) = Self::assignment_target(target) else {
+        let Some(target) = self.assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
         self.validate_assignment_target(&target)?;
+        if matches!(target.kind(), Expr::Call { .. }) {
+            return Ok(self.web_compat_call_assignment(start, target, value));
+        }
         let kind = match target.into_kind() {
             Expr::Identifier(name) => Expr::Assignment {
                 name,
@@ -259,6 +262,7 @@ impl Parser {
             | Expr::Assignment { .. }
             | Expr::DestructuringAssignment { .. }
             | Expr::CompoundAssignment { .. }
+            | Expr::WebCompatCallAssignment { .. }
             | Expr::PropertyAssignment { .. }
             | Expr::ComputedPropertyAssignment { .. }
             | Expr::SuperPropertyAssignment { .. }
@@ -287,10 +291,22 @@ impl Parser {
         operator_span: crate::SourceSpan,
     ) -> Result<Expression> {
         let start = target.span();
-        let Some(target) = Self::assignment_target(target) else {
+        let Some(target) = self.assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
         self.validate_assignment_target(&target)?;
+        if matches!(target.kind(), Expr::Call { .. }) {
+            if matches!(
+                op,
+                BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+            ) {
+                return Err(Error::parse_at(
+                    "invalid logical assignment target",
+                    operator_span,
+                ));
+            }
+            return Ok(self.web_compat_call_assignment(start, target, value));
+        }
         Ok(self.expression_node(
             start,
             Expr::CompoundAssignment {
@@ -300,6 +316,21 @@ impl Parser {
                 expr: Box::new(value),
             },
         ))
+    }
+
+    fn web_compat_call_assignment(
+        &self,
+        start: crate::SourceSpan,
+        target: Expression,
+        discarded: Expression,
+    ) -> Expression {
+        self.expression_node(
+            start,
+            Expr::WebCompatCallAssignment {
+                target: Box::new(target),
+                discarded: Some(Box::new(discarded)),
+            },
+        )
     }
 }
 

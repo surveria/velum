@@ -420,6 +420,9 @@ impl BytecodeCompiler<'_> {
             Expr::Identifier(name) => Ok(BytecodeAssignmentTarget::Binding(
                 BytecodeBinding::compile_write(name, self.layout, strict)?,
             )),
+            Expr::Call { .. } if !strict => Ok(BytecodeAssignmentTarget::WebCompatCall(
+                BytecodeBlock::compile_expression(expr, self.layout)?,
+            )),
             Expr::Member {
                 object,
                 property,
