@@ -102,22 +102,6 @@ impl<T> SlotArena<T> {
         self.slots.get_mut(index).and_then(Option::as_mut)
     }
 
-    pub(crate) fn get_pair_mut(&mut self, first: usize, second: usize) -> Option<(&mut T, &mut T)> {
-        if first == second {
-            return None;
-        }
-        if first < second {
-            let (left, right) = self.slots.split_at_mut(second);
-            let first = left.get_mut(first)?.as_mut()?;
-            let second = right.first_mut()?.as_mut()?;
-            return Some((first, second));
-        }
-        let (left, right) = self.slots.split_at_mut(first);
-        let second = left.get_mut(second)?.as_mut()?;
-        let first = right.first_mut()?.as_mut()?;
-        Some((first, second))
-    }
-
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.slots.iter().filter_map(Option::as_ref)
     }

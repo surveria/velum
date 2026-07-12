@@ -1,10 +1,12 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, roots::VmRootKind},
     value::Value,
 };
 
 const ARRAY_MUTATE_INDEX_ERROR: &str = "array index exceeded supported range";
+const ARRAY_SPLICE_LENGTH_ERROR: &str = "Array.prototype.splice result exceeds safe integer range";
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 impl Context {
     pub(in crate::runtime::native) fn eval_array_splice(
@@ -24,12 +26,10 @@ impl Context {
         let length = self.array_like_length(this_value)?;
         let start = self.array_slice_bound(args.first(), length, 0)?;
         let (delete_count, items) = self.array_splice_counts(args, length, start)?;
-        if let Some(value) =
-            self.eval_packed_array_splice(this_value, length, start, delete_count, &items)?
-        {
-            return Ok(value);
-        }
+        let new_length = Self::array_spliced_length(length, delete_count, items.len())?;
         let removed = self.array_collect_removed(this_value, start, delete_count)?;
+        let _removed_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&removed))?;
         self.array_splice_shift(this_value, length, start, delete_count, items.len())?;
         for (offset, item) in items.iter().enumerate() {
             self.step()?;
@@ -38,35 +38,8 @@ impl Context {
                 .ok_or_else(|| Error::limit(ARRAY_MUTATE_INDEX_ERROR))?;
             self.set_array_like_index(this_value, target, item.clone())?;
         }
-        let new_length = Self::array_spliced_length(length, delete_count, items.len())?;
         self.set_array_like_length(this_value, new_length)?;
         Ok(removed)
-    }
-
-    fn eval_packed_array_splice(
-        &mut self,
-        this_value: &Value,
-        length: usize,
-        start: usize,
-        delete_count: usize,
-        items: &[Value],
-    ) -> Result<Option<Value>> {
-        let Value::Object(id) = this_value else {
-            return Ok(None);
-        };
-        let Some(removed_values) = self.objects.splice_packed_default_array_if_array(
-            *id,
-            start,
-            delete_count,
-            items,
-            self.limits.max_object_properties,
-        )?
-        else {
-            return Ok(None);
-        };
-        self.charge_runtime_steps(length)?;
-        let removed = self.create_array_from_elements(removed_values)?;
-        Ok(Some(removed))
     }
 
     /// Copy the deleted range `[start, start + delete_count)` into a fresh array.
@@ -76,7 +49,9 @@ impl Context {
         start: usize,
         delete_count: usize,
     ) -> Result<Value> {
-        let removed = self.create_array_callback_result(delete_count)?;
+        let removed = self.array_species_create(this_value, delete_count)?;
+        let _removed_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&removed))?;
         for offset in 0..delete_count {
             self.step()?;
             let from = start
@@ -84,9 +59,10 @@ impl Context {
                 .ok_or_else(|| Error::limit(ARRAY_MUTATE_INDEX_ERROR))?;
             if self.has_array_like_index(this_value, from)? {
                 let value = self.get_array_like_index(this_value, from)?;
-                self.set_array_like_index(&removed, offset, value)?;
+                self.array_from_create_data_property(&removed, offset, value)?;
             }
         }
+        self.set_array_like_length(&removed, delete_count)?;
         Ok(removed)
     }
 
@@ -166,10 +142,14 @@ impl Context {
         delete_count: usize,
         item_count: usize,
     ) -> Result<usize> {
-        length
+        let new_length = length
             .checked_sub(delete_count)
             .and_then(|value| value.checked_add(item_count))
-            .ok_or_else(|| Error::limit(ARRAY_MUTATE_INDEX_ERROR))
+            .ok_or_else(|| Error::type_error(ARRAY_SPLICE_LENGTH_ERROR))?;
+        if u64::try_from(new_length).map_or(true, |length| length > MAX_SAFE_INTEGER) {
+            return Err(Error::type_error(ARRAY_SPLICE_LENGTH_ERROR));
+        }
+        Ok(new_length)
     }
 
     pub(in crate::runtime::native) fn eval_array_fill(

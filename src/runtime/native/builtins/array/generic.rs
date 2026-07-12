@@ -262,10 +262,9 @@ impl Context {
         let count = end
             .checked_sub(start)
             .ok_or_else(|| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
-        let prototype = self.existing_array_constructor_prototype()?;
-        let result =
-            self.objects
-                .create_array_with_length(count, prototype, self.limits.max_objects)?;
+        let result = self.array_species_create(this_value, count)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         for offset in 0..count {
             self.step()?;
             let source = start
@@ -273,9 +272,10 @@ impl Context {
                 .ok_or_else(|| Error::limit(ARRAY_LIKE_INDEX_LIMIT_ERROR))?;
             if self.has_array_like_index(this_value, source)? {
                 let value = self.get_array_like_index(this_value, source)?;
-                self.set_array_like_index(&result, offset, value)?;
+                self.array_from_create_data_property(&result, offset, value)?;
             }
         }
+        self.set_array_like_length(&result, count)?;
         Ok(result)
     }
 

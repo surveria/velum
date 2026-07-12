@@ -1,4 +1,4 @@
-use super::{ArrayLength, ObjectHeap, ObjectId, ObjectProperty};
+use super::{ObjectHeap, ObjectId, ObjectProperty};
 use crate::error::Result;
 use crate::value::Value;
 
@@ -34,35 +34,5 @@ impl ObjectHeap {
             .object_mut(id)?
             .array_storage
             .sort_packed_default_numbers_for_len(length, descending))
-    }
-
-    pub(crate) fn splice_packed_default_array_if_array(
-        &mut self,
-        id: ObjectId,
-        start: usize,
-        delete_count: usize,
-        items: &[Value],
-        max_properties: usize,
-    ) -> Result<Option<Vec<Value>>> {
-        let Some(length) = self.array_len_if_array(id)? else {
-            return Ok(None);
-        };
-        let Some(new_length) = length.checked_sub(delete_count).and_then(|value| {
-            value
-                .checked_add(items.len())
-                .and_then(|length| ArrayLength::from_usize(length).ok())
-        }) else {
-            return Ok(None);
-        };
-        let before = self.object(id)?.structure_snapshot();
-        let removed = self
-            .object_mut(id)?
-            .array_storage
-            .splice_packed_default_for_len(length, start, delete_count, items, max_properties);
-        if removed.is_some() {
-            self.object_mut(id)?.array_length = Some(new_length);
-            self.bump_if_structure_changed(id, before)?;
-        }
-        Ok(removed)
     }
 }
