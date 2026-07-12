@@ -104,12 +104,12 @@ impl Context {
             Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_own_property_keys(*id),
             Value::Object(id) => self.ordinary_own_property_keys(*id),
             Value::Function(id) => {
-                let names = self.function_enumerable_keys(*id)?;
-                self.property_name_values(names)
+                let (names, symbols) = self.function_own_keys(*id)?;
+                self.function_property_key_values(names, symbols)
             }
             Value::NativeFunction(id) => {
-                let names = self.native_function_enumerable_keys(*id)?;
-                self.property_name_values(names)
+                let (names, symbols) = self.native_function_own_keys(*id)?;
+                self.function_property_key_values(names, symbols)
             }
             Value::HostFunction(_) => Err(Error::runtime(
                 "own property keys target cannot be converted to an object",
@@ -137,5 +137,17 @@ impl Context {
             .into_iter()
             .map(|name| self.heap_string_value(&name))
             .collect()
+    }
+
+    fn function_property_key_values(
+        &mut self,
+        names: Vec<String>,
+        symbols: Vec<crate::storage::symbol::SymbolId>,
+    ) -> Result<Vec<Value>> {
+        let mut keys = self.property_name_values(names)?;
+        for symbol in symbols {
+            keys.push(Value::Symbol(self.symbols.get(symbol)?.clone()));
+        }
+        Ok(keys)
     }
 }

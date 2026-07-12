@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09q consolidates standard `Symbol.species` accessors behind one shared native semantic owner and closes the complete focused profile. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09r applies shared construct, call, Promise-job, and iterator owners to the standard `Promise.all` contract, leaving only one BigInt-blocked focused file. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2692,6 +2692,31 @@ AS-09q profile evidence in draft PR #476:
   adds 62 full-corpus variants and 31 conforming files with no baseline
   removals, moving the canonical 58,620 variants / 30,139 files to a candidate
   58,682 variants / 30,170 files on tested tree `d5d874c1`.
+
+AS-09r profile evidence in draft PR #478:
+
+- `NewPromiseCapability` behavior now accepts generic constructors through the
+  shared semantic construct owner, captures their resolve and reject functions
+  in VM-local traced state, and rejects non-callable capability results;
+- native Promise construction honors the explicit new-target prototype, and
+  the same Promise initialization owner supports derived constructors through
+  `super(executor)` without duplicating Promise records;
+- `Promise.all` retrieves the constructor's observable `resolve` method once,
+  streams the iterator in specification order, invokes each returned `then`,
+  closes non-exhausted iterators on abrupt completion, and rejects through the
+  captured capability;
+- per-element native functions share one rooted result state but retain
+  independent already-called guards. Result slots use the common physical
+  property owner with `CreateDataProperty` attributes, so inherited Array
+  setters cannot intercept aggregation;
+- the exact standard `built-ins/Promise/all/` profile advances from 114/196 to
+  194/196 variants and from 57/98 to 97/98 conforming files. The sole residual
+  source file contains a BigInt literal and fails in the lexer before reaching
+  Promise semantics;
+- exact-tree run `29172860321` certifies semantic tree `019c6da3`: the complete
+  baseline adds 142 variants / 71 conforming files with no removals, producing
+  a 58,824-variant / 30,241-file pass candidate. Canonical publication remains
+  required before AS-09r can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

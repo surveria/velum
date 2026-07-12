@@ -146,6 +146,9 @@ impl Context {
                     return self
                         .eval_direct_error_constructor_with_prototype(name, args, prototype);
                 }
+                if kind == NativeFunctionKind::Promise {
+                    return self.construct_promise_with_new_target(args, &new_target);
+                }
                 if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
                     return self.construct_iterator_object(constructor, &new_target);
                 }

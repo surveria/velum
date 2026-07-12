@@ -478,6 +478,9 @@ impl Context {
         if let Some(result) = self.eval_generator_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_promise_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         if let Some(result) = Self::eval_shared_function_accessor_kind(kind, this_value) {
             return result;
         }
@@ -531,18 +534,6 @@ impl Context {
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::PerformanceNow => Ok(self.eval_performance_now()),
             NativeFunctionKind::Print => self.eval_print_call(args),
-            NativeFunctionKind::Promise => self.eval_promise_constructor(args),
-            NativeFunctionKind::PromiseAll => self.eval_promise_all(args, this_value),
-            NativeFunctionKind::PromiseAllResolveElement { state, index } => {
-                self.eval_promise_all_resolve_element(state, index, args)
-            }
-            NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
-            NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),
-            NativeFunctionKind::PromiseThen => self.eval_promise_then(args, this_value),
-            NativeFunctionKind::PromiseCatch => self.eval_promise_catch(args, this_value),
-            NativeFunctionKind::PromiseResolver { promise, kind } => {
-                self.eval_promise_resolver(promise, kind, args)
-            }
             NativeFunctionKind::Proxy => Self::eval_proxy_call(args),
             NativeFunctionKind::ProxyRevocable => self.eval_proxy_revocable(args),
             NativeFunctionKind::ProxyRevoke(id) => self.eval_proxy_revoke(id),
