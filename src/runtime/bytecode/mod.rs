@@ -117,8 +117,14 @@ impl Context {
             | BytecodeInstruction::CallSuper { .. }
             | BytecodeInstruction::CallSuperSpread
             | BytecodeInstruction::SuperMember { .. }
+            | BytecodeInstruction::ComputedSuperMember { .. }
             | BytecodeInstruction::CallSuperMember { .. }
             | BytecodeInstruction::CallSuperMemberSpread { .. }
+            | BytecodeInstruction::CallComputedSuperMember { .. }
+            | BytecodeInstruction::CallComputedSuperMemberSpread { .. }
+            | BytecodeInstruction::SuperPropertyAssign { .. }
+            | BytecodeInstruction::UpdateSuperProperty { .. }
+            | BytecodeInstruction::CompoundSuperProperty { .. }
             | BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }

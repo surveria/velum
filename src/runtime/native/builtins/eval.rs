@@ -57,10 +57,17 @@ impl Context {
         strict_mode: bool,
         direct: bool,
     ) -> Result<Value> {
+        let super_binding = direct.then(|| self.current_super_frame()).flatten();
+        let allow_super_property = super_binding.is_some();
+        let allow_super_call = super_binding
+            .as_ref()
+            .is_some_and(|binding| binding.constructor.is_some());
         let script = crate::compiled_script::CompiledScript::compile_eval(
             source,
             self.limits.clone(),
             strict_mode,
+            allow_super_property,
+            allow_super_call,
         )
         .map_err(dynamic_compilation_error)?;
         self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;

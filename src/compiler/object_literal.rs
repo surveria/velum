@@ -25,13 +25,20 @@ impl BytecodeCompiler<'_> {
             };
             match &property.key {
                 ObjectPropertyKey::Static(key) => {
-                    operands.push(accessor.map_or_else(
-                        || BytecodeObjectProperty::Static(key.clone()),
+                    let operand = accessor.map_or_else(
+                        || {
+                            if matches!(property.value.kind(), Expr::MethodFunction { .. }) {
+                                BytecodeObjectProperty::StaticMethod(key.clone())
+                            } else {
+                                BytecodeObjectProperty::Static(key.clone())
+                            }
+                        },
                         |kind| BytecodeObjectProperty::StaticAccessor {
                             key: key.clone(),
                             kind,
                         },
-                    ));
+                    );
+                    operands.push(operand);
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;

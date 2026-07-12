@@ -21,5 +21,5 @@ pub use types::{
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionInit,
     BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
     BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
-    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeProgram, BytecodeProperty, BytecodeSuperProperty, BytecodeSwitchCase,
 };

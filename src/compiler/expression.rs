@@ -60,10 +60,9 @@ impl BytecodeCompiler<'_> {
             }
             Expr::Class(class) => return self.compile_class_literal(class),
             Expr::SuperCall { args } => return self.compile_super_call(args),
-            Expr::SuperMember { property, access } => {
-                self.emit(BytecodeInstruction::SuperMember {
-                    property: Self::compile_property(property, *access),
-                });
+            Expr::SuperMember { property, access } => self.compile_super_member(property, *access),
+            Expr::SuperComputedMember { property, access } => {
+                return self.compile_super_computed_member(property, *access);
             }
             Expr::Spread(_) => return Err(Self::spread_outside_literal_error()),
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
@@ -84,7 +83,11 @@ impl BytecodeCompiler<'_> {
             Expr::Assignment { .. }
             | Expr::DestructuringAssignment { .. }
             | Expr::Update { .. }
-            | Expr::CompoundAssignment { .. } => return self.compile_mutation_expr(expr),
+            | Expr::CompoundAssignment { .. }
+            | Expr::SuperPropertyAssignment { .. }
+            | Expr::SuperComputedPropertyAssignment { .. } => {
+                return self.compile_mutation_expr(expr);
+            }
             Expr::PropertyAssignment {
                 object,
                 property,
@@ -127,6 +130,28 @@ impl BytecodeCompiler<'_> {
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_super_computed_member(
+        &mut self,
+        property: &Expression,
+        access: crate::ast::StaticPropertyAccessId,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::ComputedSuperMember {
+            expression: crate::bytecode::BytecodeBlock::compile_expression(property, self.layout)?,
+            property: Self::compile_dynamic_property(access),
+        });
+        Ok(())
+    }
+
+    fn compile_super_member(
+        &mut self,
+        property: &crate::ast::StaticName,
+        access: crate::ast::StaticPropertyAccessId,
+    ) {
+        self.emit(BytecodeInstruction::SuperMember {
+            property: Self::compile_property(property, access),
+        });
     }
 
     fn compile_suspend_expr(&mut self, expr: &Expr) -> Result<()> {
@@ -183,6 +208,34 @@ impl BytecodeCompiler<'_> {
                 target,
                 expr,
             } => self.compile_compound_assignment(*op, *strict, target, expr),
+            Expr::SuperPropertyAssignment {
+                property,
+                access,
+                strict,
+                expr,
+            } => self.compile_super_property_assignment(
+                crate::bytecode::BytecodeSuperProperty::Static(Self::compile_property(
+                    property, *access,
+                )),
+                *strict,
+                expr,
+            ),
+            Expr::SuperComputedPropertyAssignment {
+                property,
+                access,
+                strict,
+                expr,
+            } => self.compile_super_property_assignment(
+                crate::bytecode::BytecodeSuperProperty::Computed {
+                    expression: crate::bytecode::BytecodeBlock::compile_expression(
+                        property,
+                        self.layout,
+                    )?,
+                    operand: Self::compile_dynamic_property(*access),
+                },
+                *strict,
+                expr,
+            ),
             _ => Err(Error::runtime("expected mutation expression")),
         }
     }

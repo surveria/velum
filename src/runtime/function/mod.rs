@@ -91,15 +91,36 @@ fn expected_function_local_count(
 
 /// Super references available to a class constructor or method body: the
 /// callable parent constructor (derived constructors only) and the home
-/// prototype used by `super.property` lookups.
+/// object whose current prototype supplies `super.property` lookups.
 #[derive(Debug)]
 pub(in crate::runtime) struct FunctionSuperBinding {
     pub(in crate::runtime) constructor: Option<Value>,
-    pub(in crate::runtime) home_prototype: Value,
+    pub(in crate::runtime) home_object: Value,
     /// The derived constructor owning this binding; its instance fields
     /// initialize after `super()` completes.
     pub(in crate::runtime) own_constructor: Option<FunctionId>,
-    pub(in crate::runtime) this_initialized: std::cell::Cell<bool>,
+    pub(in crate::runtime) this_value: std::cell::RefCell<Option<Value>>,
+}
+
+fn activation_super_bindings(
+    id: FunctionId,
+    binding: Option<Rc<FunctionSuperBinding>>,
+) -> (
+    Option<Rc<FunctionSuperBinding>>,
+    Option<Rc<FunctionSuperBinding>>,
+) {
+    let binding = binding.map(|binding| {
+        if binding.own_constructor == Some(id) {
+            binding.fresh_activation()
+        } else {
+            binding
+        }
+    });
+    let derived = binding
+        .as_ref()
+        .filter(|binding| binding.constructor.is_some())
+        .cloned();
+    (binding, derived)
 }
 
 pub(super) struct BytecodeFunctionInit<'a> {
@@ -405,13 +426,7 @@ impl Context {
             remember_params,
             scope_template,
         } = self.function_call_setup(id)?;
-        let super_binding = super_binding.map(|binding| {
-            if binding.own_constructor == Some(id) {
-                binding.fresh_activation()
-            } else {
-                binding
-            }
-        });
+        let (super_binding, derived_super_binding) = activation_super_bindings(id, super_binding);
         let packed_args = if bytecode.has_rest_parameter() {
             Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
         } else {
@@ -463,7 +478,7 @@ impl Context {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
-        let result = self.eval_function_body::<CAN_SUSPEND>(
+        let mut result = self.eval_function_body::<CAN_SUSPEND>(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -471,6 +486,9 @@ impl Context {
             &bytecode,
             remember_params,
         );
+        if let (Ok(completion), Some(binding)) = (&result, &derived_super_binding) {
+            result = self.normalize_derived_constructor_completion(completion.clone(), binding);
+        }
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
@@ -483,6 +501,37 @@ impl Context {
         binding_result?;
         activation_result?;
         result
+    }
+
+    fn normalize_derived_constructor_completion(
+        &self,
+        completion: Completion,
+        binding: &FunctionSuperBinding,
+    ) -> Result<Completion> {
+        match completion {
+            Completion::Return(value) | Completion::ReturnDirect(value)
+                if self.semantic_object_ref(&value)?.is_some() =>
+            {
+                Ok(Completion::Return(value))
+            }
+            Completion::Return(Value::Undefined)
+            | Completion::ReturnDirect(Value::Undefined)
+            | Completion::Normal(_) => binding
+                .this_value
+                .borrow()
+                .clone()
+                .map(Completion::Return)
+                .ok_or_else(|| {
+                    Error::exception(
+                        crate::value::ErrorName::ReferenceError,
+                        "derived constructor did not initialize this",
+                    )
+                }),
+            Completion::Return(_) | Completion::ReturnDirect(_) => Err(Error::type_error(
+                "derived constructor can only return an object or undefined",
+            )),
+            completion => Ok(completion),
+        }
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {

@@ -474,16 +474,17 @@ impl Context {
 
     fn validate_prototype_value(value: &Value) -> Result<()> {
         match value {
-            Value::Object(_) | Value::Null => Ok(()),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Null => Ok(()),
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_) => Err(Error::runtime(
+            | Value::Symbol(_) => Err(Error::runtime(
                 "Object.setPrototypeOf prototype must be an object or null",
             )),
         }

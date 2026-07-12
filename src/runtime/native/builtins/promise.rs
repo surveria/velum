@@ -105,25 +105,6 @@ impl Context {
         self.run_promise_executor(promise, object, executor)
     }
 
-    pub(in crate::runtime) fn initialize_promise_super_instance(
-        &mut self,
-        args: &[Value],
-        this_value: &Value,
-    ) -> Result<()> {
-        let executor = self.promise_executor_argument(args)?;
-        let Value::Object(object) = this_value else {
-            return Err(Error::runtime("Promise super receiver is not an object"));
-        };
-        if self.promise_id_from_value(this_value).is_ok() {
-            return Err(Error::type_error(
-                "Promise super constructor was called twice",
-            ));
-        }
-        let promise = self.create_pending_promise_for_object(*object)?;
-        self.run_promise_executor(promise, this_value.clone(), executor)
-            .map(|_object| ())
-    }
-
     fn promise_executor_argument(&self, args: &[Value]) -> Result<Value> {
         let Some(executor) = args.first().cloned() else {
             return Err(Error::type_error(

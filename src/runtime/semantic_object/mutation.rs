@@ -298,6 +298,13 @@ impl Context {
             self.objects.set_array_length(*id, length)?;
             return Ok(true);
         }
+        if new_property
+            && let Value::Object(id) = receiver
+            && !self.objects.is_proxy(*id)
+            && !self.objects.is_extensible(*id)?
+        {
+            return Ok(false);
+        }
         let update = DataPropertyUpdate::new(
             Some(value.clone()),
             new_property.then_some(PropertyWritable::Yes),

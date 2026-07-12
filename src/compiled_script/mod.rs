@@ -22,9 +22,55 @@ pub struct CompiledScript {
     strict: bool,
 }
 
+#[derive(Clone, Copy)]
+enum CompileMode {
+    Script,
+    Eval {
+        strict: bool,
+        super_context: EvalSuperContext,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum EvalSuperContext {
+    None,
+    Property,
+    PropertyAndCall,
+}
+
+impl CompileMode {
+    const SCRIPT: Self = Self::Script;
+
+    const fn eval(strict: bool, allow_super_property: bool, allow_super_call: bool) -> Self {
+        let super_context = match (allow_super_property, allow_super_call) {
+            (_, true) => EvalSuperContext::PropertyAndCall,
+            (true, false) => EvalSuperContext::Property,
+            (false, false) => EvalSuperContext::None,
+        };
+        Self::Eval {
+            strict,
+            super_context,
+        }
+    }
+
+    const fn strict(self) -> bool {
+        match self {
+            Self::Script => false,
+            Self::Eval { strict, .. } => strict,
+        }
+    }
+
+    const fn eval_super_context(self) -> Option<EvalSuperContext> {
+        match self {
+            Self::Script => None,
+            Self::Eval { super_context, .. } => Some(super_context),
+        }
+    }
+}
+
 impl CompiledScript {
     pub(crate) fn compile(source: &str, limits: RuntimeLimits) -> Result<Self> {
-        Self::compile_with_name_and_mode(None, source, limits, false, false)
+        Self::compile_with_name_and_mode(None, source, limits, CompileMode::SCRIPT)
     }
 
     pub(crate) fn compile_named(
@@ -32,37 +78,56 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(Some(source_name), source, limits, false, false)
+        Self::compile_with_name_and_mode(Some(source_name), source, limits, CompileMode::SCRIPT)
     }
 
     pub(crate) fn compile_eval(
         source: &str,
         limits: RuntimeLimits,
         strict_mode: bool,
+        allow_super_property: bool,
+        allow_super_call: bool,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(None, source, limits, strict_mode, true)
+        Self::compile_with_name_and_mode(
+            None,
+            source,
+            limits,
+            CompileMode::eval(strict_mode, allow_super_property, allow_super_call),
+        )
     }
 
     fn compile_with_name_and_mode(
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
-        strict_mode: bool,
-        eval: bool,
+        mode: CompileMode,
     ) -> Result<Self> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
         let tokens =
             lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
-        let parsed = if strict_mode {
+        let parsed = if let Some(super_context) = mode.eval_super_context() {
+            let allow_super_property = matches!(
+                super_context,
+                EvalSuperContext::Property | EvalSuperContext::PropertyAndCall
+            );
+            let allow_super_call = matches!(super_context, EvalSuperContext::PropertyAndCall);
+            parser::parse_eval_with_usage_in_context(
+                tokens,
+                limits,
+                mode.strict(),
+                allow_super_property,
+                allow_super_call,
+            )
+        } else if mode.strict() {
             parser::parse_with_usage_in_mode(tokens, limits, true)
         } else {
             parser::parse_with_usage(tokens, limits)
         }
         .map_err(|error| error.with_source(source_id, source))?;
         let program = parsed.program;
-        let binding_layout = if eval {
+        let binding_layout = if matches!(mode, CompileMode::Eval { .. }) {
             BindingLayout::build_eval(
                 &program,
                 parsed.usage.static_binding_count,

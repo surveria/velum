@@ -49,6 +49,10 @@ pub enum Expr {
         property: StaticName,
         access: StaticPropertyAccessId,
     },
+    SuperComputedMember {
+        property: Box<Expression>,
+        access: StaticPropertyAccessId,
+    },
     TemplateLiteral {
         quasis: Vec<StaticString>,
         expressions: Vec<Expression>,
@@ -115,6 +119,18 @@ pub enum Expr {
         object: Box<Expression>,
         property: Box<Expression>,
         access: StaticPropertyAccessId,
+        expr: Box<Expression>,
+    },
+    SuperPropertyAssignment {
+        property: StaticName,
+        access: StaticPropertyAccessId,
+        strict: bool,
+        expr: Box<Expression>,
+    },
+    SuperComputedPropertyAssignment {
+        property: Box<Expression>,
+        access: StaticPropertyAccessId,
+        strict: bool,
         expr: Box<Expression>,
     },
     Member {

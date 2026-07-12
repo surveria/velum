@@ -57,7 +57,11 @@ impl Context {
                 self.proxy_set_prototype_of(*id, prototype)?
             }
             Value::Object(id) => self.objects.try_set_prototype_value(*id, &prototype)?,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
+            Value::Function(id) => {
+                self.set_function_static_parent(*id, prototype)?;
+                true
+            }
+            Value::NativeFunction(_) | Value::HostFunction(_) => false,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

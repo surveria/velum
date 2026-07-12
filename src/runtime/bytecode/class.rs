@@ -65,34 +65,29 @@ impl Context {
         let Some(prototype_id) = self.function_constructor_prototype(*constructor_id)? else {
             return Err(Error::runtime("class prototype object is not available"));
         };
+        if heritage
+            .as_ref()
+            .is_some_and(|heritage| matches!(heritage.constructor, Value::Undefined))
+        {
+            self.objects
+                .set_prototype_value(prototype_id, &Value::Null)?;
+        }
         if let Some(heritage) = &heritage {
             self.set_function_static_parent(*constructor_id, heritage.constructor.clone())?;
             self.set_function_super_binding(
                 *constructor_id,
                 Rc::new(FunctionSuperBinding {
                     constructor: Some(heritage.constructor.clone()),
-                    home_prototype: heritage.prototype.clone(),
+                    home_object: constructor.clone(),
                     own_constructor: Some(*constructor_id),
-                    this_initialized: std::cell::Cell::new(false),
+                    this_value: std::cell::RefCell::new(None),
                 }),
             )?;
         }
-        let instance_home = match &heritage {
-            Some(heritage) => heritage.prototype.clone(),
-            // Base-class methods resolve super.property through the ordinary
-            // object prototype root above the class prototype.
-            None => self.objects.prototype_value(prototype_id)?,
-        };
-        let static_home = heritage
-            .as_ref()
-            .map_or(Value::Undefined, |heritage| heritage.constructor.clone());
-
         let targets = ClassInstallationTargets {
             constructor: constructor.clone(),
             constructor_id: *constructor_id,
             prototype_id,
-            instance_home,
-            static_home,
         };
         self.install_class_members(class, computed_keys, &targets)?;
 
@@ -144,22 +139,20 @@ impl Context {
                     instance_private_slots.push(private_slot);
                 }
             }
-            let home = if member.is_static {
-                targets.static_home.clone()
+            let home_object = if member.is_static {
+                targets.constructor.clone()
             } else {
-                targets.instance_home.clone()
+                Value::Object(targets.prototype_id)
             };
-            if !matches!(home, Value::Undefined) {
-                self.set_function_super_binding(
-                    function_id,
-                    Rc::new(FunctionSuperBinding {
-                        constructor: None,
-                        home_prototype: home,
-                        own_constructor: None,
-                        this_initialized: std::cell::Cell::new(false),
-                    }),
-                )?;
-            }
+            self.set_function_super_binding(
+                function_id,
+                Rc::new(FunctionSuperBinding {
+                    constructor: None,
+                    home_object,
+                    own_constructor: None,
+                    this_value: std::cell::RefCell::new(None),
+                }),
+            )?;
         }
         if !instance_private_slots.is_empty() {
             self.set_function_class_private_slots(
@@ -397,15 +390,12 @@ impl Context {
         match &value {
             Value::Null => Ok(ClassHeritage {
                 constructor: Value::Undefined,
-                prototype: Value::Null,
                 prototype_id: None,
             }),
             Value::Function(id) => {
                 let prototype_id = self.function_constructor_prototype(*id)?;
-                let prototype = prototype_id.map_or(Value::Undefined, Value::Object);
                 Ok(ClassHeritage {
                     constructor: value,
-                    prototype,
                     prototype_id,
                 })
             }
@@ -417,7 +407,6 @@ impl Context {
                 };
                 Ok(ClassHeritage {
                     constructor: value,
-                    prototype,
                     prototype_id,
                 })
             }
@@ -434,15 +423,12 @@ struct ClassInstallationTargets {
     constructor: Value,
     constructor_id: FunctionId,
     prototype_id: ObjectId,
-    instance_home: Value,
-    static_home: Value,
 }
 
 /// Resolved `extends` heritage: the parent constructor value plus its
 /// prototype object used as the parent of the class prototype.
 struct ClassHeritage {
     constructor: Value,
-    prototype: Value,
     prototype_id: Option<crate::value::ObjectId>,
 }
 

@@ -70,12 +70,28 @@ impl Context {
             BytecodeInstruction::SuperMember { property } => {
                 self.eval_bytecode_super_member(state, property, next)
             }
+            BytecodeInstruction::ComputedSuperMember {
+                expression,
+                property,
+            } => self.eval_bytecode_computed_super_member(state, expression, *property, next),
             BytecodeInstruction::CallSuperMember {
                 property,
                 arg_count,
             } => self.eval_bytecode_call_super_member(state, property, *arg_count, next),
             BytecodeInstruction::CallSuperMemberSpread { property } => {
                 self.eval_bytecode_call_super_member_spread(state, property, next)
+            }
+            BytecodeInstruction::CallComputedSuperMember {
+                property,
+                arg_count,
+            } => self.eval_bytecode_call_computed_super_member(state, *property, *arg_count, next),
+            BytecodeInstruction::CallComputedSuperMemberSpread { property } => {
+                self.eval_bytecode_call_computed_super_member_spread(state, *property, next)
+            }
+            BytecodeInstruction::SuperPropertyAssign { .. }
+            | BytecodeInstruction::UpdateSuperProperty { .. }
+            | BytecodeInstruction::CompoundSuperProperty { .. } => {
+                self.eval_bytecode_super_mutation_instruction(state, instruction, next)
             }
             BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }

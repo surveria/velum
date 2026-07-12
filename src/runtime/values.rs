@@ -251,6 +251,18 @@ impl Context {
     }
 
     pub(crate) fn current_this(&mut self) -> Result<Value> {
+        if let Some(binding) = self.current_activation_super()
+            && binding.constructor.is_some()
+        {
+            let this_value = binding.this_value.borrow().clone();
+            let Some(value) = this_value else {
+                return Err(Error::exception(
+                    crate::value::ErrorName::ReferenceError,
+                    "this is not initialized before super()",
+                ));
+            };
+            return self.checked_value(value);
+        }
         if let Some(value) = self.current_activation_this() {
             return self.checked_value(value.clone());
         }

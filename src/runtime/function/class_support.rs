@@ -6,7 +6,6 @@ use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     value::{FunctionId, Value},
 };
@@ -15,9 +14,9 @@ impl FunctionSuperBinding {
     pub(super) fn fresh_activation(&self) -> Rc<Self> {
         Rc::new(Self {
             constructor: self.constructor.clone(),
-            home_prototype: self.home_prototype.clone(),
+            home_object: self.home_object.clone(),
             own_constructor: self.own_constructor,
-            this_initialized: std::cell::Cell::new(false),
+            this_value: std::cell::RefCell::new(None),
         })
     }
 }
@@ -126,38 +125,6 @@ impl Context {
             .ok_or_else(|| Error::runtime("private slot disappeared"))?;
         slot.value = value;
         Ok(())
-    }
-
-    /// Runs a parent class constructor for `super(...)`: the current `this`
-    /// is initialized in place, the parent's return-object override is
-    /// ignored, and throws propagate as completions.
-    pub(in crate::runtime) fn eval_class_super_constructor_completion(
-        &mut self,
-        id: FunctionId,
-        args: &[Value],
-        this_value: &Value,
-        new_target: Value,
-    ) -> Result<Completion> {
-        self.initialize_class_fields(id, this_value)?;
-        match self.eval_function_completion_with_this_and_new_target(
-            id,
-            RuntimeCallArgs::values(args),
-            this_value.clone(),
-            new_target,
-        )? {
-            Completion::Normal(_) | Completion::Return(_) | Completion::ReturnDirect(_) => {
-                Ok(Completion::Normal(Value::Undefined))
-            }
-            completion @ Completion::Throw(_) => Ok(completion),
-            Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            completion @ (Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => completion
-                .into_function_result()
-                .map(|_| Completion::Normal(Value::Undefined)),
-        }
     }
 
     pub(in crate::runtime) fn set_function_super_binding(

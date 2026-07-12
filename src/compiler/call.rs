@@ -75,6 +75,15 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
+            Expr::SuperComputedMember { property, access } => {
+                self.compile_expr(property)?;
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::CallComputedSuperMember {
+                    property: Self::compile_dynamic_property(*access),
+                    arg_count: args.len(),
+                });
+                Ok(())
+            }
             Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, strict, args),
             _ => {
                 self.compile_expr(callee)?;
@@ -146,6 +155,15 @@ impl BytecodeCompiler<'_> {
                 self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
                 self.emit(BytecodeInstruction::CallSuperMemberSpread {
                     property: Self::compile_property(property, *access),
+                });
+                Ok(())
+            }
+            Expr::SuperComputedMember { property, access } => {
+                self.compile_expr(property)?;
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallComputedSuperMemberSpread {
+                    property: Self::compile_dynamic_property(*access),
                 });
                 Ok(())
             }

@@ -4,8 +4,23 @@ use super::{
     UpdateOp,
 };
 use crate::bytecode::BytecodePrivateName;
+use crate::bytecode::BytecodeSuperProperty;
 
 impl BytecodeCompiler<'_> {
+    pub(super) fn compile_super_property_assignment(
+        &mut self,
+        property: BytecodeSuperProperty,
+        strict: bool,
+        expr: &Expression,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::SuperPropertyAssign {
+            property,
+            value: BytecodeBlock::compile_expression(expr, self.layout)?,
+            strict,
+        });
+        Ok(())
+    }
+
     pub(super) fn compile_private_expression(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::PrivateMember { object, name } => {
@@ -189,6 +204,29 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
+            Expr::SuperMember { property, access } => {
+                self.emit(BytecodeInstruction::UpdateSuperProperty {
+                    property: BytecodeSuperProperty::Static(Self::compile_property(
+                        property, *access,
+                    )),
+                    op,
+                    prefix,
+                    strict,
+                });
+                Ok(())
+            }
+            Expr::SuperComputedMember { property, access } => {
+                self.emit(BytecodeInstruction::UpdateSuperProperty {
+                    property: BytecodeSuperProperty::Computed {
+                        expression: BytecodeBlock::compile_expression(property, self.layout)?,
+                        operand: Self::compile_dynamic_property(*access),
+                    },
+                    op,
+                    prefix,
+                    strict,
+                });
+                Ok(())
+            }
             Expr::Parenthesized(expr) => self.compile_update_expr(op, prefix, strict, expr),
             _ => Err(Error::runtime("invalid bytecode update target")),
         }
@@ -201,6 +239,27 @@ impl BytecodeCompiler<'_> {
         target: &Expression,
         expr: &Expression,
     ) -> Result<()> {
+        let super_property = match target.kind() {
+            Expr::SuperMember { property, access } => Some(BytecodeSuperProperty::Static(
+                Self::compile_property(property, *access),
+            )),
+            Expr::SuperComputedMember { property, access } => {
+                Some(BytecodeSuperProperty::Computed {
+                    expression: BytecodeBlock::compile_expression(property, self.layout)?,
+                    operand: Self::compile_dynamic_property(*access),
+                })
+            }
+            _ => None,
+        };
+        if let Some(property) = super_property {
+            self.emit(BytecodeInstruction::CompoundSuperProperty {
+                property,
+                op,
+                value: BytecodeBlock::compile_expression(expr, self.layout)?,
+                strict,
+            });
+            return Ok(());
+        }
         if matches!(
             op,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing

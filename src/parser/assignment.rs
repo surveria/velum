@@ -222,12 +222,25 @@ impl Parser {
                 name,
                 expr: Box::new(value),
             },
+            Expr::SuperMember { property, access } => Expr::SuperPropertyAssignment {
+                property,
+                access,
+                strict: self.is_strict_mode(),
+                expr: Box::new(value),
+            },
+            Expr::SuperComputedMember { property, access } => {
+                Expr::SuperComputedPropertyAssignment {
+                    property,
+                    access,
+                    strict: self.is_strict_mode(),
+                    expr: Box::new(value),
+                }
+            }
             Expr::Literal(_)
             | Expr::StringLiteral(_)
             | Expr::Spread(_)
             | Expr::Class(_)
             | Expr::SuperCall { .. }
-            | Expr::SuperMember { .. }
             | Expr::TemplateLiteral { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
@@ -245,6 +258,8 @@ impl Parser {
             | Expr::CompoundAssignment { .. }
             | Expr::PropertyAssignment { .. }
             | Expr::ComputedPropertyAssignment { .. }
+            | Expr::SuperPropertyAssignment { .. }
+            | Expr::SuperComputedPropertyAssignment { .. }
             | Expr::PrivateAssignment { .. }
             | Expr::PrivateIn { .. }
             | Expr::Call { .. }

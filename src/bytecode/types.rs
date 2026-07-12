@@ -151,6 +151,7 @@ impl BytecodeFunctionParam {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BytecodeObjectProperty {
     Static(StaticName),
+    StaticMethod(StaticName),
     StaticAccessor { key: StaticName, kind: AccessorKind },
     Computed,
     ComputedInferredName,
@@ -162,7 +163,10 @@ pub enum BytecodeObjectProperty {
 impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
-            Self::Static(_) | Self::StaticAccessor { .. } | Self::Spread => 1,
+            Self::Static(_)
+            | Self::StaticMethod(_)
+            | Self::StaticAccessor { .. }
+            | Self::Spread => 1,
             Self::Computed
             | Self::ComputedInferredName
             | Self::ComputedMethod
@@ -416,6 +420,15 @@ pub enum BytecodeAssignmentTarget {
     PrivateProperty {
         object: BytecodeBlock,
         property: BytecodePrivateName,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BytecodeSuperProperty {
+    Static(BytecodeProperty),
+    Computed {
+        expression: BytecodeBlock,
+        operand: BytecodeDynamicProperty,
     },
 }
 
@@ -713,12 +726,40 @@ pub enum BytecodeInstruction {
     SuperMember {
         property: BytecodeProperty,
     },
+    ComputedSuperMember {
+        expression: BytecodeBlock,
+        property: BytecodeDynamicProperty,
+    },
     CallSuperMember {
         property: BytecodeProperty,
         arg_count: usize,
     },
     CallSuperMemberSpread {
         property: BytecodeProperty,
+    },
+    CallComputedSuperMember {
+        property: BytecodeDynamicProperty,
+        arg_count: usize,
+    },
+    CallComputedSuperMemberSpread {
+        property: BytecodeDynamicProperty,
+    },
+    SuperPropertyAssign {
+        property: BytecodeSuperProperty,
+        value: BytecodeBlock,
+        strict: bool,
+    },
+    UpdateSuperProperty {
+        property: BytecodeSuperProperty,
+        op: UpdateOp,
+        prefix: bool,
+        strict: bool,
+    },
+    CompoundSuperProperty {
+        property: BytecodeSuperProperty,
+        op: BinaryOp,
+        value: BytecodeBlock,
+        strict: bool,
     },
     Switch {
         discriminant: BytecodeBlock,
