@@ -262,8 +262,7 @@ impl Context {
 
 fn codec_string_units(value: &Value) -> Result<Vec<u16>> {
     match value {
-        Value::String(value) => Ok(value.encode_utf16().collect()),
-        Value::HeapString(value) => Ok(value.as_utf16().to_vec()),
+        Value::String(value) => Ok(value.as_utf16().to_vec()),
         _ => Err(Error::type_error(CODEC_STRING_ERROR)),
     }
 }
@@ -297,8 +296,7 @@ fn parse_last_chunk_handling(value: &Value) -> Result<LastChunkHandling> {
 
 fn codec_option_text(value: &Value) -> Option<&str> {
     match value {
-        Value::String(value) => Some(value.as_str()),
-        Value::HeapString(value) => value.as_utf8(),
+        Value::String(value) => value.as_utf8(),
         _ => None,
     }
 }
