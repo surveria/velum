@@ -86,9 +86,16 @@ pub fn compile_regexp_utf16(
     pattern: &[u16],
     flags: RegExpFlags,
 ) -> Result<Regex, RegExpSyntaxError> {
-    let code_points = char::decode_utf16(pattern.iter().copied())
-        .map(|value| value.map_or_else(|error| u32::from(error.unpaired_surrogate()), u32::from));
-    Regex::from_unicode(code_points, flags.regress_flags())
+    let pattern_units = if flags.unicode() || flags.unicode_sets() {
+        char::decode_utf16(pattern.iter().copied())
+            .map(|value| {
+                value.map_or_else(|error| u32::from(error.unpaired_surrogate()), u32::from)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        pattern.iter().copied().map(u32::from).collect::<Vec<_>>()
+    };
+    Regex::from_unicode(pattern_units.into_iter(), flags.regress_flags())
         .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))
 }
 

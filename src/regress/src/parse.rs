@@ -479,6 +479,24 @@ where
         self.input.next()
     }
 
+    fn next_group_name_character(&mut self) -> Option<char> {
+        let first = self.next()?;
+        let Ok(high) = u16::try_from(first) else {
+            return char::from_u32(first);
+        };
+        if !(0xD800..=0xDBFF).contains(&high) {
+            return char::from_u32(first);
+        }
+
+        let low = self.peek().and_then(|value| u16::try_from(value).ok())?;
+        if !(0xDC00..=0xDFFF).contains(&low) {
+            return None;
+        }
+        self.consume(u32::from(low));
+        let code_point = ((u32::from(high) - 0xD800) << 10) + (u32::from(low) - 0xDC00) + 0x1_0000;
+        char::from_u32(code_point)
+    }
+
     fn try_parse(&mut self) -> Result<ir::Regex, Error> {
         self.parse_capture_groups()?;
 
@@ -553,12 +571,18 @@ where
                         // Term :: Assertion :: \b
                         'b' => {
                             self.consume('b');
-                            result.push(ir::Node::WordBoundary { invert: false });
+                            result.push(ir::Node::WordBoundary {
+                                invert: false,
+                                unicode_icase: self.flags.unicode && self.flags.icase,
+                            });
                         }
                         // Term :: Assertion :: \B
                         'B' => {
                             self.consume('B');
-                            result.push(ir::Node::WordBoundary { invert: true });
+                            result.push(ir::Node::WordBoundary {
+                                invert: true,
+                                unicode_icase: self.flags.unicode && self.flags.icase,
+                            });
                         }
                         // Term :: Atom :: \ AtomEscape :: CharacterEscape :: c AsciiLetter
                         // Term :: ExtendedAtom :: \ [lookahead = c]
@@ -1611,10 +1635,19 @@ where
                 let property_escape = self.try_consume_unicode_property_escape()?;
                 match property_escape {
                     PropertyEscapeKind::CharacterClass(s) => {
-                        Ok(ir::Node::Bracket(BracketContents {
-                            invert: negate,
-                            cps: CodePointSet::from_sorted_disjoint_intervals(s),
-                        }))
+                        let mut cps = CodePointSet::from_sorted_disjoint_intervals(s);
+                        let mut invert = negate;
+                        if self.flags.icase
+                            && negate
+                            && self.flags.unicode
+                            && !self.flags.unicode_sets
+                        {
+                            cps = unicode::add_icase_code_points(cps.inverted());
+                            invert = false;
+                        } else if self.flags.icase {
+                            cps = unicode::add_icase_code_points(cps);
+                        }
+                        Ok(ir::Node::Bracket(BracketContents { invert, cps }))
                     }
                     PropertyEscapeKind::StringSet(_) if negate => error("Invalid character escape"),
                     PropertyEscapeKind::StringSet(strings) => Ok(make_alt(
@@ -1640,7 +1673,10 @@ where
             '1'..='9' if self.flags.unicode => {
                 let group = self.try_consume_decimal_integer_literal().unwrap();
                 if group <= self.group_count_max as usize {
-                    Ok(ir::Node::BackRef(group as u32))
+                    Ok(ir::Node::BackRef {
+                        group: group as u32,
+                        icase: self.flags.icase,
+                    })
                 } else {
                     error("Invalid character escape")
                 }
@@ -1654,7 +1690,10 @@ where
                 let group = self.try_consume_decimal_integer_literal().unwrap();
 
                 if group <= self.group_count_max as usize {
-                    Ok(ir::Node::BackRef(group as u32))
+                    Ok(ir::Node::BackRef {
+                        group: group as u32,
+                        icase: self.flags.icase,
+                    })
                 } else {
                     self.input = input;
                     let c = self.consume_character_escape()?;
@@ -1686,15 +1725,22 @@ where
                     0 => unreachable!("Should not have empty indices for group name"),
                     1 => {
                         // Common case of a backref matching a single group.
-                        ir::Node::BackRef(group_indices[0] + 1)
+                        ir::Node::BackRef {
+                            group: group_indices[0] + 1,
+                            icase: self.flags.icase,
+                        }
                     }
                     _ => {
                         // Unusual case of multiple groups sharing a name: the backref should try each in turn.
                         // Lower to alternations of backreferences. Reverse to keep it right-associative: a | (b | (c | d))...
-                        let backrefs = group_indices
-                            .iter()
-                            .rev()
-                            .map(|group_index| ir::Node::BackRef(*group_index + 1));
+                        let backrefs =
+                            group_indices
+                                .iter()
+                                .rev()
+                                .map(|group_index| ir::Node::BackRef {
+                                    group: *group_index + 1,
+                                    icase: self.flags.icase,
+                                });
                         backrefs
                             .reduce(|right, left| ir::Node::Alt(Box::new(left), Box::new(right)))
                             .unwrap()
@@ -1820,7 +1866,7 @@ where
         let orig_input = self.input.clone();
         let mut group_name = String::new();
 
-        if let Some(mut c) = self.next().and_then(char::from_u32) {
+        if let Some(mut c) = self.next_group_name_character() {
             if c == '\\' && self.try_consume('u') {
                 if let Some(escaped) = self.try_escape_unicode_sequence().and_then(char::from_u32) {
                     c = escaped;
@@ -1842,7 +1888,7 @@ where
         }
 
         loop {
-            if let Some(mut c) = self.next().and_then(char::from_u32) {
+            if let Some(mut c) = self.next_group_name_character() {
                 if c == '\\' && self.try_consume('u') {
                     if let Some(escaped) =
                         self.try_escape_unicode_sequence().and_then(char::from_u32)
