@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T064446Z.md`
-- Task: PR #489: runtime: complete Iterator static combinators
-- Performance: 8.92x (4/5 >1.00x) (from `rsqjs-test-report-20260712T064446Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T064446Z.md`)
+- `rsqjs-test-report-20260712T073236Z.md`
+- Task: PR #492: runtime: complete ArrayBuffer lifecycle semantics
+- Performance: 8.83x (4/5 >1.00x) (from `rsqjs-test-report-20260712T073236Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T073236Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 69802 passed / 32776 failed (68.05%) (from `rsqjs-test-report-20260712T064446Z.md`)
+- Full Test262: 70658 passed / 31920 failed (68.88%) (from `rsqjs-test-report-20260712T073236Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -475,3 +475,4 @@ Latest report:
 | `20260712T061158Z` `3dbeef5` JetStream shell benchmark lane | - (0/0 >1.00x) | - (0/0 >1.00x) | 24.03x (6/7 >1.00x) | - |
 | `20260712T063646Z` `3dbeef5` PR #487: runtime: implement Annex B eval block functions | 8.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 69614 passed / 32964 failed (67.86%) |
 | `20260712T064446Z` `7e7aa65` PR #489: runtime: complete Iterator static combinators | 8.92x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 69802 passed / 32776 failed (68.05%) |
+| `20260712T073236Z` `b3a2cc8` PR #492: runtime: complete ArrayBuffer lifecycle semantics | 8.83x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 70658 passed / 31920 failed (68.88%) |
