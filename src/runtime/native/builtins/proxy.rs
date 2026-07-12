@@ -512,6 +512,41 @@ impl Context {
         Ok(result)
     }
 
+    /// Enumerable own string keys of a proxy: the `ownKeys` trap result
+    /// filtered by each key's `getOwnPropertyDescriptor` enumerability.
+    pub(in crate::runtime) fn proxy_enumerable_keys(
+        &mut self,
+        id: ObjectId,
+    ) -> Result<Vec<String>> {
+        let all = self.proxy_own_property_keys(id)?;
+        let mut keys = Vec::new();
+        let _keys_scope = self.transient_root_scope(VmRootKind::TransientTemporary, all.iter())?;
+        for key in all {
+            self.step()?;
+            if matches!(key, Value::Symbol(_)) {
+                continue;
+            }
+            let dynamic = self.dynamic_property_key(&key)?;
+            if let Some(descriptor) =
+                self.proxy_get_own_property_descriptor(id, dynamic.lookup())?
+                && Self::descriptor_is_enumerable(&descriptor)
+            {
+                keys.push(dynamic.name().to_owned());
+            }
+        }
+        Ok(keys)
+    }
+
+    const fn descriptor_is_enumerable(descriptor: &OwnPropertyDescriptor) -> bool {
+        matches!(
+            descriptor,
+            OwnPropertyDescriptor::Data(data) if data.enumerable().is_yes()
+        ) || matches!(
+            descriptor,
+            OwnPropertyDescriptor::Accessor(accessor) if accessor.enumerable().is_yes()
+        )
+    }
+
     fn validate_proxy_own_property_keys(
         &mut self,
         target: &Value,

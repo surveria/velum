@@ -39,6 +39,11 @@ impl Context {
         &mut self,
         target: &Value,
     ) -> Result<Vec<String>> {
+        if let Value::Object(id) = target
+            && self.objects.is_proxy(*id)
+        {
+            return self.proxy_enumerable_keys(*id);
+        }
         let keys = self.semantic_own_property_keys(target)?;
         let roots = self
             .active_transient_root_scope(crate::runtime::roots::VmRootKind::TransientTemporary)?;
