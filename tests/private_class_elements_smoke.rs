@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{OwnedValue, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -20,9 +20,9 @@ fn ensure_error_contains(source: &str, expected: &str) -> TestResult {
 }
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
-    let actual = eval(source)?;
-    let Value::String(actual) = actual else {
-        return Err(format!("expected string '{expected}', got {actual:?}").into());
+    let actual = match OwnedValue::try_from(eval(source)?)? {
+        OwnedValue::String(actual) => actual,
+        other => return Err(format!("expected string '{expected}', got {other:?}").into()),
     };
     if actual == expected {
         return Ok(());
