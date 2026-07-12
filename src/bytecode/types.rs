@@ -427,7 +427,8 @@ pub struct BytecodeSwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeCatch {
-    pub param: Option<BytecodeBinding>,
+    pub param: Option<Rc<BytecodePattern>>,
+    pub param_bindings: Rc<[BytecodeBinding]>,
     pub body: BytecodeBlock,
     pub body_scoped: bool,
 }
@@ -478,6 +479,11 @@ pub enum BytecodeInstruction {
     LoadNewTarget,
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),
+    StoreAnnexBVar(StaticName),
+    HoistLexicalBinding {
+        name: BytecodeBinding,
+        kind: DeclKind,
+    },
     ResolveBinding(BytecodeBinding),
     StoreResolvedBinding(BytecodeBinding),
     DeclareBinding {
@@ -718,6 +724,7 @@ pub enum BytecodeInstruction {
         discriminant: BytecodeBlock,
         cases: Rc<[BytecodeSwitchCase]>,
         scoped: bool,
+        scope_init: Option<BytecodeBlock>,
     },
     Try {
         body: BytecodeBlock,

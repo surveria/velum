@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     ast::{BindingPattern, DeclKind, ForInTarget, Statement, StaticBinding, Stmt},
-    binding_metadata::BindingLayout,
+    binding_metadata::{BindingLayout, BindingOperand},
     bytecode::{BytecodeBinding, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeHoistPlan},
     error::Result,
 };
@@ -233,6 +233,19 @@ impl<'a> HoistCollector<'a> {
                 self.collect_pattern_var_declarations(pattern);
                 Ok(())
             }
+            Stmt::FunctionDecl {
+                block_scoped: true,
+                annex_b_var_binding,
+                ..
+            } => {
+                if let Some(binding) = annex_b_var_binding
+                    && BytecodeBinding::compile(binding, self.layout)?.operand()
+                        != BindingOperand::Unresolved
+                {
+                    self.var_declarations.push(binding.clone());
+                }
+                Ok(())
+            }
             declaration @ Stmt::FunctionDecl { .. } => {
                 self.collect_function_declaration_statement(declaration)
             }
@@ -258,6 +271,7 @@ impl<'a> HoistCollector<'a> {
             parameter_prologue_count,
             kind,
             strict,
+            ..
         } = statement
         else {
             return Err(crate::Error::runtime(

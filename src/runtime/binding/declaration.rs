@@ -48,6 +48,28 @@ impl Context {
         )
     }
 
+    pub(crate) fn assign_annex_b_var(
+        &mut self,
+        name: &crate::syntax::StaticName,
+        value: Value,
+    ) -> Result<()> {
+        let atom = self.intern_static_name_atom(name)?;
+        let cell = self
+            .locals
+            .iter()
+            .rev()
+            .filter_map(|scope| scope.get(atom))
+            .find(|cell| cell.kind() == DeclKind::Var)
+            .or_else(|| {
+                self.globals
+                    .get(atom)
+                    .filter(|cell| cell.kind() == DeclKind::Var)
+            })
+            .ok_or_else(|| Error::runtime(format!("Annex B var binding '{name}' is missing")))?;
+        let value = self.checked_value(value)?;
+        cell.assign(name, value)
+    }
+
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
         let mut declarations = Vec::new();
         for (binding, kind) in plan.lexical_declarations() {
@@ -94,6 +116,14 @@ impl Context {
             self.hoist_lexical(binding, kind)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn hoist_bytecode_lexical_binding(
+        &mut self,
+        binding: &BytecodeBinding,
+        kind: DeclKind,
+    ) -> Result<()> {
+        self.hoist_lexical(binding.name(), kind)
     }
 
     pub(crate) fn hoist_bytecode_var_declarations(
@@ -261,15 +291,6 @@ impl Context {
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
         Ok(())
-    }
-
-    pub(crate) fn ensure_binding_capacity_static(
-        &mut self,
-        name: &StaticBinding,
-    ) -> Result<AtomId> {
-        let atom = self.intern_static_name_atom(name.name())?;
-        self.ensure_binding_capacity_for_atom(atom)?;
-        Ok(atom)
     }
 
     fn ensure_binding_capacity_for_atom(&self, atom: AtomId) -> Result<()> {

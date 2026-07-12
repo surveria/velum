@@ -36,12 +36,38 @@ pub(super) fn numeric_switch_case_test(test: &BytecodeBlock) -> Option<f64> {
 }
 
 impl Context {
+    pub(super) fn eval_bytecode_switch_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let BytecodeInstruction::Switch {
+            discriminant,
+            cases,
+            scoped,
+            scope_init,
+        } = instruction
+        else {
+            return Err(Error::runtime("bytecode switch instruction mismatch"));
+        };
+        self.eval_bytecode_switch(
+            state,
+            discriminant,
+            cases,
+            *scoped,
+            scope_init.as_ref(),
+            next,
+        )
+    }
+
     pub(super) fn eval_bytecode_switch(
         &mut self,
         state: &mut BytecodeState,
         discriminant: &BytecodeBlock,
         cases: &Rc<[BytecodeSwitchCase]>,
         scoped: bool,
+        scope_init: Option<&BytecodeBlock>,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let start = match self.bytecode_switch_start_index(discriminant, cases)? {
@@ -63,7 +89,20 @@ impl Context {
             if !resumes && let Err(error) = self.push_lexical_scope() {
                 return self.finish_bytecode_control_result(handle, Err(error));
             }
-            let completion = self.eval_bytecode_switch_cases(handle, control, cases);
+            let completion = if !resumes && let Some(scope_init) = scope_init {
+                match self.eval_bytecode_block(scope_init) {
+                    Ok(Completion::Normal(_)) => {
+                        self.eval_bytecode_switch_cases(handle, control, cases)
+                    }
+                    Ok(completion) => Ok((control, completion)),
+                    Err(error) => {
+                        self.finish_bytecode_control(handle)?;
+                        Err(error)
+                    }
+                }
+            } else {
+                self.eval_bytecode_switch_cases(handle, control, cases)
+            };
             if completion
                 .as_ref()
                 .is_ok_and(|(_, completion)| completion.suspends_execution())

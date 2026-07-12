@@ -12,6 +12,7 @@ use crate::{
 
 use super::scope_rules::for_init_needs_layout_scope;
 
+mod annex_b;
 mod function;
 mod with_environment;
 use function::FunctionBindings;
@@ -70,6 +71,7 @@ impl LayoutBuilder {
                 (root, root)
             }
         };
+        self.collect_annex_b_var_bindings(&program.statements, var_scope)?;
         self.analyze_statements(&program.statements, root_scope, var_scope, root_function)?;
         let unresolved_count = self.unresolved_count();
         Ok(BindingLayout::from_parts(BindingLayoutParts {
@@ -112,49 +114,6 @@ impl LayoutBuilder {
             self.collect_direct_declaration(statement, scope, var_scope)?;
         }
         Ok(())
-    }
-
-    fn collect_direct_declaration(
-        &mut self,
-        statement: &Statement,
-        scope: ScopeId,
-        var_scope: ScopeId,
-    ) -> Result<()> {
-        match statement.kind() {
-            Stmt::DeclList(statements) => {
-                for declaration in statements {
-                    self.collect_direct_declaration(declaration, scope, var_scope)?;
-                }
-                Ok(())
-            }
-            Stmt::VarDecl { name, kind, .. } => match kind {
-                DeclKind::Var => self.declare(var_scope, name),
-                DeclKind::Let | DeclKind::Const => self.declare(scope, name),
-            },
-            Stmt::PatternDecl { pattern, kind, .. } => match kind {
-                DeclKind::Var => self.declare_pattern(pattern, var_scope),
-                DeclKind::Let | DeclKind::Const => self.declare_pattern(pattern, scope),
-            },
-            Stmt::ClassDecl { name, .. } => self.declare(scope, name),
-            Stmt::FunctionDecl { .. }
-            | Stmt::Empty
-            | Stmt::Block(_)
-            | Stmt::If { .. }
-            | Stmt::While { .. }
-            | Stmt::DoWhile { .. }
-            | Stmt::With { .. }
-            | Stmt::Label { .. }
-            | Stmt::For { .. }
-            | Stmt::ForIn { .. }
-            | Stmt::ForOf { .. }
-            | Stmt::Switch { .. }
-            | Stmt::Try { .. }
-            | Stmt::Break(_)
-            | Stmt::Continue(_)
-            | Stmt::Throw(_)
-            | Stmt::Return(_)
-            | Stmt::Expr(_) => Ok(()),
-        }
     }
 
     fn collect_hoisted_vars(&mut self, statement: &Statement, var_scope: ScopeId) -> Result<()> {
@@ -236,13 +195,18 @@ impl LayoutBuilder {
                 kind: DeclKind::Var,
                 ..
             }
-            | Stmt::FunctionDecl { name, .. } => self.declare(var_scope, name),
+            | Stmt::FunctionDecl {
+                name,
+                block_scoped: false,
+                ..
+            } => self.declare(var_scope, name),
             Stmt::PatternDecl {
                 pattern,
                 kind: DeclKind::Var,
                 ..
             } => self.declare_pattern(pattern, var_scope),
-            Stmt::VarDecl { .. }
+            Stmt::FunctionDecl { .. }
+            | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::Empty
@@ -568,7 +532,8 @@ impl LayoutBuilder {
     ) -> Result<()> {
         let catch_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
         if let Some(param) = &catch.param {
-            self.declare(catch_scope, param)?;
+            self.declare_pattern(param, catch_scope)?;
+            self.analyze_pattern_exprs(param, catch_scope, function)?;
         }
         let body_scope = self.add_scope(Some(catch_scope), function, ScopeKind::Local);
         self.analyze_statements(&catch.body, body_scope, var_scope, function)

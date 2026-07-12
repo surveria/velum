@@ -1,0 +1,219 @@
+use std::collections::BTreeSet;
+
+use crate::{
+    ast::{BindingPattern, DeclKind, ForInTarget, Statement, Stmt},
+    binding_metadata::ScopeId,
+    error::Result,
+};
+
+use super::LayoutBuilder;
+
+impl LayoutBuilder {
+    pub(super) fn collect_direct_declaration(
+        &mut self,
+        statement: &Statement,
+        scope: ScopeId,
+        var_scope: ScopeId,
+    ) -> Result<()> {
+        match statement.kind() {
+            Stmt::DeclList(statements) => {
+                for declaration in statements {
+                    self.collect_direct_declaration(declaration, scope, var_scope)?;
+                }
+                Ok(())
+            }
+            Stmt::VarDecl { name, kind, .. } => match kind {
+                DeclKind::Var => self.declare(var_scope, name),
+                DeclKind::Let | DeclKind::Const => self.declare(scope, name),
+            },
+            Stmt::PatternDecl { pattern, kind, .. } => match kind {
+                DeclKind::Var => self.declare_pattern(pattern, var_scope),
+                DeclKind::Let | DeclKind::Const => self.declare_pattern(pattern, scope),
+            },
+            Stmt::ClassDecl { name, .. } => self.declare(scope, name),
+            Stmt::FunctionDecl {
+                name, block_scoped, ..
+            } => self.declare(if *block_scoped { scope } else { var_scope }, name),
+            Stmt::Empty
+            | Stmt::Block(_)
+            | Stmt::If { .. }
+            | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::With { .. }
+            | Stmt::Label { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
+            | Stmt::Switch { .. }
+            | Stmt::Try { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::Expr(_) => Ok(()),
+        }
+    }
+
+    pub(super) fn collect_annex_b_var_bindings(
+        &mut self,
+        statements: &[Statement],
+        var_scope: ScopeId,
+    ) -> Result<()> {
+        self.collect_annex_b_statement_list(statements, var_scope, &BTreeSet::new())
+    }
+
+    fn collect_annex_b_statement_list(
+        &mut self,
+        statements: &[Statement],
+        var_scope: ScopeId,
+        inherited: &BTreeSet<String>,
+    ) -> Result<()> {
+        let mut blocked = inherited.clone();
+        for statement in statements {
+            Self::collect_direct_lexical_names(statement, &mut blocked)?;
+        }
+        for statement in statements {
+            self.collect_annex_b_statement(statement, var_scope, &blocked)?;
+        }
+        Ok(())
+    }
+
+    fn collect_annex_b_statement(
+        &mut self,
+        statement: &Statement,
+        var_scope: ScopeId,
+        blocked: &BTreeSet<String>,
+    ) -> Result<()> {
+        match statement.kind() {
+            Stmt::Block(statements) | Stmt::DeclList(statements) => {
+                self.collect_annex_b_statement_list(statements, var_scope, blocked)
+            }
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                self.collect_annex_b_statement(consequent, var_scope, blocked)?;
+                if let Some(alternate) = alternate {
+                    self.collect_annex_b_statement(alternate, var_scope, blocked)?;
+                }
+                Ok(())
+            }
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::With { body, .. }
+            | Stmt::Label { body, .. } => self.collect_annex_b_statement(body, var_scope, blocked),
+            Stmt::For { init, body, .. } => {
+                let mut body_blocked = blocked.clone();
+                if let Some(init) = init {
+                    Self::collect_direct_lexical_names(init, &mut body_blocked)?;
+                }
+                self.collect_annex_b_statement(body, var_scope, &body_blocked)
+            }
+            Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
+                let mut body_blocked = blocked.clone();
+                Self::collect_for_lexical_names(target, &mut body_blocked)?;
+                self.collect_annex_b_statement(body, var_scope, &body_blocked)
+            }
+            Stmt::Switch { cases, .. } => {
+                let statements = cases
+                    .iter()
+                    .flat_map(|case| case.statements.iter().cloned())
+                    .collect::<Vec<_>>();
+                self.collect_annex_b_statement_list(&statements, var_scope, blocked)
+            }
+            Stmt::Try {
+                body,
+                catch,
+                finally_body,
+            } => {
+                self.collect_annex_b_statement_list(body, var_scope, blocked)?;
+                if let Some(catch) = catch {
+                    let mut catch_blocked = blocked.clone();
+                    if let Some(pattern) = &catch.param
+                        && !matches!(pattern, BindingPattern::Identifier(_))
+                    {
+                        Self::collect_pattern_names(pattern, &mut catch_blocked)?;
+                    }
+                    self.collect_annex_b_statement_list(&catch.body, var_scope, &catch_blocked)?;
+                }
+                if let Some(finally_body) = finally_body {
+                    self.collect_annex_b_statement_list(finally_body, var_scope, blocked)?;
+                }
+                Ok(())
+            }
+            Stmt::FunctionDecl {
+                name,
+                annex_b_var_binding: Some(variable),
+                ..
+            } => {
+                if !blocked.contains(name.name().as_str()) {
+                    self.declare(var_scope, variable)?;
+                }
+                Ok(())
+            }
+            Stmt::FunctionDecl { .. }
+            | Stmt::Empty
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::VarDecl { .. }
+            | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
+            | Stmt::Expr(_) => Ok(()),
+        }
+    }
+
+    fn collect_direct_lexical_names(
+        statement: &Statement,
+        names: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        match statement.kind() {
+            Stmt::DeclList(statements) => {
+                for statement in statements {
+                    Self::collect_direct_lexical_names(statement, names)?;
+                }
+            }
+            Stmt::VarDecl {
+                name,
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            }
+            | Stmt::ClassDecl { name, .. } => {
+                names.insert(name.name().as_str().to_owned());
+            }
+            Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            } => Self::collect_pattern_names(pattern, names)?,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn collect_for_lexical_names(target: &ForInTarget, names: &mut BTreeSet<String>) -> Result<()> {
+        match target {
+            ForInTarget::Binding {
+                name,
+                kind: DeclKind::Let | DeclKind::Const,
+            } => {
+                names.insert(name.name().as_str().to_owned());
+            }
+            ForInTarget::PatternBinding {
+                pattern,
+                kind: DeclKind::Let | DeclKind::Const,
+            } => Self::collect_pattern_names(pattern, names)?,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn collect_pattern_names(pattern: &BindingPattern, names: &mut BTreeSet<String>) -> Result<()> {
+        pattern.for_each_binding(&mut |binding| {
+            names.insert(binding.name().as_str().to_owned());
+            Ok(())
+        })
+    }
+}

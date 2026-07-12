@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 
 use crate::{
     ast::{
@@ -64,6 +64,164 @@ impl BytecodeCompiler<'_> {
             new_target_mode: spec.new_target_mode,
         });
         Ok(())
+    }
+
+    pub(super) fn compile_block_function_initializers(
+        &mut self,
+        statements: &[Statement],
+    ) -> Result<()> {
+        self.compile_block_lexical_hoists(statements)?;
+        for (index, statement) in statements.iter().enumerate() {
+            let Stmt::FunctionDecl {
+                name,
+                arguments_binding,
+                id,
+                params,
+                body,
+                parameter_prologue_count,
+                kind,
+                strict,
+                block_scoped: true,
+                ..
+            } = statement.kind()
+            else {
+                continue;
+            };
+            if statement.kind().is_annex_b_function()
+                && statements
+                    .iter()
+                    .skip(index.saturating_add(1))
+                    .any(|later| {
+                        matches!(
+                            later.kind(),
+                            Stmt::FunctionDecl {
+                                name: later_name,
+                                annex_b_var_binding: Some(_),
+                                block_scoped: true,
+                                ..
+                            } if later_name.name() == name.name()
+                        )
+                    })
+            {
+                continue;
+            }
+            let binding = self.compile_binding(name)?;
+            self.emit(BytecodeInstruction::CreateFunction {
+                id: *id,
+                name: Some(name.name().clone()),
+                bytecode: BytecodeFunction::compile(
+                    None,
+                    arguments_binding.clone(),
+                    params,
+                    body,
+                    *parameter_prologue_count,
+                    FunctionCompileMode::new(*kind, *strict),
+                    self.layout,
+                )?,
+                constructable: kind.is_constructable(),
+                kind: *kind,
+                new_target_mode: BytecodeNewTargetMode::Own,
+            });
+            self.emit(BytecodeInstruction::DeclareBinding {
+                name: binding,
+                kind: crate::syntax::DeclKind::Let,
+                has_init: true,
+            });
+        }
+        Ok(())
+    }
+
+    fn compile_block_lexical_hoists(&mut self, statements: &[Statement]) -> Result<()> {
+        let mut annex_b_functions = BTreeSet::new();
+        self.compile_block_lexical_hoists_with_names(statements, &mut annex_b_functions)
+    }
+
+    fn compile_block_lexical_hoists_with_names(
+        &mut self,
+        statements: &[Statement],
+        annex_b_functions: &mut BTreeSet<crate::syntax::StaticNameId>,
+    ) -> Result<()> {
+        for statement in statements {
+            match statement.kind() {
+                Stmt::DeclList(declarations) => {
+                    self.compile_block_lexical_hoists_with_names(declarations, annex_b_functions)?;
+                }
+                Stmt::VarDecl {
+                    name,
+                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    ..
+                } => self.emit_lexical_hoist(name, *kind)?,
+                Stmt::PatternDecl {
+                    pattern,
+                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    ..
+                } => pattern
+                    .for_each_binding(&mut |binding| self.emit_lexical_hoist(binding, *kind))?,
+                Stmt::ClassDecl { name, .. } => {
+                    self.emit_lexical_hoist(name, crate::syntax::DeclKind::Let)?;
+                }
+                Stmt::FunctionDecl {
+                    name,
+                    block_scoped: true,
+                    annex_b_var_binding,
+                    ..
+                } if annex_b_var_binding.is_none()
+                    || annex_b_functions.insert(name.name().id()) =>
+                {
+                    self.emit_lexical_hoist(name, crate::syntax::DeclKind::Let)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_lexical_hoist(
+        &mut self,
+        name: &StaticBinding,
+        kind: crate::syntax::DeclKind,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::HoistLexicalBinding {
+            name: self.compile_binding(name)?,
+            kind,
+        });
+        Ok(())
+    }
+
+    pub(super) fn compile_annex_b_function_update(
+        &mut self,
+        lexical: &StaticBinding,
+        variable: &StaticBinding,
+    ) -> Result<()> {
+        let variable = self.compile_binding(variable)?;
+        if variable.operand() == crate::binding_metadata::BindingOperand::Unresolved {
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::LoadBinding(
+            self.compile_binding(lexical)?,
+        ));
+        self.emit(BytecodeInstruction::StoreAnnexBVar(
+            variable.name().name().clone(),
+        ));
+        self.emit(BytecodeInstruction::Pop);
+        Ok(())
+    }
+}
+
+trait AnnexBFunctionStatement {
+    fn is_annex_b_function(&self) -> bool;
+}
+
+impl AnnexBFunctionStatement for Stmt {
+    fn is_annex_b_function(&self) -> bool {
+        matches!(
+            self,
+            Self::FunctionDecl {
+                annex_b_var_binding: Some(_),
+                block_scoped: true,
+                ..
+            }
+        )
     }
 }
 
@@ -412,6 +570,9 @@ impl CaptureBindingCollector {
     }
 
     fn collect_catch(&mut self, catch: &CatchClause) {
+        if let Some(param) = &catch.param {
+            self.collect_pattern(param);
+        }
         self.collect_statements(&catch.body);
     }
 

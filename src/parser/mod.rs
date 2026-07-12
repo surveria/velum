@@ -92,6 +92,7 @@ struct Parser {
     static_call_site_count: usize,
     arguments_reference_count: usize,
     strict_mode: bool,
+    function_declaration_context: FunctionDeclarationContext,
     await_expression_context: AwaitExpressionContext,
     await_identifier_context: AwaitIdentifierContext,
     yield_expression_context: YieldExpressionContext,
@@ -107,6 +108,12 @@ struct Parser {
 enum ClassArgumentsContext {
     Allowed,
     Restricted,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum FunctionDeclarationContext {
+    Var,
+    Lexical,
 }
 
 impl Parser {
@@ -130,6 +137,7 @@ impl Parser {
             static_call_site_count: 0,
             arguments_reference_count: 0,
             strict_mode,
+            function_declaration_context: FunctionDeclarationContext::Var,
             await_expression_context: AwaitExpressionContext::Allowed,
             await_identifier_context: AwaitIdentifierContext::Allowed,
             yield_expression_context: YieldExpressionContext::Forbidden,

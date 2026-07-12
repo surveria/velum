@@ -1,6 +1,4 @@
-use crate::bytecode::{
-    BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeSwitchCase,
-};
+use crate::bytecode::{BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeSwitchCase};
 
 impl BytecodeAssignmentTarget {
     pub(super) fn for_each_block(&self, visit: &mut impl FnMut(&BytecodeBlock)) {
@@ -153,29 +151,48 @@ impl BytecodeSwitchCase {
 
 impl BytecodeCatch {
     pub(super) fn property_operand_count(&self) -> usize {
-        self.body.property_operand_count()
+        self.param
+            .as_ref()
+            .map_or(0, |pattern| pattern.property_operand_count())
+            .saturating_add(self.body.property_operand_count())
     }
 
     pub(super) fn direct_native_call_count(&self) -> usize {
-        self.body.direct_native_call_count()
+        self.param
+            .as_ref()
+            .map_or(0, |pattern| pattern.direct_native_call_count())
+            .saturating_add(self.body.direct_native_call_count())
     }
 
     pub(super) fn array_native_call_count(&self) -> usize {
-        self.body.array_native_call_count()
+        self.param
+            .as_ref()
+            .map_or(0, |pattern| pattern.array_native_call_count())
+            .saturating_add(self.body.array_native_call_count())
     }
 
     pub(super) fn numeric_instruction_count(&self) -> usize {
-        self.body.numeric_instruction_count()
+        self.param
+            .as_ref()
+            .map_or(0, |pattern| pattern.numeric_instruction_count())
+            .saturating_add(self.body.numeric_instruction_count())
     }
 
     pub(super) fn binding_operand_count(&self) -> usize {
+        let targets = self.param_bindings.iter().fold(0usize, |count, binding| {
+            count.saturating_add(binding.direct_operand_count())
+        });
         self.param
             .as_ref()
-            .map_or(0, BytecodeBinding::direct_operand_count)
+            .map_or(0, |pattern| pattern.binding_operand_count())
+            .saturating_add(targets)
             .saturating_add(self.body.binding_operand_count())
     }
 
     pub(super) fn instruction_count(&self) -> usize {
-        self.body.instruction_count()
+        self.param
+            .as_ref()
+            .map_or(0, |pattern| pattern.nested_instruction_count())
+            .saturating_add(self.body.instruction_count())
     }
 }

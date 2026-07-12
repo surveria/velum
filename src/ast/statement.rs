@@ -72,6 +72,8 @@ pub enum Stmt {
     Return(Option<Expression>),
     FunctionDecl {
         name: StaticBinding,
+        block_scoped: bool,
+        annex_b_var_binding: Option<StaticBinding>,
         arguments_binding: Option<StaticBinding>,
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
@@ -122,6 +124,6 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
-    pub param: Option<StaticBinding>,
+    pub param: Option<BindingPattern>,
     pub body: Vec<Statement>,
 }
