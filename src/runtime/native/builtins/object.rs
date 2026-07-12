@@ -646,28 +646,28 @@ impl Context {
                 }
             }
             PropertyUpdate::Accessor(update) => {
-                if let Some(getter) = update.get() {
+                if let Some(getter) = update.get.clone() {
                     properties.push(Self::descriptor_object_property(
                         keys.get(),
                         DESCRIPTOR_GET_PROPERTY,
                         getter,
                     ));
                 }
-                if let Some(setter) = update.set() {
+                if let Some(setter) = update.set.clone() {
                     properties.push(Self::descriptor_object_property(
                         keys.set(),
                         DESCRIPTOR_SET_PROPERTY,
                         setter,
                     ));
                 }
-                if let Some(enumerable) = update.enumerable() {
+                if let Some(enumerable) = update.enumerable {
                     properties.push(Self::descriptor_object_property(
                         keys.enumerable(),
                         DESCRIPTOR_ENUMERABLE_PROPERTY,
                         Value::Bool(enumerable.is_yes()),
                     ));
                 }
-                if let Some(configurable) = update.configurable() {
+                if let Some(configurable) = update.configurable {
                     properties.push(Self::descriptor_object_property(
                         keys.configurable(),
                         DESCRIPTOR_CONFIGURABLE_PROPERTY,

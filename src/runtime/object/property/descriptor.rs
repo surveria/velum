@@ -219,10 +219,10 @@ impl AccessorPropertyDescriptor {
 /// existing state or fall back to defineProperty defaults for new properties.
 #[derive(Debug, Clone)]
 pub struct AccessorPropertyUpdate {
-    get: Option<Value>,
-    set: Option<Value>,
-    enumerable: Option<PropertyEnumerable>,
-    configurable: Option<PropertyConfigurable>,
+    pub(in crate::runtime) get: Option<Value>,
+    pub(in crate::runtime) set: Option<Value>,
+    pub(in crate::runtime) enumerable: Option<PropertyEnumerable>,
+    pub(in crate::runtime) configurable: Option<PropertyConfigurable>,
 }
 
 impl AccessorPropertyUpdate {
@@ -247,22 +247,6 @@ impl AccessorPropertyUpdate {
             self.enumerable.unwrap_or(PropertyEnumerable::No),
             self.configurable.unwrap_or(PropertyConfigurable::No),
         )
-    }
-
-    pub(in crate::runtime) fn get(&self) -> Option<Value> {
-        self.get.clone()
-    }
-
-    pub(in crate::runtime) fn set(&self) -> Option<Value> {
-        self.set.clone()
-    }
-
-    pub(in crate::runtime) const fn enumerable(&self) -> Option<PropertyEnumerable> {
-        self.enumerable
-    }
-
-    pub(in crate::runtime) const fn configurable(&self) -> Option<PropertyConfigurable> {
-        self.configurable
     }
 
     pub(in crate::runtime) const fn trace_values(&self) -> [Option<&Value>; 2] {
