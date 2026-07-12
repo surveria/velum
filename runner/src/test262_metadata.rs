@@ -10,6 +10,7 @@ const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
 const HARNESS_DIR: &str = "harness";
 const HARNESS_ASSERT: &str = "assert.js";
+const HARNESS_DEEP_EQUAL: &str = "deepEqual.js";
 const HARNESS_DONEPRINT_HANDLE: &str = "doneprintHandle.js";
 const HARNESS_STA: &str = "sta.js";
 const STRICT_DIRECTIVE: &str = "\"use strict\";\n";
@@ -148,6 +149,41 @@ assert.throws = function (expectedErrorConstructor, func, message) {
 };
 assert._formatIdentityFreeValue = formatIdentityFreeValue;
 assert._toString = formatSimpleValue;
+"#;
+const COMPAT_DEEP_EQUAL_SOURCE: &str = r#"
+function test262DeepEqual(actual, expected) {
+    if (actual === expected) {
+        return true;
+    }
+    if (actual !== actual && expected !== expected) {
+        return true;
+    }
+    if (actual === null || expected === null ||
+        typeof actual !== "object" || typeof expected !== "object") {
+        return false;
+    }
+    let actualKeys = Object.keys(actual);
+    let expectedKeys = Object.keys(expected);
+    if (actualKeys.length !== expectedKeys.length) {
+        return false;
+    }
+    for (let index = 0; index < actualKeys.length; index += 1) {
+        let key = actualKeys[index];
+        if (key !== expectedKeys[index] ||
+            !test262DeepEqual(actual[key], expected[key])) {
+            return false;
+        }
+    }
+    return true;
+}
+assert.deepEqual = function (actual, expected, message) {
+    if (test262DeepEqual(actual, expected)) {
+        return;
+    }
+    throw new Test262Error(message || "Expected structurally equal values");
+};
+assert.deepEqual._compare = test262DeepEqual;
+assert.deepEqual.format = String;
 "#;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -400,6 +436,7 @@ fn compat_harness_source(name: &str) -> Option<&'static str> {
     match name {
         HARNESS_STA => Some(COMPAT_STA_SOURCE),
         HARNESS_ASSERT => Some(COMPAT_ASSERT_SOURCE),
+        HARNESS_DEEP_EQUAL => Some(COMPAT_DEEP_EQUAL_SOURCE),
         _ => None,
     }
 }

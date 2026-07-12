@@ -110,7 +110,13 @@ impl Parser {
         }
         let mut unique_lexical_names = BTreeSet::new();
         for name in lexical_names {
-            if !unique_lexical_names.insert(name) {
+            if !unique_lexical_names.insert(name.clone())
+                && !self.allows_duplicate_sloppy_block_functions(
+                    statements,
+                    functions_are_lexical,
+                    &name,
+                )?
+            {
                 return Err(self.parse_error("duplicate lexical declaration"));
             }
         }
@@ -126,6 +132,66 @@ impl Parser {
             return Err(self.parse_error("lexical declaration conflicts with a var declaration"));
         }
         Ok(())
+    }
+
+    fn allows_duplicate_sloppy_block_functions(
+        &self,
+        statements: &[&Statement],
+        functions_are_lexical: bool,
+        name: &str,
+    ) -> Result<bool> {
+        if self.is_strict_mode() || !functions_are_lexical {
+            return Ok(false);
+        }
+        let mut function_count = 0usize;
+        for statement in statements {
+            if !Self::direct_name_is_only_function(statement, name, &mut function_count)? {
+                return Ok(false);
+            }
+        }
+        Ok(function_count >= 2)
+    }
+
+    fn direct_name_is_only_function(
+        statement: &Statement,
+        name: &str,
+        function_count: &mut usize,
+    ) -> Result<bool> {
+        match statement.kind() {
+            Stmt::DeclList(declarations) => {
+                for declaration in declarations {
+                    if !Self::direct_name_is_only_function(declaration, name, function_count)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            Stmt::FunctionDecl {
+                name: function_name,
+                ..
+            } if function_name.name().as_str() == name => {
+                *function_count = function_count
+                    .checked_add(1)
+                    .ok_or_else(|| crate::error::Error::limit("function count overflowed"))?;
+                Ok(true)
+            }
+            Stmt::VarDecl {
+                name: binding,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
+            }
+            | Stmt::ClassDecl { name: binding, .. } => Ok(binding.name().as_str() != name),
+            Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
+            } => {
+                let mut names = Vec::new();
+                Self::collect_pattern_names(pattern, &mut names)?;
+                Ok(!names.iter().any(|candidate| candidate == name))
+            }
+            _ => Ok(true),
+        }
     }
 
     fn collect_direct_lexical_names(

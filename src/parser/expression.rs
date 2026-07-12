@@ -131,36 +131,6 @@ impl Parser {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;
             }
-            if matches!(self.peek_kind(0), Some(TokenKind::TemplateHead(_))) {
-                let token = self
-                    .advance()
-                    .ok_or_else(|| self.parse_error("expected tagged template literal"))?;
-                let TokenKind::TemplateHead(head) = token.kind else {
-                    return Err(Error::parse_at(
-                        "expected tagged template literal",
-                        token.span,
-                    ));
-                };
-                let (quasis, expressions) = self.template_parts(head)?;
-                let strings = quasis
-                    .into_iter()
-                    .map(|value| Expression::new(Expr::StringLiteral(value), token.span))
-                    .collect();
-                let mut args = vec![Expression::new(Expr::Array(strings), token.span)];
-                args.extend(expressions);
-                let site = self.static_call_site()?;
-                let start = expr.span();
-                expr = self.expression_node(
-                    start,
-                    Expr::Call {
-                        callee: Box::new(expr),
-                        site,
-                        strict: self.is_strict_mode(),
-                        args,
-                    },
-                );
-                continue;
-            }
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }
@@ -502,7 +472,7 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
-            TokenKind::Let if !self.is_strict_mode() => self.contextual_let(token_span)?,
+            TokenKind::Let => self.contextual_let(token_span, token.identifier_escaped)?,
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -546,7 +516,14 @@ impl Parser {
         Ok(expr)
     }
 
-    fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
+    fn contextual_let(
+        &mut self,
+        span: crate::SourceSpan,
+        identifier_escaped: bool,
+    ) -> Result<Expression> {
+        if identifier_escaped || self.is_strict_mode() {
+            return Err(Error::parse_at("expected expression", span));
+        }
         let name = self.static_name_borrowed_at("let", span.start())?;
         Ok(Expression::new(
             Expr::Identifier(self.static_binding(name)?),
