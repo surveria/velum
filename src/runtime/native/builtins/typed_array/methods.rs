@@ -439,7 +439,7 @@ impl Context {
         length: usize,
         default: usize,
     ) -> Result<usize> {
-        let Some(value) = value else {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(default);
         };
         let relative = self.to_integer_or_infinity(value)?;

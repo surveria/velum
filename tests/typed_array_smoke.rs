@@ -212,6 +212,18 @@ fn supports_bigint_element_kinds_and_content_boundaries() -> TestResult {
 }
 
 #[test]
+fn typed_array_relative_end_uses_length_for_explicit_undefined() -> TestResult {
+    ensure_eval(
+        r"
+        let filled = new Uint8Array([0, 0]).fill(1, 0, undefined);
+        let sliced = new Uint8Array([1, 2]).subarray(0, undefined);
+        filled.join(',') === '1,1' && sliced.join(',') === '1,2' ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
