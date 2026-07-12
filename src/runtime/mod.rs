@@ -8,7 +8,7 @@ use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::ownership::VmIdentity;
 use crate::runtime::binding::scope::{BindingCell, BindingScope};
-use crate::runtime::control::{Completion, reference_error_undefined};
+use crate::runtime::control::{Completion, reference_error_undefined, runtime_exception_value};
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
@@ -452,7 +452,17 @@ impl Context {
             binding_cache,
             script.binding_layout().clone(),
             |context| {
-                context.hoist_bytecode_declarations(script.bytecode().hoist_plan())?;
+                if let Err(error) =
+                    context.hoist_bytecode_declarations(script.bytecode().hoist_plan())
+                {
+                    let Some(value) = runtime_exception_value(context, &error)? else {
+                        return Err(error);
+                    };
+                    return Ok(BytecodeOutcome::Completed {
+                        completion: Completion::Throw(value),
+                        span: None,
+                    });
+                }
                 let outcome = context.eval_bytecode_program(script.bytecode())?;
                 if outcome.is_normal() {
                     context.drain_promise_jobs()?;
