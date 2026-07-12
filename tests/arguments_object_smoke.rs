@@ -233,3 +233,31 @@ fn functions_without_arguments_references_skip_the_binding() -> TestResult {
         "42",
     )
 }
+
+#[test]
+fn distinguishes_mapped_and_unmapped_callee_properties() -> TestResult {
+    ensure_string(
+        r#"
+        function sloppy() {
+            var original = arguments.callee === sloppy;
+            arguments.callee = 7;
+            var assigned = arguments.callee === 7;
+            var deleted = delete arguments.callee;
+            return original && assigned && deleted && arguments.callee === undefined;
+        }
+        function strict() {
+            "use strict";
+            return Object.getOwnPropertyDescriptor(arguments, "callee");
+        }
+        function nonSimple(value = 0) {
+            return Object.getOwnPropertyDescriptor(arguments, "callee");
+        }
+        var strictDescriptor = strict();
+        var nonSimpleDescriptor = nonSimple();
+        sloppy() + ":" +
+            (strictDescriptor.get === strictDescriptor.set) + ":" +
+            (strictDescriptor.get === nonSimpleDescriptor.get);
+        "#,
+        "true:true:true",
+    )
+}

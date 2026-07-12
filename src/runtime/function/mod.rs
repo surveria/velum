@@ -442,7 +442,7 @@ impl Context {
             }
         }
         let arguments_scope = match arguments_binding
-            .map(|binding| self.arguments_binding_scope(binding, raw_args))
+            .map(|binding| self.arguments_binding_scope(id, binding, raw_args))
             .transpose()
         {
             Ok(scope) => scope,

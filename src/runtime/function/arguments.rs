@@ -31,7 +31,12 @@ impl Context {
     /// Indexed values and `length` are ordinary own properties. The explicit
     /// Arguments builtin-class marker only supplies the internal brand. Mapped
     /// parameter aliasing is not modeled.
-    pub(super) fn create_arguments_object(&mut self, original_args: &[Value]) -> Result<Value> {
+    pub(super) fn create_arguments_object(
+        &mut self,
+        function: crate::value::FunctionId,
+        unmapped: bool,
+        original_args: &[Value],
+    ) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         let value = self.objects.create_with_prototype(
             None,
@@ -48,7 +53,11 @@ impl Context {
         self.install_arguments_values(*id, original_args)?;
         self.install_arguments_length(*id, original_args.len())?;
         self.install_arguments_iterator(*id)?;
-        self.install_arguments_restricted_callee(*id)?;
+        if unmapped {
+            self.install_arguments_restricted_callee(*id)?;
+        } else {
+            self.install_arguments_callee(*id, function)?;
+        }
         Ok(value)
     }
 
@@ -131,6 +140,26 @@ impl Context {
                 Some(thrower),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn install_arguments_callee(
+        &mut self,
+        id: crate::value::ObjectId,
+        function: crate::value::FunctionId,
+    ) -> Result<()> {
+        let key = self.intern_property_key(ARGUMENTS_CALLEE_PROPERTY)?;
+        self.objects.define_property(
+            id,
+            key,
+            ARGUMENTS_CALLEE_PROPERTY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Function(function)),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
             )),
             self.limits.max_object_properties,
         )

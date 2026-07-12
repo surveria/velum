@@ -259,6 +259,10 @@ impl BytecodeFunction {
             capture_bindings: collected.bindings,
             uses_arguments: collected.uses_arguments,
             strict: mode.strict,
+            simple_parameters: parameter_prologue_count == 0
+                && params
+                    .iter()
+                    .all(|param| param.default.is_none() && !param.rest),
         }))
     }
 }
