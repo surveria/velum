@@ -143,8 +143,8 @@ impl Context {
         let object = self.checked_value(array_cell.value(array.name())?)?;
         let property = if let Value::Number(index_value) = index_value {
             let index = number_to_i32(index_value, "&")? & number_to_i32(*mask, "&")?;
-            if let Some(has_property) = self.has_own_array_index_for_in(&object, index)? {
-                state.stack.push(Value::Bool(has_property));
+            if self.has_own_array_index_for_in(&object, index)? == Some(true) {
+                state.stack.push(Value::Bool(true));
                 return Ok(());
             }
             Value::Number(f64::from(index))

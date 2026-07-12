@@ -122,7 +122,11 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && let Some(end) = length.checked_add(args.len())
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, length, end)?
         {
             return self
                 .objects
@@ -162,7 +166,10 @@ impl Context {
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, length)?
         {
             return self
                 .objects
@@ -186,7 +193,12 @@ impl Context {
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self.objects.array_index_range_has_accessor_in_chain(
+                *id,
+                length.saturating_sub(1),
+                length,
+            )?
         {
             return self.objects.array_pop(*id);
         }
@@ -210,9 +222,11 @@ impl Context {
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, length)?
         {
-            let length = self.objects.array_len_for_includes(*id)?;
             if length == 0 {
                 return Ok(Value::Bool(false));
             }
@@ -239,9 +253,11 @@ impl Context {
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, length)?
         {
-            let length = self.objects.array_len_for_index_of(*id)?;
             if length == 0 {
                 return Ok(Value::Number(ARRAY_INDEX_NOT_FOUND));
             }
@@ -268,9 +284,11 @@ impl Context {
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, length)?
         {
-            let length = self.objects.array_len_for_last_index_of(*id)?;
             if length == 0 {
                 return Ok(Value::Number(ARRAY_INDEX_NOT_FOUND));
             }
@@ -319,7 +337,10 @@ impl Context {
         let separator = Self::eval_array_unary_value(args);
         let separator = self.array_join_separator(separator)?;
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(array_length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, array_length)?
         {
             if let Some(joined) =
                 self.objects
@@ -360,7 +381,10 @@ impl Context {
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, length)?
         {
             return self
                 .objects
@@ -400,7 +424,11 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
+            && let Some(length) = self.objects.array_len_if_array(*id)?
+            && let Some(end) = length.checked_add(args.len())
+            && !self
+                .objects
+                .array_index_range_has_accessor_in_chain(*id, 0, end)?
         {
             return self
                 .objects

@@ -26,6 +26,21 @@ impl ObjectHeap {
         Ok(false)
     }
 
+    pub(crate) fn array_index_range_has_accessor_in_chain(
+        &self,
+        id: ObjectId,
+        start: usize,
+        end: usize,
+    ) -> Result<bool> {
+        for position in start..end {
+            let index = ArrayIndex::from_usize(position)?;
+            if self.array_index_has_accessor_in_chain(id, index)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub(crate) fn dynamic_array_index_if_array(
         &self,
         id: ObjectId,

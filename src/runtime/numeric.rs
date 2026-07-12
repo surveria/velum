@@ -112,7 +112,7 @@ fn apply_number_binary(op: BinaryOp, left: f64, right: f64) -> Result<f64> {
     })
 }
 
-pub(crate) fn number_exponentiate(base: f64, exponent: f64) -> f64 {
+pub(in crate::runtime) fn number_exponentiate(base: f64, exponent: f64) -> f64 {
     if exponent.is_nan() || (is_exact_abs_one(base) && exponent.is_infinite()) {
         return f64::NAN;
     }

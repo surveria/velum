@@ -13,13 +13,18 @@ impl ObjectHeap {
         let Some(properties) = self.object(id)?.packed_array_properties(length) else {
             return Ok(None);
         };
-        if !properties
-            .iter()
-            .all(ObjectProperty::has_default_array_attributes)
-        {
+        if !properties.iter().all(|property| {
+            property.has_default_array_attributes() && property.data_value_ref().is_some()
+        }) {
             return Ok(None);
         }
-        Ok(Some(properties.iter().map(ObjectProperty::value).collect()))
+        Ok(Some(
+            properties
+                .iter()
+                .filter_map(ObjectProperty::data_value_ref)
+                .cloned()
+                .collect(),
+        ))
     }
 
     pub(crate) fn sort_packed_default_numeric_array_if_array(
