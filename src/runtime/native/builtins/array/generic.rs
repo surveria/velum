@@ -286,6 +286,16 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
+        self.generic_array_join_with_length(separator, this_value, length)
+    }
+
+    pub(super) fn generic_array_join_with_length(
+        &mut self,
+        separator: &str,
+        this_value: &Value,
+        length: usize,
+    ) -> Result<Value> {
+        Self::ensure_array_like_object(this_value)?;
         let mut joined = self.join_string_with_separator_capacity(length, separator.len())?;
         for index in 0..length {
             self.step()?;

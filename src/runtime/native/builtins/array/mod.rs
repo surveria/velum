@@ -307,6 +307,15 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_join_with_length(args, this_value, None)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_join_with_length(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+        fixed_length: Option<usize>,
+    ) -> Result<Value> {
         let separator = Self::eval_array_unary_value(args);
         let separator = self.array_join_separator(separator)?;
         if let Value::Object(id) = this_value
@@ -329,6 +338,9 @@ impl Context {
                 self.push_join_value_text(&mut joined, &value)?;
             }
             return self.heap_string_value(&joined);
+        }
+        if let Some(length) = fixed_length {
+            return self.generic_array_join_with_length(&separator, this_value, length);
         }
         self.generic_array_join(&separator, this_value)
     }

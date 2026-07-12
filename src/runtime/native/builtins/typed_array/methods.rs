@@ -192,7 +192,12 @@ impl Context {
             }
             TypedArrayFunctionKind::Includes => self.eval_direct_array_includes(args, this_value),
             TypedArrayFunctionKind::IndexOf => self.eval_direct_array_index_of(args, this_value),
-            TypedArrayFunctionKind::Join => self.eval_direct_array_join(args, this_value),
+            TypedArrayFunctionKind::Join => match self.typed_array_receiver(this_value) {
+                Ok((_, view)) => {
+                    self.eval_direct_array_join_with_length(args, this_value, Some(view.length()))
+                }
+                Err(error) => Err(error),
+            },
             TypedArrayFunctionKind::LastIndexOf => {
                 self.eval_direct_array_last_index_of(args, this_value)
             }
