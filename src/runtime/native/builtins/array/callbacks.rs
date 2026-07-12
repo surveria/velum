@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, abstract_operations::to_boolean, call::RuntimeCallArgs, control::Completion,
+        roots::VmRootKind,
     },
     value::Value,
 };
@@ -9,6 +10,8 @@ use crate::{
 use super::callback_state::{ArrayCallbackAction, ReduceDirection, ReduceState};
 
 const ARRAY_CALLBACK_NOT_CALLABLE_ERROR: &str = "Array.prototype callback must be callable";
+const ARRAY_FILTER_RESULT_LIMIT_ERROR: &str =
+    "Array.prototype.filter result exceeded supported range";
 const ARRAY_REDUCE_EMPTY_ERROR: &str = "Reduce of empty array with no initial value";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
@@ -59,13 +62,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
-        if let Some(value) = self.eval_packed_numeric_array_map(callback, this_value)? {
-            return Ok(value);
-        }
         let length = self.array_like_length_for_callback(this_value)?;
-        let result = self.create_array_callback_result(length)?;
-        self.visit_array_like_present(this_value, |context, index, value| {
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
+        let result = self.array_species_create(this_value, length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+        self.visit_array_like_present_with_length(this_value, length, |context, index, value| {
             let mapped = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -73,7 +75,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            context.set_array_like_index(&result, index, mapped)?;
+            context.array_from_create_data_property(&result, index, mapped)?;
             Ok(ArrayCallbackAction::Continue)
         })?;
         Ok(result)
@@ -92,12 +94,13 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
-        if let Some(value) = self.eval_packed_numeric_array_filter(callback, this_value)? {
-            return Ok(value);
-        }
-        let result = self.create_array_callback_result(0)?;
-        self.visit_array_like_present(this_value, |context, index, value| {
+        let result = self.array_species_create(this_value, 0)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+        let mut next_index = 0_usize;
+        self.visit_array_like_present_with_length(this_value, length, |context, index, value| {
             let keep = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -106,7 +109,10 @@ impl Context {
                 this_value,
             )?;
             if to_boolean(&keep) {
-                context.push_array_callback_result(&result, value.clone())?;
+                context.array_from_create_data_property(&result, next_index, value.clone())?;
+                next_index = next_index
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit(ARRAY_FILTER_RESULT_LIMIT_ERROR))?;
             }
             Ok(ArrayCallbackAction::Continue)
         })?;
@@ -317,50 +323,6 @@ impl Context {
         self.eval_direct_array_reduce_with_direction(args, this_value, direction, true)
     }
 
-    fn eval_packed_numeric_array_map(
-        &mut self,
-        callback: &Value,
-        this_value: &Value,
-    ) -> Result<Option<Value>> {
-        let Some(values) = self.packed_numeric_array_values(this_value)? else {
-            return Ok(None);
-        };
-        let mut mapped = Vec::with_capacity(values.len());
-        for (index, value) in values.iter().enumerate() {
-            self.step()?;
-            let args = Self::array_callback_args(value, index, this_value)?;
-            let Some(value) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
-                return Ok(None);
-            };
-            mapped.push(value);
-        }
-        self.create_array_callback_result_from_values(mapped)
-            .map(Some)
-    }
-
-    fn eval_packed_numeric_array_filter(
-        &mut self,
-        callback: &Value,
-        this_value: &Value,
-    ) -> Result<Option<Value>> {
-        let Some(values) = self.packed_numeric_array_values(this_value)? else {
-            return Ok(None);
-        };
-        let mut filtered = Vec::new();
-        for (index, value) in values.iter().enumerate() {
-            self.step()?;
-            let args = Self::array_callback_args(value, index, this_value)?;
-            let Some(keep) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
-                return Ok(None);
-            };
-            if to_boolean(&keep) {
-                filtered.push(value.clone());
-            }
-        }
-        self.create_array_callback_result_from_values(filtered)
-            .map(Some)
-    }
-
     fn eval_packed_numeric_array_some(
         &mut self,
         callback: &Value,
@@ -516,6 +478,28 @@ impl Context {
         F: FnMut(&mut Self, usize, &Value) -> Result<ArrayCallbackAction>,
     {
         self.visit_array_like_indices(object, CallbackVisitMode::PresentOnly, visitor)
+    }
+
+    fn visit_array_like_present_with_length<F>(
+        &mut self,
+        object: &Value,
+        length: usize,
+        mut visitor: F,
+    ) -> Result<()>
+    where
+        F: FnMut(&mut Self, usize, &Value) -> Result<ArrayCallbackAction>,
+    {
+        for index in 0..length {
+            self.step()?;
+            if !self.has_array_like_index(object, index)? {
+                continue;
+            }
+            let value = self.get_array_like_index(object, index)?;
+            if visitor(self, index, &value)? == ArrayCallbackAction::Stop {
+                return Ok(());
+            }
+        }
+        Ok(())
     }
 
     fn visit_array_like_indices<F>(
@@ -736,16 +720,6 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
-    }
-
-    fn push_array_callback_result(&mut self, result: &Value, value: Value) -> Result<()> {
-        let Value::Object(id) = result else {
-            return Err(Error::runtime("array callback result is not an object"));
-        };
-        let values = [value];
-        self.objects
-            .array_push(*id, &values, self.limits.max_object_properties)
-            .map(|_| ())
     }
 
     fn array_like_length_for_callback(&mut self, this_value: &Value) -> Result<usize> {

@@ -6,7 +6,7 @@ use crate::{
         object::{PropertyKey, PropertyLookup},
         roots::VmRootKind,
     },
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -15,6 +15,7 @@ const ARRAY_LIKE_LENGTH_LIMIT_ERROR: &str = "array-like length exceeded supporte
 const ARRAY_LIKE_INDEX_LIMIT_ERROR: &str = "array-like index exceeded supported range";
 const ARRAY_CONCAT_LENGTH_ERROR: &str = "Array.prototype.concat result exceeds safe integer range";
 const ARRAY_SPECIES_ERROR: &str = "Array species value must be a constructor";
+const ARRAY_SPECIES_LENGTH_RANGE_ERROR: &str = "Invalid array length";
 const ARRAY_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const IS_CONCAT_SPREADABLE_PROPERTY: &str = "isConcatSpreadable";
 const IS_CONCAT_SPREADABLE_DISPLAY: &str = "[Symbol.isConcatSpreadable]";
@@ -61,7 +62,11 @@ impl Context {
         Ok(result)
     }
 
-    fn array_species_create(&mut self, original: &Value, length: usize) -> Result<Value> {
+    pub(super) fn array_species_create(
+        &mut self,
+        original: &Value,
+        length: usize,
+    ) -> Result<Value> {
         let is_array = match original {
             Value::Object(id) => self.objects.array_len_if_array(*id)?.is_some(),
             _ => false,
@@ -99,6 +104,12 @@ impl Context {
     }
 
     fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
+        if u64::try_from(length).map_or(true, |length| length > u64::from(u32::MAX)) {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                ARRAY_SPECIES_LENGTH_RANGE_ERROR,
+            ));
+        }
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects
             .create_array_with_length(length, prototype, self.limits.max_objects)

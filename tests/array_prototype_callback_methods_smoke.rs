@@ -219,6 +219,141 @@ fn limits_callback_methods_on_large_array_like_lengths() -> TestResult {
     ensure_error_contains(&error, "runtime steps")
 }
 
+#[test]
+fn map_and_filter_honor_custom_array_species_results() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let mapLength = -1;
+        function MapResult(length) {
+            mapLength = length;
+            return { kind: "mapped" };
+        }
+        let values = [2, , 4];
+        values.constructor = { [Symbol.species]: MapResult };
+        let mapped = values.map(function(value) { return value * 10; });
+        let mapDescriptor = Object.getOwnPropertyDescriptor(mapped, "0");
+
+        let filterLength = -1;
+        function FilterResult(length) {
+            filterLength = length;
+            return { kind: "filtered" };
+        }
+        values.constructor = { [Symbol.species]: FilterResult };
+        let filtered = values.filter(function(value) { return value > 2; });
+        let filterDescriptor = Object.getOwnPropertyDescriptor(filtered, "0");
+
+        mapLength === 3 &&
+            mapped.kind === "mapped" &&
+            mapped[0] === 20 &&
+            !("1" in mapped) &&
+            mapped[2] === 40 &&
+            mapDescriptor.writable && mapDescriptor.enumerable && mapDescriptor.configurable &&
+            filterLength === 0 &&
+            filtered.kind === "filtered" &&
+            filtered[0] === 4 &&
+            filterDescriptor.writable && filterDescriptor.enumerable && filterDescriptor.configurable &&
+            !("length" in filtered) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn callback_result_creation_preserves_observable_order_and_length_snapshot() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let log = "";
+        let values = [1, 2, 3];
+        function Result(length) {
+            log = log + "construct:" + length + ";";
+            values.length = 1;
+            return {};
+        }
+        Object.defineProperty(values, "constructor", {
+            get: function() {
+                log = log + "constructor;";
+                return {
+                    get [Symbol.species]() {
+                        log = log + "species;";
+                        return Result;
+                    }
+                };
+            }
+        });
+
+        let mapped = values.map(function(value, index) {
+            log = log + "callback:" + index + ";";
+            return value;
+        });
+
+        log === "constructor;species;construct:3;callback:0;" &&
+            mapped[0] === 1 &&
+            !("1" in mapped) &&
+            !("2" in mapped) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn callback_result_creation_propagates_length_and_property_failures() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        let lengthError = {};
+        let lengthFirst = false;
+        try {
+            Array.prototype.map.call({
+                get length() { throw lengthError; }
+            }, null);
+        } catch (error) {
+            lengthFirst = error === lengthError;
+        }
+
+        let callbackCount = 0;
+        function ClosedResult() {
+            return Object.preventExtensions({});
+        }
+        let values = [1, 2];
+        values.constructor = { [Symbol.species]: ClosedResult };
+        let propertyFailure = false;
+        try {
+            values.filter(function() {
+                callbackCount = callbackCount + 1;
+                return true;
+            });
+        } catch (error) {
+            propertyFailure = error instanceof TypeError;
+        }
+
+        let rangeCallbackCount = 0;
+        let rangeFailure = false;
+        try {
+            Array.prototype.map.call({ length: 4294967296 }, function() {
+                rangeCallbackCount = rangeCallbackCount + 1;
+            });
+        } catch (error) {
+            rangeFailure = error instanceof RangeError;
+        }
+
+        lengthFirst && propertyFailure && callbackCount === 1 &&
+            rangeFailure && rangeCallbackCount === 0 ? 42 : 0
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
