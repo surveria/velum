@@ -61,7 +61,7 @@ impl Context {
         };
         let upvalues = upvalues.as_deref().unwrap_or(&[]);
         let active_layout = self.current_static_binding_layout();
-        if binding_layout == active_layout {
+        if binding_layout == active_layout || !self.active_function_has_arguments_binding() {
             return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
         }
         match (atom_cache, binding_cache, binding_layout) {
