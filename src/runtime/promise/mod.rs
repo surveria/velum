@@ -8,9 +8,11 @@ use crate::{
     value::{ErrorName, FunctionId, ObjectId, Value},
 };
 
+mod combinator;
 mod job;
 mod state;
 
+pub(in crate::runtime) use combinator::{PromiseCombinatorElementKind, PromiseCombinatorKind};
 use job::PromiseStatus;
 pub(in crate::runtime) use job::{
     PromiseContinuationCancellation, PromiseJob, PromiseReaction, PromiseSettledState,

@@ -11,15 +11,18 @@ use crate::{
             DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
             PropertyUpdate, PropertyWritable,
         },
+        promise::{PromiseCombinatorElementKind, PromiseCombinatorKind},
         roots::VmRootKind,
     },
     value::{ObjectId, Value},
 };
 
 use super::{
-    OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_ALL_NAME, PROMISE_CATCH_NAME, PROMISE_NAME,
-    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+    OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_CATCH_NAME, PROMISE_NAME, PROMISE_REJECT_NAME,
+    PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
 };
+
+mod combinators;
 
 const PROMISE_CAPABILITY_REJECT_PROPERTY: &str = "[[PromiseCapabilityReject]]";
 const PROMISE_CAPABILITY_RESOLVE_PROPERTY: &str = "[[PromiseCapabilityResolve]]";
@@ -28,7 +31,7 @@ const PROMISE_ALL_SHARED_STATE_PROPERTY: &str = "[[PromiseAllSharedState]]";
 const PROMISE_ALL_VALUES_PROPERTY: &str = "[[PromiseAllValues]]";
 const PROMISE_ALL_REMAINING_PROPERTY: &str = "[[PromiseAllRemaining]]";
 const PROMISE_ALL_RESOLVE_PROPERTY: &str = "[[PromiseAllResolve]]";
-const PROMISE_ALL_COUNT_ERROR: &str = "Promise.all input count exceeds numeric range";
+const PROMISE_COMBINATOR_COUNT_ERROR: &str = "Promise combinator input count exceeds numeric range";
 
 struct PromiseCapability {
     promise: Value,
@@ -172,17 +175,44 @@ impl Context {
     pub(in crate::runtime::native) fn eval_promise_resolve(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        constructor: &Value,
     ) -> Result<Value> {
-        self.eval_direct_promise_resolve(args.as_slice())
+        let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        if !self.semantic_is_constructor(constructor)? {
+            return Err(Error::type_error(
+                "Promise.resolve receiver must be a constructor",
+            ));
+        }
+        if self.promise_id_from_value(&value).is_ok()
+            && self.get_named(&value, OBJECT_CONSTRUCTOR_PROPERTY)? == *constructor
+        {
+            return Ok(value);
+        }
+        let intrinsic = self.promise_constructor_value()?;
+        if constructor == &intrinsic {
+            return self.eval_direct_promise_resolve(std::slice::from_ref(&value));
+        }
+        let capability = self.new_promise_capability(constructor)?;
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            capability
+                .root_values()
+                .into_iter()
+                .chain(std::iter::once(&value)),
+        )?;
+        self.call_value(&capability.resolve, &[value], Value::Undefined)?;
+        Ok(capability.promise)
     }
 
     pub(in crate::runtime::native) fn eval_direct_promise_resolve(
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        self.promise_constructor_value()?;
+        let intrinsic = self.promise_constructor_value()?;
         let value = args.first().cloned().unwrap_or(Value::Undefined);
-        if self.promise_id_from_value(&value).is_ok() {
+        if self.promise_id_from_value(&value).is_ok()
+            && self.get_named(&value, OBJECT_CONSTRUCTOR_PROPERTY)? == intrinsic
+        {
             return Ok(value);
         }
         let (promise, object) = self.create_pending_promise()?;
@@ -193,8 +223,23 @@ impl Context {
     pub(in crate::runtime::native) fn eval_promise_reject(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        constructor: &Value,
     ) -> Result<Value> {
-        self.eval_direct_promise_reject(args.as_slice())
+        let reason = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let intrinsic = self.promise_constructor_value()?;
+        if constructor == &intrinsic {
+            return self.eval_direct_promise_reject(std::slice::from_ref(&reason));
+        }
+        let capability = self.new_promise_capability(constructor)?;
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            capability
+                .root_values()
+                .into_iter()
+                .chain(std::iter::once(&reason)),
+        )?;
+        self.call_value(&capability.reject, &[reason], Value::Undefined)?;
+        Ok(capability.promise)
     }
 
     pub(in crate::runtime::native) fn eval_direct_promise_reject(
@@ -251,15 +296,17 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             NativeFunctionKind::Promise => Some(self.eval_promise_constructor(args)),
-            NativeFunctionKind::PromiseAll => Some(self.eval_promise_all(args, this_value)),
-            NativeFunctionKind::PromiseAllResolveElement { state, index } => {
-                Some(self.eval_promise_all_resolve_element(state, index, args))
+            NativeFunctionKind::PromiseCombinator(kind) => {
+                Some(self.eval_promise_combinator(kind, args, this_value))
+            }
+            NativeFunctionKind::PromiseCombinatorElement { state, index, kind } => {
+                Some(self.eval_promise_combinator_element(state, index, kind, args))
             }
             NativeFunctionKind::PromiseCapabilityExecutor { capability_state } => {
                 Some(self.eval_promise_capability_executor(capability_state, args))
             }
-            NativeFunctionKind::PromiseResolve => Some(self.eval_promise_resolve(args)),
-            NativeFunctionKind::PromiseReject => Some(self.eval_promise_reject(args)),
+            NativeFunctionKind::PromiseResolve => Some(self.eval_promise_resolve(args, this_value)),
+            NativeFunctionKind::PromiseReject => Some(self.eval_promise_reject(args, this_value)),
             NativeFunctionKind::PromiseThen => Some(self.eval_promise_then(args, this_value)),
             NativeFunctionKind::PromiseCatch => Some(self.eval_promise_catch(args, this_value)),
             NativeFunctionKind::PromiseResolver { promise, kind } => {
@@ -285,11 +332,13 @@ impl Context {
         &mut self,
         constructor: crate::value::NativeFunctionId,
     ) -> Result<()> {
-        self.define_promise_static_method(
-            constructor,
-            PROMISE_ALL_NAME,
-            NativeFunctionKind::PromiseAll,
-        )?;
+        for kind in PromiseCombinatorKind::ALL {
+            self.define_promise_static_method(
+                constructor,
+                kind.name(),
+                NativeFunctionKind::PromiseCombinator(kind),
+            )?;
+        }
         self.define_promise_static_method(
             constructor,
             PROMISE_RESOLVE_NAME,
@@ -318,7 +367,7 @@ impl Context {
         )?;
         let setup = self.setup_promise_all(&capability, this_value, &iterable);
         if let Err(error) = setup {
-            self.reject_promise_all_capability(&capability, error)?;
+            self.reject_promise_combinator_capability(&capability, error)?;
         }
         Ok(capability.promise)
     }
@@ -326,7 +375,7 @@ impl Context {
     fn new_promise_capability(&mut self, constructor: &Value) -> Result<PromiseCapability> {
         if !self.semantic_is_constructor(constructor)? {
             return Err(Error::type_error(
-                "Promise.all receiver must be a constructor",
+                "Promise combinator receiver must be a constructor",
             ));
         }
         let intrinsic = self.promise_constructor_value()?;
@@ -414,7 +463,7 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    fn reject_promise_all_capability(
+    fn reject_promise_combinator_capability(
         &mut self,
         capability: &PromiseCapability,
         error: Error,
@@ -512,7 +561,7 @@ impl Context {
             )?;
             index = index
                 .checked_add(1)
-                .ok_or_else(|| Error::limit(PROMISE_ALL_COUNT_ERROR))?;
+                .ok_or_else(|| Error::limit(PROMISE_COMBINATOR_COUNT_ERROR))?;
         }
     }
 
@@ -576,7 +625,11 @@ impl Context {
             Value::Object(shared_state),
         )?;
         self.create_ephemeral_native_function(
-            NativeFunctionKind::PromiseAllResolveElement { state, index },
+            NativeFunctionKind::PromiseCombinatorElement {
+                state,
+                index,
+                kind: PromiseCombinatorElementKind::AllResolve,
+            },
             Value::Undefined,
         )
     }
@@ -588,11 +641,11 @@ impl Context {
             return Err(Error::runtime("Promise.all remaining state is not numeric"));
         };
         let remaining =
-            Self::finite_nonnegative_integer_to_usize(remaining, PROMISE_ALL_COUNT_ERROR)?;
+            Self::finite_nonnegative_integer_to_usize(remaining, PROMISE_COMBINATOR_COUNT_ERROR)?;
         let next = if increment {
             remaining
                 .checked_add(1)
-                .ok_or_else(|| Error::limit(PROMISE_ALL_COUNT_ERROR))?
+                .ok_or_else(|| Error::limit(PROMISE_COMBINATOR_COUNT_ERROR))?
         } else {
             remaining
                 .checked_sub(1)
@@ -601,7 +654,7 @@ impl Context {
         self.define_non_enumerable_object_property(
             state,
             PROMISE_ALL_REMAINING_PROPERTY,
-            Value::Number(Self::usize_to_number(next, PROMISE_ALL_COUNT_ERROR)?),
+            Value::Number(Self::usize_to_number(next, PROMISE_COMBINATOR_COUNT_ERROR)?),
         )?;
         Ok(next)
     }

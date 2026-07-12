@@ -2,7 +2,10 @@ use super::{
     data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
     iterator_kind::IteratorFunctionKind, typed_array_kind::TypedArrayFunctionKind,
 };
-use crate::runtime::object::TypedArrayElementKind;
+use crate::runtime::{
+    object::TypedArrayElementKind,
+    promise::{PromiseCombinatorElementKind, PromiseCombinatorKind},
+};
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
 mod math;
@@ -157,10 +160,6 @@ pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
-const PROMISE_ALL_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const PROMISE_ALL_NAME: &str = "all";
-const PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH: f64 = 1.0;
-const PROMISE_ALL_RESOLVE_ELEMENT_NAME: &str = "";
 const PROMISE_CAPABILITY_EXECUTOR_FUNCTION_LENGTH: f64 = 2.0;
 const PROMISE_CAPABILITY_EXECUTOR_NAME: &str = "";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
@@ -396,10 +395,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     PerformanceNow,
     Print,
     Promise,
-    PromiseAll,
-    PromiseAllResolveElement {
+    PromiseCombinator(PromiseCombinatorKind),
+    PromiseCombinatorElement {
         state: ObjectId,
         index: usize,
+        kind: PromiseCombinatorElementKind,
     },
     PromiseCapabilityExecutor {
         capability_state: ObjectId,
@@ -608,7 +608,9 @@ impl NativeFunctionKind {
             | Self::AsyncGeneratorThrow
             | Self::GeneratorNext
             | Self::GeneratorReturn
-            | Self::GeneratorThrow => Some(1.0),
+            | Self::GeneratorThrow
+            | Self::PromiseCombinator(_)
+            | Self::PromiseCombinatorElement { .. } => Some(1.0),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
@@ -629,10 +631,6 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
             Self::Print | Self::ThrowTypeError | Self::TypedArrayIntrinsic => Some(0.0),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
-            Self::PromiseAll => Some(PROMISE_ALL_FUNCTION_LENGTH),
-            Self::PromiseAllResolveElement { .. } => {
-                Some(PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH)
-            }
             Self::PromiseCapabilityExecutor { .. } => {
                 Some(PROMISE_CAPABILITY_EXECUTOR_FUNCTION_LENGTH)
             }
@@ -761,7 +759,7 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
-            Self::ThrowTypeError => Some(""),
+            Self::ThrowTypeError | Self::PromiseCombinatorElement { .. } => Some(""),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
             Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),
@@ -769,8 +767,7 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_NAME),
             Self::Print => Some("print"),
             Self::Promise => Some(PROMISE_NAME),
-            Self::PromiseAll => Some(PROMISE_ALL_NAME),
-            Self::PromiseAllResolveElement { .. } => Some(PROMISE_ALL_RESOLVE_ELEMENT_NAME),
+            Self::PromiseCombinator(kind) => Some(kind.name()),
             Self::PromiseCapabilityExecutor { .. } => Some(PROMISE_CAPABILITY_EXECUTOR_NAME),
             Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
             Self::PromiseReject => Some(PROMISE_REJECT_NAME),

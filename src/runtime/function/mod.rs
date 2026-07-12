@@ -642,6 +642,11 @@ impl Context {
         if matches!(kind, NativeFunctionKind::TypedArray(_)) {
             return self.typed_array_intrinsic_constructor_value();
         }
+        if let NativeFunctionKind::ErrorConstructor(name) = kind
+            && name != crate::value::ErrorName::Base
+        {
+            return self.error_constructor_value(crate::value::ErrorName::Base);
+        }
         if matches!(
             kind,
             NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction

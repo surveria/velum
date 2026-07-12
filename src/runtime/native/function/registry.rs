@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::object::TypedArrayElementKind,
+    runtime::{object::TypedArrayElementKind, promise::PromiseCombinatorKind},
     value::{ErrorName, NativeFunctionId},
 };
 
@@ -256,7 +256,10 @@ const ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT: NativeFunctionSlot =
 const ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT: NativeFunctionSlot =
     NativeFunctionSlot::new(262);
 const TYPED_ARRAY_INTRINSIC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(263);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 264;
+const PROMISE_ALL_SETTLED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(264);
+const PROMISE_ANY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(265);
+const PROMISE_RACE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(266);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 267;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -429,7 +432,14 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
         NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
-        NativeFunctionKind::PromiseAll => Some(PROMISE_ALL_SLOT),
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::All) => Some(PROMISE_ALL_SLOT),
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::AllSettled) => {
+            Some(PROMISE_ALL_SETTLED_SLOT)
+        }
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::Any) => Some(PROMISE_ANY_SLOT),
+        NativeFunctionKind::PromiseCombinator(PromiseCombinatorKind::Race) => {
+            Some(PROMISE_RACE_SLOT)
+        }
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
