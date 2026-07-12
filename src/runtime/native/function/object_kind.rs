@@ -13,6 +13,7 @@ const OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH: f64 = 2.0;
 const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
 const OBJECT_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_FREEZE_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_GROUP_BY_FUNCTION_LENGTH: f64 = 2.0;
 const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH: f64 = 1.0;
@@ -48,6 +49,7 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH),
             Self::ObjectEntries => Some(OBJECT_ENTRIES_FUNCTION_LENGTH),
             Self::ObjectFreeze => Some(OBJECT_FREEZE_FUNCTION_LENGTH),
+            Self::ObjectGroupBy => Some(OBJECT_GROUP_BY_FUNCTION_LENGTH),
             Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH),
             Self::ObjectGetOwnPropertyDescriptor => {
                 Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH)
@@ -116,6 +118,7 @@ impl Context {
             }
             NativeFunctionKind::ObjectEntries => Some(self.eval_object_entries(args)),
             NativeFunctionKind::ObjectFreeze => Some(self.eval_object_freeze(args)),
+            NativeFunctionKind::ObjectGroupBy => Some(self.eval_object_group_by(args)),
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
                 Some(self.eval_object_get_own_property_descriptor(args))
             }

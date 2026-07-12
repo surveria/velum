@@ -284,6 +284,10 @@ impl Context {
             (OBJECT_IS_SEALED_NAME, NativeFunctionKind::ObjectIsSealed),
             (OBJECT_KEYS_NAME, NativeFunctionKind::ObjectKeys),
             (
+                super::group_by::OBJECT_GROUP_BY_NAME,
+                NativeFunctionKind::ObjectGroupBy,
+            ),
+            (
                 OBJECT_FROM_ENTRIES_NAME,
                 NativeFunctionKind::ObjectFromEntries,
             ),

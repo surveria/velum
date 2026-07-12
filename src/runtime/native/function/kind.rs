@@ -146,6 +146,7 @@ pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTIES_NAME: &str = "defi
 pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
 pub(in crate::runtime::native) const OBJECT_ENTRIES_NAME: &str = "entries";
 pub(in crate::runtime::native) const OBJECT_FREEZE_NAME: &str = "freeze";
+const OBJECT_GROUP_BY_NAME: &str = "groupBy";
 pub(in crate::runtime::native) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str =
     "getOwnPropertyDescriptor";
@@ -403,6 +404,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectDefineProperty,
     ObjectEntries,
     ObjectFreeze,
+    ObjectGroupBy,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyDescriptor,
     ObjectGetOwnPropertyDescriptors,
@@ -717,6 +719,7 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_NAME),
             Self::ObjectEntries => Some(OBJECT_ENTRIES_NAME),
             Self::ObjectFreeze => Some(OBJECT_FREEZE_NAME),
+            Self::ObjectGroupBy => Some(OBJECT_GROUP_BY_NAME),
             Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_NAME),
             Self::ObjectGetOwnPropertyDescriptor => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME),
             Self::ObjectGetOwnPropertyDescriptors => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME),
