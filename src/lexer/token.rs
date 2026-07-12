@@ -1,4 +1,4 @@
-use crate::{SourceSpan, value::JsBigInt};
+use crate::{Error, SourceSpan, value::JsBigInt};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -16,6 +16,8 @@ impl Token {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
+    #[doc(hidden)]
+    LexicalError(Box<Error>),
     Number(f64),
     BigInt(JsBigInt),
     String(Vec<u16>),

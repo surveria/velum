@@ -1,8 +1,10 @@
 mod classification;
 mod scanner;
+mod stream;
 mod support;
 mod template;
 mod token;
 
-pub use scanner::lex;
+pub(crate) use scanner::LexicalGoal;
+pub(crate) use stream::TokenStream;
 pub use token::{Token, TokenKind};

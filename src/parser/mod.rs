@@ -3,7 +3,7 @@ use crate::ast::{
     StaticName, StaticPropertyAccessId, StaticString, Stmt,
 };
 use crate::error::{Error, Result};
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::{LexicalGoal, Token, TokenKind, TokenStream};
 use crate::runtime::limits::RuntimeLimits;
 use crate::source::{SourceId, SourceSpan};
 
@@ -48,24 +48,27 @@ pub struct ParsedFunctionBody {
     pub contains_use_strict: bool,
 }
 
-pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
+pub fn parse_with_usage(tokens: TokenStream, limits: RuntimeLimits) -> Result<ParsedProgram> {
     parse_with_usage_in_mode(tokens, limits, false)
 }
 
 pub fn parse_with_usage_in_mode(
-    tokens: Vec<Token>,
+    tokens: TokenStream,
     limits: RuntimeLimits,
     strict_mode: bool,
 ) -> Result<ParsedProgram> {
     Parser::new(tokens, limits, strict_mode).parse()
 }
 
-pub fn parse_module_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
+pub fn parse_module_with_usage(
+    tokens: TokenStream,
+    limits: RuntimeLimits,
+) -> Result<ParsedProgram> {
     Parser::new_module(tokens, limits).parse()
 }
 
 pub fn parse_eval_with_usage_in_context(
-    tokens: Vec<Token>,
+    tokens: TokenStream,
     limits: RuntimeLimits,
     strict_mode: bool,
     allow_super_property: bool,
@@ -96,7 +99,7 @@ pub struct ParseUsage {
 }
 
 struct Parser {
-    tokens: Vec<Token>,
+    tokens: TokenStream,
     cursor: usize,
     limits: RuntimeLimits,
     expression_depth: usize,
@@ -147,7 +150,7 @@ enum FunctionDeclarationContext {
 }
 
 impl Parser {
-    const fn new(tokens: Vec<Token>, limits: RuntimeLimits, strict_mode: bool) -> Self {
+    const fn new(tokens: TokenStream, limits: RuntimeLimits, strict_mode: bool) -> Self {
         Self {
             tokens,
             cursor: 0,
@@ -179,7 +182,7 @@ impl Parser {
         }
     }
 
-    const fn new_module(tokens: Vec<Token>, limits: RuntimeLimits) -> Self {
+    const fn new_module(tokens: TokenStream, limits: RuntimeLimits) -> Self {
         let mut parser = Self::new(tokens, limits, true);
         parser.await_identifier_context = AwaitIdentifierContext::Reserved;
         parser.source_goal = SourceGoal::Module;
@@ -240,6 +243,7 @@ impl Parser {
         let token_span = token.span;
         let token_offset = token.offset();
         match token.kind {
+            TokenKind::LexicalError(error) => Err(*error),
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
                 "super is not a valid identifier",
                 token_span,
@@ -403,14 +407,14 @@ impl Parser {
         })
     }
 
-    pub(super) fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
+    pub(super) fn peek_kind(&self, offset: usize) -> Option<TokenKind> {
         let cursor = self.cursor.checked_add(offset)?;
-        self.tokens.get(cursor).map(|token| &token.kind)
+        self.tokens.get(cursor).map(|token| token.kind)
     }
 
     pub(super) fn peek_kind_is(&self, offset: usize, expected: &TokenKind) -> bool {
         self.peek_kind(offset)
-            .is_some_and(|kind| token_kind_eq(kind, expected))
+            .is_some_and(|kind| token_kind_eq(&kind, expected))
     }
 
     pub(super) fn peek_kind_is_no_line_terminator(
@@ -430,9 +434,9 @@ impl Parser {
 
     pub(super) fn peek_is_identifier_name(&self, offset: usize) -> bool {
         self.peek_kind(offset).is_some_and(|kind| {
-            Self::is_identifier_name(kind)
-                || (*kind == TokenKind::Await && !self.await_identifier_is_reserved())
-                || (*kind == TokenKind::Let && !self.is_strict_mode())
+            Self::is_identifier_name(&kind)
+                || (kind == TokenKind::Await && !self.await_identifier_is_reserved())
+                || (kind == TokenKind::Let && !self.is_strict_mode())
         })
     }
 
@@ -489,13 +493,24 @@ impl Parser {
     }
 
     pub(super) fn check(&self, expected: &TokenKind) -> bool {
-        self.peek()
+        let goal = matches!(expected, TokenKind::Slash | TokenKind::SlashEqual)
+            .then_some(LexicalGoal::Div);
+        self.tokens
+            .get_with_goal(self.cursor, goal)
             .is_some_and(|token| token_kind_eq(&token.kind, expected))
     }
 
     pub(super) fn advance(&mut self) -> Option<Token> {
-        let token = self.peek()?.clone();
-        if !matches!(token.kind, TokenKind::Eof) {
+        self.advance_with_goal(None)
+    }
+
+    pub(super) fn advance_regexp(&mut self) -> Option<Token> {
+        self.advance_with_goal(Some(LexicalGoal::RegExp))
+    }
+
+    fn advance_with_goal(&mut self, goal: Option<LexicalGoal>) -> Option<Token> {
+        let token = self.tokens.get_with_goal(self.cursor, goal)?;
+        if !matches!(token.kind, TokenKind::Eof | TokenKind::LexicalError(_)) {
             self.cursor = self.cursor.saturating_add(1);
         }
         Some(token)
@@ -506,11 +521,11 @@ impl Parser {
             .is_none_or(|token| matches!(token.kind, TokenKind::Eof))
     }
 
-    pub(super) fn peek(&self) -> Option<&Token> {
+    pub(super) fn peek(&self) -> Option<Token> {
         self.tokens.get(self.cursor)
     }
 
-    fn peek_token(&self, offset: usize) -> Option<&Token> {
+    fn peek_token(&self, offset: usize) -> Option<Token> {
         let cursor = self.cursor.checked_add(offset)?;
         self.tokens.get(cursor)
     }
@@ -525,7 +540,11 @@ impl Parser {
 
     pub(super) fn current_span(&self) -> SourceSpan {
         self.peek()
-            .or_else(|| self.tokens.last())
+            .or_else(|| {
+                self.cursor
+                    .checked_sub(1)
+                    .and_then(|cursor| self.tokens.get(cursor))
+            })
             .map_or(SourceSpan::point(SourceId::UNKNOWN, 0), |token| token.span)
     }
 
@@ -537,6 +556,13 @@ impl Parser {
     }
 
     pub(super) fn parse_error(&self, message: impl Into<String>) -> Error {
+        if let Some(Token {
+            kind: TokenKind::LexicalError(error),
+            ..
+        }) = self.peek()
+        {
+            return *error;
+        }
         Error::parse_at(message, self.current_span())
     }
 

@@ -87,7 +87,7 @@ impl Parser {
             return false;
         };
         self.peek_kind(offset.saturating_add(1))
-            .is_some_and(|next| next == &TokenKind::Equal)
+            .is_some_and(|next| next == TokenKind::Equal)
     }
 
     pub(super) fn literal_starts_assignment_target(&self) -> bool {

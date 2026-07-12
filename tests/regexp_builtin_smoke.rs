@@ -68,6 +68,54 @@ fn supports_regexp_constructor_and_preserves_slash_operator() -> TestResult {
 }
 
 #[test]
+fn selects_regexp_goal_after_statement_boundaries_and_yield() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let afterIf = false;
+        if (true) /a\/b/.test("a/b") ? afterIf = true : afterIf = false;
+
+        let afterBlock = false;
+        {
+            let scoped = 1;
+        }
+        /\w+/.test("word") ? afterBlock = true : afterBlock = false;
+
+        function* values() {
+            yield /\d+/;
+        }
+        let yielded = values().next().value;
+        let equals = /=/.test("=");
+
+        afterIf && afterBlock && yielded.test("42") && equals ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn keeps_division_goal_after_expression_operands() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let quotient = (84) / 2 / 3;
+        quotient /= 2;
+        let async = 18;
+        let contextualIdentifier = async / 3;
+        let regexpThenDivision = /42/.source.length / 2;
+        quotient === 7 && contextualIdentifier === 6 && regexpThenDivision === 1 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn scopes_regexp_modifier_flags_to_their_groups() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

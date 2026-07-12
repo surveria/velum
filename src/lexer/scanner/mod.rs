@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     error::{Error, Result},
-    lexer::classification::{EscapeContext, token_kind_can_precede_regexp},
+    lexer::classification::EscapeContext,
     lexer::support::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
         HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
@@ -22,35 +22,73 @@ use crate::{
 mod names;
 mod operators;
 
-pub fn lex(source: &str, source_id: SourceId) -> Result<Vec<Token>> {
-    Lexer::new(source, source_id).lex()
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum LexicalGoal {
+    Div,
+    RegExp,
 }
 
-struct Lexer<'a> {
-    source: &'a str,
-    source_id: SourceId,
-    chars: Vec<(usize, char)>,
+#[derive(Clone)]
+pub(super) struct LexerCheckpoint {
     cursor: usize,
-    tokens: Vec<Token>,
     line_terminator_before: bool,
     template_substitutions: Vec<TemplateSubstitutionState>,
 }
 
-impl<'a> Lexer<'a> {
-    fn new(source: &'a str, source_id: SourceId) -> Self {
+pub(super) struct Lexer {
+    source: String,
+    source_id: SourceId,
+    chars: Vec<(usize, char)>,
+    cursor: usize,
+    pending: Option<Token>,
+    line_terminator_before: bool,
+    template_substitutions: Vec<TemplateSubstitutionState>,
+}
+
+impl Lexer {
+    pub(super) fn new(source: &str, source_id: SourceId) -> Self {
         Self {
-            source,
+            source: source.to_owned(),
             source_id,
             chars: source.char_indices().collect(),
             cursor: 0,
-            tokens: Vec::new(),
+            pending: None,
             line_terminator_before: false,
             template_substitutions: Vec::new(),
         }
     }
 
-    fn lex(mut self) -> Result<Vec<Token>> {
-        while let Some((offset, ch)) = self.peek() {
+    pub(super) fn checkpoint(&self) -> LexerCheckpoint {
+        LexerCheckpoint {
+            cursor: self.cursor,
+            line_terminator_before: self.line_terminator_before,
+            template_substitutions: self.template_substitutions.clone(),
+        }
+    }
+
+    pub(super) fn restore(&mut self, checkpoint: &LexerCheckpoint) {
+        self.cursor = checkpoint.cursor;
+        self.line_terminator_before = checkpoint.line_terminator_before;
+        self.template_substitutions = checkpoint.template_substitutions.clone();
+        self.pending = None;
+    }
+
+    pub(super) fn next_token(&mut self, goal: LexicalGoal) -> Result<Token> {
+        loop {
+            let Some((offset, ch)) = self.peek() else {
+                if let Some(substitution) = self.template_substitutions.last() {
+                    return Err(Error::lex(
+                        "unterminated template literal substitution",
+                        substitution.substitution_offset,
+                    ));
+                }
+                return Ok(Token {
+                    kind: TokenKind::Eof,
+                    span: SourceSpan::point(self.source_id, self.source.len()),
+                    line_terminator_before: self.line_terminator_before,
+                    identifier_escaped: false,
+                });
+            };
             match ch {
                 ch if ch.is_whitespace() => {
                     if is_line_terminator(ch) {
@@ -73,7 +111,7 @@ impl<'a> Lexer<'a> {
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
                 '*' => self.star_or_power(offset),
-                '/' => self.slash_or_regexp(offset)?,
+                '/' => self.slash_token(offset, goal)?,
                 '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
                 '?' => self.question_token(offset),
                 ':' => self.simple(TokenKind::Colon),
@@ -102,22 +140,10 @@ impl<'a> Lexer<'a> {
                 '^' => self.simple_or_equal(offset, TokenKind::Caret, TokenKind::CaretEqual),
                 _ => return Err(Error::lex(format!("unexpected character '{ch}'"), offset)),
             }
+            if let Some(token) = self.pending.take() {
+                return Ok(token);
+            }
         }
-
-        if let Some(substitution) = self.template_substitutions.last() {
-            return Err(Error::lex(
-                "unterminated template literal substitution",
-                substitution.substitution_offset,
-            ));
-        }
-
-        self.tokens.push(Token {
-            kind: TokenKind::Eof,
-            span: SourceSpan::point(self.source_id, self.source.len()),
-            line_terminator_before: self.line_terminator_before,
-            identifier_escaped: false,
-        });
-        Ok(self.tokens)
     }
 
     fn number(&mut self, offset: usize) -> Result<()> {
@@ -129,18 +155,14 @@ impl<'a> Lexer<'a> {
         self.decimal_number(offset)
     }
 
-    fn slash_or_regexp(&mut self, offset: usize) -> Result<()> {
-        if self.peek_next_char() == Some('=') || !self.can_start_regexp_literal() {
-            self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual);
-            return Ok(());
+    fn slash_token(&mut self, offset: usize, goal: LexicalGoal) -> Result<()> {
+        match goal {
+            LexicalGoal::Div => {
+                self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual);
+                Ok(())
+            }
+            LexicalGoal::RegExp => self.regexp_literal(offset),
         }
-        self.regexp_literal(offset)
-    }
-
-    fn can_start_regexp_literal(&self) -> bool {
-        self.tokens
-            .last()
-            .is_none_or(|token| token_kind_can_precede_regexp(&token.kind))
     }
 
     fn regexp_literal(&mut self, offset: usize) -> Result<()> {
@@ -707,7 +729,7 @@ impl<'a> Lexer<'a> {
         identifier_escaped: bool,
     ) {
         let span = SourceSpan::from_valid_bounds(self.source_id, offset, self.current_offset());
-        self.tokens.push(Token {
+        self.pending = Some(Token {
             kind,
             span,
             line_terminator_before: self.line_terminator_before,

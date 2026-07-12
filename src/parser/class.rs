@@ -531,9 +531,12 @@ impl Parser {
             return false;
         }
         if self.peek_kind_is(1, &TokenKind::Star) {
-            return self.peek_kind(2).is_some_and(class_element_name_start);
+            return self
+                .peek_kind(2)
+                .is_some_and(|kind| class_element_name_start(&kind));
         }
-        self.peek_kind(1).is_some_and(class_element_name_start)
+        self.peek_kind(1)
+            .is_some_and(|kind| class_element_name_start(&kind))
     }
 
     fn class_member_key_name(key: &ClassKeySeed) -> Option<StaticName> {

@@ -334,6 +334,7 @@ impl Parser {
                 .ok_or_else(|| self.parse_error("expected template literal continuation"))?;
             let token_span = token.span;
             match token.kind {
+                TokenKind::LexicalError(error) => return Err(*error),
                 TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
                 TokenKind::TemplateTail(cooked) => {
                     quasis.push(self.static_string(cooked)?);
@@ -431,10 +432,11 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expression> {
         let token = self
-            .advance()
+            .advance_regexp()
             .ok_or_else(|| self.parse_error("expected expression"))?;
         let token_span = token.span;
         let expr = match token.kind {
+            TokenKind::LexicalError(error) => return Err(*error),
             TokenKind::Number(value) => {
                 Expression::new(Expr::Literal(Value::Number(value)), token_span)
             }

@@ -119,7 +119,7 @@ impl Parser {
             _ => return None,
         };
         self.peek_kind(1)
-            .is_some_and(is_object_property_name_start)
+            .is_some_and(|kind| is_object_property_name_start(&kind))
             .then_some(kind)
     }
 
@@ -205,9 +205,13 @@ impl Parser {
     fn async_object_method_start(&self) -> bool {
         self.peek_kind_is(0, &TokenKind::Async)
             && !self.peek_has_line_terminator_before(1)
-            && (self.peek_kind(1).is_some_and(is_object_property_name_start)
+            && (self
+                .peek_kind(1)
+                .is_some_and(|kind| is_object_property_name_start(&kind))
                 || (self.peek_kind_is(1, &TokenKind::Star)
-                    && self.peek_kind(2).is_some_and(is_object_property_name_start)))
+                    && self
+                        .peek_kind(2)
+                        .is_some_and(|kind| is_object_property_name_start(&kind))))
     }
 
     fn object_method_property(
