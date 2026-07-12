@@ -15,6 +15,7 @@ use crate::{
 mod compile;
 mod engine;
 mod match_result;
+mod split;
 
 use engine::{
     escaped_regexp_source_utf16, parse_regexp_flags, regexp_find_utf16,
@@ -237,20 +238,6 @@ impl Context {
             return self.string_regexp_replace_global_value(&input, this_value, &replacement);
         }
         self.string_regexp_replace_first_value(&input, this_value, &replacement)
-    }
-
-    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_split(
-        &mut self,
-        args: RuntimeCallArgs<'_>,
-        this_value: &Value,
-    ) -> Result<Value> {
-        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        let input_value = self.heap_string_value(&input)?;
-        let mut split_args = vec![this_value.clone()];
-        if let Some(limit) = args.as_slice().get(1) {
-            split_args.push(limit.clone());
-        }
-        self.eval_string_prototype_split(RuntimeCallArgs::values(&split_args), &input_value)
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
@@ -598,22 +585,6 @@ impl Context {
             self.set_regexp_last_index(this_value, matched.span.code_units.end)?;
         }
         self.regexp_match_array(input, &matched, flags.has_indices())
-    }
-
-    pub(in crate::runtime::native) fn regexp_exec_from(
-        &mut self,
-        this_value: &Value,
-        input: &str,
-        start: usize,
-    ) -> Result<Value> {
-        let input = input.encode_utf16().collect::<Vec<_>>();
-        let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = parse_regexp_flags(regexp.flags())?;
-        self.charge_regexp_utf16_work(regexp.pattern_utf16(), &input)?;
-        let Some(matched) = regexp_find_utf16(regexp.pattern_utf16(), flags, &input, start)? else {
-            return Ok(Value::Null);
-        };
-        self.regexp_match_array(&input, &matched, flags.has_indices())
     }
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
