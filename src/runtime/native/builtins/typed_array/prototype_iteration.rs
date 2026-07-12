@@ -4,7 +4,6 @@ use crate::{
         Context,
         abstract_operations::{same_value_zero, strict_equality, to_boolean},
         native::TypedArrayFunctionKind,
-        object::TypedArrayView,
     },
     value::Value,
 };
@@ -12,23 +11,6 @@ use crate::{
 const CALLBACK_NOT_CALLABLE_ERROR: &str = "TypedArray.prototype callback must be callable";
 const REDUCE_EMPTY_ERROR: &str = "Reduce of empty typed array with no initial value";
 const INDEX_NOT_FOUND: f64 = -1.0;
-
-#[derive(Debug, Clone)]
-struct TypedArrayViewRecord {
-    view: TypedArrayView,
-    length: usize,
-}
-
-impl TypedArrayViewRecord {
-    fn read(&self, index: usize) -> Result<Option<Value>> {
-        self.view.read(index)
-    }
-
-    fn value(&self, index: usize) -> Result<Value> {
-        self.read(index)
-            .map(|value| value.unwrap_or(Value::Undefined))
-    }
-}
 
 impl Context {
     pub(super) fn eval_typed_array_iteration_kind(
@@ -38,6 +20,9 @@ impl Context {
         this_value: &Value,
     ) -> Option<Result<Value>> {
         match kind {
+            TypedArrayFunctionKind::Filter | TypedArrayFunctionKind::Map => {
+                Some(self.eval_typed_array_map_filter(kind, args, this_value))
+            }
             TypedArrayFunctionKind::Every
             | TypedArrayFunctionKind::Find
             | TypedArrayFunctionKind::FindIndex
@@ -57,12 +42,6 @@ impl Context {
             }
             _ => None,
         }
-    }
-
-    fn typed_array_view_record(&self, this_value: &Value) -> Result<TypedArrayViewRecord> {
-        let (_, view) = self.typed_array_receiver(this_value)?;
-        let length = view.length();
-        Ok(TypedArrayViewRecord { view, length })
     }
 
     fn typed_array_callback<'args>(&self, args: &'args [Value]) -> Result<(&'args Value, Value)> {
@@ -303,5 +282,62 @@ impl Context {
             accumulator = self.call_value(callback, &call_args, Value::Undefined)?;
         }
         Ok(accumulator)
+    }
+
+    fn eval_typed_array_map_filter(
+        &mut self,
+        kind: TypedArrayFunctionKind,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let record = self.typed_array_view_record(this_value)?;
+        let (callback, callback_this) = self.typed_array_callback(args)?;
+        if matches!(kind, TypedArrayFunctionKind::Filter) {
+            let mut selected = Vec::new();
+            for index in 0..record.length {
+                self.step()?;
+                let value = record.value(index)?;
+                let keep = self.call_typed_array_callback(
+                    callback,
+                    &callback_this,
+                    &value,
+                    index,
+                    this_value,
+                )?;
+                if to_boolean(&keep) {
+                    selected.push(value);
+                }
+            }
+            return self.typed_array_species_create_from_values(this_value, selected);
+        }
+
+        let (result, result_id, result_view) =
+            self.typed_array_species_create_with_length(this_value, record.length)?;
+        let _result_scope = self.transient_root_scope(
+            crate::runtime::roots::VmRootKind::TransientTemporary,
+            std::iter::once(&result),
+        )?;
+        for index in 0..record.length {
+            self.step()?;
+            let value = record.value(index)?;
+            let mapped = self.call_typed_array_callback(
+                callback,
+                &callback_this,
+                &value,
+                index,
+                this_value,
+            )?;
+            let element =
+                self.convert_typed_array_element_value(result_view.element_kind(), &mapped)?;
+            if !self
+                .objects
+                .set_typed_array_value(result_id, index, &element)?
+            {
+                return Err(Error::type_error(
+                    "TypedArray map result became out of bounds",
+                ));
+            }
+        }
+        Ok(result)
     }
 }

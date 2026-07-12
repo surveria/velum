@@ -54,7 +54,7 @@ impl Context {
                 self.eval_typed_array_iterator(this_value, IterationTarget::Entries)
             }
             TypedArrayFunctionKind::Filter => {
-                self.eval_typed_array_callback_copy(values, this_value, false)
+                Err(Error::runtime("typed array filter was routed incorrectly"))
             }
             TypedArrayFunctionKind::FromBase64 => self.eval_uint8_array_from_base64(values),
             TypedArrayFunctionKind::FromHex => self.eval_uint8_array_from_hex(values),
@@ -62,7 +62,7 @@ impl Context {
                 self.eval_typed_array_iterator(this_value, IterationTarget::Keys)
             }
             TypedArrayFunctionKind::Map => {
-                self.eval_typed_array_callback_copy(values, this_value, true)
+                Err(Error::runtime("typed array map was routed incorrectly"))
             }
             TypedArrayFunctionKind::Set => self.eval_typed_array_set(values, this_value),
             TypedArrayFunctionKind::SetFromBase64 => {
@@ -71,11 +71,11 @@ impl Context {
             TypedArrayFunctionKind::SetFromHex => {
                 self.eval_uint8_array_set_from_hex(values, this_value)
             }
-            TypedArrayFunctionKind::Slice => self.eval_typed_array_slice(values, this_value),
+            TypedArrayFunctionKind::Slice => self.eval_typed_array_slice_record(values, this_value),
             TypedArrayFunctionKind::Sort => self.eval_typed_array_sort(values, this_value),
             TypedArrayFunctionKind::Subarray => self.eval_typed_array_subarray(values, this_value),
             TypedArrayFunctionKind::ToReversed => {
-                self.eval_typed_array_copy_method(values, this_value, CopyMethod::Reversed)
+                self.eval_typed_array_to_reversed_record(values, this_value)
             }
             TypedArrayFunctionKind::ToSorted => self.eval_typed_array_to_sorted(values, this_value),
             TypedArrayFunctionKind::ToBase64 => self.eval_uint8_array_to_base64(values, this_value),
@@ -83,9 +83,7 @@ impl Context {
             TypedArrayFunctionKind::Values => {
                 self.eval_typed_array_iterator(this_value, IterationTarget::Values)
             }
-            TypedArrayFunctionKind::With => {
-                self.eval_typed_array_copy_method(values, this_value, CopyMethod::With)
-            }
+            TypedArrayFunctionKind::With => self.eval_typed_array_with(values, this_value),
             TypedArrayFunctionKind::At
             | TypedArrayFunctionKind::BufferGetter
             | TypedArrayFunctionKind::ByteLengthGetter
@@ -158,13 +156,14 @@ impl Context {
         if let Some(result) = self.eval_typed_array_iteration_kind(kind, args, this_value) {
             return Some(result);
         }
+        if let Some(result) = self.eval_typed_array_copy_mutation_kind(kind, args, this_value) {
+            return Some(result);
+        }
         if !matches!(
             kind,
             TypedArrayFunctionKind::At
-                | TypedArrayFunctionKind::CopyWithin
                 | TypedArrayFunctionKind::Fill
                 | TypedArrayFunctionKind::Join
-                | TypedArrayFunctionKind::Reverse
                 | TypedArrayFunctionKind::ToLocaleString
                 | TypedArrayFunctionKind::ToString
         ) {
@@ -175,9 +174,6 @@ impl Context {
         }
         let result = match kind {
             TypedArrayFunctionKind::At => self.eval_direct_array_at(args, this_value),
-            TypedArrayFunctionKind::CopyWithin => {
-                self.eval_direct_array_copy_within(args, this_value)
-            }
             TypedArrayFunctionKind::Fill => self.eval_typed_array_fill(args, this_value),
             TypedArrayFunctionKind::Join => match self.typed_array_receiver(this_value) {
                 Ok((_, view)) => {
@@ -185,7 +181,6 @@ impl Context {
                 }
                 Err(error) => Err(error),
             },
-            TypedArrayFunctionKind::Reverse => self.eval_direct_array_reverse(args, this_value),
             TypedArrayFunctionKind::ToLocaleString | TypedArrayFunctionKind::ToString => {
                 self.eval_direct_array_join(&[], this_value)
             }
@@ -289,40 +284,9 @@ impl Context {
         self.create_tagged_collection_iterator_object(items, ARRAY_ITERATOR_TAG)
     }
 
-    fn eval_typed_array_callback_copy(
-        &mut self,
-        args: &[Value],
-        this_value: &Value,
-        map: bool,
-    ) -> Result<Value> {
-        self.typed_array_receiver(this_value)?;
-        let array = if map {
-            self.eval_direct_array_map(args, this_value, true)?
-        } else {
-            self.eval_direct_array_filter(args, this_value, true)?
-        };
-        let values = self.typed_array_collect_array_like(&array)?;
-        self.typed_array_species_create_from_values(this_value, values)
-    }
-
-    fn eval_typed_array_slice(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
-        self.typed_array_receiver(this_value)?;
-        let array = self.eval_direct_array_slice(args, this_value)?;
-        let values = self.typed_array_collect_array_like(&array)?;
-        self.typed_array_species_create_from_values(this_value, values)
-    }
-
-    fn eval_typed_array_copy_method(
-        &mut self,
-        args: &[Value],
-        this_value: &Value,
-        method: CopyMethod,
-    ) -> Result<Value> {
+    fn eval_typed_array_with(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (_, view) = self.typed_array_receiver(this_value)?;
-        let array = match method {
-            CopyMethod::Reversed => self.eval_direct_array_to_reversed(args, this_value)?,
-            CopyMethod::With => self.eval_direct_array_with(args, this_value)?,
-        };
+        let array = self.eval_direct_array_with(args, this_value)?;
         let values = self.typed_array_collect_array_like(&array)?;
         self.create_typed_array_from_values(view.element_kind(), values)
     }
@@ -569,7 +533,7 @@ impl Context {
         Err(Error::type_error(TYPED_ARRAY_SPECIES_ERROR))
     }
 
-    fn typed_array_species_create_from_values(
+    pub(super) fn typed_array_species_create_from_values(
         &mut self,
         source: &Value,
         values: Vec<Value>,
@@ -580,6 +544,21 @@ impl Context {
             &constructor,
             values,
             Some(view.element_kind().content_type()),
+        )
+    }
+
+    pub(super) fn typed_array_species_create_with_length(
+        &mut self,
+        source: &Value,
+        length: usize,
+    ) -> Result<(Value, ObjectId, TypedArrayView)> {
+        let (_, source_view) = self.typed_array_branded_receiver(source)?;
+        let constructor =
+            self.typed_array_species_constructor(source, source_view.element_kind())?;
+        self.typed_array_create_with_constructor_length(
+            &constructor,
+            length,
+            Some(source_view.element_kind().content_type()),
         )
     }
 
@@ -636,25 +615,13 @@ impl Context {
         mapping: Option<&Value>,
         callback_this: &Value,
     ) -> Result<Value> {
-        let length = Self::typed_array_usize_value(values.len())?;
-        let result = self.semantic_construct(
+        let (result, id, view) = self.typed_array_create_with_constructor_length(
             constructor,
-            std::slice::from_ref(&length),
-            constructor.clone(),
+            values.len(),
+            expected_content_type,
         )?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
-        let (id, view) = self
-            .typed_array_receiver(&result)
-            .map_err(|_| Error::type_error(TYPED_ARRAY_RESULT_ERROR))?;
-        if view.length() < values.len() {
-            return Err(Error::type_error(TYPED_ARRAY_RESULT_ERROR));
-        }
-        if expected_content_type
-            .is_some_and(|expected| expected != view.element_kind().content_type())
-        {
-            return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
-        }
         for (index, value) in values.into_iter().enumerate() {
             let value = if let Some(callback) = mapping {
                 let call_args = [value, Self::typed_array_usize_value(index)?];
@@ -666,6 +633,32 @@ impl Context {
             self.objects.set_typed_array_value(id, index, &element)?;
         }
         Ok(result)
+    }
+
+    fn typed_array_create_with_constructor_length(
+        &mut self,
+        constructor: &Value,
+        length: usize,
+        expected_content_type: Option<TypedArrayContentType>,
+    ) -> Result<(Value, ObjectId, TypedArrayView)> {
+        let length_value = Self::typed_array_usize_value(length)?;
+        let result = self.semantic_construct(
+            constructor,
+            std::slice::from_ref(&length_value),
+            constructor.clone(),
+        )?;
+        let (id, view) = self
+            .typed_array_receiver(&result)
+            .map_err(|_| Error::type_error(TYPED_ARRAY_RESULT_ERROR))?;
+        if view.length() < length {
+            return Err(Error::type_error(TYPED_ARRAY_RESULT_ERROR));
+        }
+        if expected_content_type
+            .is_some_and(|expected| expected != view.element_kind().content_type())
+        {
+            return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
+        }
+        Ok((result, id, view))
     }
 
     fn typed_array_collect_array_like(&mut self, source: &Value) -> Result<Vec<Value>> {
@@ -712,12 +705,6 @@ impl Context {
         }
         Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR))
     }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum CopyMethod {
-    Reversed,
-    With,
 }
 
 fn typed_array_numeric_order(left: f64, right: f64) -> Ordering {

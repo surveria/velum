@@ -363,6 +363,48 @@ fn typed_array_iteration_uses_internal_length_and_live_view_values() -> TestResu
 }
 
 #[test]
+fn typed_array_copy_methods_refresh_views_and_preserve_aliasing() -> TestResult {
+    ensure_eval(
+        r#"
+        let source = new Uint8Array([10, 20, 30, 40, 50, 60]);
+        source.constructor = {
+            [Symbol.species]: function() {
+                return new Uint8Array(source.buffer, 2);
+            }
+        };
+        let aliased = source.slice(1, 4);
+
+        let rab = new ArrayBuffer(4, { maxByteLength: 8 });
+        let tracking = new Uint8Array(rab);
+        tracking.set([0, 1, 2, 3]);
+        tracking.copyWithin({
+            valueOf() {
+                rab.resize(3);
+                return 2;
+            }
+        }, 0);
+
+        let values = new Uint8Array([1, 2, 3, 4]);
+        let lengthReads = 0;
+        Object.defineProperty(values, "length", {
+            get() {
+                lengthReads += 1;
+                return 0;
+            }
+        });
+        let reversedCopy = values.toReversed();
+        values.reverse();
+
+        aliased.join(",") === "20,20,20,60" &&
+            tracking.join(",") === "0,1,0" &&
+            reversedCopy.join(",") === "4,3,2,1" &&
+            values.join(",") === "4,3,2,1" && lengthReads === 0 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn supports_typed_array_mutation_sort_iteration_and_statics() -> TestResult {
     ensure_eval(
         r#"

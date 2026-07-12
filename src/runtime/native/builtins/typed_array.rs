@@ -17,7 +17,9 @@ use crate::{
 mod codec;
 mod install;
 mod methods;
+mod prototype_copy;
 mod prototype_iteration;
+mod view_record;
 
 const BYTES_PER_ELEMENT_PROPERTY: &str = "BYTES_PER_ELEMENT";
 const TYPED_ARRAY_LENGTH_LIMIT_ERROR: &str = "typed array length exceeded supported range";
