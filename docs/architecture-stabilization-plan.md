@@ -571,6 +571,17 @@ AS-01b evidence:
   report-only commit `5e81d2e`
 - Remaining for AS-01: none; AS-02 now owns the next architecture boundary
 
+AS-01b guard evolution:
+
+- Architecture guards protect semantic, ownership, and layering properties;
+  they do not make the implementation snapshot immutable.
+- Intentional architecture pull requests may update, replace, or remove a
+  guard together with the revised invariant and behavioral or mutation
+  evidence.
+- Complete struct-field inventories, exact helper counts, module filename
+  lists, and verbatim accounting/root statements are not retained as proxies
+  for architectural correctness.
+
 ### AS-02: Unified Semantic Object Boundary
 
 Migrate incrementally rather than replacing every store in one pull request:

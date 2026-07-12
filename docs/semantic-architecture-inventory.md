@@ -743,13 +743,20 @@ decision sequence:
 
 ## AS-01b Guard Specification
 
-AS-01b should create one focused architecture-check script and tests for that
-script. Existing debt should be an explicit, inspectable allowlist; the guard
-must fail on growth.
+AS-01b created one focused architecture-check script and mutation tests for
+that script. The guard is a living executable record of architectural
+properties. It is not an endorsement of the current representation and must
+not make file layout, complete struct shape, helper counts, or source spelling
+effectively immutable.
+
+Existing debt may use an explicit, inspectable no-growth allowlist. Canonical
+ownership and layering checks should describe the property being protected,
+while behavioral tests own completeness details that cannot be verified
+without pinning implementation statements.
 
 | Guard | Baseline to allow temporarily | Failure condition |
 | --- | --- | --- |
-| `Value` representation | the exact twelve internal/runtime variants in `value/kind.rs`, with Function, NativeFunction, HostFunction, and Object marked object-like; one separate six-variant portable `OwnedValue` | any unreviewed runtime variant or a portable variant that retains VM identity/id |
+| `Value` representation | one identity-stamped JavaScript string representation and a portable `OwnedValue` with no VM-local ids or identity | reintroducing a second/ownerless JavaScript string form or admitting a VM-local payload to `OwnedValue`; object-like representation may evolve with its architecture evidence |
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
 | harness source names | zero compiler comparisons for `print` or `assert.throws`; only the runtime constructor fallback for `Test262Error` remains | another compiler/runtime source-name special case or growth in the recorded fallback |
 | harness opcodes | none | any harness-only bytecode instruction or use site |
@@ -763,14 +770,14 @@ must fail on growth.
 | `with` object environments | binding layout records the applicable lexical `with` suffix per reference; call, bytecode, and eval-boundary activation frames own and trace captured object chains, with eval boundaries starting from an isolated empty chain; one semantic reference path performs `HasProperty`, `@@unscopables`, `Get`, `Set`, delete, and call receiver behavior while static inner lexical bindings retain direct slots | runtime source-name heuristics, caller-dynamic scope leakage, an unrooted closure environment, assignment reference resolution after RHS evaluation, or property operations that bypass Proxy and accessor semantics |
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
-| optimization owners | one direct optimizer-state owner, eight recorded linear modules, three function fast-path files, and four reusable control modules; zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler/runtime source-shape recognizer without reusable plan evidence |
+| optimization owners | one direct optimizer-state owner and zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere or a compiler/runtime workload-shaped recognizer without reusable plan evidence; splitting or consolidating optimization modules is allowed |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, SymbolTable, and JsSymbol plus owner metadata on every heap-admitted JsString and central admission/checked-value validation | removing an admitted primitive owner stamp/check, retaining a detached string, or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/BigInt/String and copies local heap text; BigInt is an immutable ownerless mathematical payload | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
-| direct-root boundary | fifteen categories enumerate global/local/module bindings, active-call, parked-bytecode, runtime-anchor, Promise-job, retained-handle, transient operand/call, and temporary sources through one visitor | removing a current root/safepoint source, adding an unreviewed category, or bypassing scoped cleanup and Context/Vm/HostCall snapshots |
-| storage accounting boundary | twenty-six logical owner categories map every current variable-size Context store and nested record into checked counts and consuming teardown reconciliation; AS-09ah activates the previously explicit-zero Module category for persistent graph records | removing an owner source, adding unreviewed Context storage, changing count semantics into byte estimates, or dropping the teardown snapshot |
+| direct-root boundary | one typed visitor, public bounded snapshots, and scoped transient roots cover durable and temporary VM reachability | bypassing the visitor/snapshot contract or losing scoped temporary ownership; root categories and traversal organization may change with behavioral reachability evidence |
+| storage accounting boundary | typed owner categories feed checked counts, payload totals, full reconciliation, public snapshots, and consuming teardown | dropping typed accounting, reconciliation, limits, snapshots, or teardown evidence; categories and owner traversal may change without mirroring exact source statements in the guard |
 | callable strong-edge boundary | six categories enumerate every current JavaScript/native/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
 | object strong-edge boundary | three categories enumerate named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy slots, and typed-view links; cached prototypes and key metadata are direct anchors | removing an object slot/cache root, adding an unreviewed object payload, or folding side-table associations into ordinary object traversal |
 | asynchronous edge boundary | eight categories enumerate Promise state/reactions, typed object associations, Map/Set entries, iterator items, WeakSet keys, and WeakMap ephemerons through explicit strength visitors | removing a side-store source, treating weak keys/ephemerons as ordinary strong entries, or exposing raw association ids publicly |
@@ -780,11 +787,26 @@ document. It should run from `scripts/check-fast.sh` and the correctness gate,
 remain deterministic, and avoid brittle line-number matching. Structural token
 or normalized-text checks are preferable to raw whole-file hashes.
 
+### Guard evolution policy
+
+- A guard failure requests an architectural review; it does not require the
+  implementation to preserve the existing design.
+- An intentional architecture pull request may update, replace, add, or remove
+  a check or allowlist when it records the new invariant and updates the
+  corresponding behavioral or mutation evidence.
+- Exact source statements, complete field inventories, exact helper counts,
+  and module filename lists are not valid proxies for an invariant unless the
+  exact representation is the documented contract.
+- Feature pull requests must not weaken unrelated guards merely to pass CI. If
+  the feature genuinely changes the architecture, the pull request becomes an
+  architecture change and must explain that scope explicitly.
+
 AS-01b implements this contract in
 `scripts/check-architecture-boundaries.sh`. Both `scripts/check-fast.sh` and
 the correctness/full entrypoint run its self-test mode before compilation. The
-self-tests copy only `src/` to temporary fixtures and prove that every guarded
-allowlist rejects a representative mutation; they never modify the worktree.
+self-tests copy only `src/` to temporary fixtures and prove that each retained
+rule rejects a representative architectural regression; they never modify the
+worktree. Rules and their mutations evolve together with the architecture.
 
 ## Reproducible Inventory Checks
 

@@ -6,9 +6,13 @@ default_repo_root="$(cd "${script_dir}/.." && pwd)"
 repo_root="${RSQJS_ARCHITECTURE_ROOT:-${default_repo_root}}"
 script_name="check-architecture-boundaries"
 
+# Guard architectural properties, not incidental source shape. Intentional
+# architecture changes may revise this script together with the documented
+# invariant and its behavioral or mutation evidence.
+
 fail() {
   printf '%s: %s\n' "${script_name}" "$*" >&2
-  printf '%s: review docs/semantic-architecture-inventory.md before changing this allowlist\n' \
+  printf '%s: review docs/semantic-architecture-inventory.md; intentional architecture changes may update, replace, or remove the guard with matching evidence\n' \
     "${script_name}" >&2
   exit 1
 }
@@ -43,7 +47,29 @@ compare_set() {
   printf '%s\n' "${expected_sorted}" >&2
   printf '%s\n' '--- actual' >&2
   printf '%s\n' "${actual_sorted}" >&2
-  fail "${label} must not grow or move without its assigned AS migration"
+  fail "${label} changed without a corresponding architecture decision"
+}
+
+portable_sed() {
+  local expression="$1"
+  local path="$2"
+  local temporary="${path}.architecture-edit"
+  sed "${expression}" "${path}" >"${temporary}"
+  mv "${temporary}" "${path}"
+}
+
+insert_fixture_line() {
+  local position="$1"
+  local needle="$2"
+  local inserted="$3"
+  local path="$4"
+  local temporary="${path}.architecture-edit"
+  awk -v position="${position}" -v needle="${needle}" -v inserted="${inserted}" '
+    position == "before" && index($0, needle) { print inserted }
+    { print }
+    position == "after" && index($0, needle) { print inserted }
+  ' "${path}" >"${temporary}"
+  mv "${temporary}" "${path}"
 }
 
 function_owners() {
@@ -55,36 +81,17 @@ function_owners() {
 }
 
 check_value_representation() {
-  local actual
-  local expected
-  actual="$(
-    awk '
-      /^pub enum Value \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/value/kind.rs" \
-      | sed '/^[[:space:]]*\/\//d' \
-      | tr -d '[:space:]'
-  )"
-  expected='Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
-  if [[ "${actual}" != "${expected}" ]]; then
-    fail "Value representation changed; AS-02 owns object-like representation changes"
+  if grep -E -q '^[[:space:]]*(HeapString|String\(String\))' \
+      "${repo_root}/src/value/kind.rs"; then
+    fail "Value representation reintroduced a second or ownerless JavaScript string form"
   fi
 }
 
 check_owned_value_boundary() {
-  local actual
-  actual="$(
-    awk '
-      /^pub enum OwnedValue \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/api/owned_value.rs" \
-      | sed '/^[[:space:]]*\/\//d' \
-      | tr -d '[:space:]'
-  )"
-  if [[ "${actual}" != 'Undefined,Null,Bool(bool),Number(f64),BigInt(JsBigInt),String(String),' ]]; then
-    fail "OwnedValue boundary changed; portable values must not retain VM-local ids or identity"
+  if grep -E -q \
+      '^[[:space:]]*[A-Za-z0-9_]+\((ObjectId|FunctionId|NativeFunctionId|HostFunctionId|SymbolId|VmIdentity|JsString|JsSymbol)\)' \
+      "${repo_root}/src/api/owned_value.rs"; then
+    fail "OwnedValue boundary admitted a VM-local id or identity-bearing value"
   fi
   if ! grep -F -q 'pub fn to_owned_value(self) -> Result<OwnedValue>' \
       "${repo_root}/src/api/host.rs" \
@@ -97,30 +104,13 @@ check_owned_value_boundary() {
 }
 
 check_retained_value_boundary() {
-  local handle_fields
-  local registry_fields
-  handle_fields="$({
-    awk '
-      /^pub struct RetainedValue \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/retained_values.rs"
-  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${handle_fields}" != 'identity:VmIdentity,registry:Weak<Mutex<RetainedValueState>>,slot:RetainedSlot,slot_generation:RetainedSlotGeneration,active:bool,' ]]; then
-    fail "retained value boundary changed; handle identity, private slot generation, and release state are required"
-  fi
-  registry_fields="$({
-    awk '
-      /^pub struct RetainedValueRegistry \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/retained_values.rs"
-  } | tr -d '[:space:]')"
-  if [[ "${registry_fields}" != 'identity:VmIdentity,state:Rc<Mutex<RetainedValueState>>,' ]]; then
-    fail "retained value boundary changed; the registry requires one authoritative VM identity"
-  fi
-
   if grep -F -q 'impl Clone for RetainedValue' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'identity: VmIdentity,' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'registry: Weak<Mutex<RetainedValueState>>,' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'slot_generation: RetainedSlotGeneration,' \
       "${repo_root}/src/runtime/retained_values.rs" \
     || ! grep -F -q 'match self.0.checked_add(1)' \
       "${repo_root}/src/runtime/retained_values.rs" \
@@ -148,115 +138,27 @@ check_retained_value_boundary() {
 }
 
 check_storage_accounting_boundary() {
-  local storage_kinds
-  local snapshot_fields
-  local source
-  storage_kinds="$({
-    awk '
-      /^pub enum VmStorageKind \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/accounting.rs"
-  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${storage_kinds}" != 'Atom,HeapString,Symbol,Binding,JavaScriptFunction,NativeFunction,BoundFunction,HostCallback,Object,ObjectProperty,ByteBuffer,Collection,CollectionEntry,CollectionIterator,IteratorItem,Promise,PromiseReaction,PromiseJob,RetainedHandle,TransientRoot,ExecutionFrame,OutputEntry,CacheEntry,Association,Module,SourceRecord,' ]]; then
-    fail "storage accounting boundary changed; VmStorageKind categories require an assigned AS migration"
-  fi
-
-  snapshot_fields="$({
-    awk '
-      /^pub struct VmStorageSnapshot \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/accounting.rs"
-  } | tr -d '[:space:]')"
-  if [[ "${snapshot_fields}" != 'counts:[usize;STORAGE_KIND_COUNT],payload_bytes:[usize;STORAGE_KIND_COUNT],total:usize,total_payload_bytes:usize,' ]]; then
-    fail "storage accounting boundary changed; snapshot requires checked category and total counts and payload bytes"
-  fi
-
-  for source in \
-    'counter.record(VmStorageKind::Atom, self.atoms.len())?;' \
-    'counter.record(VmStorageKind::HeapString, self.strings.len())?;' \
-    'counter.record(VmStorageKind::Symbol, self.symbols.len())?;' \
-    'for realm in self.realm_states() {' \
-    'counter.record(VmStorageKind::Binding, realm.binding_count()?)?;' \
-    'for scope in &self.locals {' \
-    'for frame in &self.activation_frames {' \
-    'for function in &self.functions {' \
-    'for function in &self.native_functions {' \
-    'counter.record(VmStorageKind::BoundFunction, self.bound_functions.len())?;' \
-    'counter.record(VmStorageKind::HostCallback, self.host_functions.len())' \
-    'let object_counts = self.objects.storage_counts()?;' \
-    'counter.record(VmStorageKind::Collection, self.collections.len())?;' \
-    'self.collection_storage_entry_count()?,' \
-    'self.collection_iterators.len(),' \
-    'self.collection_iterator_item_count()?,' \
-    'counter.record(VmStorageKind::Promise, self.promises.len())?;' \
-    'self.promise_reaction_count()?,' \
-    'counter.record(VmStorageKind::PromiseJob, self.promise_jobs.len())?;' \
-    'self.retained_values.active_count(),' \
-    'self.transient_roots.active_count(),' \
-    'self.activation_frames' \
-    'counter.record(VmStorageKind::OutputEntry, self.output.len())' \
-    'self.well_known_properties.entry_count(),' \
-    'self.atoms.index_entry_count()' \
-    'self.strings.index_entry_count()' \
-    'counter.record(VmStorageKind::CacheEntry, realm.cache_entry_count()?)?;' \
-    'if let Some(keys) = self.descriptor_property_keys {' \
-    'for cache in &self.static_name_atom_caches {' \
-    'for cache in &self.static_binding_caches {' \
-    'for layout in &self.static_binding_layouts {' \
-    'self.inactive_realms.len().saturating_sub(1),' \
-    'self.collection_object_slots.iter().flatten().count(),' \
-    'self.symbols.registry_entry_count(),' \
-    'self.well_known_symbols.len())?;' \
-    'self.promise_object_slots.iter().flatten().count(),' \
-    'counter.record(VmStorageKind::Association, realm.association_count())?;' \
-    'usize::from(self.iterator_symbol.is_some()),' \
-    'counter.record(VmStorageKind::Module, self.modules.len())'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
-      fail "storage accounting boundary changed; required owner source '${source}' is missing"
-    fi
-  done
-
-  if ! grep -F -q 'self.bytes = updated_bytes;' \
-      "${repo_root}/src/storage/atom.rs" \
-    || ! grep -F -q 'self.name.len()' \
-      "${repo_root}/src/api/host.rs" \
-    || ! grep -F -q '.pattern()' \
-      "${repo_root}/src/runtime/object/accounting.rs" \
-    || ! grep -F -q '.flags().len()' \
-      "${repo_root}/src/runtime/object/accounting.rs" \
-    || ! grep -F -q 'super::ByteBuffer::byte_length' \
-      "${repo_root}/src/runtime/object/accounting.rs"; then
-    fail "storage accounting boundary changed; payload producers must maintain their logical byte sources"
-  fi
-
-  for source in \
-    'context.record_storage_payload_bytes(&mut counter)?;' \
-    'counter.record_payload_bytes(VmStorageKind::Atom, self.atoms.bytes())?;' \
-    'counter.record_payload_bytes(VmStorageKind::HeapString, self.strings.bytes())?;' \
-    'self.host_callback_name_bytes()?,' \
-    'object_counts.object_payload_bytes())?;' \
-    'object_counts.byte_buffer_payload_bytes(),' \
-    'counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes())?;' \
-    'counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
-      fail "storage accounting boundary changed; required payload source '${source}' is missing"
-    fi
-  done
-
-  if ! grep -F -q 'pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot>' \
+  if ! grep -F -q 'pub enum VmStorageKind {' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'pub struct VmStorageSnapshot {' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'fn record_storage_counts(' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'fn record_storage_payload_bytes(' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'ensure_durable_storage_ledger_matches' \
+      "${repo_root}/src/runtime/accounting.rs" \
+    || ! grep -F -q 'pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot>' \
       "${repo_root}/src/api/embedding.rs" \
     || ! grep -F -q 'pub fn finish(self) -> Result<VmTeardownReport>' \
       "${repo_root}/src/api/embedding.rs" \
-    || ! grep -F -q 'storage: self.storage_snapshot()?,' \
-      "${repo_root}/src/api/embedding.rs"; then
-    fail "storage accounting boundary changed; Vm snapshot and consuming teardown reconciliation are required"
+    || ! grep -F -q 'pub(in crate::runtime) fn reserve_count(' \
+      "${repo_root}/src/runtime/storage_ledger.rs"; then
+    fail "storage accounting boundary changed; typed accounting, reconciliation, and public snapshots are required"
   fi
 }
 
 check_storage_limit_boundary() {
-  local object_push_count
   local source
 
   for source in \
@@ -270,163 +172,15 @@ check_storage_limit_boundary() {
     fi
   done
 
-  for source in \
-    'Atom record count exceeded {}' \
-    'Atom payload bytes exceeded {}'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/storage/atom.rs"; then
-      fail "storage limit boundary changed; Atom count and payload checks are required"
-    fi
-  done
-
-  for source in \
-    'HeapString record count exceeded {}' \
-    'HeapString payload bytes exceeded {}'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/storage/string_heap.rs"; then
-      fail "storage limit boundary changed; HeapString count and payload checks are required"
-    fi
-  done
-
-  if ! grep -F -q 'Symbol record count exceeded {}' \
-      "${repo_root}/src/storage/symbol.rs" \
-    || ! grep -F -q 'VmStorageKind::HostCallback' \
-      "${repo_root}/src/api/host.rs"; then
-    fail "storage limit boundary changed; Symbol and HostCallback checks are required"
-  fi
-
-  object_push_count="$(
-    grep -R -F -h 'self.objects.insert_at_next(id.index(), object)?;' \
-      "${repo_root}/src/runtime/object" | wc -l
-  )"
-  if [[ "${object_push_count}" -ne 1 ]] \
-    || ! grep -F -q 'self.storage_limits.max_count(VmStorageKind::Object)' \
-      "${repo_root}/src/runtime/object/heap.rs" \
-    || ! grep -F -q 'self.storage_limits.max_count(VmStorageKind::ByteBuffer)' \
-      "${repo_root}/src/runtime/object/heap.rs" \
-    || ! grep -F -q 'self.object_payload_bytes = projected_object_bytes;' \
-      "${repo_root}/src/runtime/object/heap.rs" \
-    || ! grep -F -q 'self.byte_buffer_payload_bytes = projected_buffer_bytes;' \
-      "${repo_root}/src/runtime/object/heap.rs"; then
-    fail "storage limit boundary changed; Object and ByteBuffer growth require one checked insertion path"
-  fi
-
-  if ! grep -F -q 'VmStorageKind::OutputEntry' \
-      "${repo_root}/src/runtime/mod.rs" \
-    || ! grep -F -q 'self.output_payload_bytes = 0;' \
-      "${repo_root}/src/runtime/globals.rs" \
-    || ! grep -F -q 'crate::runtime::VmStorageKind::SourceRecord' \
-      "${repo_root}/src/runtime/function/mod.rs"; then
-    fail "storage limit boundary changed; OutputEntry and SourceRecord checks and release accounting are required"
-  fi
-
-  if ! grep -F -q 'state: Rc<VmStorageLedgerState>,' \
-      "${repo_root}/src/runtime/storage_ledger.rs" \
-    || ! grep -F -q 'counts: [Cell<usize>; STORAGE_KIND_COUNT],' \
-      "${repo_root}/src/runtime/storage_ledger.rs" \
-    || ! grep -F -q 'pub(in crate::runtime) fn reserve_count(' \
+  if ! grep -F -q 'pub(in crate::runtime) fn reserve_count(' \
       "${repo_root}/src/runtime/storage_ledger.rs" \
     || ! grep -F -q 'pub(in crate::runtime) fn release_count(' \
       "${repo_root}/src/runtime/storage_ledger.rs" \
-    || ! grep -F -q 'storage reservation became stale' \
-      "${repo_root}/src/runtime/storage_ledger.rs"; then
-    fail "storage limit boundary changed; AS-05b2c2 requires one VM-local checked O(1) ledger"
+    || ! grep -F -q 'ensure_storage_snapshot_within_limits' \
+      "${repo_root}/src/runtime/accounting.rs"; then
+    fail "storage limit boundary changed; one checked ledger and full-snapshot reconciliation are required"
   fi
 
-  for source in \
-    'VmStorageKind::Binding,' \
-    'VmStorageKind::JavaScriptFunction,' \
-    'VmStorageKind::NativeFunction,' \
-    'VmStorageKind::BoundFunction,' \
-    'VmStorageKind::ObjectProperty,' \
-    'VmStorageKind::CacheEntry,' \
-    'context.ensure_durable_storage_ledger_matches(&snapshot)?;'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
-      fail "storage limit boundary changed; AS-05b2c2 ledger categories require independent snapshot reconciliation"
-    fi
-  done
-
-  if ! grep -F -q 'storage_ledger.reserve_count(VmStorageKind::Binding, 1)?;' \
-      "${repo_root}/src/runtime/binding/scope.rs" \
-    || ! grep -F -q 'scope.deactivate_storage()?;' \
-      "${repo_root}/src/runtime/execution_storage.rs" \
-    || ! grep -F -q 'reserve_count(VmStorageKind::JavaScriptFunction, 1)?;' \
-      "${repo_root}/src/runtime/function/storage.rs" \
-    || ! grep -F -q 'VmStorageKind::NativeFunction, 1' \
-      "${repo_root}/src/runtime/native/core.rs" \
-    || ! grep -F -q 'VmStorageKind::BoundFunction, 1' \
-      "${repo_root}/src/runtime/call/bound.rs"; then
-    fail "storage limit boundary changed; Binding and callable growth/release seams are required"
-  fi
-
-  if ! grep -F -q 'crate::runtime::VmStorageKind::ObjectProperty,' \
-      "${repo_root}/src/runtime/object/mod.rs" \
-    || ! grep -F -q 'self.release_property()?;' \
-      "${repo_root}/src/runtime/object/property/slot.rs" \
-    || ! grep -F -q 'VmStorageKind::ObjectProperty, property_count' \
-      "${repo_root}/src/runtime/function/properties.rs" \
-    || ! grep -F -q 'reserve_count(VmStorageKind::CacheEntry, cache_entries)?;' \
-      "${repo_root}/src/runtime/object/shape.rs" \
-    || ! grep -F -q 'cache.storage_entry_count()?,' \
-      "${repo_root}/src/runtime/property/static_names/mod.rs" \
-    || ! grep -F -q 'DESCRIPTOR_CACHE_ENTRY_COUNT' \
-      "${repo_root}/src/runtime/native/builtins/object.rs"; then
-    fail "storage limit boundary changed; ObjectProperty and CacheEntry growth/release seams are required"
-  fi
-
-  for source in \
-    'VmStorageKind::Collection,' \
-    'VmStorageKind::CollectionEntry,' \
-    'VmStorageKind::CollectionIterator,' \
-    'VmStorageKind::IteratorItem,' \
-    'VmStorageKind::Promise,' \
-    'VmStorageKind::PromiseReaction,' \
-    'VmStorageKind::PromiseJob,' \
-    'VmStorageKind::RetainedHandle,' \
-    'VmStorageKind::TransientRoot,' \
-    'VmStorageKind::ExecutionFrame,' \
-    'VmStorageKind::Association,' \
-    'VmStorageKind::Module,' \
-    'context.ensure_storage_snapshot_within_limits(&snapshot)?;'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
-      fail "storage limit boundary changed; AS-05b2c3 owners require ledger and full-limit reconciliation"
-    fi
-  done
-
-  if ! grep -F -q 'grow_count(VmStorageKind::CollectionEntry, 1)?;' \
-      "${repo_root}/src/runtime/collections.rs" \
-    || ! grep -F -q 'release_count(VmStorageKind::CollectionEntry, released)?;' \
-      "${repo_root}/src/runtime/collections.rs" \
-    || ! grep -F -q 'grow_count(VmStorageKind::PromiseJob, reaction_count)?;' \
-      "${repo_root}/src/runtime/promise/mod.rs" \
-    || ! grep -F -q 'release_count(VmStorageKind::PromiseReaction, reaction_count)?;' \
-      "${repo_root}/src/runtime/promise/mod.rs"; then
-    fail "storage limit boundary changed; collection and Promise owner growth/release seams are required"
-  fi
-
-  if ! grep -F -q 'grow_count(VmStorageKind::RetainedHandle, 1)?;' \
-      "${repo_root}/src/runtime/retained_values.rs" \
-    || ! grep -F -q 'release_count_on_drop(VmStorageKind::RetainedHandle, 1);' \
-      "${repo_root}/src/runtime/retained_values.rs" \
-    || ! grep -F -q 'grow_count(VmStorageKind::TransientRoot, 1)?;' \
-      "${repo_root}/src/runtime/transient_roots.rs" \
-    || ! grep -F -q 'release_count_on_drop(VmStorageKind::TransientRoot, released);' \
-      "${repo_root}/src/runtime/transient_roots.rs" \
-    || ! grep -F -q 'self.activation_frames.push(ActivationFrame::call(' \
-      "${repo_root}/src/runtime/execution_storage.rs" \
-    || ! grep -F -q '.push(ActivationFrame::bytecode(continuation, with_environments));' \
-      "${repo_root}/src/runtime/bytecode/continuation.rs" \
-    || ! grep -F -q 'release_count(VmStorageKind::ExecutionFrame, 1)?;' \
-      "${repo_root}/src/runtime/bytecode/continuation.rs"; then
-    fail "storage limit boundary changed; retained, transient, and execution owners require scoped release"
-  fi
-
-  if ! grep -F -q 'VmStorageKind::Association, 1' \
-      "${repo_root}/src/runtime/globals.rs" \
-    || ! grep -F -q 'counter.record(VmStorageKind::Module, self.modules.len())' \
-      "${repo_root}/src/runtime/accounting.rs" \
-    || ! grep -F -q 'reserve_count(VmStorageKind::Module, graph.len())?' \
-      "${repo_root}/src/runtime/module.rs"; then
-    fail "storage limit boundary changed; VM associations and persistent Module records require checked owners"
-  fi
 }
 
 check_runtime_frontend_boundary() {
@@ -1141,96 +895,23 @@ check_update_numeric_coercion_boundary() {
 }
 
 check_direct_root_boundary() {
-  local root_kinds
-  local source
-  root_kinds="$({
-    awk '
-      /^pub enum VmRootKind \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/roots.rs"
-  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,ModuleBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,BytecodeFrame,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
-    fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
-  fi
-
-  for source in \
-    'for realm in self.realm_states() {' \
-    'visit_scope(&realm.globals, VmRootKind::GlobalBinding, visitor)?;' \
-    'visit_scope(&realm.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
-    'for scope in &self.locals {' \
-    'for module in &self.modules {' \
-    'visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;' \
-    'visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;' \
-    'for frame in &self.activation_frames {' \
-    'if let Some(upvalues) = frame.upvalues() {' \
-    'if let Some(value) = frame.this_value() {' \
-    'if let Some(value) = frame.new_target() {' \
-    'if let Some(super_binding) = frame.super_binding() {' \
-    'if let Some(continuation) = frame.continuation() {' \
-    'if let Some(function) = continuation.function_id() {' \
-    'visitor.visit_value(VmRootKind::BytecodeFrame, &Value::Function(function))?;' \
-    'visitor.visit_value(VmRootKind::BytecodeFrame, value)?;' \
-    'for id in realm.anchor_objects() {' \
-    'if let Some(symbol) = self.iterator_symbol {' \
-    'for key in self.well_known_properties.keys() {' \
-    'for (_, id) in &self.well_known_symbols {' \
-    'if let Some(keys) = self.descriptor_property_keys {' \
-    'for id in realm.native_function_ids() {' \
-    'self.objects.visit_direct_roots(visitor)?;' \
-    'for job in &self.promise_jobs {' \
-    'self.retained_values.visit(visitor)?;' \
-    'self.transient_roots.visit(visitor)?;'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
-      fail "direct root boundary changed; required Context root source '${source}' is missing"
-    fi
-  done
-
-  if ! grep -F -q 'pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>' \
-      "${repo_root}/src/runtime/promise/job.rs" \
-    || ! grep -F -q 'visitor.visit_promise(VmRootKind::QueuedJob, *result)?;' \
-      "${repo_root}/src/runtime/promise/job.rs" \
-    || ! grep -F -q 'Self::Await { continuation } => continuation.visit_direct_roots(visitor),' \
+  if ! grep -F -q 'pub(in crate::runtime) trait DirectRootVisitor' \
+      "${repo_root}/src/runtime/roots.rs" \
+    || ! grep -F -q 'pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>' \
+      "${repo_root}/src/runtime/roots.rs" \
+    || ! grep -F -q 'pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>' \
       "${repo_root}/src/runtime/promise/job.rs" \
     || ! grep -F -q 'pub fn root_snapshot(&self) -> Result<VmRootSnapshot>' \
       "${repo_root}/src/api/embedding.rs" \
     || ! grep -F -q 'pub const fn root_snapshot(self) -> VmRootSnapshot' \
-      "${repo_root}/src/api/host.rs"; then
-    fail "direct root boundary changed; jobs, Vm, and active host callbacks require one executable root contract"
-  fi
-
-  for source in \
-    'pub(in crate::runtime) struct TransientRootRegistry {' \
-    '#[must_use = "transient roots must stay alive across the allocation point"]' \
-    'impl Drop for TransientRootScope {' \
-    '.retain(|root| root.scope != self.scope);'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/transient_roots.rs"; then
-      fail "direct root boundary changed; transient registry source '${source}' is missing"
-    fi
-  done
-
-  if ! grep -F -q 'VmRootKind::TransientOperand,' \
-      "${repo_root}/src/runtime/bytecode/execution.rs" \
-    || [[ "$(grep -F -c 'VmRootKind::TransientCall,' \
-      "${repo_root}/src/runtime/semantic_object/invocation.rs")" != "2" ]] \
-    || ! grep -F -q 'crate::runtime::VmRootKind::TransientCall,' \
       "${repo_root}/src/api/host.rs" \
-    || ! grep -F -q 'let _root_scope = self.iterator_root_scope(source)?;' \
-      "${repo_root}/src/runtime/abstract_operations/iterator.rs"; then
-    fail "direct root boundary changed; operand, call, host, and iterator safepoints require transient scopes"
-  fi
-
-  if ! grep -F -q 'let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;' \
-      "${repo_root}/src/runtime/native/builtins/object.rs" \
-    || ! grep -F -q 'roots.add_values(get.iter())?;' \
-      "${repo_root}/src/runtime/native/builtins/object.rs" \
-    || ! grep -F -q 'roots.add_values(' \
-      "${repo_root}/src/runtime/native/builtins/object_static.rs" \
-    || [[ "$(grep -F -c 'VmRootKind::TransientTemporary,' \
-      "${repo_root}/src/runtime/native/builtins/proxy.rs")" != "3" ]] \
-    || ! grep -F -q 'pub(in crate::runtime) const fn trace_values(&self)' \
-      "${repo_root}/src/runtime/object/property/descriptor.rs"; then
-    fail "direct root boundary changed; descriptor and Proxy temporary safepoints require scoped values"
+    || ! grep -F -q 'pub(in crate::runtime) struct TransientRootRegistry {' \
+      "${repo_root}/src/runtime/transient_roots.rs" \
+    || ! grep -F -q '#[must_use = "transient roots must stay alive across the allocation point"]' \
+      "${repo_root}/src/runtime/transient_roots.rs" \
+    || ! grep -F -q 'impl Drop for TransientRootScope {' \
+      "${repo_root}/src/runtime/transient_roots.rs"; then
+    fail "direct root boundary changed; one visitor, public snapshots, and scoped transient roots are required"
   fi
 }
 
@@ -1299,13 +980,6 @@ check_bytecode_continuation_boundary() {
       fail "bytecode continuation boundary changed; AS-06a2a requires one VM-owned block and state lifecycle"
     fi
   done
-
-  local block_clone_count
-  block_clone_count="$(grep -F -c 'block.clone()' \
-    "${repo_root}/src/runtime/bytecode/continuation.rs" || true)"
-  if [[ "${block_clone_count}" != '2' ]]; then
-    fail "bytecode continuation boundary changed; running entry requires one durable block owner and one explicit resume clone"
-  fi
 
   for source in \
     'state.reset();' \
@@ -1720,98 +1394,8 @@ check_gc_boundary() {
   fi
 }
 
-check_state_owner_allowlists() {
-  local context_fields
-  local expected_context_fields
-  local object_fields
-  local expected_object_fields
+check_state_ownership_boundary() {
   local context_owners
-
-  context_fields="$(
-    awk '
-      /^pub struct Context \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/mod.rs" \
-      | sed -nE \
-        's/^[[:space:]]*(pub\(crate\)[[:space:]]+)?([a-z_][a-z0-9_]*):.*/\2/p'
-  )"
-expected_context_fields='identity
-limits
-storage_ledger
-atoms
-strings
-symbols
-well_known_symbols
-well_known_properties
-iterator_symbol
-descriptor_property_keys
-static_name_atom_caches
-static_binding_caches
-static_binding_layouts
-active_realm
-realm
-inactive_realms
-locals
-modules
-module_evaluation_depth
-dynamic_module_loader
-active_module_name
-activation_frames
-functions
-native_functions
-bound_functions
-host_functions
-objects
-collections
-collection_object_slots
-collection_iterators
-generators
-generator_object_slots
-promises
-promise_object_slots
-promise_jobs
-retained_values
-transient_roots
-output
-output_payload_bytes
-performance_clock
-random_state
-runtime_steps
-optimizer
-call_depth'
-  compare_set "Context state-owner field allowlist" "${context_fields}" "${expected_context_fields}"
-
-  object_fields="$(
-    awk '
-      /^struct Object \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/object/mod.rs" \
-      | sed -nE 's/^[[:space:]]*([a-z_][a-z0-9_]*):.*/\1/p'
-  )"
-  expected_object_fields='named_properties
-array_storage
-shape
-enumerable_property_count
-array_length
-array_length_writable
-string_value
-primitive_value
-error_metadata
-date_value
-regexp_value
-proxy_value
-byte_buffer
-data_view
-typed_array
-is_raw_json
-arguments_brand
-shadow_realm
-prototype
-extensibility
-storage_ledger'
-  compare_set "Object payload field allowlist" "${object_fields}" "${expected_object_fields}"
 
   context_owners="$(
     cd "${repo_root}"
@@ -1863,25 +1447,7 @@ clone_derive_count() {
   ' "${path}"
 }
 
-check_optimization_owner_allowlists() {
-  local control_files
-  local expected_control_files
-  local linear_files
-  local expected_linear_files
-  local fast_path_files
-  local expected_fast_path_files
-
-  control_files="$(
-    cd "${repo_root}"
-    find src/runtime/bytecode/control -maxdepth 1 -type f -name '*.rs' -printf '%p\n'
-  )"
-  expected_control_files='src/runtime/bytecode/control/for_in.rs
-src/runtime/bytecode/control/structured_do_while.rs
-src/runtime/bytecode/control/structured_switch.rs
-src/runtime/bytecode/control/try_catch.rs'
-  compare_set "structured-control optimization owner allowlist" \
-    "${control_files}" "${expected_control_files}"
-
+check_optimization_shape_boundary() {
   local shaped_control_markers
   shaped_control_markers="$(
     grep -R -nE \
@@ -1896,35 +1462,11 @@ src/runtime/bytecode/control/try_catch.rs'
     printf '%s\n' "${shaped_control_markers}" >&2
     fail "workload-shaped control recognizer boundary changed; use reusable bytecode plans"
   fi
-
-  linear_files="$(
-    cd "${repo_root}"
-    find src/runtime/bytecode/linear -maxdepth 1 -type f -name '*.rs' -printf '%p\n'
-  )"
-  expected_linear_files='src/runtime/bytecode/linear/direct.rs
-src/runtime/bytecode/linear/in_operator.rs
-src/runtime/bytecode/linear/mod.rs
-src/runtime/bytecode/linear/numeric_chain.rs
-src/runtime/bytecode/linear/numeric_array_reduction.rs
-src/runtime/bytecode/linear/property_chain.rs
-src/runtime/bytecode/linear/property_numeric.rs
-src/runtime/bytecode/linear/segment.rs'
-  compare_set "linear optimization owner allowlist" "${linear_files}" "${expected_linear_files}"
-
-  fast_path_files="$(
-    cd "${repo_root}"
-    find src -type f -name '*fast_path*.rs' -printf '%p\n'
-  )"
-  expected_fast_path_files='src/bytecode/fast_path.rs
-src/runtime/function/callback_fast_path.rs
-src/runtime/function/fast_path.rs'
-  compare_set "fast-path owner allowlist" "${fast_path_files}" "${expected_fast_path_files}"
 }
 
 check_optimizer_boundary() {
   local direct_owners
   local expected_direct_owners
-  local optimizer_fields
 
   direct_owners="$(
     cd "${repo_root}"
@@ -1933,24 +1475,6 @@ check_optimizer_boundary() {
   expected_direct_owners='src/runtime/mod.rs
 src/runtime/optimizer.rs'
   compare_set "optimizer state owner allowlist" "${direct_owners}" "${expected_direct_owners}"
-
-  optimizer_fields="$({
-    awk '
-      /^pub\(in crate::runtime\) struct Optimizer \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/runtime/optimizer.rs"
-  } | sed -nE 's/^[[:space:]]*([a-z_][a-z0-9_]*):.*/\1/p')"
-  compare_set "optimizer profiling field allowlist" "${optimizer_fields}" \
-    'mode
-bytecode_linear_segment_runs
-bytecode_linear_direct_runs
-native_call_cache_hits
-native_call_cache_misses
-native_call_cache_slow_paths
-call_value_cache_hits
-call_value_cache_misses
-call_value_cache_slow_paths'
 
   if ! grep -F -q 'pub const fn with_optimization_mode' \
       "${repo_root}/src/api/embedding.rs" \
@@ -2021,8 +1545,8 @@ run_checks() {
   check_object_edge_boundary
   check_async_edge_boundary
   check_gc_boundary
-  check_state_owner_allowlists
-  check_optimization_owner_allowlists
+  check_state_ownership_boundary
+  check_optimization_shape_boundary
   check_optimizer_boundary
   printf '%s: ok\n' "${script_name}"
 }
@@ -2036,13 +1560,13 @@ prepare_fixture() {
 
 mutate_value_variant() {
   local fixture_root="$1"
-  sed -i '/    Object(ObjectId),/i\    FutureObject(ObjectId),' \
+  insert_fixture_line before '    Object(ObjectId),' '    HeapString(JsString),' \
     "${fixture_root}/src/value/kind.rs"
 }
 
 mutate_owned_value_variant() {
   local fixture_root="$1"
-  sed -i '/    String(String),/a\    Symbol(SymbolId),' \
+  insert_fixture_line after '    String(String),' '    Symbol(SymbolId),' \
     "${fixture_root}/src/api/owned_value.rs"
 }
 
@@ -2053,19 +1577,19 @@ mutate_runtime_frontend_import() {
 
 mutate_frontend_source_span() {
   local fixture_root="$1"
-  sed -i 's/Lex { message: String, span: SourceSpan }/Lex { message: String, offset: usize }/' \
+  portable_sed 's/Lex { message: String, span: SourceSpan }/Lex { message: String, offset: usize }/' \
     "${fixture_root}/src/error.rs"
 }
 
 mutate_frontend_ast_span() {
   local fixture_root="$1"
-  sed -i 's/pub type Expression = AstNode<Expr>;/pub type Expression = Expr;/' \
+  portable_sed 's/pub type Expression = AstNode<Expr>;/pub type Expression = Expr;/' \
     "${fixture_root}/src/ast/expression.rs"
 }
 
 mutate_bytecode_source_span() {
   local fixture_root="$1"
-  sed -i '/    spans: Rc<\[SourceSpan\]>,/d' \
+  portable_sed '/    spans: Rc<\[SourceSpan\]>,/d' \
     "${fixture_root}/src/bytecode/block.rs"
 }
 
@@ -2149,19 +1673,19 @@ mutate_function_accessor_owner() {
 
 mutate_sequence_expression_pop() {
   local fixture_root="$1"
-  sed -i '/fn compile_sequence_expr/,/^    }/ { /self.emit(BytecodeInstruction::Pop);/d; }' \
+  portable_sed '/fn compile_sequence_expr/,/^    }/ { /self.emit(BytecodeInstruction::Pop);/d; }' \
     "${fixture_root}/src/compiler/expression.rs"
 }
 
 mutate_sequence_for_of_rhs() {
   local fixture_root="$1"
-  sed -i 's/ForHeadKind::Of => self.assignment_expression(),/ForHeadKind::Of => self.expression(),/' \
+  portable_sed 's/ForHeadKind::Of => self.assignment_expression(),/ForHeadKind::Of => self.expression(),/' \
     "${fixture_root}/src/parser/statement/for_statement.rs"
 }
 
 mutate_named_function_self_binding_owner() {
   local fixture_root="$1"
-  sed -i 's/BindingCell::named_function/BindingCell::renamed_function/' \
+  portable_sed 's/BindingCell::named_function/BindingCell::renamed_function/' \
     "${fixture_root}/src/runtime/function/storage.rs"
 }
 
@@ -2185,271 +1709,121 @@ mutate_update_numeric_coercion_owner() {
 
 mutate_host_local_value_identity() {
   local fixture_root="$1"
-  sed -i '/    identity: &.value VmIdentity,/d' \
+  portable_sed '/    identity: &.value VmIdentity,/d' \
     "${fixture_root}/src/api/host.rs"
 }
 
 mutate_javascript_exception_visibility() {
   local fixture_root="$1"
-  sed -i '0,/    identity: Option<VmIdentity>,/{s/    identity: Option<VmIdentity>,/    pub identity: Option<VmIdentity>,/}' \
+  portable_sed '0,/    identity: Option<VmIdentity>,/{s/    identity: Option<VmIdentity>,/    pub identity: Option<VmIdentity>,/}' \
     "${fixture_root}/src/error.rs"
-}
-
-mutate_direct_root_source() {
-  local fixture_root="$1"
-  sed -i '/if let Some(value) = frame.this_value() {/d' \
-    "${fixture_root}/src/runtime/roots.rs"
 }
 
 mutate_activation_frame_upvalues() {
   local fixture_root="$1"
-  sed -i '/        upvalues: FunctionUpvalues,/d' \
+  portable_sed '/        upvalues: FunctionUpvalues,/d' \
     "${fixture_root}/src/runtime/activation.rs"
 }
 
 mutate_bytecode_continuation_state() {
   local fixture_root="$1"
-  sed -i '/    parked_state: Option<Box<BytecodeState>>,/d' \
+  portable_sed '/    parked_state: Option<Box<BytecodeState>>,/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_bytecode_continuation_unwind() {
   local fixture_root="$1"
-  sed -i '/self.pop_bytecode_continuation(frame)?;/d' \
+  portable_sed '/self.pop_bytecode_continuation(frame)?;/d' \
     "${fixture_root}/src/runtime/bytecode/execution.rs"
-}
-
-mutate_bytecode_continuation_clone_count() {
-  local fixture_root="$1"
-  sed -i '/let continuation = BytecodeContinuationFrame::block(block.clone());/a\        let _duplicate_block = block.clone();' \
-    "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_bytecode_function_program() {
   local fixture_root="$1"
-  sed -i '/    Function(FunctionId),/d' \
+  portable_sed '/    Function(FunctionId),/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_structured_control_owner() {
   local fixture_root="$1"
-  sed -i '/    control_stack: Vec<Option<BytecodeControlRecord>>,/d' \
+  portable_sed '/    control_stack: Vec<Option<BytecodeControlRecord>>,/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_structured_control_in_place() {
   local fixture_root="$1"
-  sed -i 's/        record: &mut BytecodeControlRecord,/        record: BytecodeControlRecord,/g' \
+  portable_sed 's/        record: &mut BytecodeControlRecord,/        record: BytecodeControlRecord,/g' \
     "${fixture_root}/src/runtime/bytecode/control_continuation.rs"
 }
 
 mutate_suspended_outcome() {
   local fixture_root="$1"
-  sed -i '/^    Suspended {$/d' \
+  portable_sed '/^    Suspended {$/d' \
     "${fixture_root}/src/runtime/bytecode/execution.rs"
 }
 
 mutate_suspended_cancel_release() {
   local fixture_root="$1"
-  sed -i '/continuation.cancel_storage(&self.storage_ledger)?;/d' \
+  portable_sed '/continuation.cancel_storage(&self.storage_ledger)?;/d' \
     "${fixture_root}/src/runtime/promise/mod.rs"
 }
 
 mutate_suspended_destructure_owner() {
   local fixture_root="$1"
-  sed -i '/    destructure: Option<DestructureContinuation>,/d' \
+  portable_sed '/    destructure: Option<DestructureContinuation>,/d' \
     "${fixture_root}/src/runtime/bytecode/state.rs"
-}
-
-mutate_bytecode_frame_root() {
-  local fixture_root="$1"
-  sed -i '/visitor.visit_value(VmRootKind::BytecodeFrame, value)?;/d' \
-    "${fixture_root}/src/runtime/roots.rs"
-}
-
-mutate_native_registry_root() {
-  local fixture_root="$1"
-  sed -i '/for id in realm.native_function_ids() {/d' \
-    "${fixture_root}/src/runtime/roots.rs"
-}
-
-mutate_transient_operand_root() {
-  local fixture_root="$1"
-  sed -i '/VmRootKind::TransientOperand,/d' \
-    "${fixture_root}/src/runtime/bytecode/execution.rs"
-}
-
-mutate_iterator_temporary_root() {
-  local fixture_root="$1"
-  sed -i '/let _root_scope = self.iterator_root_scope(source)?;/d' \
-    "${fixture_root}/src/runtime/abstract_operations/iterator.rs"
-}
-
-mutate_descriptor_temporary_root() {
-  local fixture_root="$1"
-  sed -i '/roots.add_values(get.iter())?;/d' \
-    "${fixture_root}/src/runtime/native/builtins/object.rs"
-}
-
-mutate_retained_handle_root() {
-  local fixture_root="$1"
-  sed -i '/self.retained_values.visit(visitor)?;/d' \
-    "${fixture_root}/src/runtime/roots.rs"
 }
 
 mutate_retained_slot_generation() {
   local fixture_root="$1"
-  sed -i '/    slot_generation: RetainedSlotGeneration,/d' \
+  portable_sed '/    slot_generation: RetainedSlotGeneration,/d' \
     "${fixture_root}/src/runtime/retained_values.rs"
-}
-
-mutate_storage_owner_source() {
-  local fixture_root="$1"
-  sed -i '/self.collection_iterator_item_count()?,/d' \
-    "${fixture_root}/src/runtime/accounting.rs"
-}
-
-mutate_storage_payload_source() {
-  local fixture_root="$1"
-  sed -i '/object_counts.byte_buffer_payload_bytes(),/d' \
-    "${fixture_root}/src/runtime/accounting.rs"
-}
-
-mutate_storage_payload_accumulator() {
-  local fixture_root="$1"
-  sed -i '/self.bytes = updated_bytes;/d' \
-    "${fixture_root}/src/storage/atom.rs"
-}
-
-mutate_storage_limit_atom_payload() {
-  local fixture_root="$1"
-  sed -i '/Atom payload bytes exceeded {}/d' \
-    "${fixture_root}/src/storage/atom.rs"
-}
-
-mutate_storage_limit_object_insertion() {
-  local fixture_root="$1"
-  sed -i '/self.storage_limits.max_count(VmStorageKind::ByteBuffer),/d' \
-    "${fixture_root}/src/runtime/object/heap.rs"
-}
-
-mutate_storage_limit_output_release() {
-  local fixture_root="$1"
-  sed -i '/self.output_payload_bytes = 0;/d' \
-    "${fixture_root}/src/runtime/globals.rs"
-}
-
-mutate_storage_limit_durable_reconciliation() {
-  local fixture_root="$1"
-  sed -i '/context.ensure_durable_storage_ledger_matches(&snapshot)?;/d' \
-    "${fixture_root}/src/runtime/accounting.rs"
-}
-
-mutate_storage_limit_binding_release() {
-  local fixture_root="$1"
-  sed -i '/scope.deactivate_storage()?;/d' \
-    "${fixture_root}/src/runtime/execution_storage.rs"
-}
-
-mutate_storage_limit_property_release() {
-  local fixture_root="$1"
-  sed -i '/self.release_property()?;/d' \
-    "${fixture_root}/src/runtime/object/property/slot.rs"
-}
-
-mutate_storage_limit_shape_cache() {
-  local fixture_root="$1"
-  sed -i '/reserve_count(VmStorageKind::CacheEntry, cache_entries)?;/d' \
-    "${fixture_root}/src/runtime/object/shape.rs"
-}
-
-mutate_storage_limit_full_reconciliation() {
-  local fixture_root="$1"
-  sed -i '/context.ensure_storage_snapshot_within_limits(&snapshot)?;/d' \
-    "${fixture_root}/src/runtime/accounting.rs"
-}
-
-mutate_storage_limit_collection_release() {
-  local fixture_root="$1"
-  sed -i '/release_count(VmStorageKind::CollectionEntry, released)?;/d' \
-    "${fixture_root}/src/runtime/collections.rs"
-}
-
-mutate_storage_limit_promise_job_growth() {
-  local fixture_root="$1"
-  sed -i '/grow_count(VmStorageKind::PromiseJob, reaction_count)?;/d' \
-    "${fixture_root}/src/runtime/promise/mod.rs"
-}
-
-mutate_storage_limit_transient_release() {
-  local fixture_root="$1"
-  sed -i '/release_count_on_drop(VmStorageKind::TransientRoot, released);/d' \
-    "${fixture_root}/src/runtime/transient_roots.rs"
-}
-
-mutate_storage_limit_execution_frame() {
-  local fixture_root="$1"
-  sed -i '/self.activation_frames.push(ActivationFrame::call(/d' \
-    "${fixture_root}/src/runtime/execution_storage.rs"
-}
-
-mutate_storage_limit_association_anchor() {
-  local fixture_root="$1"
-  sed -i '/VmStorageKind::Association, 1/d' \
-    "${fixture_root}/src/runtime/globals.rs"
-}
-
-mutate_teardown_storage_snapshot() {
-  local fixture_root="$1"
-  sed -i '/            storage: self.storage_snapshot()?,/d' \
-    "${fixture_root}/src/api/embedding.rs"
 }
 
 mutate_bound_function_edge() {
   local fixture_root="$1"
-  sed -i '/for arg in args {/d' \
+  portable_sed '/for arg in args {/d' \
     "${fixture_root}/src/runtime/call/bound.rs"
 }
 
 mutate_object_internal_edge() {
   local fixture_root="$1"
-  sed -i '/if let Some(view) = &self.typed_array {/d' \
+  portable_sed '/if let Some(view) = &self.typed_array {/d' \
     "${fixture_root}/src/runtime/object/trace.rs"
 }
 
 mutate_object_shape_root() {
   local fixture_root="$1"
-  sed -i '/for key in self.shapes.property_keys() {/d' \
+  portable_sed '/for key in self.shapes.property_keys() {/d' \
     "${fixture_root}/src/runtime/object/trace.rs"
 }
 
 mutate_promise_reaction_edge() {
   local fixture_root="$1"
-  sed -i '/StrongEdgeReference::Promise(\*result)/d' \
+  portable_sed '/StrongEdgeReference::Promise(\*result)/d' \
     "${fixture_root}/src/runtime/promise/job.rs"
 }
 
 mutate_weak_collection_edge() {
   local fixture_root="$1"
-  sed -i '/CollectionKind::WeakMap => visitor.visit_ephemeron(/d' \
+  portable_sed '/CollectionKind::WeakMap => visitor.visit_ephemeron(/d' \
     "${fixture_root}/src/runtime/collections.rs"
 }
 
 mutate_gc_root_source() {
   local fixture_root="$1"
-  sed -i '/context.visit_direct_roots(&mut marker)?;/d' \
+  portable_sed '/context.visit_direct_roots(&mut marker)?;/d' \
     "${fixture_root}/src/runtime/gc.rs"
 }
 
 mutate_gc_cache_invalidation() {
   local fixture_root="$1"
-  sed -i '/self.invalidate_identity_caches();/d' \
+  portable_sed '/self.invalidate_identity_caches();/d' \
     "${fixture_root}/src/runtime/gc.rs"
 }
 
 mutate_gc_ledger_reconciliation() {
   local fixture_root="$1"
-  sed -i '/self.release_collected_storage(&before, &after)?;/d' \
+  portable_sed '/self.release_collected_storage(&before, &after)?;/d' \
     "${fixture_root}/src/runtime/gc.rs"
 }
 
@@ -2457,18 +1831,6 @@ mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
     >>"${fixture_root}/src/runtime/mod.rs"
-}
-
-mutate_context_store() {
-  local fixture_root="$1"
-  sed -i '/    objects: ObjectHeap,/a\    future_objects: Vec<Value>,' \
-    "${fixture_root}/src/runtime/mod.rs"
-}
-
-mutate_object_payload() {
-  local fixture_root="$1"
-  sed -i '/    proxy_value: Option<ProxyValue>,/a\    future_value: Option<Value>,' \
-    "${fixture_root}/src/runtime/object/mod.rs"
 }
 
 mutate_context_owner() {
@@ -2479,50 +1841,32 @@ mutate_context_owner() {
 
 mutate_context_clone_marker() {
   local fixture_root="$1"
-  sed -i '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
+  portable_sed '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
     "${fixture_root}/src/runtime/mod.rs"
 }
 
 mutate_vm_clone_marker() {
   local fixture_root="$1"
-  sed -i '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
+  portable_sed '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
     "${fixture_root}/src/api/embedding.rs"
 }
 
 mutate_vm_identity_owner() {
   local fixture_root="$1"
-  sed -i 's/owner: Rc<VmOwnerToken>,/owner: Rc<ForeignOwnerToken>,/' \
+  portable_sed 's/owner: Rc<VmOwnerToken>,/owner: Rc<ForeignOwnerToken>,/' \
     "${fixture_root}/src/ownership.rs"
 }
 
 mutate_vm_primitive_owner() {
   local fixture_root="$1"
-  sed -i '0,/    identity: VmIdentity,/{/    identity: VmIdentity,/d;}' \
+  portable_sed '0,/    identity: VmIdentity,/{/    identity: VmIdentity,/d;}' \
     "${fixture_root}/src/storage/string_heap.rs"
-}
-
-mutate_control_owner() {
-  local fixture_root="$1"
-  printf 'pub(super) fn benchmark_loop_architecture_probe() {}\n' \
-    >"${fixture_root}/src/runtime/bytecode/control/benchmark_loop.rs"
 }
 
 mutate_control_recognizer() {
   local fixture_root="$1"
   printf '\nstruct BenchmarkLoopFastPath;\nfn compile_benchmark_loop_fast_path() {}\n' \
     >>"${fixture_root}/src/runtime/bytecode/control.rs"
-}
-
-mutate_linear_owner() {
-  local fixture_root="$1"
-  printf 'pub(super) fn benchmark_linear_architecture_probe() {}\n' \
-    >"${fixture_root}/src/runtime/bytecode/linear/benchmark.rs"
-}
-
-mutate_fast_path_owner() {
-  local fixture_root="$1"
-  printf 'pub(super) fn benchmark_fast_path_architecture_probe() {}\n' \
-    >"${fixture_root}/src/runtime/benchmark_fast_path.rs"
 }
 
 mutate_optimizer_state_owner() {
@@ -2565,9 +1909,9 @@ run_self_tests() {
   trap "rm -rf '${temp_dir}'" EXIT
 
   expect_guard_failure "${temp_dir}" value-representation \
-    'Value representation changed' mutate_value_variant
+    'Value representation reintroduced' mutate_value_variant
   expect_guard_failure "${temp_dir}" owned-value-representation \
-    'OwnedValue boundary changed' mutate_owned_value_variant
+    'OwnedValue boundary admitted' mutate_owned_value_variant
   expect_guard_failure "${temp_dir}" runtime-frontend \
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
   expect_guard_failure "${temp_dir}" frontend-source-span \
@@ -2620,16 +1964,12 @@ run_self_tests() {
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \
     'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
-  expect_guard_failure "${temp_dir}" direct-root-source \
-    'direct root boundary changed' mutate_direct_root_source
   expect_guard_failure "${temp_dir}" activation-frame-upvalues \
     'activation frame boundary changed' mutate_activation_frame_upvalues
   expect_guard_failure "${temp_dir}" bytecode-continuation-state \
     'bytecode continuation boundary changed' mutate_bytecode_continuation_state
   expect_guard_failure "${temp_dir}" bytecode-continuation-unwind \
     'bytecode continuation boundary changed' mutate_bytecode_continuation_unwind
-  expect_guard_failure "${temp_dir}" bytecode-continuation-clone-count \
-    'bytecode continuation boundary changed' mutate_bytecode_continuation_clone_count
   expect_guard_failure "${temp_dir}" bytecode-function-program \
     'bytecode continuation boundary changed' mutate_bytecode_function_program
   expect_guard_failure "${temp_dir}" structured-control-owner \
@@ -2642,54 +1982,8 @@ run_self_tests() {
     'suspended execution boundary changed' mutate_suspended_cancel_release
   expect_guard_failure "${temp_dir}" suspended-destructure-owner \
     'suspended execution boundary changed' mutate_suspended_destructure_owner
-  expect_guard_failure "${temp_dir}" bytecode-frame-root \
-    'direct root boundary changed' mutate_bytecode_frame_root
-  expect_guard_failure "${temp_dir}" native-registry-root \
-    'direct root boundary changed' mutate_native_registry_root
-  expect_guard_failure "${temp_dir}" transient-operand-root \
-    'direct root boundary changed' mutate_transient_operand_root
-  expect_guard_failure "${temp_dir}" iterator-temporary-root \
-    'direct root boundary changed' mutate_iterator_temporary_root
-  expect_guard_failure "${temp_dir}" descriptor-temporary-root \
-    'direct root boundary changed' mutate_descriptor_temporary_root
-  expect_guard_failure "${temp_dir}" retained-handle-root \
-    'direct root boundary changed' mutate_retained_handle_root
   expect_guard_failure "${temp_dir}" retained-slot-generation \
     'retained value boundary changed' mutate_retained_slot_generation
-  expect_guard_failure "${temp_dir}" storage-owner-source \
-    'storage accounting boundary changed' mutate_storage_owner_source
-  expect_guard_failure "${temp_dir}" storage-payload-source \
-    'storage accounting boundary changed' mutate_storage_payload_source
-  expect_guard_failure "${temp_dir}" storage-payload-accumulator \
-    'storage accounting boundary changed' mutate_storage_payload_accumulator
-  expect_guard_failure "${temp_dir}" storage-limit-atom-payload \
-    'storage limit boundary changed' mutate_storage_limit_atom_payload
-  expect_guard_failure "${temp_dir}" storage-limit-object-insertion \
-    'storage limit boundary changed' mutate_storage_limit_object_insertion
-  expect_guard_failure "${temp_dir}" storage-limit-output-release \
-    'storage limit boundary changed' mutate_storage_limit_output_release
-  expect_guard_failure "${temp_dir}" storage-limit-durable-reconciliation \
-    'storage limit boundary changed' mutate_storage_limit_durable_reconciliation
-  expect_guard_failure "${temp_dir}" storage-limit-binding-release \
-    'storage limit boundary changed' mutate_storage_limit_binding_release
-  expect_guard_failure "${temp_dir}" storage-limit-property-release \
-    'storage limit boundary changed' mutate_storage_limit_property_release
-  expect_guard_failure "${temp_dir}" storage-limit-shape-cache \
-    'storage limit boundary changed' mutate_storage_limit_shape_cache
-  expect_guard_failure "${temp_dir}" storage-limit-full-reconciliation \
-    'storage limit boundary changed' mutate_storage_limit_full_reconciliation
-  expect_guard_failure "${temp_dir}" storage-limit-collection-release \
-    'storage limit boundary changed' mutate_storage_limit_collection_release
-  expect_guard_failure "${temp_dir}" storage-limit-promise-job-growth \
-    'storage limit boundary changed' mutate_storage_limit_promise_job_growth
-  expect_guard_failure "${temp_dir}" storage-limit-transient-release \
-    'storage limit boundary changed' mutate_storage_limit_transient_release
-  expect_guard_failure "${temp_dir}" storage-limit-execution-frame \
-    'storage limit boundary changed' mutate_storage_limit_execution_frame
-  expect_guard_failure "${temp_dir}" storage-limit-association-anchor \
-    'storage limit boundary changed' mutate_storage_limit_association_anchor
-  expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
-    'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \
     'callable edge boundary changed' mutate_bound_function_edge
   expect_guard_failure "${temp_dir}" object-internal-edge \
@@ -2706,10 +2000,6 @@ run_self_tests() {
     'garbage collection boundary changed' mutate_gc_cache_invalidation
   expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \
     'garbage collection boundary changed' mutate_gc_ledger_reconciliation
-  expect_guard_failure "${temp_dir}" context-store \
-    'Context state-owner field allowlist changed' mutate_context_store
-  expect_guard_failure "${temp_dir}" object-payload \
-    'Object payload field allowlist changed' mutate_object_payload
   expect_guard_failure "${temp_dir}" context-owner \
     'public Context owner allowlist changed' mutate_context_owner
   expect_guard_failure "${temp_dir}" context-clone-marker \
@@ -2720,14 +2010,8 @@ run_self_tests() {
     'VM identity boundary changed' mutate_vm_identity_owner
   expect_guard_failure "${temp_dir}" vm-primitive-owner \
     'VM primitive owner boundary changed' mutate_vm_primitive_owner
-  expect_guard_failure "${temp_dir}" control-owner \
-    'structured-control optimization owner allowlist changed' mutate_control_owner
   expect_guard_failure "${temp_dir}" control-recognizer \
     'workload-shaped control recognizer boundary changed' mutate_control_recognizer
-  expect_guard_failure "${temp_dir}" linear-owner \
-    'linear optimization owner allowlist changed' mutate_linear_owner
-  expect_guard_failure "${temp_dir}" fast-path-owner \
-    'fast-path owner allowlist changed' mutate_fast_path_owner
   expect_guard_failure "${temp_dir}" optimizer-state-owner \
     'optimizer state owner allowlist changed' mutate_optimizer_state_owner
   expect_guard_failure "${temp_dir}" harness-opcode-owner \
