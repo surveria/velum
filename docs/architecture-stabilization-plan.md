@@ -2739,8 +2739,10 @@ AS-09s profile evidence in draft PR #480:
   variants and from 4/48 to 45/48 conforming files. Two residual sources depend
   on the unavailable `$262.createRealm` harness, while one depends on carrying
   function strictness into the shared call-time `this` normalization owner;
-- complete exact-tree CI and canonical publication remain required before
-  AS-09s can close.
+- exact-tree run `29173872552` certifies semantic tree `2375f1d3`: the complete
+  baseline adds 113 variants / 58 conforming files with no removals, producing
+  a 66,928-variant / 34,326-file pass candidate. Canonical publication remains
+  required before AS-09s can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
