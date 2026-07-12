@@ -2,7 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        object::PropertyLookup,
+        object::{PROTOTYPE_PROPERTY, PropertyLookup},
         property::{get_property, get_property_with_receiver, has_property},
     },
     value::{ObjectId, Value},
@@ -175,10 +175,36 @@ impl Context {
         match read {
             SemanticPropertyRead::Resolved(value) => Ok(value),
             SemanticPropertyRead::ObjectTail(id) => {
-                let value = get_property_with_receiver(&self.objects, id, receiver, property)?;
-                self.runtime_property_value(value)
+                self.finish_ordinary_property_read(id, receiver, property)
             }
         }
+    }
+
+    fn finish_ordinary_property_read(
+        &mut self,
+        id: ObjectId,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if self.objects.has_own(id, property)? {
+            let value = get_property_with_receiver(&self.objects, id, receiver, property)?;
+            return self.runtime_property_value(value);
+        }
+        if property.name() == PROTOTYPE_PROPERTY {
+            return self.objects.prototype_value(id);
+        }
+        let prototype = self.objects.prototype_value(id)?;
+        if matches!(prototype, Value::Null) {
+            return Ok(Value::Undefined);
+        }
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&prototype, receiver, property)?
+        else {
+            return Err(crate::error::Error::type_error(
+                "property prototype is not an object",
+            ));
+        };
+        self.finish_semantic_property_read(read, receiver, property)
     }
 
     /// Runs the shared object-like `[[HasProperty]]` dispatch and returns an
@@ -224,13 +250,35 @@ impl Context {
     /// Finishes a shared object-like presence check after an optimizer
     /// declined the ordinary-object tail.
     pub(in crate::runtime) fn finish_semantic_property_presence(
-        &self,
+        &mut self,
         presence: SemanticPropertyPresence,
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
         match presence {
             SemanticPropertyPresence::Resolved(value) => Ok(value),
-            SemanticPropertyPresence::ObjectTail(id) => self.objects.has(id, property),
+            SemanticPropertyPresence::ObjectTail(id) => {
+                self.finish_ordinary_property_presence(id, property)
+            }
         }
+    }
+
+    fn finish_ordinary_property_presence(
+        &mut self,
+        id: ObjectId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.objects.has_own(id, property)? {
+            return Ok(true);
+        }
+        let prototype = self.objects.prototype_value(id)?;
+        if matches!(prototype, Value::Null) {
+            return Ok(false);
+        }
+        let Some(presence) = self.semantic_property_presence(&prototype, property)? else {
+            return Err(crate::error::Error::type_error(
+                "property prototype is not an object",
+            ));
+        };
+        self.finish_semantic_property_presence(presence, property)
     }
 }

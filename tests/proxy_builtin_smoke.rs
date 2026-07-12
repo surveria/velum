@@ -82,6 +82,36 @@ fn exposes_proxy_traps_through_public_api() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_proxy_dispatch_across_fallbacks_and_prototype_chains() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+            var outer;
+            var inner = new Proxy({}, {
+                get: function (target, key, receiver) {
+                    return key === "receiver" && receiver === outer ? 7 : undefined;
+                }
+            });
+            outer = new Proxy(inner, {});
+
+            var child;
+            var prototype = new Proxy({}, {
+                get: function (target, key, receiver) {
+                    return key === "inherited" && receiver === child ? 5 : undefined;
+                },
+                has: function (target, key) { return key === "virtual"; }
+            });
+            child = Object.create(prototype);
+
+            outer.receiver + child.inherited + ("virtual" in child ? 30 : 0)
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 // The active Test262 fixtures are executed by the runner with a raw
 // `context.eval(source)` (no Test262 harness) and must evaluate to 42 while
 // producing no output. Mirror that here so the fixtures stay runner-compatible.
