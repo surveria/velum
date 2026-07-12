@@ -261,8 +261,12 @@ impl Context {
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
             NativeCallTarget::Number => self.eval_direct_number_constructor(args),
             NativeCallTarget::Promise => self.eval_direct_promise_constructor(args),
-            NativeCallTarget::PromiseResolve => self.eval_direct_promise_resolve(args),
-            NativeCallTarget::PromiseReject => self.eval_direct_promise_reject(args),
+            NativeCallTarget::PromiseResolve => {
+                self.eval_promise_resolve(runtime_call_args(args), this_value)
+            }
+            NativeCallTarget::PromiseReject => {
+                self.eval_promise_reject(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),

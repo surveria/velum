@@ -29,7 +29,6 @@ mod property_dispatch;
 mod storage;
 mod suspended;
 mod upvalues;
-
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
@@ -641,6 +640,11 @@ impl Context {
         let kind = self.native_function(id)?.kind();
         if matches!(kind, NativeFunctionKind::TypedArray(_)) {
             return self.typed_array_intrinsic_constructor_value();
+        }
+        if let NativeFunctionKind::ErrorConstructor(name) = kind
+            && name != crate::value::ErrorName::Base
+        {
+            return self.error_constructor_value(crate::value::ErrorName::Base);
         }
         if matches!(
             kind,

@@ -1,10 +1,10 @@
 use crate::{
     bytecode::BytecodeBinding,
     error::{Error, JavaScriptErrorMetadata, Result},
-    runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable, TypedArrayElementKind},
+    runtime::{Context, abstract_operations::IteratorStep, roots::VmRootKind},
     syntax::DeclKind,
     value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
@@ -23,6 +23,8 @@ use super::{
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
 const ERROR_MESSAGE_PROPERTY: &str = "message";
 const ERROR_NAME_PROPERTY: &str = "name";
+const ERROR_ERRORS_PROPERTY: &str = "errors";
+const ERROR_CAUSE_PROPERTY: &str = "cause";
 const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const PRINT_NAME: &str = "print";
 
@@ -341,7 +343,16 @@ impl Context {
 
     fn error_prototype_parent(&mut self, name: ErrorName) -> Result<Option<ObjectId>> {
         if matches!(name, ErrorName::Base) {
-            return Ok(None);
+            self.object_constructor_value()?;
+            let constructor_key = self.object_constructor_property_key()?;
+            return self
+                .objects
+                .object_prototype_id(
+                    constructor_key,
+                    self.limits.max_objects,
+                    self.limits.max_object_properties,
+                )
+                .map(Some);
         }
         self.error_constructor_prototype(ErrorName::Base).map(Some)
     }
@@ -533,11 +544,63 @@ impl Context {
             None | Some(Value::Undefined) => (String::new(), false),
             Some(value) => (self.to_string(value)?, true),
         };
-        self.create_error_object_with_prototype(
+        let error = self.create_error_object_with_prototype(
             JavaScriptErrorMetadata::new(name, message),
             define_message,
             prototype,
-        )
+        )?;
+        if matches!(name, ErrorName::AggregateError) {
+            let errors = args.first().cloned().unwrap_or(Value::Undefined);
+            let errors = self.aggregate_error_list(&errors)?;
+            self.define_aggregate_errors(&error, errors)?;
+        }
+        if let Some(options) = Self::error_constructor_options_argument(name, args)
+            && self.semantic_object_ref(options)?.is_some()
+            && self.has_property_value_with_lookup(
+                options,
+                self.property_lookup(ERROR_CAUSE_PROPERTY),
+            )?
+        {
+            let cause = self.get_named(options, ERROR_CAUSE_PROPERTY)?;
+            let Value::Object(error) = error else {
+                return Err(Error::runtime("Error allocation did not produce an object"));
+            };
+            self.define_non_enumerable_object_property(error, ERROR_CAUSE_PROPERTY, cause)?;
+        }
+        Ok(error)
+    }
+
+    pub(in crate::runtime) fn create_aggregate_error(&mut self, errors: Value) -> Result<Value> {
+        let error = self.create_error_object(
+            JavaScriptErrorMetadata::new(ErrorName::AggregateError, ""),
+            false,
+        )?;
+        self.define_aggregate_errors(&error, errors)?;
+        Ok(error)
+    }
+
+    fn aggregate_error_list(&mut self, errors: &Value) -> Result<Value> {
+        let mut iterator = self.get_iterator(errors)?;
+        let _iterator_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, iterator.root_values())?;
+        let mut values = Vec::new();
+        loop {
+            self.step()?;
+            match self.iterator_step(&mut iterator)? {
+                IteratorStep::Value(value) => values.push(value),
+                IteratorStep::Done => return self.create_array_from_elements(values),
+                IteratorStep::Abrupt(completion) => return completion.into_result(),
+            }
+        }
+    }
+
+    fn define_aggregate_errors(&mut self, error: &Value, errors: Value) -> Result<()> {
+        let Value::Object(error) = error else {
+            return Err(Error::runtime(
+                "AggregateError allocation did not produce an object",
+            ));
+        };
+        self.define_non_enumerable_object_property(*error, ERROR_ERRORS_PROPERTY, errors)
     }
 
     pub(in crate::runtime) fn create_error_object(
@@ -620,6 +683,13 @@ impl Context {
             return args.get(1);
         }
         args.first()
+    }
+
+    fn error_constructor_options_argument(name: ErrorName, args: &[Value]) -> Option<&Value> {
+        if matches!(name, ErrorName::AggregateError) {
+            return args.get(2);
+        }
+        args.get(1)
     }
 
     fn error_to_string_property(

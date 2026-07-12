@@ -1455,7 +1455,7 @@ check_callable_edge_boundary() {
     'NativeFunctionKind::BoundFunction(id)' \
     'NativeFunctionKind::CollectionIteratorNext(id)' \
     'NativeFunctionKind::PromiseCapabilityExecutor {' \
-    'NativeFunctionKind::PromiseAllResolveElement { state, .. }' \
+    'NativeFunctionKind::PromiseCombinatorElement { state, .. }' \
     'NativeFunctionKind::PromiseResolver { promise, .. }' \
     'NativeFunctionKind::ProxyRevoke(id)'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/native/function/mod.rs"; then

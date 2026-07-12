@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09t adds a VM-owned async-operation continuation for `Array.fromAsync`, reuses Promise and iterator owners, and corrects lexical/upvalue lifetime gaps exposed by nested async helpers. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09u unifies the standard Promise settlement combinators over shared capability, iterator, element-state, and AggregateError owners. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2776,8 +2776,41 @@ AS-09t profile evidence in draft PR #481:
   variants and from 0/95 to 79/95 conforming files. All 30 residual variants
   fail before the algorithm because BigInt syntax is unavailable either in the
   source or the included `temporalHelpers.js` harness;
+- exact-tree run `29178889390` certifies tree
+  `9561aa09a4009eaee10c888137f7e2209bba8240`: the complete baseline adds 340
+  variants / 182 conforming files with no removals. PR #481 merged as
+  `9031c93`, and report commit `1d18f16` published canonical report
+  `20260712T035912Z`; AS-09t is complete.
+
+AS-09u profile evidence in draft PR #483:
+
+- one `PromiseCombinatorKind` owns the static `all`, `allSettled`, `any`, and
+  `race` metadata and registry slots. One element-function representation
+  owns the `all`, `allSettled`, and `any` per-input callbacks while retaining
+  their shared state through the native-function strong-edge visitor;
+- all combinators use the shared generic `NewPromiseCapability`, observable
+  constructor `resolve`, iterator stepping/closing, and ordinary `then` call
+  paths. `allSettled` shares one idempotence cell between each fulfill/reject
+  pair, `any` preserves rejection order in `AggregateError.errors`, and
+  `race` leaves empty input pending;
+- `Promise.resolve` and `Promise.reject` are constructor-generic even through
+  the guarded direct call target. `Promise.resolve` validates its receiver
+  before reading a Promise's observable `constructor` and only preserves
+  identity when that constructor matches;
+- `AggregateError` now consumes its errors iterable, installs the standard
+  non-enumerable `errors` and optional `cause` properties, and inherits its
+  constructor and prototype chains from `Error` and `Object` respectively;
+- six direct engine cases cover ordered settlement records, empty inputs,
+  generic resolve failure, abrupt iterator closing, AggregateError descriptors
+  and inheritance, and observable Promise constructor identity;
+- across the exact `allSettled/`, `any/`, `race/`, `resolve/`, `reject/`, and
+  `AggregateError/` profiles, the baseline advances from 102/724 to 712/724
+  variants and from 51/362 to 356/362 conforming files. Six residual variants
+  require unavailable BigInt syntax, four require the separately owned
+  `Promise.prototype.finally`, and two require the unavailable cross-realm
+  `$262` harness;
 - exact-tree correctness and canonical publication remain required before
-  AS-09t can close.
+  AS-09u can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
