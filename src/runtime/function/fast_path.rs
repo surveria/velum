@@ -10,6 +10,7 @@ use crate::{
         CompiledBindingFrame, Context,
         binding::scope::BindingCell,
         control::{Completion, reference_error_undefined},
+        native::UNDEFINED_NAME,
         numeric::number_exponentiate,
     },
     syntax::{DeclKind, StaticString},
@@ -711,6 +712,10 @@ fn source_for_binding(
     param_frames: &[Option<CompiledBindingFrame>],
     binding: &BytecodeBinding,
 ) -> Result<Option<FastValueSource>> {
+    if binding.operand() == BindingOperand::Unresolved && binding.name().as_str() == UNDEFINED_NAME
+    {
+        return Ok(Some(FastValueSource::Literal(Value::Undefined)));
+    }
     if let Some(index) = param_index_for_operand(param_frames, binding.operand())? {
         return Ok(Some(FastValueSource::Param(index)));
     }
