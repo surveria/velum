@@ -277,6 +277,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     BoundFunction(BoundFunctionId),
     DataView(DataViewFunctionKind),
     Date(DateFunctionKind),
+    DisposableStack(super::disposable_stack_kind::DisposableStackFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     Iterator(IteratorFunctionKind),
     IteratorSelf,
@@ -560,6 +561,9 @@ impl NativeFunctionKind {
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::Date(DateFunctionKind::Constructor)
+                | Self::DisposableStack(
+                    super::disposable_stack_kind::DisposableStackFunctionKind::Constructor,
+                )
         )
     }
 
@@ -568,6 +572,9 @@ impl NativeFunctionKind {
             return kind.length();
         }
         if let Self::DataView(kind) = self {
+            return kind.length();
+        }
+        if let Self::DisposableStack(kind) = self {
             return kind.length();
         }
         if let Self::ArrayBufferPrototype(kind) = self {
@@ -668,6 +675,9 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::DataView(kind) = self {
+            return kind.name();
+        }
+        if let Self::DisposableStack(kind) = self {
             return kind.name();
         }
         if let Self::ArrayBufferPrototype(kind) = self {

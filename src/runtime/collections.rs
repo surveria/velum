@@ -11,55 +11,16 @@ use crate::{
 
 use super::collection_array_iterator::LiveArrayIteratorState;
 
-const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
-
-/// VM-local index of one Map or Set backing store.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) struct CollectionId(usize);
-
-impl CollectionId {
-    pub(in crate::runtime) const fn index(self) -> usize {
-        self.0
-    }
-}
-
-/// Which collection flavor an object slot belongs to.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) enum CollectionKind {
-    Map,
-    Set,
-    WeakMap,
-    WeakSet,
-}
-
-/// Which entry component a live Map or Set iterator yields.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) enum CollectionIterationTarget {
-    Keys,
-    Values,
-    Entries,
-}
-
-/// Insertion-ordered entry storage shared by Map (key/value pairs) and Set
-/// (the key doubles as the value). Keys compare with `SameValueZero`.
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct CollectionData {
-    kind: CollectionKind,
-    entries: Vec<Option<(Value, Value)>>,
-}
+pub(in crate::runtime) use super::collection_storage::{CollectionData, CollectionKind};
 
 impl CollectionData {
-    const fn new(kind: CollectionKind) -> Self {
-        Self {
-            kind,
-            entries: Vec::new(),
-        }
-    }
-
     pub(in crate::runtime) fn visit_edges<V>(&self, visitor: &mut V) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
     {
+        if let Some(stack) = &self.disposable_stack {
+            return stack.visit_edges(visitor);
+        }
         for (key, value) in self.entries.iter().flatten() {
             match self.kind {
                 CollectionKind::Map | CollectionKind::Set => {
@@ -81,6 +42,7 @@ impl CollectionData {
                     VmAsyncEdgeKind::WeakCollectionKey,
                     WeakEdgeReference::Value(key),
                 )?,
+                CollectionKind::DisposableStack => {}
             }
         }
         Ok(())
@@ -90,7 +52,7 @@ impl CollectionData {
         &mut self,
         mut key_is_reachable: impl FnMut(&Value) -> bool,
     ) -> usize {
-        if matches!(self.kind, CollectionKind::Map | CollectionKind::Set) {
+        if !matches!(self.kind, CollectionKind::WeakMap | CollectionKind::WeakSet) {
             return 0;
         }
         let before = self.entries.iter().flatten().count();
@@ -103,11 +65,31 @@ impl CollectionData {
     }
 }
 
+const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
+
+/// VM-local index of one Map or Set backing store.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) struct CollectionId(usize);
+
+impl CollectionId {
+    pub(in crate::runtime) const fn index(self) -> usize {
+        self.0
+    }
+}
+
+/// Which entry component a live Map or Set iterator yields.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum CollectionIterationTarget {
+    Keys,
+    Values,
+    Entries,
+}
+
 impl Context {
     pub(in crate::runtime) fn collection_storage_entry_count(&self) -> Result<usize> {
         self.collections.iter().try_fold(0_usize, |count, data| {
             count
-                .checked_add(data.entries.iter().flatten().count())
+                .checked_add(data.logical_entry_count())
                 .ok_or_else(|| Error::limit("collection entry count overflowed"))
         })
     }
@@ -200,13 +182,16 @@ impl Context {
         }
     }
 
-    fn collection(&self, id: CollectionId) -> Result<&CollectionData> {
+    pub(in crate::runtime) fn collection(&self, id: CollectionId) -> Result<&CollectionData> {
         self.collections
             .get(id.index())
             .ok_or_else(|| Error::runtime("collection storage disappeared"))
     }
 
-    fn collection_mut(&mut self, id: CollectionId) -> Result<&mut CollectionData> {
+    pub(in crate::runtime) fn collection_mut(
+        &mut self,
+        id: CollectionId,
+    ) -> Result<&mut CollectionData> {
         self.collections
             .get_mut(id.index())
             .ok_or_else(|| Error::runtime("collection storage disappeared"))

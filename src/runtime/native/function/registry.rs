@@ -266,7 +266,9 @@ const ITERATOR_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(270);
 const ITERATOR_ZIP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(271);
 const ITERATOR_ZIP_KEYED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(272);
 const ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 273;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 282;
+const DISPOSABLE_STACK_SLOT_BASE: usize = 282;
+const ERROR_SUPPRESSED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(289);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 290;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -392,7 +394,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = data_view_slot(kind) {
         return Some(slot);
     }
-    if let Some(slot) = array_buffer_slot(kind) {
+    if let Some(slot) = buffer_or_disposable_slot(kind) {
         return Some(slot);
     }
 
@@ -466,6 +468,19 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::Iterator(iterator_kind) => iterator_slot(iterator_kind),
         _ => collection_slot(kind),
     }
+}
+
+const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    if let Some(slot) = array_buffer_slot(kind) {
+        return Some(slot);
+    }
+    let NativeFunctionKind::DisposableStack(method) = kind else {
+        return None;
+    };
+    let Some(index) = DISPOSABLE_STACK_SLOT_BASE.checked_add(method.index()) else {
+        return None;
+    };
+    Some(NativeFunctionSlot::new(index))
 }
 
 const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
@@ -790,6 +805,7 @@ const fn error_constructor_slot(name: ErrorName) -> NativeFunctionSlot {
         ErrorName::RangeError => ERROR_RANGE_SLOT,
         ErrorName::ReferenceError => ERROR_REFERENCE_SLOT,
         ErrorName::SyntaxError => ERROR_SYNTAX_SLOT,
+        ErrorName::SuppressedError => ERROR_SUPPRESSED_SLOT,
         ErrorName::Test262Error => ERROR_TEST262_SLOT,
         ErrorName::TypeError => ERROR_TYPE_SLOT,
         ErrorName::UriError => ERROR_URI_SLOT,

@@ -10,14 +10,14 @@ use crate::{
 };
 
 use super::{
-    ARRAY_BUFFER_NAME, ARRAY_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME, DataViewFunctionKind,
-    DateFunctionKind, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
-    GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
-    GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME,
-    NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME,
-    PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME,
-    SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    ARRAY_BUFFER_NAME, ARRAY_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME, DISPOSABLE_STACK_NAME,
+    DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind, EVAL_NAME, FUNCTION_NAME,
+    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
+    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
+    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME,
+    MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME,
+    REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -71,6 +71,7 @@ impl Context {
             ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             JSON_NAME => self.json_object_value().map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
+            DISPOSABLE_STACK_NAME => self.disposable_stack_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
@@ -138,6 +139,7 @@ impl Context {
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
+            DISPOSABLE_STACK_NAME => self.disposable_stack_constructor_value().map(Some),
             ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
@@ -208,6 +210,9 @@ impl Context {
             NativeFunctionKind::String => self.construct_string_object(args),
             NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
                 self.construct_date_object(args)
+            }
+            NativeFunctionKind::DisposableStack(DisposableStackFunctionKind::Constructor) => {
+                self.construct_disposable_stack()
             }
             NativeFunctionKind::TypedArray(element_kind) => {
                 self.construct_typed_array(element_kind, args)
@@ -295,7 +300,7 @@ impl Context {
         Ok(function)
     }
 
-    pub(in crate::runtime::native) fn insert_global_builtin(
+    pub(in crate::runtime) fn insert_global_builtin(
         &mut self,
         name: &str,
         value: Value,
@@ -428,11 +433,11 @@ impl Context {
         Ok(Value::NativeFunction(id))
     }
 
-    pub(in crate::runtime::native) fn next_native_function_id(&self) -> NativeFunctionId {
+    pub(in crate::runtime) fn next_native_function_id(&self) -> NativeFunctionId {
         NativeFunctionId::new(self.native_functions.next_index())
     }
 
-    pub(in crate::runtime::native) fn push_native_function_with_id(
+    pub(in crate::runtime) fn push_native_function_with_id(
         &mut self,
         id: NativeFunctionId,
         kind: NativeFunctionKind,
@@ -497,7 +502,7 @@ impl Context {
         Ok(())
     }
 
-    pub(in crate::runtime::native) fn native_function_name_value(
+    pub(in crate::runtime) fn native_function_name_value(
         &mut self,
         kind: NativeFunctionKind,
     ) -> Result<Value> {
@@ -554,6 +559,11 @@ impl Context {
             let errors = self.aggregate_error_list(&errors)?;
             self.define_aggregate_errors(&error, errors)?;
         }
+        if matches!(name, ErrorName::SuppressedError) {
+            let error_value = args.first().cloned().unwrap_or(Value::Undefined);
+            let suppressed = args.get(1).cloned().unwrap_or(Value::Undefined);
+            self.define_suppressed_error_fields(&error, error_value, suppressed)?;
+        }
         if let Some(options) = Self::error_constructor_options_argument(name, args)
             && self.semantic_object_ref(options)?.is_some()
             && self.has_property_value_with_lookup(
@@ -601,6 +611,34 @@ impl Context {
             ));
         };
         self.define_non_enumerable_object_property(*error, ERROR_ERRORS_PROPERTY, errors)
+    }
+
+    pub(in crate::runtime) fn create_suppressed_error(
+        &mut self,
+        error: Value,
+        suppressed: Value,
+    ) -> Result<Value> {
+        let value = self.create_error_object(
+            JavaScriptErrorMetadata::new(ErrorName::SuppressedError, ""),
+            false,
+        )?;
+        self.define_suppressed_error_fields(&value, error, suppressed)?;
+        Ok(value)
+    }
+
+    fn define_suppressed_error_fields(
+        &mut self,
+        object: &Value,
+        error: Value,
+        suppressed: Value,
+    ) -> Result<()> {
+        let Value::Object(id) = object else {
+            return Err(Error::runtime(
+                "SuppressedError allocation did not produce an object",
+            ));
+        };
+        self.define_non_enumerable_object_property(*id, "error", error)?;
+        self.define_non_enumerable_object_property(*id, "suppressed", suppressed)
     }
 
     pub(in crate::runtime) fn create_error_object(
@@ -679,17 +717,19 @@ impl Context {
     }
 
     fn error_constructor_message_argument(name: ErrorName, args: &[Value]) -> Option<&Value> {
-        if matches!(name, ErrorName::AggregateError) {
-            return args.get(1);
+        match name {
+            ErrorName::AggregateError => args.get(1),
+            ErrorName::SuppressedError => args.get(2),
+            _ => args.first(),
         }
-        args.first()
     }
 
     fn error_constructor_options_argument(name: ErrorName, args: &[Value]) -> Option<&Value> {
-        if matches!(name, ErrorName::AggregateError) {
-            return args.get(2);
+        match name {
+            ErrorName::AggregateError => args.get(2),
+            ErrorName::SuppressedError => None,
+            _ => args.get(1),
         }
-        args.get(1)
     }
 
     fn error_to_string_property(

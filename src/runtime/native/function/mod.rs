@@ -18,6 +18,7 @@ mod constructable;
 mod data_view_kind;
 mod date_kind;
 mod direct;
+mod disposable_stack_kind;
 mod iterator;
 mod iterator_kind;
 mod kind;
@@ -39,6 +40,9 @@ pub(in crate::runtime) use data_view_kind::DATA_VIEW_NAME;
 pub(in crate::runtime) use data_view_kind::DataViewFunctionKind;
 pub(in crate::runtime) use date_kind::{
     DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
+};
+pub(in crate::runtime) use disposable_stack_kind::{
+    DISPOSABLE_STACK_NAME, DisposableStackFunctionKind,
 };
 pub(in crate::runtime::native) use iterator_kind::{
     ITERATOR_CONCAT_NAME, ITERATOR_FROM_NAME, ITERATOR_PROTOTYPE_DROP_NAME,
