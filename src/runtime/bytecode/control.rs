@@ -7,7 +7,7 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
     error::{Error, Result},
     runtime::control::Completion,
-    runtime::{Context, abstract_operations::to_boolean},
+    runtime::{Context, abstract_operations::to_boolean, resource_scope::ScopeDisposal},
     syntax::StaticName,
     value::Value,
 };
@@ -19,7 +19,7 @@ use super::{
     for_of::BytecodeForOfParts,
     linear::BytecodeLinearPlan,
     state::{
-        BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
+        BytecodeState, ScopeDisposalResumeBehavior, bytecode_loop_completion, loop_label_matches,
     },
 };
 use try_catch::BytecodeTryParts;
@@ -145,9 +145,10 @@ impl Context {
             BytecodeInstruction::Label { label, body } => {
                 self.eval_bytecode_label(state, label, body, next)
             }
-            BytecodeInstruction::ScopedBlock(block) => {
-                self.eval_bytecode_scoped_block_instruction(state, block, next)
-            }
+            BytecodeInstruction::ScopedBlock {
+                block,
+                preserve_last,
+            } => self.eval_bytecode_scoped_block_instruction(state, block, *preserve_last, next),
             BytecodeInstruction::Jump(target) => {
                 state.pc = *target;
                 Ok(None)
@@ -198,10 +199,40 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         block: &BytecodeBlock,
+        preserve_last: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let completion = self.eval_bytecode_scoped_block(block)?;
-        Ok(Self::store_or_return_completion(state, completion, next))
+        let completion = if let Some(completion) = self.take_resumed_bytecode_child(block)? {
+            completion
+        } else {
+            self.push_lexical_scope()?;
+            let result = self.eval_bytecode_block(block);
+            if result.as_ref().is_ok_and(Completion::suspends_execution) {
+                return result.map(Some);
+            }
+            result?
+        };
+        let Some(removed) = self.pop_lexical_scope()? else {
+            return Err(Error::runtime("bytecode lexical scope disappeared"));
+        };
+        match self.begin_dispose_binding_scope(removed, completion.clone())? {
+            ScopeDisposal::Complete(completion) => {
+                if preserve_last && matches!(completion, Completion::Normal(_)) {
+                    state.pc = next;
+                    return Ok(None);
+                }
+                Ok(Self::store_or_return_completion(state, completion, next))
+            }
+            ScopeDisposal::Await(awaited) => {
+                state.pc = next;
+                state.store_scope_disposal(
+                    completion,
+                    ScopeDisposalResumeBehavior::Continue { preserve_last },
+                )?;
+                state.mark_await_suspended();
+                Ok(Some(Completion::Suspended(awaited)))
+            }
+        }
     }
 
     fn eval_bytecode_with(
@@ -238,26 +269,6 @@ impl Context {
             }
             completion => Some(completion),
         }
-    }
-
-    fn eval_bytecode_scoped_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
-        if let Some(completion) = self.take_resumed_bytecode_child(block)? {
-            let removed = self.pop_lexical_scope()?;
-            if removed.is_none() {
-                return Err(Error::runtime("resumed bytecode lexical scope disappeared"));
-            }
-            return Ok(completion);
-        }
-        self.push_lexical_scope()?;
-        let result = self.eval_bytecode_block(block);
-        if result.as_ref().is_ok_and(Completion::suspends_execution) {
-            return result;
-        }
-        let removed = self.pop_lexical_scope()?;
-        if removed.is_none() {
-            return Err(Error::runtime("bytecode lexical scope disappeared"));
-        }
-        result
     }
 
     fn eval_bytecode_while(
@@ -382,10 +393,37 @@ impl Context {
             return result;
         }
         if parts.scoped {
-            let removed = self.pop_lexical_scope()?;
-            if removed.is_none() {
+            let Some(removed) = self.pop_lexical_scope()? else {
                 return Err(Error::runtime("bytecode for lexical scope disappeared"));
-            }
+            };
+            return match result {
+                Ok(completion) => {
+                    let was_normal = completion.is_none();
+                    let original =
+                        completion.unwrap_or_else(|| Completion::Normal(state.last.clone()));
+                    match self.begin_dispose_binding_scope(removed, original.clone())? {
+                        ScopeDisposal::Complete(completion) => {
+                            if was_normal && let Completion::Normal(value) = completion {
+                                state.last = value;
+                                return Ok(None);
+                            }
+                            Ok(Some(completion))
+                        }
+                        ScopeDisposal::Await(awaited) => {
+                            state.pc = next;
+                            state.store_scope_disposal(
+                                original,
+                                ScopeDisposalResumeBehavior::Continue {
+                                    preserve_last: false,
+                                },
+                            )?;
+                            state.mark_await_suspended();
+                            Ok(Some(Completion::Suspended(awaited)))
+                        }
+                    }
+                }
+                Err(error) => Err(error),
+            };
         }
         result
     }
@@ -413,8 +451,8 @@ impl Context {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }
-                if let Err(error) = init_completion_to_result(completion) {
-                    return self.finish_bytecode_control_result(handle, Err(error));
+                if !matches!(completion, Completion::Normal(_)) {
+                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
             }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;

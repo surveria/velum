@@ -48,6 +48,7 @@ mod optimizer;
 mod private;
 pub mod promise;
 pub mod property;
+mod resource_scope;
 pub mod retained_values;
 mod roots;
 mod script_execution;

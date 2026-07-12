@@ -148,12 +148,20 @@ impl BytecodeCompiler<'_> {
                 }
                 Stmt::VarDecl {
                     name,
-                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    kind:
+                        kind @ (crate::syntax::DeclKind::Let
+                        | crate::syntax::DeclKind::Const
+                        | crate::syntax::DeclKind::Using
+                        | crate::syntax::DeclKind::AwaitUsing),
                     ..
                 } => self.emit_lexical_hoist(name, *kind)?,
                 Stmt::PatternDecl {
                     pattern,
-                    kind: kind @ (crate::syntax::DeclKind::Let | crate::syntax::DeclKind::Const),
+                    kind:
+                        kind @ (crate::syntax::DeclKind::Let
+                        | crate::syntax::DeclKind::Const
+                        | crate::syntax::DeclKind::Using
+                        | crate::syntax::DeclKind::AwaitUsing),
                     ..
                 } => pattern
                     .for_each_binding(&mut |binding| self.emit_lexical_hoist(binding, *kind))?,

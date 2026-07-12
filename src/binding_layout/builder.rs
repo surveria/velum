@@ -363,7 +363,7 @@ impl LayoutBuilder {
         match target {
             ForInTarget::Binding {
                 name,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare(loop_scope, name)?;
@@ -380,7 +380,7 @@ impl LayoutBuilder {
             }
             ForInTarget::PatternBinding {
                 pattern,
-                kind: DeclKind::Let | DeclKind::Const,
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare_pattern(pattern, loop_scope)?;

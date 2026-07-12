@@ -6,6 +6,7 @@ use crate::{
         async_trace::VmAsyncEdgeKind,
         function::SuspendedAsyncFunction,
         generator::GeneratorId,
+        resource_scope::ResourceScopeContinuation,
         roots::{DirectRootVisitor, VmRootKind},
         trace::{StrongEdgeReference, StrongEdgeVisitor},
     },
@@ -38,6 +39,9 @@ pub(in crate::runtime) enum PromiseReaction {
     },
     AsyncDisposableStack {
         continuation: Box<AsyncDisposableStackContinuation>,
+    },
+    ResourceScope {
+        continuation: Box<ResourceScopeContinuation>,
     },
 }
 
@@ -93,6 +97,14 @@ impl PromiseReaction {
         }
     }
 
+    pub(in crate::runtime) fn awaiting_resource_scope(
+        continuation: ResourceScopeContinuation,
+    ) -> Self {
+        Self::ResourceScope {
+            continuation: Box::new(continuation),
+        }
+    }
+
     pub(super) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
@@ -140,6 +152,9 @@ impl PromiseReaction {
             Self::AsyncDisposableStack { continuation } => {
                 continuation.visit_strong_edges(visitor)?;
             }
+            Self::ResourceScope { continuation } => {
+                continuation.visit_strong_edges(visitor)?;
+            }
         }
         Ok(())
     }
@@ -150,7 +165,8 @@ impl PromiseReaction {
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::ArrayFromAsync { .. }
-            | Self::AsyncDisposableStack { .. } => Ok(0),
+            | Self::AsyncDisposableStack { .. }
+            | Self::ResourceScope { .. } => Ok(0),
         }
     }
 
@@ -160,7 +176,8 @@ impl PromiseReaction {
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::ArrayFromAsync { .. }
-            | Self::AsyncDisposableStack { .. } => Ok(0),
+            | Self::AsyncDisposableStack { .. }
+            | Self::ResourceScope { .. } => Ok(0),
         }
     }
 
@@ -192,6 +209,7 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { .. } => Ok(()),
             Self::ArrayFromAsync { continuation } => continuation.visit_direct_roots(visitor),
             Self::AsyncDisposableStack { continuation } => continuation.visit_direct_roots(visitor),
+            Self::ResourceScope { continuation } => continuation.visit_direct_roots(visitor),
         }
     }
 
@@ -203,9 +221,10 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
-            Self::Then { .. } | Self::ArrayFromAsync { .. } | Self::AsyncDisposableStack { .. } => {
-                None
-            }
+            Self::Then { .. }
+            | Self::ArrayFromAsync { .. }
+            | Self::AsyncDisposableStack { .. }
+            | Self::ResourceScope { .. } => None,
         }
     }
 
@@ -215,7 +234,8 @@ impl PromiseReaction {
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::ArrayFromAsync { .. }
-            | Self::AsyncDisposableStack { .. } => None,
+            | Self::AsyncDisposableStack { .. }
+            | Self::ResourceScope { .. } => None,
         }
     }
 }

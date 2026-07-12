@@ -627,7 +627,9 @@ impl Context {
                 };
                 if matches!(
                     mode,
-                    BytecodeDestructureMode::Declaration(DeclKind::Let | DeclKind::Const)
+                    BytecodeDestructureMode::Declaration(
+                        DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing
+                    )
                 ) {
                     self.push_lexical_scope_with(BindingScope::new())?;
                 }
@@ -718,7 +720,9 @@ impl Context {
                 let value = self.heap_string_value(&key)?;
                 if matches!(
                     mode,
-                    BytecodeDestructureMode::Declaration(DeclKind::Let | DeclKind::Const)
+                    BytecodeDestructureMode::Declaration(
+                        DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing
+                    )
                 ) {
                     self.push_lexical_scope_with(BindingScope::new())?;
                 }
@@ -780,7 +784,9 @@ impl Context {
     fn pop_pattern_iteration_scope(&mut self, mode: BytecodeDestructureMode) -> Result<()> {
         if matches!(
             mode,
-            BytecodeDestructureMode::Declaration(DeclKind::Let | DeclKind::Const)
+            BytecodeDestructureMode::Declaration(
+                DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing
+            )
         ) && self.pop_lexical_scope()?.is_none()
         {
             return Err(Error::runtime("bytecode pattern loop scope disappeared"));

@@ -31,6 +31,7 @@ pub(super) enum BytecodeLoopPhase {
     Destructure,
     Condition,
     Body,
+    Dispose,
     Update,
     Close,
 }
@@ -110,6 +111,7 @@ impl BytecodeControlRecord {
                 BytecodeLoopPhase::Initialize | BytecodeLoopPhase::Condition => condition_state,
                 BytecodeLoopPhase::Destructure
                 | BytecodeLoopPhase::Body
+                | BytecodeLoopPhase::Dispose
                 | BytecodeLoopPhase::Close => body_state,
                 BytecodeLoopPhase::Update => update_state,
             },
@@ -403,7 +405,10 @@ impl BytecodeControlRecord {
         }
     }
 
-    fn state_mut(&mut self, slot: BytecodeControlStateSlot) -> Result<&mut BytecodeState> {
+    pub(super) fn state_mut(
+        &mut self,
+        slot: BytecodeControlStateSlot,
+    ) -> Result<&mut BytecodeState> {
         match (self, slot) {
             (
                 Self::Loop {

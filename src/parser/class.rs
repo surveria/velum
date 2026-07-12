@@ -57,7 +57,11 @@ impl Parser {
     pub(super) fn class_expression(&mut self) -> Result<Expression> {
         let start = self.previous_span();
         let name = if self.next_is_identifier() {
-            Some(self.consume_identifier("expected class name")?)
+            let previous_strict = self.is_strict_mode();
+            self.set_strict_mode(true);
+            let result = self.consume_identifier("expected class name");
+            self.set_strict_mode(previous_strict);
+            Some(result?)
         } else {
             None
         };

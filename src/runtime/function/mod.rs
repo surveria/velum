@@ -458,6 +458,9 @@ impl Context {
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
+        if let Ok(completion) = result {
+            result = self.dispose_active_binding_scope(completion);
+        }
         let binding_result = self.pop_function_binding_storage(
             local_base,
             arguments_binding.is_some(),

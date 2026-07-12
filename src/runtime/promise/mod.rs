@@ -593,6 +593,13 @@ impl Context {
                     };
                     self.resume_async_disposable_stack_disposal(*continuation, resume)
                 }
+                PromiseReaction::ResourceScope { continuation } => {
+                    let resume = match state.status {
+                        PromiseStatus::Fulfilled => Completion::Normal(state.value),
+                        PromiseStatus::Rejected => Completion::Throw(state.value),
+                    };
+                    self.resume_resource_scope_disposal(*continuation, resume)
+                }
                 PromiseReaction::Then { .. } => {
                     Err(Error::runtime("Promise reaction kind disappeared"))
                 }

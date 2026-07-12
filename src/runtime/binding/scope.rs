@@ -105,6 +105,21 @@ pub struct BindingScope {
     index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
     storage_ledger: Option<VmStorageLedger>,
+    resource_stacks: Vec<BindingResourceStack>,
+}
+
+#[derive(Debug)]
+pub(in crate::runtime) enum BindingResourceStack {
+    Sync(Value),
+    Async(Value),
+}
+
+impl BindingResourceStack {
+    pub(crate) const fn value(&self) -> &Value {
+        match self {
+            Self::Sync(value) | Self::Async(value) => value,
+        }
+    }
 }
 
 impl Default for ScopeIndex {
@@ -120,6 +135,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: None,
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -129,6 +145,7 @@ impl BindingScope {
             index: ScopeIndex::new(),
             compiled_scope: None,
             storage_ledger: Some(storage_ledger),
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -144,6 +161,7 @@ impl BindingScope {
             index: ScopeIndex::Shared(template),
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
+            resource_stacks: Vec::new(),
         }
     }
 
@@ -178,7 +196,22 @@ impl BindingScope {
             },
             compiled_scope: Some(compiled_scope),
             storage_ledger: None,
+            resource_stacks: Vec::new(),
         })
+    }
+
+    pub(in crate::runtime) fn resource_stacks(
+        &self,
+    ) -> impl Iterator<Item = &BindingResourceStack> {
+        self.resource_stacks.iter()
+    }
+
+    pub(in crate::runtime) fn push_resource_stack(&mut self, stack: BindingResourceStack) {
+        self.resource_stacks.push(stack);
+    }
+
+    pub(in crate::runtime) fn take_resource_stacks(&mut self) -> Vec<BindingResourceStack> {
+        std::mem::take(&mut self.resource_stacks)
     }
 
     pub(crate) fn contains(&self, atom: AtomId) -> bool {

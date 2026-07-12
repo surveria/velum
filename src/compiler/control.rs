@@ -491,14 +491,14 @@ fn for_init_needs_lexical_scope(init: Option<&Statement>) -> bool {
     };
     match init.kind() {
         Stmt::VarDecl {
-            kind: DeclKind::Let | DeclKind::Const,
+            kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
         } => true,
         Stmt::DeclList(statements) => statements.iter().any(|statement| {
             matches!(
                 statement.kind(),
                 Stmt::VarDecl {
-                    kind: DeclKind::Let | DeclKind::Const,
+                    kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                     ..
                 }
             )

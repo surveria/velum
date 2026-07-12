@@ -198,6 +198,7 @@ impl Parser {
         let token = self.advance().ok_or_else(|| self.parse_error(message))?;
         let token_span = token.span;
         let token_offset = token.offset();
+        let identifier_escaped = token.identifier_escaped;
         match token.kind {
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
                 "super is not a valid identifier",
@@ -212,6 +213,9 @@ impl Parser {
             TokenKind::Await if !self.await_identifier_is_reserved() => {
                 self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, token_offset)
             }
+            TokenKind::Let if !identifier_escaped && !self.is_strict_mode() => {
+                self.static_name_borrowed_at("let", token_offset)
+            }
             _ => Err(Error::parse_at(message, token_span)),
         }
     }
@@ -224,6 +228,9 @@ impl Parser {
             return Err(self.parse_error("super is not a valid binding identifier"));
         }
         let name = self.consume_identifier(message)?;
+        if name.as_str() == "let" {
+            return Err(self.parse_error("let is not a valid binding identifier"));
+        }
         if (self.yield_identifier_is_reserved() || self.is_strict_mode())
             && name.as_str() == YIELD_IDENTIFIER_NAME
         {

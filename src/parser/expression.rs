@@ -295,6 +295,20 @@ impl Parser {
     }
 
     fn template_literal(&mut self, head: Vec<u16>, start: crate::SourceSpan) -> Result<Expression> {
+        let (quasis, expressions) = self.template_parts(head)?;
+        Ok(self.expression_node(
+            start,
+            Expr::TemplateLiteral {
+                quasis,
+                expressions,
+            },
+        ))
+    }
+
+    fn template_parts(
+        &mut self,
+        head: Vec<u16>,
+    ) -> Result<(Vec<crate::ast::StaticString>, Vec<Expression>)> {
         let mut quasis = vec![self.static_string(head)?];
         let mut expressions = Vec::new();
         loop {
@@ -317,13 +331,7 @@ impl Parser {
                 }
             }
         }
-        Ok(self.expression_node(
-            start,
-            Expr::TemplateLiteral {
-                quasis,
-                expressions,
-            },
-        ))
+        Ok((quasis, expressions))
     }
 
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
@@ -464,6 +472,7 @@ impl Parser {
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
             ),
+            TokenKind::Let => self.contextual_let(token_span, token.identifier_escaped)?,
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -505,6 +514,21 @@ impl Parser {
             _ => return Err(Error::parse_at("expected expression", token_span)),
         };
         Ok(expr)
+    }
+
+    fn contextual_let(
+        &mut self,
+        span: crate::SourceSpan,
+        identifier_escaped: bool,
+    ) -> Result<Expression> {
+        if identifier_escaped || self.is_strict_mode() {
+            return Err(Error::parse_at("expected expression", span));
+        }
+        let name = self.static_name_borrowed_at("let", span.start())?;
+        Ok(Expression::new(
+            Expr::Identifier(self.static_binding(name)?),
+            span,
+        ))
     }
 
     pub(super) fn arrow_function(&mut self) -> Result<Option<Expression>> {

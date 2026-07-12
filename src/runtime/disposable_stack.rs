@@ -413,28 +413,37 @@ impl Context {
     }
 
     fn disposable_stack_dispose(&mut self, this_value: &Value) -> Result<Value> {
+        self.dispose_disposable_stack_completion(this_value, Completion::Normal(Value::Undefined))?
+            .into_native_value_result()
+    }
+
+    pub(in crate::runtime) fn dispose_disposable_stack_completion(
+        &mut self,
+        this_value: &Value,
+        mut completion: Completion,
+    ) -> Result<Completion> {
         let id = self.disposable_stack_id(this_value)?;
         let resources = {
             let data = self.disposable_stack_data_mut(id)?;
             if data.disposed {
-                return Ok(Value::Undefined);
+                return Ok(completion);
             }
             data.disposed = true;
             std::mem::take(&mut data.resources)
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, resources.len())?;
-        let mut thrown = None;
         for resource in resources.into_iter().rev() {
             if let Some(error) = self.dispose_resource(resource)? {
-                thrown = Some(if let Some(suppressed) = thrown {
-                    self.create_suppressed_error(error, suppressed)?
-                } else {
-                    error
-                });
+                completion = match completion {
+                    Completion::Throw(suppressed) => {
+                        Completion::Throw(self.create_suppressed_error(error, suppressed)?)
+                    }
+                    _ => Completion::Throw(error),
+                };
             }
         }
-        thrown.map_or(Ok(Value::Undefined), |value| Err(Error::javascript(value)))
+        Ok(completion)
     }
 
     fn dispose_resource(&mut self, resource: DisposableResource) -> Result<Option<Value>> {

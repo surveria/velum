@@ -61,6 +61,19 @@ impl Context {
                 };
                 self.initialize_bytecode_lexical(name, value, DeclKind::Const)?;
             }
+            kind @ (DeclKind::Using | DeclKind::AwaitUsing) => {
+                let Some(value) = value else {
+                    return Err(Error::runtime(
+                        "resource declaration requires an initializer",
+                    ));
+                };
+                if kind.is_async_resource() {
+                    self.register_await_using_resource(&value)?;
+                } else {
+                    self.register_using_resource(&value)?;
+                }
+                self.initialize_bytecode_lexical(name, value, kind)?;
+            }
         }
         Ok(())
     }

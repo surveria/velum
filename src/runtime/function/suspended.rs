@@ -110,6 +110,10 @@ impl Context {
                 self.activation_frames.len()
             )));
         }
+        let mut result = result;
+        if let Ok(completion) = result {
+            result = self.dispose_active_binding_scope(completion);
+        }
         let binding_result = self.pop_function_binding_storage(
             local_base,
             setup.arguments_binding.is_some(),
@@ -283,6 +287,9 @@ impl DetachedFunctionExecution {
                     result?;
                 }
             }
+            for stack in scope.resource_stacks() {
+                visitor.visit_value(kind, stack.value())?;
+            }
         }
         for frame in &self.activations {
             if let Some(environments) = frame.with_environments() {
@@ -345,6 +352,9 @@ impl DetachedFunctionExecution {
                 }) {
                     result?;
                 }
+            }
+            for stack in scope.resource_stacks() {
+                visitor.visit(kind, StrongEdgeReference::Value(stack.value()))?;
             }
         }
         for frame in &self.activations {

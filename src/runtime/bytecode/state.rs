@@ -28,6 +28,20 @@ struct BytecodeSuspendState {
     resume_completion: Option<Completion>,
     destructure: Option<DestructureContinuation>,
     yield_delegate: Option<YieldDelegateContinuation>,
+    scope_disposal: Option<ScopeDisposalResume>,
+    scope_disposal_resumed: bool,
+}
+
+#[derive(Debug)]
+struct ScopeDisposalResume {
+    completion: Completion,
+    behavior: ScopeDisposalResumeBehavior,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ScopeDisposalResumeBehavior {
+    Complete,
+    Continue { preserve_last: bool },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -170,11 +184,24 @@ impl BytecodeState {
             .is_some_and(|suspend| suspend.phase != BytecodeSuspendPhase::Running)
     }
 
+    pub(super) fn has_scope_disposal(&self) -> bool {
+        self.suspend.as_ref().is_some_and(|suspend| {
+            suspend.scope_disposal.is_some() || suspend.scope_disposal_resumed
+        })
+    }
+
     pub(super) fn resume_suspension(&mut self, completion: Completion) -> Result<()> {
         if !self.is_awaiting() && !self.is_generator_starting() && !self.is_yielding() {
             return Err(Error::runtime(
                 "bytecode state is not awaiting a resume completion",
             ));
+        }
+        if self
+            .suspend
+            .as_ref()
+            .is_some_and(|suspend| suspend.scope_disposal.is_some())
+        {
+            return self.resume_scope_disposal(completion);
         }
         let delegates = self.has_yield_delegate();
         let permits_abrupt = self.is_yielding() || delegates || self.is_generator_starting();
@@ -200,6 +227,55 @@ impl BytecodeState {
         Ok(())
     }
 
+    fn resume_scope_disposal(&mut self, completion: Completion) -> Result<()> {
+        let disposal = self
+            .suspend
+            .as_mut()
+            .and_then(|suspend| suspend.scope_disposal.take())
+            .ok_or_else(|| Error::runtime("scope disposal continuation disappeared"))?;
+        let resume_completion = match completion {
+            Completion::Throw(reason) => Some(Completion::Throw(reason)),
+            Completion::Normal(_) => match disposal.behavior {
+                ScopeDisposalResumeBehavior::Complete => Some(disposal.completion),
+                ScopeDisposalResumeBehavior::Continue { preserve_last } => {
+                    match disposal.completion {
+                        Completion::Normal(value) => {
+                            if !preserve_last {
+                                self.last = value;
+                            }
+                            None
+                        }
+                        completion => Some(completion),
+                    }
+                }
+            },
+            completion => return completion.into_result().map(|_| ()),
+        };
+        let suspend = self.suspend_state_mut();
+        suspend.phase = BytecodeSuspendPhase::ResumeReady;
+        suspend.resume_completion = resume_completion;
+        suspend.scope_disposal_resumed = true;
+        Ok(())
+    }
+
+    pub(super) fn store_scope_disposal(
+        &mut self,
+        completion: Completion,
+        behavior: ScopeDisposalResumeBehavior,
+    ) -> Result<()> {
+        let suspend = self.suspend_state_mut();
+        if suspend.scope_disposal.is_some() {
+            return Err(Error::runtime(
+                "bytecode scope disposal continuation is already stored",
+            ));
+        }
+        suspend.scope_disposal = Some(ScopeDisposalResume {
+            completion,
+            behavior,
+        });
+        Ok(())
+    }
+
     pub(super) fn take_resume_completion(&mut self) -> Option<Completion> {
         if self.has_yield_delegate() {
             return None;
@@ -208,6 +284,9 @@ impl BytecodeState {
             .suspend
             .as_mut()
             .and_then(|suspend| suspend.resume_completion.take());
+        if let Some(suspend) = self.suspend.as_mut() {
+            suspend.scope_disposal_resumed = false;
+        }
         self.release_empty_suspend_state();
         completion
     }
@@ -288,6 +367,8 @@ impl BytecodeState {
                 resume_completion: None,
                 destructure: None,
                 yield_delegate: None,
+                scope_disposal: None,
+                scope_disposal_resumed: false,
             })
         })
     }
@@ -298,6 +379,8 @@ impl BytecodeState {
                 && suspend.resume_completion.is_none()
                 && suspend.destructure.is_none()
                 && suspend.yield_delegate.is_none()
+                && suspend.scope_disposal.is_none()
+                && !suspend.scope_disposal_resumed
         }) {
             self.suspend = None;
         }
@@ -327,6 +410,13 @@ impl BytecodeState {
             }
             if let Some(delegate) = suspend.yield_delegate.as_ref() {
                 cold.extend(delegate.root_values());
+            }
+            if let Some(value) = suspend
+                .scope_disposal
+                .as_ref()
+                .and_then(|disposal| completion_value(&disposal.completion))
+            {
+                cold.push(value);
             }
         }
         self.root_values_with_cold(cold)
@@ -490,13 +580,6 @@ impl BytecodeStack {
             ));
         }
         Ok(value)
-    }
-}
-
-pub(super) fn init_completion_to_result(completion: Completion) -> Result<()> {
-    match completion {
-        Completion::Normal(_) => Ok(()),
-        completion => completion.into_result().map(|_| ()),
     }
 }
 

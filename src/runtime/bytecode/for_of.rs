@@ -8,6 +8,7 @@ use crate::{
     },
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::{Completion, runtime_exception_value},
+    runtime::resource_scope::ScopeDisposal,
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -15,7 +16,7 @@ use crate::{
 use super::control_continuation::{
     BytecodeControlHandle, BytecodeControlRecord, BytecodeControlStateSlot, BytecodeLoopPhase,
 };
-use super::state::{BytecodeState, bytecode_loop_completion};
+use super::state::{BytecodeState, ScopeDisposalResumeBehavior, bytecode_loop_completion};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct BytecodeForOfParts<'a> {
@@ -42,6 +43,15 @@ impl<'a> BytecodeForOfParts<'a> {
             asynchronous,
         }
     }
+}
+
+struct ForOfLexicalBinding<'a> {
+    atom: crate::storage::atom::AtomId,
+    frame: Option<crate::runtime::CompiledBindingFrame>,
+    name: &'a BytecodeBinding,
+    kind: DeclKind,
+    mutable: bool,
+    value: Value,
 }
 
 impl Context {
@@ -75,7 +85,8 @@ impl Context {
         let completion = match target {
             BytecodeForInTarget::Binding {
                 name,
-                kind: kind @ (DeclKind::Let | DeclKind::Const),
+                kind:
+                    kind @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
             } => self.eval_for_of_lexical_binding(name, *kind, iterator, body, labels)?,
             BytecodeForInTarget::Binding {
                 name,
@@ -118,7 +129,7 @@ impl Context {
         self.ensure_extra_binding_capacity(0)?;
         let atom = self.intern_static_name_atom(name.name().name())?;
         let frame = self.compiled_local_binding_frame(name.name())?;
-        let mutable = kind != DeclKind::Const;
+        let mutable = kind.is_mutable();
         let mut scope = BindingScope::new();
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(iterator))?;
         let mut control = self.checkout_bytecode_control(handle)?;
@@ -126,7 +137,10 @@ impl Context {
             return self.resume_for_of_close(handle, control);
         }
         loop {
-            let resumes_body = *control.for_of_state_mut()?.0 == BytecodeLoopPhase::Body;
+            let phase = *control.for_of_state_mut()?.0;
+            let resumes_body =
+                matches!(phase, BytecodeLoopPhase::Body | BytecodeLoopPhase::Dispose);
+            let resumes_disposal = phase == BytecodeLoopPhase::Dispose;
             if !resumes_body {
                 *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
                 let value = match self.next_for_of_value(handle, &mut control)? {
@@ -141,24 +155,15 @@ impl Context {
                     }
                 };
                 let binding_result = self.run_bytecode_control_action_result(&control, |context| {
-                    let inserted = scope.insert_or_replace_at_optional_slot(
+                    let binding = ForOfLexicalBinding {
                         atom,
-                        BindingCell::new(value, mutable, kind),
-                        frame.map(crate::runtime::CompiledBindingFrame::slot),
-                    )?;
-                    if let Some(frame) = frame {
-                        Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
-                    }
-                    context.push_lexical_scope_with(scope)?;
-                    if let Err(error) = context.remember_active_static_binding(name.name(), atom) {
-                        if context.pop_lexical_scope()?.is_none() {
-                            return Err(Error::runtime(
-                                "bytecode for-of lexical scope disappeared after binding failure",
-                            ));
-                        }
-                        return Err(error);
-                    }
-                    Ok(())
+                        frame,
+                        name,
+                        kind,
+                        mutable,
+                        value,
+                    };
+                    context.push_for_of_lexical_binding_scope(scope, &binding)
                 });
                 if let Err(error) = binding_result {
                     return self.close_for_of_error(handle, control, error);
@@ -178,24 +183,35 @@ impl Context {
                 self.park_bytecode_control(handle, control)?;
                 return Ok(completion);
             }
-            let removed_scope = self.pop_lexical_scope();
-            scope = match removed_scope {
-                Ok(Some(scope)) => scope,
-                Ok(None) => {
-                    return self.close_for_of_error(
-                        handle,
-                        control,
-                        Error::runtime("bytecode for-of lexical scope disappeared"),
-                    );
-                }
-                Err(error) => return self.close_for_of_error(handle, control, error),
-            };
             let completion = match body_result {
                 Ok(completion) => completion,
                 Err(error) => {
                     return self.close_for_of_error(handle, control, error);
                 }
             };
+            if !resumes_disposal {
+                scope = match self.take_for_of_lexical_scope() {
+                    Ok(scope) => scope,
+                    Err(error) => return self.close_for_of_error(handle, control, error),
+                };
+                match self.begin_dispose_binding_scope(scope, completion.clone())? {
+                    ScopeDisposal::Complete(disposed) => {
+                        scope = BindingScope::new();
+                        let (_, last) = control.for_of_state_mut()?;
+                        if let Some(completion) = bytecode_loop_completion(last, disposed, labels) {
+                            return self.close_for_of_completion(handle, control, completion);
+                        }
+                        *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+                        continue;
+                    }
+                    ScopeDisposal::Await(awaited) => {
+                        Self::prepare_for_of_scope_disposal(&mut control, completion)?;
+                        self.park_bytecode_control(handle, control)?;
+                        return Ok(Completion::Suspended(awaited));
+                    }
+                }
+            }
+            scope = BindingScope::new();
             let (_, last) = control.for_of_state_mut()?;
             if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
                 return self.close_for_of_completion(handle, control, completion);
@@ -205,6 +221,63 @@ impl Context {
         let (_, last) = control.for_of_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
         Self::finish_for_of_control(self, handle, completion)
+    }
+
+    fn push_for_of_lexical_binding_scope(
+        &mut self,
+        mut scope: BindingScope,
+        binding: &ForOfLexicalBinding<'_>,
+    ) -> Result<()> {
+        let inserted = scope.insert_or_replace_at_optional_slot(
+            binding.atom,
+            BindingCell::new(binding.value.clone(), binding.mutable, binding.kind),
+            binding
+                .frame
+                .map(crate::runtime::CompiledBindingFrame::slot),
+        )?;
+        if let Some(frame) = binding.frame {
+            Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+        }
+        self.push_lexical_scope_with(scope)?;
+        if let Err(error) = self.remember_active_static_binding(binding.name.name(), binding.atom) {
+            self.pop_failed_for_of_resource_scope("binding")?;
+            return Err(error);
+        }
+        let registration = match binding.kind {
+            DeclKind::Using => self.register_using_resource(&binding.value),
+            DeclKind::AwaitUsing => self.register_await_using_resource(&binding.value),
+            DeclKind::Var | DeclKind::Let | DeclKind::Const => Ok(()),
+        };
+        if let Err(error) = registration {
+            self.pop_failed_for_of_resource_scope("resource")?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn take_for_of_lexical_scope(&mut self) -> Result<BindingScope> {
+        self.pop_lexical_scope()?
+            .ok_or_else(|| Error::runtime("bytecode for-of lexical scope disappeared"))
+    }
+
+    fn prepare_for_of_scope_disposal(
+        control: &mut BytecodeControlRecord,
+        completion: Completion,
+    ) -> Result<()> {
+        let body_state = control.state_mut(BytecodeControlStateSlot::Body)?;
+        body_state.store_scope_disposal(completion, ScopeDisposalResumeBehavior::Complete)?;
+        body_state.mark_await_suspended();
+        *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Dispose;
+        Ok(())
+    }
+
+    fn pop_failed_for_of_resource_scope(&mut self, stage: &str) -> Result<()> {
+        if self.pop_lexical_scope()?.is_some() {
+            return Ok(());
+        }
+        Err(Error::runtime(format!(
+            "bytecode for-of lexical scope disappeared after {stage} failure"
+        )))
     }
 
     fn eval_for_of_assignment_loop(

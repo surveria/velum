@@ -279,6 +279,9 @@ fn visit_scope<V: DirectRootVisitor>(
     for cell in scope.cells() {
         visit_cell(cell, kind, visitor)?;
     }
+    for stack in scope.resource_stacks() {
+        visitor.visit_value(kind, stack.value())?;
+    }
     Ok(())
 }
 
