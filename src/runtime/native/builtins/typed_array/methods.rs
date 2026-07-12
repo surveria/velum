@@ -349,8 +349,8 @@ impl Context {
 
     fn eval_typed_array_set(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (target_id, target) = self.typed_array_receiver(this_value)?;
+        let target_length = target.length();
         let source = args.first().cloned().unwrap_or(Value::Undefined);
-        let values = self.typed_array_collect_array_like(&source)?;
         let offset_value = args.get(1).unwrap_or(&Value::Undefined);
         let offset_number = self.to_integer_or_infinity(offset_value)?;
         if !offset_number.is_finite() || offset_number < 0.0 {
@@ -361,29 +361,60 @@ impl Context {
         }
         let offset =
             Self::finite_nonnegative_integer_to_usize(offset_number, TYPED_ARRAY_LENGTH_ERROR)?;
-        let Some(end) = offset.checked_add(values.len()) else {
-            return Err(Error::exception(
-                ErrorName::RangeError,
-                TYPED_ARRAY_SET_RANGE_ERROR,
-            ));
-        };
-        if end > target.length() {
-            return Err(Error::exception(
-                ErrorName::RangeError,
-                TYPED_ARRAY_SET_RANGE_ERROR,
-            ));
+        if target.is_out_of_bounds() {
+            return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
         }
         if let Value::Object(source_id) = source
             && let Some(source_view) = self.objects.typed_array(source_id)?
-            && source_view.element_kind().content_type() != target.element_kind().content_type()
         {
+            return self.set_typed_array_from_typed_array(
+                target_id,
+                &target,
+                target_length,
+                offset,
+                &source_view,
+            );
+        }
+        let source = self.object_to_object(&source)?;
+        let _source_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&source))?;
+        let length_value = self.get_named(&source, "length")?;
+        let source_length =
+            Self::length_to_usize(self.to_length(&length_value)?, TYPED_ARRAY_LENGTH_ERROR)?;
+        Self::ensure_typed_array_set_range(offset, source_length, target_length)?;
+        for source_index in 0..source_length {
+            self.step()?;
+            let value = self.get_named(&source, &source_index.to_string())?;
+            let element = self.convert_typed_array_element_value(target.element_kind(), &value)?;
+            let target_index = offset
+                .checked_add(source_index)
+                .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+            // A later resize may invalidate this slot without suppressing
+            // subsequent source property effects.
+            self.objects
+                .set_typed_array_value(target_id, target_index, &element)?;
+        }
+        Ok(Value::Undefined)
+    }
+
+    fn set_typed_array_from_typed_array(
+        &mut self,
+        target_id: ObjectId,
+        target: &TypedArrayView,
+        target_length: usize,
+        offset: usize,
+        source: &TypedArrayView,
+    ) -> Result<Value> {
+        if source.is_out_of_bounds() {
+            return Err(Error::type_error(super::TYPED_ARRAY_SOURCE_ERROR));
+        }
+        if source.element_kind().content_type() != target.element_kind().content_type() {
             return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
-        let mut elements = Vec::with_capacity(values.len());
-        for value in values {
-            elements.push(self.convert_typed_array_element_value(target.element_kind(), &value)?);
-        }
-        for (source_index, element) in elements.into_iter().enumerate() {
+        let values = self.typed_array_view_values(source)?;
+        Self::ensure_typed_array_set_range(offset, values.len(), target_length)?;
+        for (source_index, value) in values.into_iter().enumerate() {
+            let element = self.convert_typed_array_element_value(target.element_kind(), &value)?;
             let target_index = offset
                 .checked_add(source_index)
                 .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
@@ -395,6 +426,23 @@ impl Context {
             }
         }
         Ok(Value::Undefined)
+    }
+
+    fn ensure_typed_array_set_range(
+        offset: usize,
+        source_length: usize,
+        target_length: usize,
+    ) -> Result<()> {
+        let end = offset
+            .checked_add(source_length)
+            .ok_or_else(|| Error::exception(ErrorName::RangeError, TYPED_ARRAY_SET_RANGE_ERROR))?;
+        if end <= target_length {
+            return Ok(());
+        }
+        Err(Error::exception(
+            ErrorName::RangeError,
+            TYPED_ARRAY_SET_RANGE_ERROR,
+        ))
     }
 
     fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
