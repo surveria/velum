@@ -43,28 +43,38 @@ impl Context {
         };
 
         match argument {
-            Value::String(source) => {
-                let script = crate::compiled_script::CompiledScript::compile_eval(
-                    source,
-                    self.limits.clone(),
-                    strict_mode,
-                )
-                .map_err(dynamic_compilation_error)?;
-                self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;
-                eval_completion_result(self.eval_compiled_completion(&script)?)
-            }
+            Value::String(source) => self.eval_string_source(source, strict_mode, direct),
             Value::HeapString(source) => {
-                let script = crate::compiled_script::CompiledScript::compile_eval(
-                    source.as_str(),
-                    self.limits.clone(),
-                    strict_mode,
-                )
-                .map_err(dynamic_compilation_error)?;
-                self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;
-                eval_completion_result(self.eval_compiled_completion(&script)?)
+                self.eval_string_source(source.as_str(), strict_mode, direct)
             }
             value => Ok(value.clone()),
         }
+    }
+
+    fn eval_string_source(
+        &mut self,
+        source: &str,
+        strict_mode: bool,
+        direct: bool,
+    ) -> Result<Value> {
+        let script = crate::compiled_script::CompiledScript::compile_eval(
+            source,
+            self.limits.clone(),
+            strict_mode,
+        )
+        .map_err(dynamic_compilation_error)?;
+        self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;
+        if direct {
+            return eval_completion_result(
+                self.eval_compiled_eval_completion(&script, script.strict())?,
+            );
+        }
+
+        let boundary = self.push_eval_activation_boundary()?;
+        let result = self.eval_compiled_eval_completion(&script, script.strict());
+        let boundary_result = self.pop_eval_activation_boundary(boundary);
+        boundary_result?;
+        eval_completion_result(result?)
     }
 
     fn reject_direct_eval_parameter_conflict(

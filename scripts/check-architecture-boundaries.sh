@@ -468,7 +468,7 @@ src/source.rs:pub struct SourceSpan'
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected_compiled_fields='bytecode:BytecodeProgram,binding_layout:BindingLayout,usage:CompiledScriptUsage,source_id:SourceId,source_name:Option<String>,'
+  expected_compiled_fields='bytecode:BytecodeProgram,binding_layout:BindingLayout,usage:CompiledScriptUsage,source_id:SourceId,source_name:Option<String>,strict:bool,'
   if [[ "${compiled_fields}" != "${expected_compiled_fields}" ]]; then
     fail "CompiledScript source metadata boundary changed; AS-04b2 owns source retention"
   fi

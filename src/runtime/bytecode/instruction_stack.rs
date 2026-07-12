@@ -182,7 +182,6 @@ impl Context {
             None
         };
         self.eval_bytecode_declaration(name, kind, value)?;
-        state.last = Value::Undefined;
         state.pc = next;
         Ok(None)
     }

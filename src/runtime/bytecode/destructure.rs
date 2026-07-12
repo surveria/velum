@@ -58,7 +58,6 @@ impl Context {
             DestructureOutcome::Completed => {
                 if let BytecodeDestructureMode::Declaration(_) = mode {
                     state.stack.pop()?;
-                    state.last = Value::Undefined;
                 }
                 state.pc = next;
                 Ok(None)

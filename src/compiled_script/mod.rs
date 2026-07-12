@@ -19,11 +19,12 @@ pub struct CompiledScript {
     usage: CompiledScriptUsage,
     source_id: SourceId,
     source_name: Option<String>,
+    strict: bool,
 }
 
 impl CompiledScript {
     pub(crate) fn compile(source: &str, limits: RuntimeLimits) -> Result<Self> {
-        Self::compile_with_name_and_mode(None, source, limits, false)
+        Self::compile_with_name_and_mode(None, source, limits, false, false)
     }
 
     pub(crate) fn compile_named(
@@ -31,7 +32,7 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(Some(source_name), source, limits, false)
+        Self::compile_with_name_and_mode(Some(source_name), source, limits, false, false)
     }
 
     pub(crate) fn compile_eval(
@@ -39,7 +40,7 @@ impl CompiledScript {
         limits: RuntimeLimits,
         strict_mode: bool,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(None, source, limits, strict_mode)
+        Self::compile_with_name_and_mode(None, source, limits, strict_mode, true)
     }
 
     fn compile_with_name_and_mode(
@@ -47,6 +48,7 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
         strict_mode: bool,
+        eval: bool,
     ) -> Result<Self> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
@@ -60,11 +62,20 @@ impl CompiledScript {
         }
         .map_err(|error| error.with_source(source_id, source))?;
         let program = parsed.program;
-        let binding_layout = BindingLayout::build(
-            &program,
-            parsed.usage.static_binding_count,
-            parsed.usage.static_function_count,
-        )?;
+        let binding_layout = if eval {
+            BindingLayout::build_eval(
+                &program,
+                parsed.usage.static_binding_count,
+                parsed.usage.static_function_count,
+                parsed.strict,
+            )?
+        } else {
+            BindingLayout::build(
+                &program,
+                parsed.usage.static_binding_count,
+                parsed.usage.static_function_count,
+            )?
+        };
         let bytecode = compiler::compile_program(&program, &binding_layout)?;
         let bytecode_instruction_count = bytecode.instruction_count();
         let bytecode_binding_operand_count = bytecode.binding_operand_count();
@@ -102,6 +113,7 @@ impl CompiledScript {
             binding_layout,
             source_id,
             source_name: source_name.map(str::to_owned),
+            strict: parsed.strict,
         })
     }
 
@@ -128,6 +140,10 @@ impl CompiledScript {
     #[must_use]
     pub fn source_name(&self) -> Option<&str> {
         self.source_name.as_deref()
+    }
+
+    pub(crate) const fn strict(&self) -> bool {
+        self.strict
     }
 
     pub(crate) fn ensure_within_limits(&self, limits: &RuntimeLimits) -> Result<()> {

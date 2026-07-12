@@ -77,6 +77,47 @@ impl Context {
         Ok(())
     }
 
+    pub(crate) fn hoist_bytecode_lexical_declarations(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+    ) -> Result<()> {
+        let mut declarations = Vec::new();
+        for (binding, kind) in plan.lexical_declarations() {
+            let slot = self
+                .compiled_active_binding_frame(binding)?
+                .map(CompiledBindingFrame::slot)
+                .map(crate::runtime::binding::scope::BindingSlot::index);
+            declarations.push((slot, binding, *kind));
+        }
+        declarations.sort_by_key(|(slot, _, _)| slot.unwrap_or(usize::MAX));
+        for (_, binding, kind) in declarations {
+            self.hoist_lexical(binding, kind)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn hoist_bytecode_var_declarations(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+    ) -> Result<()> {
+        let mut declarations = Vec::new();
+        for binding in plan.var_declarations() {
+            let slot = self
+                .compiled_active_binding_frame(binding)?
+                .map(CompiledBindingFrame::slot)
+                .map(crate::runtime::binding::scope::BindingSlot::index);
+            declarations.push((slot, binding));
+        }
+        declarations.sort_by_key(|(slot, _)| slot.unwrap_or(usize::MAX));
+        for (_, binding) in declarations {
+            self.hoist_var(binding)?;
+        }
+        for declaration in plan.function_declarations() {
+            self.hoist_function(declaration)?;
+        }
+        Ok(())
+    }
+
     fn hoist_lexical(&mut self, name: &StaticBinding, kind: DeclKind) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name())?;
         if self.active_bindings().contains(atom) {

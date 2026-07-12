@@ -27,6 +27,12 @@ pub(super) struct LayoutBuilder {
     with_scopes: Vec<ScopeId>,
 }
 
+pub(super) enum RootLayoutMode {
+    Script,
+    SloppyEval,
+    StrictEval,
+}
+
 impl LayoutBuilder {
     pub(super) fn new(static_binding_count: usize, static_function_count: usize) -> Self {
         Self {
@@ -42,10 +48,29 @@ impl LayoutBuilder {
         }
     }
 
-    pub(super) fn build(&mut self, program: &Program) -> Result<BindingLayout> {
+    pub(super) fn build(
+        &mut self,
+        program: &Program,
+        mode: &RootLayoutMode,
+    ) -> Result<BindingLayout> {
         let root_function = self.add_function(None);
-        let root_scope = self.add_scope(None, root_function, ScopeKind::Global);
-        self.analyze_statements(&program.statements, root_scope, root_scope, root_function)?;
+        let (root_scope, var_scope) = match mode {
+            RootLayoutMode::Script => {
+                let root = self.add_scope(None, root_function, ScopeKind::Global);
+                (root, root)
+            }
+            RootLayoutMode::SloppyEval => {
+                let var_scope = self.add_scope(None, root_function, ScopeKind::Global);
+                let lexical_scope =
+                    self.add_scope(Some(var_scope), root_function, ScopeKind::Local);
+                (lexical_scope, var_scope)
+            }
+            RootLayoutMode::StrictEval => {
+                let root = self.add_scope(None, root_function, ScopeKind::Local);
+                (root, root)
+            }
+        };
+        self.analyze_statements(&program.statements, root_scope, var_scope, root_function)?;
         let unresolved_count = self.unresolved_count();
         Ok(BindingLayout::from_parts(BindingLayoutParts {
             operands: self.operands.clone(),
