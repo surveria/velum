@@ -16,7 +16,7 @@ fn snapshots_start_empty_and_use_stable_categories() -> TestResult {
         "expected a fresh VM to have no direct roots",
     )?;
     ensure_usize(snapshot.total(), 0, "fresh root total")?;
-    ensure_usize(VmRootKind::all().len(), 14, "root kind count")?;
+    ensure_usize(VmRootKind::all().len(), 15, "root kind count")?;
 
     let summed = VmRootKind::all().iter().try_fold(0_usize, |total, kind| {
         checked_root_sum(total, snapshot.count(*kind))

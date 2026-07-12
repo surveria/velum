@@ -716,6 +716,17 @@ impl Context {
             .ok_or_else(|| Error::runtime("Promise id is not defined"))
     }
 
+    pub(in crate::runtime) fn promise_settlement_completion(
+        &self,
+        id: PromiseId,
+    ) -> Result<Option<Completion>> {
+        match self.promise_state(id)? {
+            PromiseState::Pending { .. } => Ok(None),
+            PromiseState::Fulfilled(value) => Ok(Some(Completion::Normal(value.clone()))),
+            PromiseState::Rejected(reason) => Ok(Some(Completion::Throw(reason.clone()))),
+        }
+    }
+
     fn promise_mut(&mut self, id: PromiseId) -> Result<&mut Promise> {
         self.promises
             .get_mut(id.index())

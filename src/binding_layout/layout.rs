@@ -26,4 +26,13 @@ impl BindingLayout {
         let mut builder = LayoutBuilder::new(static_binding_count, static_function_count);
         builder.build(program, &mode)
     }
+
+    pub(crate) fn build_module(
+        program: &Program,
+        static_binding_count: usize,
+        static_function_count: usize,
+    ) -> Result<Self> {
+        let mut builder = LayoutBuilder::new(static_binding_count, static_function_count);
+        builder.build(program, &RootLayoutMode::StrictEval)
+    }
 }

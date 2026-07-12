@@ -9,6 +9,10 @@ use crate::{
 use super::Parser;
 
 impl Parser {
+    pub(super) fn validate_module_declarations(&self, statements: &[Statement]) -> Result<()> {
+        self.validate_lexical_var_declarations(statements, true, false)
+    }
+
     pub(super) fn validate_for_in_of_declarations(
         &self,
         target: &ForInTarget,
@@ -378,7 +382,10 @@ impl Parser {
         Ok(())
     }
 
-    fn collect_pattern_names(pattern: &BindingPattern, names: &mut Vec<String>) -> Result<()> {
+    pub(super) fn collect_pattern_names(
+        pattern: &BindingPattern,
+        names: &mut Vec<String>,
+    ) -> Result<()> {
         pattern.for_each_binding(&mut |binding| {
             names.push(binding.name().as_str().to_owned());
             Ok(())

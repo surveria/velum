@@ -2,7 +2,7 @@ use crate::{error::Result, value::Value};
 
 use super::{Context, binding::scope::BindingScope, object::PropertyKey, promise::PromiseId};
 
-const ROOT_KIND_COUNT: usize = 14;
+const ROOT_KIND_COUNT: usize = 15;
 
 /// Direct VM root categories that exist independently of heap trace edges.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -10,6 +10,7 @@ pub enum VmRootKind {
     GlobalBinding,
     BuiltinBinding,
     LocalBinding,
+    ModuleBinding,
     CapturedBinding,
     ActiveThis,
     ActiveNewTarget,
@@ -28,6 +29,7 @@ impl VmRootKind {
         Self::GlobalBinding,
         Self::BuiltinBinding,
         Self::LocalBinding,
+        Self::ModuleBinding,
         Self::CapturedBinding,
         Self::ActiveThis,
         Self::ActiveNewTarget,
@@ -52,17 +54,18 @@ impl VmRootKind {
             Self::GlobalBinding => 0,
             Self::BuiltinBinding => 1,
             Self::LocalBinding => 2,
-            Self::CapturedBinding => 3,
-            Self::ActiveThis => 4,
-            Self::ActiveNewTarget => 5,
-            Self::ActiveSuper => 6,
-            Self::BytecodeFrame => 7,
-            Self::QueuedJob => 8,
-            Self::RuntimeAnchor => 9,
-            Self::RetainedHandle => 10,
-            Self::TransientOperand => 11,
-            Self::TransientCall => 12,
-            Self::TransientTemporary => 13,
+            Self::ModuleBinding => 3,
+            Self::CapturedBinding => 4,
+            Self::ActiveThis => 5,
+            Self::ActiveNewTarget => 6,
+            Self::ActiveSuper => 7,
+            Self::BytecodeFrame => 8,
+            Self::QueuedJob => 9,
+            Self::RuntimeAnchor => 10,
+            Self::RetainedHandle => 11,
+            Self::TransientOperand => 12,
+            Self::TransientCall => 13,
+            Self::TransientTemporary => 14,
         }
     }
 
@@ -184,6 +187,10 @@ impl Context {
         visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;
         for scope in &self.locals {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
+        }
+        for module in &self.modules {
+            visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;
+            visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
         }
         for frame in &self.activation_frames {
             if let Some(environments) = frame.with_environments() {

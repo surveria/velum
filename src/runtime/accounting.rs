@@ -319,7 +319,7 @@ impl Context {
         self.record_active_storage(counter)?;
         self.record_cache_storage(counter)?;
         self.record_association_storage(counter)?;
-        counter.record(VmStorageKind::Module, 0)
+        counter.record(VmStorageKind::Module, self.modules.len())
     }
 
     fn record_storage_payload_bytes(&self, counter: &mut StorageCounter) -> Result<()> {

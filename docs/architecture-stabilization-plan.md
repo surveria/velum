@@ -2943,6 +2943,26 @@ AS-09z profile evidence in draft PR #494:
 - required exact-tree correctness and canonical publication remain before
   AS-09z can close.
 
+AS-09ah profile evidence in draft PR #517:
+
+- a dedicated strict module source goal owns import/export grammar and early
+  errors instead of mapping module metadata onto strict script execution;
+- public compiled-module metadata and an embedder-controlled loader build one
+  canonical, deduplicated VM-local graph without engine-owned filesystem or
+  resolution policy;
+- instantiation creates persistent module environments, links imports through
+  live alias cells, evaluates dependencies once across cycles, and retains
+  exported closures over module-local and imported bindings;
+- stable namespace objects use sorted live accessors, a null prototype,
+  non-configurable exports, and non-extensibility; namespace re-exports and
+  diamond star exports preserve binding and object identity;
+- persistent scope and namespace roots activate the checked Module storage
+  category. Rollback deactivates already-accounted scopes when graph
+  persistence fails;
+- direct module tests, strict Clippy, the complete engine test suite, and the
+  architecture guard pass. Top-level await, Test262 runner routing, focused
+  corpus evidence, and exact-tree CI remain in progress.
+
 ### AS-10: Performance And Memory Checkpoints
 
 Maintain a stable core benchmark cohort whose history remains comparable even

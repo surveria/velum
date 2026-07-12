@@ -52,6 +52,32 @@ pub fn compile_program(program: &Program, layout: &BindingLayout) -> Result<Byte
     ))
 }
 
+pub fn compile_module_program(
+    program: &Program,
+    layout: &BindingLayout,
+    import_local_names: &std::collections::BTreeSet<&str>,
+) -> Result<BytecodeProgram> {
+    let executable = program
+        .statements
+        .iter()
+        .filter(|statement| {
+            !matches!(
+                statement.kind(),
+                Stmt::VarDecl {
+                    name,
+                    kind: DeclKind::Const,
+                    init: None,
+                } if import_local_names.contains(name.name().as_str())
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    Ok(BytecodeProgram::new(
+        BytecodeBlock::compile_statements(&executable, StatementValue::Store, layout)?,
+        BytecodeHoistPlan::compile(&program.statements, layout)?,
+    ))
+}
+
 impl BytecodeBlock {
     fn compile_statements(
         statements: &[Statement],

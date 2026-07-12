@@ -558,18 +558,25 @@ impl BindingCell {
     }
 
     pub fn value(&self, name: &str) -> Result<Value> {
-        match &self.0.lock().state {
-            BindingState::Initialized(value) => Ok(value.clone()),
-            BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
+        let mut current = self.clone();
+        let mut visited = Vec::new();
+        loop {
+            if visited.iter().any(|cell: &Self| cell.same_cell(&current)) {
+                return Err(reference_error_uninitialized(name));
+            }
+            visited.push(current.clone());
+            let state = current.0.lock().state.clone();
+            match state {
+                BindingState::Initialized(value) => return Ok(value),
+                BindingState::Uninitialized => return Err(reference_error_uninitialized(name)),
+                BindingState::Alias(target) => current = target,
+            }
         }
     }
 
     pub(crate) fn with_initialized_value<R>(&self, visit: impl FnOnce(&Value) -> R) -> Option<R> {
-        let binding = self.0.lock();
-        match &binding.state {
-            BindingState::Initialized(value) => Some(visit(value)),
-            BindingState::Uninitialized => None,
-        }
+        let value = self.value("<binding>").ok()?;
+        Some(visit(&value))
     }
 
     pub fn kind(&self) -> DeclKind {
@@ -578,7 +585,7 @@ impl BindingCell {
 
     pub fn initialize(&self, value: Value) -> Result<()> {
         let mut binding = self.0.lock();
-        if matches!(binding.state, BindingState::Initialized(_)) {
+        if !matches!(binding.state, BindingState::Uninitialized) {
             return Err(Error::runtime(
                 "function parameter binding is already initialized",
             ));
@@ -624,6 +631,21 @@ impl BindingCell {
         Ok(())
     }
 
+    pub(in crate::runtime) fn alias_to(&self, target: Self) -> Result<()> {
+        if self.same_cell(&target) {
+            return Err(Error::runtime("binding cannot alias itself"));
+        }
+        let mut binding = self.0.lock();
+        if !matches!(binding.state, BindingState::Uninitialized) {
+            return Err(Error::runtime("import binding is already linked"));
+        }
+        binding.state = BindingState::Alias(target);
+        binding.mutable = false;
+        binding.immutable_assignment = ImmutableAssignment::AlwaysThrow;
+        drop(binding);
+        Ok(())
+    }
+
     pub(crate) fn same_cell(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
@@ -633,6 +655,7 @@ impl BindingCell {
 enum BindingState {
     Uninitialized,
     Initialized(Value),
+    Alias(BindingCell),
 }
 
 #[derive(Debug, Clone)]

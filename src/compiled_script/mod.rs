@@ -5,12 +5,15 @@ pub use usage::CompiledScriptUsage;
 use crate::{
     binding_metadata::BindingLayout,
     bytecode::BytecodeProgram,
+    compiled_module::{ModuleExport, ModuleImport, ModuleImportName},
     compiler,
     error::{Error, Result},
-    lexer, parser,
+    lexer,
+    parser::{self, ModuleSyntax},
     runtime::limits::RuntimeLimits,
     source::SourceId,
 };
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
@@ -25,6 +28,7 @@ pub struct CompiledScript {
 #[derive(Clone, Copy)]
 enum CompileMode {
     Script,
+    Module,
     Eval {
         strict: bool,
         super_context: EvalSuperContext,
@@ -37,6 +41,13 @@ enum EvalSuperContext {
     Property,
     PropertyAndCall,
 }
+
+type CompiledModuleParts = (
+    CompiledScript,
+    Box<[String]>,
+    Box<[ModuleImport]>,
+    Box<[ModuleExport]>,
+);
 
 impl CompileMode {
     const SCRIPT: Self = Self::Script;
@@ -56,13 +67,14 @@ impl CompileMode {
     const fn strict(self) -> bool {
         match self {
             Self::Script => false,
+            Self::Module => true,
             Self::Eval { strict, .. } => strict,
         }
     }
 
     const fn eval_super_context(self) -> Option<EvalSuperContext> {
         match self {
-            Self::Script => None,
+            Self::Script | Self::Module => None,
             Self::Eval { super_context, .. } => Some(super_context),
         }
     }
@@ -96,18 +108,116 @@ impl CompiledScript {
         )
     }
 
+    pub(crate) fn compile_module_named(
+        source_name: &str,
+        source: &str,
+        limits: RuntimeLimits,
+    ) -> Result<CompiledModuleParts> {
+        let (script, module) = Self::compile_with_name_and_mode_parts(
+            Some(source_name),
+            source,
+            limits,
+            CompileMode::Module,
+        )?;
+        let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
+        let imported_exports = module
+            .imports
+            .iter()
+            .map(|entry| {
+                (
+                    entry.local_name.clone(),
+                    (entry.request.clone(), entry.import_name.clone()),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let imports = module
+            .imports
+            .into_iter()
+            .map(|entry| {
+                ModuleImport::new(
+                    entry.request,
+                    match entry.import_name {
+                        parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
+                        parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
+                    },
+                    entry.local_name,
+                )
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let exports = module
+            .exports
+            .into_iter()
+            .map(|entry| match entry {
+                parser::ModuleExportEntry::Local {
+                    export_name,
+                    local_name,
+                } => match imported_exports.get(&local_name) {
+                    Some((request, parser::ModuleImportName::Name(import_name))) => {
+                        ModuleExport::Indirect {
+                            export_name,
+                            import_name: import_name.clone(),
+                            request: request.clone(),
+                        }
+                    }
+                    Some((request, parser::ModuleImportName::Namespace)) => {
+                        ModuleExport::Namespace {
+                            export_name,
+                            request: request.clone(),
+                        }
+                    }
+                    None => ModuleExport::Local {
+                        export_name,
+                        local_name,
+                    },
+                },
+                parser::ModuleExportEntry::Indirect {
+                    export_name,
+                    import_name,
+                    request,
+                } => ModuleExport::Indirect {
+                    export_name,
+                    import_name,
+                    request,
+                },
+                parser::ModuleExportEntry::Namespace {
+                    export_name,
+                    request,
+                } => ModuleExport::Namespace {
+                    export_name,
+                    request,
+                },
+                parser::ModuleExportEntry::Star { request } => ModuleExport::Star { request },
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Ok((script, module.requests.into_boxed_slice(), imports, exports))
+    }
+
     fn compile_with_name_and_mode(
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
         mode: CompileMode,
     ) -> Result<Self> {
+        Self::compile_with_name_and_mode_parts(source_name, source, limits, mode)
+            .map(|(script, _)| script)
+    }
+
+    fn compile_with_name_and_mode_parts(
+        source_name: Option<&str>,
+        source: &str,
+        limits: RuntimeLimits,
+        mode: CompileMode,
+    ) -> Result<(Self, Option<ModuleSyntax>)> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
         let tokens =
             lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
-        let parsed = if let Some(super_context) = mode.eval_super_context() {
+        let parsed = if matches!(mode, CompileMode::Module) {
+            parser::parse_module_with_usage(tokens, limits)
+        } else if let Some(super_context) = mode.eval_super_context() {
             let allow_super_property = matches!(
                 super_context,
                 EvalSuperContext::Property | EvalSuperContext::PropertyAndCall
@@ -126,22 +236,36 @@ impl CompiledScript {
             parser::parse_with_usage(tokens, limits)
         }
         .map_err(|error| error.with_source(source_id, source))?;
+        let module = parsed.module;
         let program = parsed.program;
-        let binding_layout = if matches!(mode, CompileMode::Eval { .. }) {
-            BindingLayout::build_eval(
+        let binding_layout = match mode {
+            CompileMode::Eval { .. } => BindingLayout::build_eval(
                 &program,
                 parsed.usage.static_binding_count,
                 parsed.usage.static_function_count,
                 parsed.strict,
-            )?
-        } else {
-            BindingLayout::build(
+            )?,
+            CompileMode::Module => BindingLayout::build_module(
                 &program,
                 parsed.usage.static_binding_count,
                 parsed.usage.static_function_count,
-            )?
+            )?,
+            CompileMode::Script => BindingLayout::build(
+                &program,
+                parsed.usage.static_binding_count,
+                parsed.usage.static_function_count,
+            )?,
         };
-        let bytecode = compiler::compile_program(&program, &binding_layout)?;
+        let bytecode = if let Some(module) = module.as_ref() {
+            let import_local_names = module
+                .imports
+                .iter()
+                .map(|entry| entry.local_name.as_str())
+                .collect();
+            compiler::compile_module_program(&program, &binding_layout, &import_local_names)?
+        } else {
+            compiler::compile_program(&program, &binding_layout)?
+        };
         let bytecode_instruction_count = bytecode.instruction_count();
         let bytecode_binding_operand_count = bytecode.binding_operand_count();
         let bytecode_property_operand_count = bytecode.property_operand_count();
@@ -150,7 +274,7 @@ impl CompiledScript {
         let bytecode_numeric_instruction_count = bytecode.numeric_instruction_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();
-        Ok(Self {
+        let script = Self {
             bytecode,
             usage: CompiledScriptUsage {
                 source_len: source.len(),
@@ -179,7 +303,8 @@ impl CompiledScript {
             source_id,
             source_name: source_name.map(str::to_owned),
             strict: parsed.strict,
-        })
+        };
+        Ok((script, module))
     }
 
     pub(crate) const fn binding_layout(&self) -> &BindingLayout {

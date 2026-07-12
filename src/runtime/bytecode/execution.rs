@@ -93,6 +93,84 @@ impl Context {
         Ok(outcome)
     }
 
+    pub(in crate::runtime) fn eval_bytecode_program_with_jobs(
+        &mut self,
+        bytecode: &BytecodeProgram,
+    ) -> Result<BytecodeOutcome> {
+        let local_base = self.locals.len();
+        let activation_base = self.activation_frames.len();
+        let mut state = BytecodeState::with_private_environment(self.current_private_environment());
+        let mut outcome =
+            self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)?;
+        loop {
+            let BytecodeOutcome::Suspended { awaited, .. } = outcome else {
+                return Ok(outcome);
+            };
+            let resume = loop {
+                if let Some(completion) = self.promise_settlement_completion(awaited)? {
+                    break completion;
+                }
+                if self.run_jobs()? == 0 {
+                    self.discard_execution_suffix(local_base, activation_base)?;
+                    return Err(Error::runtime(
+                        "top-level await remained pending after the module job queue drained",
+                    ));
+                }
+            };
+            outcome = match self.resume_top_level_bytecode(activation_base, resume) {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    self.discard_execution_suffix(local_base, activation_base)?;
+                    return Err(error);
+                }
+            };
+        }
+    }
+
+    fn resume_top_level_bytecode(
+        &mut self,
+        activation_base: usize,
+        resume: Completion,
+    ) -> Result<BytecodeOutcome> {
+        let mut resume = Some(resume);
+        loop {
+            let activation_index = self
+                .activation_frames
+                .len()
+                .checked_sub(1)
+                .ok_or_else(|| Error::runtime("top-level bytecode activation disappeared"))?;
+            if activation_index < activation_base {
+                return Err(Error::runtime("top-level bytecode activation underflowed"));
+            }
+            let (block, mut state) = {
+                let continuation = self
+                    .activation_frames
+                    .last_mut()
+                    .map(crate::runtime::activation::ActivationFrame::continuation_mut)
+                    .and_then(Option::as_mut)
+                    .ok_or_else(|| Error::runtime("top-level bytecode continuation disappeared"))?;
+                if let Some(completion) = resume.take() {
+                    continuation.resume_suspension(completion)?;
+                }
+                let block = continuation.program_block().ok_or_else(|| {
+                    Error::runtime("top-level await resumed a function continuation")
+                })?;
+                let state = continuation.checkout_state()?;
+                (block, state)
+            };
+            let outcome = self.run_bytecode_state(&block, &mut state)?;
+            if outcome.is_suspended() {
+                self.park_bytecode_state_at(activation_index, state)?;
+                return Ok(outcome);
+            }
+            if activation_index == activation_base {
+                self.pop_owned_bytecode_continuation_at(activation_base)?;
+                return Ok(outcome);
+            }
+            self.finish_resumed_bytecode_child(block, outcome.completion())?;
+        }
+    }
+
     pub(in crate::runtime) fn eval_bytecode_block(
         &mut self,
         block: &BytecodeBlock,

@@ -1,5 +1,6 @@
 use crate::api::host::{HostCall, IntoJsValue};
 use crate::api::owned_value::OwnedValue;
+use crate::compiled_module::{CompiledModule, ModuleLoader};
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
@@ -231,6 +232,40 @@ impl Vm {
     /// lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
         self.context.compile_named(source_name, source)
+    }
+
+    /// Compiles an ECMAScript module with a stable embedder-provided specifier.
+    ///
+    /// # Errors
+    /// Fails when module lexing, parsing, static validation, or configured
+    /// compile-time resource limits fail.
+    pub fn compile_module_named(&self, source_name: &str, source: &str) -> Result<CompiledModule> {
+        self.context.compile_module_named(source_name, source)
+    }
+
+    /// Compiles, links, and evaluates one ECMAScript module graph through an
+    /// embedder-controlled loader.
+    ///
+    /// # Errors
+    /// Fails when loading, module compilation, linking, evaluation, or
+    /// configured resource limits fail.
+    pub fn eval_module_named<L: ModuleLoader>(
+        &mut self,
+        source_name: &str,
+        source: &str,
+        loader: &mut L,
+    ) -> Result<Value> {
+        self.context.eval_module_named(source_name, source, loader)
+    }
+
+    #[must_use]
+    pub const fn loaded_module_count(&self) -> usize {
+        self.context.loaded_module_count()
+    }
+
+    #[must_use]
+    pub fn has_loaded_module(&self, source_name: &str) -> bool {
+        self.context.has_loaded_module(source_name)
     }
 
     /// # Errors

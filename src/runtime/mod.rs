@@ -41,6 +41,7 @@ mod gc;
 pub(in crate::runtime) mod generator;
 pub mod globals;
 pub mod limits;
+mod module;
 pub mod native;
 pub mod numeric;
 pub mod object;
@@ -103,6 +104,8 @@ pub struct Context {
     globals: BindingScope,
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
+    modules: Vec<module::ModuleRecord>,
+    module_evaluation_depth: usize,
     activation_frames: Vec<activation::ActivationFrame>,
     functions: SlotArena<Function>,
     native_functions: SlotArena<native::NativeFunction>,
@@ -365,6 +368,8 @@ impl Context {
             globals: BindingScope::new_active(storage_ledger.clone()),
             builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             locals: Vec::new(),
+            modules: Vec::new(),
+            module_evaluation_depth: 0,
             activation_frames: Vec::new(),
             functions: SlotArena::new(),
             native_functions: SlotArena::new(),

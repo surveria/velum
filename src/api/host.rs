@@ -135,7 +135,10 @@ pub struct HostFunction {
 
 #[derive(Clone)]
 enum HostFunctionKind {
-    Callback(Rc<HostCallback>),
+    Callback {
+        callback: Rc<HostCallback>,
+        allow_vm_handles: bool,
+    },
     Operation(HostOperation),
 }
 
@@ -146,7 +149,10 @@ impl HostFunction {
     {
         Self {
             name,
-            kind: HostFunctionKind::Callback(Rc::new(callback)),
+            kind: HostFunctionKind::Callback {
+                callback: Rc::new(callback),
+                allow_vm_handles: false,
+            },
         }
     }
 
@@ -154,6 +160,19 @@ impl HostFunction {
         Self {
             name,
             kind: HostFunctionKind::Operation(operation),
+        }
+    }
+
+    fn new_internal<F>(name: String, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
+    {
+        Self {
+            name,
+            kind: HostFunctionKind::Callback {
+                callback: Rc::new(callback),
+                allow_vm_handles: true,
+            },
         }
     }
 
@@ -179,7 +198,7 @@ impl HostFunction {
             roots,
             args,
         };
-        let HostFunctionKind::Callback(callback) = &self.kind else {
+        let HostFunctionKind::Callback { callback, .. } = &self.kind else {
             return Err(Error::runtime("host operation was routed as a callback"));
         };
         callback(call).map_err(|error| error.with_context(self.context_message()))
@@ -195,8 +214,17 @@ impl HostFunction {
 
     const fn operation_kind(&self) -> Option<HostOperation> {
         match self.kind {
-            HostFunctionKind::Callback(_) => None,
+            HostFunctionKind::Callback { .. } => None,
             HostFunctionKind::Operation(operation) => Some(operation),
+        }
+    }
+
+    const fn allows_vm_handles(&self) -> bool {
+        match self.kind {
+            HostFunctionKind::Callback {
+                allow_vm_handles, ..
+            } => allow_vm_handles,
+            HostFunctionKind::Operation(_) => false,
         }
     }
 }
@@ -354,6 +382,39 @@ impl<'call> HostCall<'call> {
 }
 
 impl Context {
+    pub(crate) fn create_internal_host_function<F>(
+        &mut self,
+        name: String,
+        callback: F,
+    ) -> Result<Value>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
+    {
+        if name.is_empty() {
+            return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
+        }
+        self.check_string_len(&name)?;
+        let projected_count = self
+            .host_functions
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("host callback count overflowed"))?;
+        let projected_payload_bytes = self
+            .host_callback_name_bytes()?
+            .checked_add(name.len())
+            .ok_or_else(|| Error::limit("host callback name bytes overflowed"))?;
+        self.ensure_storage_totals(
+            crate::runtime::VmStorageKind::HostCallback,
+            projected_count,
+            projected_payload_bytes,
+        )?;
+        self.host_functions.reserve_insert()?;
+        let id = HostFunctionId::new(self.host_functions.next_index());
+        self.host_functions
+            .insert_at_next(id.index(), HostFunction::new_internal(name, callback))?;
+        Ok(Value::HostFunction(id))
+    }
+
     /// # Errors
     /// Fails when the name is empty, exceeds string limits, duplicates an
     /// existing binding, or would exceed the binding limit.
@@ -456,6 +517,7 @@ impl Context {
                 .eval_host_operation(operation, &values)
                 .map_err(|error| error.with_context(function.context_message()));
         }
+        let allow_vm_handles = function.allows_vm_handles();
         let roots = self.root_snapshot()?;
         let value = function.call(
             self.identity(),
@@ -463,6 +525,11 @@ impl Context {
             roots,
             &values,
         )?;
+        if allow_vm_handles {
+            return self
+                .checked_value(value)
+                .map_err(|error| error.with_context(function.context_message()));
+        }
         self.checked_host_return_value(value)
             .map_err(|error| error.with_context(function.context_message()))
     }
