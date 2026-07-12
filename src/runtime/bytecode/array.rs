@@ -71,9 +71,11 @@ impl Context {
         property: &BytecodeProperty,
         index: BytecodeArrayIndex,
         value: Value,
+        strict: bool,
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
         if self.optional_optimizations_enabled()
+            && (!strict || self.bytecode_target_is_typed_array(object)?)
             && let Value::Object(id) = object
             && self.objects.set_array_index_if_array(
                 *id,
@@ -84,7 +86,13 @@ impl Context {
         {
             return Ok(());
         }
-        self.set_static_property_value(object, property.name(), property.access(), value)
+        self.set_bytecode_static_property_reference(
+            object,
+            property.name(),
+            property.access(),
+            value,
+            strict,
+        )
     }
 
     pub(super) fn set_dynamic_array_index_property(
@@ -92,6 +100,7 @@ impl Context {
         object: &Value,
         property: &Value,
         value: Value,
+        strict: bool,
     ) -> Result<bool> {
         if !self.optional_optimizations_enabled() {
             return Ok(false);
@@ -99,6 +108,9 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(false);
         };
+        if strict && self.objects.typed_array(*id)?.is_none() {
+            return Ok(false);
+        }
         let Some(index) = self.objects.dynamic_array_index_if_array(*id, property)? else {
             return Ok(false);
         };
@@ -114,14 +126,18 @@ impl Context {
         index: BytecodeArrayIndex,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     ) -> Result<Value> {
-        if !self.optional_optimizations_enabled() {
+        if !self.optional_optimizations_enabled()
+            || (strict && !self.bytecode_target_is_typed_array(object)?)
+        {
             return self.eval_bytecode_update_static_property(
                 object,
                 property.name(),
                 property.access(),
                 op,
                 prefix,
+                strict,
             );
         }
         let Some(mutation) =
@@ -135,9 +151,10 @@ impl Context {
                 property.access(),
                 op,
                 prefix,
+                strict,
             );
         };
-        self.array_index_mutation_result(object, property, mutation, prefix)
+        self.array_index_mutation_result(object, property, mutation, prefix, strict)
     }
 
     pub(super) fn eval_dynamic_array_index_update(
@@ -147,6 +164,7 @@ impl Context {
         access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     ) -> Result<Option<Value>> {
         if !self.optional_optimizations_enabled() {
             return Ok(None);
@@ -154,6 +172,9 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(None);
         };
+        if strict && self.objects.typed_array(*id)?.is_none() {
+            return Ok(None);
+        }
         let Some(index) = self.objects.dynamic_array_index_if_array(*id, property)? else {
             return Ok(None);
         };
@@ -164,7 +185,7 @@ impl Context {
         else {
             return Ok(None);
         };
-        self.dynamic_array_index_mutation_result(object, property, access, mutation, prefix)
+        self.dynamic_array_index_mutation_result(object, property, access, mutation, prefix, strict)
             .map(Some)
     }
 
@@ -175,14 +196,18 @@ impl Context {
         property: &BytecodeProperty,
         index: BytecodeArrayIndex,
         right: &Value,
+        strict: bool,
     ) -> Result<Value> {
-        if !self.optional_optimizations_enabled() {
+        if !self.optional_optimizations_enabled()
+            || (strict && !self.bytecode_target_is_typed_array(object)?)
+        {
             return self.eval_bytecode_static_compound_assignment(
                 op,
                 object,
                 property.name(),
                 property.access(),
                 right,
+                strict,
             );
         }
         let Some(mutation) = self.try_array_index_read_modify_write(
@@ -197,9 +222,10 @@ impl Context {
                 property.name(),
                 property.access(),
                 right,
+                strict,
             );
         };
-        self.array_index_mutation_result(object, property, mutation, true)
+        self.array_index_mutation_result(object, property, mutation, true, strict)
     }
 
     pub(super) fn eval_dynamic_array_index_compound_assignment(
@@ -209,6 +235,7 @@ impl Context {
         property: &Value,
         access: StaticPropertyAccessId,
         right: &Value,
+        strict: bool,
     ) -> Result<Option<Value>> {
         if !self.optional_optimizations_enabled() {
             return Ok(None);
@@ -216,6 +243,9 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(None);
         };
+        if strict && self.objects.typed_array(*id)?.is_none() {
+            return Ok(None);
+        }
         let Some(index) = self.objects.dynamic_array_index_if_array(*id, property)? else {
             return Ok(None);
         };
@@ -226,7 +256,7 @@ impl Context {
         else {
             return Ok(None);
         };
-        self.dynamic_array_index_mutation_result(object, property, access, mutation, true)
+        self.dynamic_array_index_mutation_result(object, property, access, mutation, true, strict)
             .map(Some)
     }
 
@@ -262,12 +292,20 @@ impl Context {
         }))
     }
 
+    fn bytecode_target_is_typed_array(&self, object: &Value) -> Result<bool> {
+        let Value::Object(id) = object else {
+            return Ok(false);
+        };
+        self.objects.typed_array(*id).map(|view| view.is_some())
+    }
+
     fn array_index_mutation_result(
         &mut self,
         object: &Value,
         property: &BytecodeProperty,
         mutation: ArrayIndexMutation,
         prefix: bool,
+        strict: bool,
     ) -> Result<Value> {
         match mutation {
             ArrayIndexMutation::Updated {
@@ -278,11 +316,12 @@ impl Context {
                 old_value,
                 new_value,
             } => {
-                self.set_static_property_value(
+                self.set_bytecode_static_property_reference(
                     object,
                     property.name(),
                     property.access(),
                     new_value.clone(),
+                    strict,
                 )?;
                 Ok(if prefix { new_value } else { old_value })
             }
@@ -296,6 +335,7 @@ impl Context {
         access: StaticPropertyAccessId,
         mutation: ArrayIndexMutation,
         prefix: bool,
+        strict: bool,
     ) -> Result<Value> {
         match mutation {
             ArrayIndexMutation::Updated {
@@ -307,11 +347,12 @@ impl Context {
                 new_value,
             } => {
                 let mut property = self.dynamic_property_key(property)?;
-                self.set_cached_dynamic_property_value(
+                self.set_bytecode_dynamic_property_reference(
                     object,
                     &mut property,
                     access,
                     new_value.clone(),
+                    strict,
                 )?;
                 Ok(if prefix { new_value } else { old_value })
             }

@@ -11,7 +11,6 @@ use crate::{
     value::Value,
 };
 
-use super::BytecodeDirectThrow;
 use super::block::BytecodeBlock;
 use super::function_mode::BytecodeNewTargetMode;
 use super::numeric::{
@@ -20,6 +19,7 @@ use super::numeric::{
 };
 use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
 use super::super_property::BytecodeSuperProperty;
+use super::{BytecodeAddress, BytecodeDirectThrow};
 
 mod binding;
 
@@ -402,16 +402,19 @@ pub enum BytecodeAssignmentTarget {
     StaticProperty {
         object: BytecodeBlock,
         property: BytecodeProperty,
+        strict: bool,
     },
     ArrayIndexProperty {
         object: BytecodeBlock,
         property: BytecodeProperty,
         index: BytecodeArrayIndex,
+        strict: bool,
     },
     ComputedProperty {
         object: BytecodeBlock,
         property: BytecodeBlock,
         operand: BytecodeDynamicProperty,
+        strict: bool,
     },
     PrivateProperty {
         object: BytecodeBlock,
@@ -522,17 +525,20 @@ pub enum BytecodeInstruction {
         property: BytecodeProperty,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     },
     UpdateArrayIndexProperty {
         property: BytecodeProperty,
         index: BytecodeArrayIndex,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     },
     UpdateComputedProperty {
         property: BytecodeDynamicProperty,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     },
     Binary {
         op: BinaryOp,
@@ -552,15 +558,18 @@ pub enum BytecodeInstruction {
     CompoundStaticProperty {
         property: BytecodeProperty,
         op: BinaryOp,
+        strict: bool,
     },
     CompoundArrayIndexProperty {
         property: BytecodeProperty,
         index: BytecodeArrayIndex,
         op: BinaryOp,
+        strict: bool,
     },
     CompoundComputedProperty {
         property: BytecodeDynamicProperty,
         op: BinaryOp,
+        strict: bool,
     },
     LogicalAssignment {
         op: BinaryOp,
@@ -614,13 +623,16 @@ pub enum BytecodeInstruction {
     },
     StaticPropertyAssign {
         property: BytecodeProperty,
+        strict: bool,
     },
     ArrayIndexAssign {
         property: BytecodeProperty,
         index: BytecodeArrayIndex,
+        strict: bool,
     },
     ComputedPropertyAssign {
         property: BytecodeDynamicProperty,
+        strict: bool,
     },
     CallBinding {
         callee: BytecodeBinding,
@@ -781,17 +793,4 @@ pub enum BytecodeCompletion {
     Return,
     ReturnDirect,
     Throw,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct BytecodeAddress(usize);
-
-impl BytecodeAddress {
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    pub const fn index(self) -> usize {
-        self.0
-    }
 }

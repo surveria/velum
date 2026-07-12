@@ -190,6 +190,7 @@ impl Parser {
         let Some(target) = Self::assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
+        self.validate_assignment_target(&target)?;
         let kind = match target.into_kind() {
             Expr::Identifier(name) => Expr::Assignment {
                 name,
@@ -205,6 +206,7 @@ impl Parser {
                 object,
                 property,
                 access,
+                strict: self.is_strict_mode(),
                 expr: Box::new(value),
             },
             Expr::ComputedMember {
@@ -215,6 +217,7 @@ impl Parser {
                 object,
                 property,
                 access,
+                strict: self.is_strict_mode(),
                 expr: Box::new(value),
             },
             Expr::PrivateMember { object, name } => Expr::PrivateAssignment {
@@ -287,6 +290,7 @@ impl Parser {
         let Some(target) = Self::assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
+        self.validate_assignment_target(&target)?;
         Ok(self.expression_node(
             start,
             Expr::CompoundAssignment {

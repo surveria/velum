@@ -6,7 +6,7 @@ use crate::{
     runtime::native::NativeFunctionKind,
     runtime::object::{
         CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyValue,
-        CacheablePropertyWrite, PropertyKey, PropertyLookup,
+        CacheablePropertyWrite, OwnPropertyDescriptor, PropertyKey, PropertyLookup,
     },
     runtime::property::{DynamicPropertyKey, delete_property},
     runtime::semantic_object::{SemanticPropertyDelete, SemanticPropertyWrite},
@@ -282,6 +282,38 @@ impl Context {
         Ok(())
     }
 
+    pub(in crate::runtime) fn try_set_cached_static_own_property_value(
+        &mut self,
+        object: &Value,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        value: Value,
+    ) -> Result<bool> {
+        let Value::Object(id) = object else {
+            return Ok(false);
+        };
+        if self.objects.is_proxy(*id) {
+            return Ok(false);
+        }
+        let value = self.runtime_value(value)?;
+        let key = self.intern_static_property_key(property)?;
+        let lookup = PropertyLookup::from_key(property.as_str(), key);
+        let dynamic = DynamicPropertyKey::new(property.as_str().to_owned(), Some(key));
+        if !matches!(
+            self.semantic_own_property_descriptor(object, &dynamic)?,
+            Some(OwnPropertyDescriptor::Data(descriptor)) if descriptor.writable().is_yes()
+        ) {
+            return Ok(false);
+        }
+        if !self.set_cached_object_property_value(*id, access, lookup, value.clone())? {
+            return Ok(false);
+        }
+        if self.is_global_object_id(*id) {
+            self.sync_global_object_property_binding(property.as_str(), value)?;
+        }
+        Ok(true)
+    }
+
     pub(in crate::runtime) fn try_cached_static_property_read_modify_write(
         &mut self,
         object: &Value,
@@ -349,6 +381,37 @@ impl Context {
             self.sync_global_object_property_binding(property.name(), value)?;
         }
         Ok(())
+    }
+
+    pub(in crate::runtime) fn try_set_cached_dynamic_own_property_value(
+        &mut self,
+        object: &Value,
+        property: &mut DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+        value: Value,
+    ) -> Result<bool> {
+        let Value::Object(id) = object else {
+            return Ok(false);
+        };
+        if self.objects.is_proxy(*id) || self.objects.array_len_if_array(*id)?.is_some() {
+            return Ok(false);
+        }
+        let value = self.runtime_value(value)?;
+        let key = self.intern_dynamic_property_key(property)?;
+        let lookup = PropertyLookup::from_key(property.name(), key);
+        if !matches!(
+            self.semantic_own_property_descriptor(object, &*property)?,
+            Some(OwnPropertyDescriptor::Data(descriptor)) if descriptor.writable().is_yes()
+        ) {
+            return Ok(false);
+        }
+        if !self.set_cached_object_property_value(*id, access, lookup, value.clone())? {
+            return Ok(false);
+        }
+        if self.is_global_object_id(*id) {
+            self.sync_global_object_property_binding(property.name(), value)?;
+        }
+        Ok(true)
     }
 
     pub(in crate::runtime) fn try_cached_dynamic_property_read_modify_write(

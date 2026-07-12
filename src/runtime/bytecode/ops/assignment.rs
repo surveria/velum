@@ -11,10 +11,17 @@ use crate::{
     },
     runtime::private::PrivateNameId,
     runtime::property::DynamicPropertyKey,
-    runtime::{Context, abstract_operations::to_boolean, control::reference_error_undefined},
+    runtime::{
+        Context,
+        abstract_operations::{SetFailureBehavior, to_boolean},
+        control::reference_error_undefined,
+        object::PropertyLookup,
+    },
     syntax::{BinaryOp, StaticName, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
+
+const LEGACY_PROTO_PROPERTY: &str = "__proto__";
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
@@ -29,17 +36,20 @@ pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
     StaticProperty {
         object: Value,
         property: BytecodeProperty,
+        strict: bool,
     },
     ArrayIndexProperty {
         object: Value,
         property: BytecodeProperty,
         index: BytecodeArrayIndex,
+        strict: bool,
     },
     ComputedProperty {
         object: Value,
         property_value: Value,
         property: DynamicPropertyKey,
         access: StaticPropertyAccessId,
+        strict: bool,
     },
     PrivateProperty {
         object: Value,
@@ -59,19 +69,21 @@ impl BytecodeAssignmentReference {
                 cell.value(name.name())
             }
             Self::WithBinding { name, reference } => reference.get(context, name),
-            Self::StaticProperty { object, property } => {
-                context.get_static_property_value(object, property.name(), property.access())
-            }
+            Self::StaticProperty {
+                object, property, ..
+            } => context.get_static_property_value(object, property.name(), property.access()),
             Self::ArrayIndexProperty {
                 object,
                 property,
                 index,
+                ..
             } => context.eval_bytecode_array_index_member(object, property, *index),
             Self::ComputedProperty {
                 object,
                 property_value,
                 property,
                 access,
+                ..
             } => {
                 if let Some(value) =
                     context.eval_dynamic_array_index_member(object, property_value)?
@@ -97,29 +109,40 @@ impl BytecodeAssignmentReference {
                 context.assign_bytecode_or_create_sloppy_global(name, value)
             }
             Self::WithBinding { name, reference } => reference.set(context, name, value),
-            Self::StaticProperty { object, property } => {
-                context.set_static_property_value(object, property.name(), property.access(), value)
-            }
+            Self::StaticProperty {
+                object,
+                property,
+                strict,
+            } => context.set_bytecode_static_property_reference(
+                object,
+                property.name(),
+                property.access(),
+                value,
+                *strict,
+            ),
             Self::ArrayIndexProperty {
                 object,
                 property,
                 index,
-            } => context.set_bytecode_array_index_property(object, property, *index, value),
+                strict,
+            } => {
+                context.set_bytecode_array_index_property(object, property, *index, value, *strict)
+            }
             Self::ComputedProperty {
                 object,
-                property_value,
+                property_value: _,
                 property,
                 access,
+                strict,
             } => {
-                if context.set_dynamic_array_index_property(
-                    object,
-                    property_value,
-                    value.clone(),
-                )? {
-                    return Ok(());
-                }
                 let mut property = property.clone();
-                context.set_cached_dynamic_property_value(object, &mut property, *access, value)
+                context.set_bytecode_dynamic_property_reference(
+                    object,
+                    &mut property,
+                    *access,
+                    value,
+                    *strict,
+                )
             }
             Self::PrivateProperty { object, name } => {
                 context.write_private_slot(object, name, value)
@@ -146,6 +169,82 @@ impl BytecodeAssignmentReference {
 }
 
 impl Context {
+    pub(in crate::runtime::bytecode) fn set_bytecode_static_property_reference(
+        &mut self,
+        object: &Value,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        value: Value,
+        strict: bool,
+    ) -> Result<()> {
+        if bytecode_property_set_uses_legacy_path(object, property.as_str(), strict)
+            || (!strict && self.bytecode_property_target_is_array(object)?)
+        {
+            return self.set_static_property_value(object, property, access, value);
+        }
+        if self.try_set_cached_static_own_property_value(object, property, access, value.clone())? {
+            return Ok(());
+        }
+        let value = self.runtime_value(value)?;
+        let sync_value = value.clone();
+        let key = self.intern_static_property_key(property)?;
+        let lookup = PropertyLookup::from_key(property.as_str(), key);
+        self.set(object, lookup, value, object, bytecode_set_failure(strict))?;
+        if let Value::Object(id) = object
+            && self.is_global_object_id(*id)
+        {
+            self.sync_global_object_property_binding(property.as_str(), sync_value)?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime::bytecode) fn set_bytecode_dynamic_property_reference(
+        &mut self,
+        object: &Value,
+        property: &mut DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+        value: Value,
+        strict: bool,
+    ) -> Result<()> {
+        if bytecode_property_set_uses_legacy_path(object, property.name(), strict)
+            || (!strict && self.bytecode_property_target_is_array(object)?)
+        {
+            return self.set_cached_dynamic_property_value(object, property, access, value);
+        }
+        if self.try_set_cached_dynamic_own_property_value(
+            object,
+            property,
+            access,
+            value.clone(),
+        )? {
+            return Ok(());
+        }
+        let value = self.runtime_value(value)?;
+        let sync_value = value.clone();
+        self.set(
+            object,
+            property.lookup(),
+            value,
+            object,
+            bytecode_set_failure(strict),
+        )?;
+        if let Value::Object(id) = object
+            && self.is_global_object_id(*id)
+        {
+            self.sync_global_object_property_binding(property.name(), sync_value)?;
+        }
+        Ok(())
+    }
+
+    fn bytecode_property_target_is_array(&self, object: &Value) -> Result<bool> {
+        let Value::Object(id) = object else {
+            return Ok(false);
+        };
+        self.objects
+            .array_len_if_array(*id)
+            .map(|length| length.is_some())
+    }
+
     pub(in crate::runtime::bytecode) fn eval_bytecode_update_binding(
         &mut self,
         name: &BytecodeBinding,
@@ -176,18 +275,28 @@ impl Context {
         access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     ) -> Result<Value> {
-        if let Some((old_value, new_value)) = self.try_cached_static_property_read_modify_write(
-            object,
-            property,
-            access,
-            |_, value| Self::updated_bytecode_number(value, op),
-        )? {
+        if !strict
+            && let Some((old_value, new_value)) = self
+                .try_cached_static_property_read_modify_write(
+                    object,
+                    property,
+                    access,
+                    |_, value| Self::updated_bytecode_number(value, op),
+                )?
+        {
             return Ok(if prefix { new_value } else { old_value });
         }
         let old_value = self.get_static_property_value(object, property, access)?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
-        self.set_static_property_value(object, property, access, new_value.clone())?;
+        self.set_bytecode_static_property_reference(
+            object,
+            property,
+            access,
+            new_value.clone(),
+            strict,
+        )?;
         Ok(if prefix { new_value } else { old_value })
     }
 
@@ -198,18 +307,28 @@ impl Context {
         access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
     ) -> Result<Value> {
-        if let Some((old_value, new_value)) = self.try_cached_dynamic_property_read_modify_write(
-            object,
-            &mut property,
-            access,
-            |_, value| Self::updated_bytecode_number(value, op),
-        )? {
+        if !strict
+            && let Some((old_value, new_value)) = self
+                .try_cached_dynamic_property_read_modify_write(
+                    object,
+                    &mut property,
+                    access,
+                    |_, value| Self::updated_bytecode_number(value, op),
+                )?
+        {
             return Ok(if prefix { new_value } else { old_value });
         }
         let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
-        self.set_cached_dynamic_property_value(object, &mut property, access, new_value.clone())?;
+        self.set_bytecode_dynamic_property_reference(
+            object,
+            &mut property,
+            access,
+            new_value.clone(),
+            strict,
+        )?;
         Ok(if prefix { new_value } else { old_value })
     }
 
@@ -255,18 +374,27 @@ impl Context {
         property: &StaticName,
         access: StaticPropertyAccessId,
         right: &Value,
+        strict: bool,
     ) -> Result<Value> {
-        if let Some((_, value)) = self.try_cached_static_property_read_modify_write(
-            object,
-            property,
-            access,
-            |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
-        )? {
+        if !strict
+            && let Some((_, value)) = self.try_cached_static_property_read_modify_write(
+                object,
+                property,
+                access,
+                |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+            )?
+        {
             return Ok(value);
         }
         let old_value = self.get_static_property_value(object, property, access)?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        self.set_static_property_value(object, property, access, value.clone())?;
+        self.set_bytecode_static_property_reference(
+            object,
+            property,
+            access,
+            value.clone(),
+            strict,
+        )?;
         Ok(value)
     }
 
@@ -277,18 +405,27 @@ impl Context {
         mut property: DynamicPropertyKey,
         access: StaticPropertyAccessId,
         right: &Value,
+        strict: bool,
     ) -> Result<Value> {
-        if let Some((_, value)) = self.try_cached_dynamic_property_read_modify_write(
-            object,
-            &mut property,
-            access,
-            |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
-        )? {
+        if !strict
+            && let Some((_, value)) = self.try_cached_dynamic_property_read_modify_write(
+                object,
+                &mut property,
+                access,
+                |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+            )?
+        {
             return Ok(value);
         }
         let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        self.set_cached_dynamic_property_value(object, &mut property, access, value.clone())?;
+        self.set_bytecode_dynamic_property_reference(
+            object,
+            &mut property,
+            access,
+            value.clone(),
+            strict,
+        )?;
         Ok(value)
     }
 
@@ -373,25 +510,31 @@ impl Context {
                     cell,
                 })
             }
-            BytecodeAssignmentTarget::StaticProperty { object, property } => {
-                Ok(BytecodeAssignmentReference::StaticProperty {
-                    object: self.eval_bytecode_expression(object)?,
-                    property: property.clone(),
-                })
-            }
+            BytecodeAssignmentTarget::StaticProperty {
+                object,
+                property,
+                strict,
+            } => Ok(BytecodeAssignmentReference::StaticProperty {
+                object: self.eval_bytecode_expression(object)?,
+                property: property.clone(),
+                strict: *strict,
+            }),
             BytecodeAssignmentTarget::ArrayIndexProperty {
                 object,
                 property,
                 index,
+                strict,
             } => Ok(BytecodeAssignmentReference::ArrayIndexProperty {
                 object: self.eval_bytecode_expression(object)?,
                 property: property.clone(),
                 index: *index,
+                strict: *strict,
             }),
             BytecodeAssignmentTarget::ComputedProperty {
                 object,
                 property,
                 operand,
+                strict,
             } => {
                 let object = self.eval_bytecode_expression(object)?;
                 let property_value = self.eval_bytecode_expression(property)?;
@@ -401,6 +544,7 @@ impl Context {
                     property_value,
                     property,
                     access: operand.access(),
+                    strict: *strict,
                 })
             }
             BytecodeAssignmentTarget::PrivateProperty { object, property } => {
@@ -420,31 +564,44 @@ impl Context {
             BytecodeAssignmentTarget::Binding(name) => {
                 self.assign_bytecode_or_create_sloppy_global(name, value)
             }
-            BytecodeAssignmentTarget::StaticProperty { object, property } => {
+            BytecodeAssignmentTarget::StaticProperty {
+                object,
+                property,
+                strict,
+            } => {
                 let object = self.eval_bytecode_expression(object)?;
-                self.set_static_property_value(&object, property.name(), property.access(), value)
+                self.set_bytecode_static_property_reference(
+                    &object,
+                    property.name(),
+                    property.access(),
+                    value,
+                    *strict,
+                )
             }
             BytecodeAssignmentTarget::ArrayIndexProperty {
                 object,
                 property,
                 index,
+                strict,
             } => {
                 let object = self.eval_bytecode_expression(object)?;
-                self.set_bytecode_array_index_property(&object, property, *index, value)
+                self.set_bytecode_array_index_property(&object, property, *index, value, *strict)
             }
             BytecodeAssignmentTarget::ComputedProperty {
                 object,
                 property,
                 operand,
+                strict,
             } => {
                 let object = self.eval_bytecode_expression(object)?;
                 let property = self.eval_bytecode_expression(property)?;
                 let mut property = self.dynamic_property_key(&property)?;
-                self.set_cached_dynamic_property_value(
+                self.set_bytecode_dynamic_property_reference(
                     &object,
                     &mut property,
                     operand.access(),
                     value,
+                    *strict,
                 )
             }
             BytecodeAssignmentTarget::PrivateProperty { object, property } => {
@@ -454,6 +611,26 @@ impl Context {
             }
         }
     }
+}
+
+const fn bytecode_set_failure(strict: bool) -> SetFailureBehavior {
+    if strict {
+        SetFailureBehavior::Throw
+    } else {
+        SetFailureBehavior::ReturnFalse
+    }
+}
+
+fn bytecode_property_set_uses_legacy_path(object: &Value, property: &str, strict: bool) -> bool {
+    (!strict && !matches!(object, Value::Object(_) | Value::Undefined | Value::Null))
+        || (bytecode_property_target_is_object(object) && property == LEGACY_PROTO_PROPERTY)
+}
+
+const fn bytecode_property_target_is_object(object: &Value) -> bool {
+    matches!(
+        object,
+        Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
+    )
 }
 
 fn logical_assignment_should_store(op: BinaryOp, value: &Value) -> Result<bool> {

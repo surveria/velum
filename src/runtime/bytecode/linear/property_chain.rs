@@ -129,6 +129,7 @@ impl Context {
                     property,
                     op,
                     prefix,
+                    strict: false,
                 },
                 BytecodeInstruction::StoreLast,
             ],
@@ -160,6 +161,7 @@ impl Context {
                     property,
                     op,
                     prefix,
+                    strict: false,
                 },
                 BytecodeInstruction::StoreLast,
             ],
@@ -190,6 +192,7 @@ impl Context {
                     property,
                     op,
                     prefix,
+                    strict: false,
                 },
                 BytecodeInstruction::StoreLast,
             ],
@@ -216,7 +219,11 @@ impl Context {
             [
                 BytecodeInstruction::LoadBinding(object),
                 BytecodeInstruction::PushLiteral(Value::Number(right)),
-                BytecodeInstruction::CompoundStaticProperty { property, op },
+                BytecodeInstruction::CompoundStaticProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 4)
@@ -235,7 +242,11 @@ impl Context {
             [
                 BytecodeInstruction::LoadBinding(object),
                 BytecodeInstruction::LoadBinding(binding),
-                BytecodeInstruction::CompoundStaticProperty { property, op },
+                BytecodeInstruction::CompoundStaticProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 4)
@@ -264,7 +275,11 @@ impl Context {
                 BytecodeInstruction::LoadBinding(binding),
                 BytecodeInstruction::PushLiteral(Value::Number(mask)),
                 BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::BitAnd),
-                BytecodeInstruction::CompoundStaticProperty { property, op },
+                BytecodeInstruction::CompoundStaticProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 6)
@@ -301,7 +316,11 @@ impl Context {
                 BytecodeInstruction::ComputedMember {
                     property: rhs_property,
                 },
-                BytecodeInstruction::CompoundStaticProperty { property, op },
+                BytecodeInstruction::CompoundStaticProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 8)
@@ -328,7 +347,11 @@ impl Context {
                 BytecodeInstruction::PushLiteral(Value::Number(mask)),
                 BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::BitAnd),
                 BytecodeInstruction::PushLiteral(Value::Number(right)),
-                BytecodeInstruction::CompoundComputedProperty { property, op },
+                BytecodeInstruction::CompoundComputedProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 7)
@@ -355,7 +378,11 @@ impl Context {
                 BytecodeInstruction::LoadBinding(array),
                 BytecodeInstruction::LoadBinding(index_binding),
                 BytecodeInstruction::PushLiteral(Value::Number(right)),
-                BytecodeInstruction::CompoundComputedProperty { property, op },
+                BytecodeInstruction::CompoundComputedProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 5)
@@ -389,7 +416,11 @@ impl Context {
                 },
                 BytecodeInstruction::PushLiteral(Value::Number(rhs_mask)),
                 BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::BitAnd),
-                BytecodeInstruction::CompoundComputedProperty { property, op },
+                BytecodeInstruction::CompoundComputedProperty {
+                    property,
+                    op,
+                    strict: false,
+                },
                 BytecodeInstruction::StoreLast,
             ],
         ) = instruction_window(instructions, index, 10)
@@ -535,6 +566,7 @@ impl Context {
                     property.access(),
                     op,
                     prefix,
+                    false,
                 )
             }
             PropertyTarget::DynamicArray {
@@ -553,6 +585,7 @@ impl Context {
                     property.access(),
                     op,
                     prefix,
+                    false,
                 )? {
                     return Ok(value);
                 }
@@ -563,6 +596,7 @@ impl Context {
                     property.access(),
                     op,
                     prefix,
+                    false,
                 )
             }
         }
@@ -612,6 +646,7 @@ impl Context {
                     &index,
                     property.access(),
                     rhs,
+                    false,
                 )? {
                     return Ok(value);
                 }
@@ -622,6 +657,7 @@ impl Context {
                     key,
                     property.access(),
                     rhs,
+                    false,
                 )
             }
         }

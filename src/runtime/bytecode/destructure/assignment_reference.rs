@@ -41,7 +41,11 @@ impl Context {
                     cell,
                 }))
             }
-            BytecodeAssignmentTarget::StaticProperty { object, property } => {
+            BytecodeAssignmentTarget::StaticProperty {
+                object,
+                property,
+                strict,
+            } => {
                 let object = match self.eval_pattern_block(object)? {
                     PatternStep::Value(object) => object,
                     PatternStep::Abrupt(completion) => {
@@ -52,6 +56,7 @@ impl Context {
                     BytecodeAssignmentReference::StaticProperty {
                         object,
                         property: property.clone(),
+                        strict: *strict,
                     },
                 ))
             }
@@ -59,6 +64,7 @@ impl Context {
                 object,
                 property,
                 index,
+                strict,
             } => {
                 let object = match self.eval_pattern_block(object)? {
                     PatternStep::Value(object) => object,
@@ -71,6 +77,7 @@ impl Context {
                         object,
                         property: property.clone(),
                         index: *index,
+                        strict: *strict,
                     },
                 ))
             }
@@ -78,6 +85,7 @@ impl Context {
                 object,
                 property,
                 operand,
+                strict,
             } => {
                 let object = match self.eval_pattern_block(object)? {
                     PatternStep::Value(object) => object,
@@ -98,6 +106,7 @@ impl Context {
                         property_value,
                         property,
                         access: operand.access(),
+                        strict: *strict,
                     },
                 ))
             }

@@ -228,9 +228,7 @@ impl Parser {
         let Some(target) = Self::assignment_target(target) else {
             return Err(self.parse_error("invalid destructuring assignment target"));
         };
-        if let crate::ast::Expr::Identifier(binding) = target.kind() {
-            self.validate_assignment_identifier(binding.as_str())?;
-        }
+        self.validate_assignment_target(&target)?;
         Ok(AssignmentPattern::Target(target))
     }
 

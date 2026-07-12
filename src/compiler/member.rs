@@ -40,15 +40,20 @@ impl BytecodeCompiler<'_> {
         object: &Expression,
         property: &StaticName,
         access: StaticPropertyAccessId,
+        strict: bool,
         expr: &Expression,
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.compile_expr(expr)?;
         let property = Self::compile_property(property, access);
         if let Some(index) = Self::compile_array_index(&property) {
-            self.emit(BytecodeInstruction::ArrayIndexAssign { property, index });
+            self.emit(BytecodeInstruction::ArrayIndexAssign {
+                property,
+                index,
+                strict,
+            });
         } else {
-            self.emit(BytecodeInstruction::StaticPropertyAssign { property });
+            self.emit(BytecodeInstruction::StaticPropertyAssign { property, strict });
         }
         Ok(())
     }
@@ -58,6 +63,7 @@ impl BytecodeCompiler<'_> {
         object: &Expression,
         property: &Expression,
         access: StaticPropertyAccessId,
+        strict: bool,
         expr: &Expression,
     ) -> Result<()> {
         self.compile_expr(object)?;
@@ -65,6 +71,7 @@ impl BytecodeCompiler<'_> {
         self.compile_expr(expr)?;
         self.emit(BytecodeInstruction::ComputedPropertyAssign {
             property: Self::compile_dynamic_property(access),
+            strict,
         });
         Ok(())
     }
@@ -171,12 +178,14 @@ impl BytecodeCompiler<'_> {
                         index,
                         op,
                         prefix,
+                        strict,
                     });
                 } else {
                     self.emit(BytecodeInstruction::UpdateStaticProperty {
                         property,
                         op,
                         prefix,
+                        strict,
                     });
                 }
                 Ok(())
@@ -192,6 +201,7 @@ impl BytecodeCompiler<'_> {
                     property: Self::compile_dynamic_property(*access),
                     op,
                     prefix,
+                    strict,
                 });
                 Ok(())
             }
@@ -294,9 +304,14 @@ impl BytecodeCompiler<'_> {
                         property,
                         index,
                         op,
+                        strict,
                     });
                 } else {
-                    self.emit(BytecodeInstruction::CompoundStaticProperty { property, op });
+                    self.emit(BytecodeInstruction::CompoundStaticProperty {
+                        property,
+                        op,
+                        strict,
+                    });
                 }
                 Ok(())
             }
@@ -311,6 +326,7 @@ impl BytecodeCompiler<'_> {
                 self.emit(BytecodeInstruction::CompoundComputedProperty {
                     property: Self::compile_dynamic_property(*access),
                     op,
+                    strict,
                 });
                 Ok(())
             }

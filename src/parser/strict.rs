@@ -117,6 +117,13 @@ impl Parser {
         Ok(())
     }
 
+    pub(super) fn validate_assignment_target(&self, target: &crate::ast::Expression) -> Result<()> {
+        if let Expr::Identifier(name) = target.kind() {
+            self.validate_assignment_identifier(name.as_str())?;
+        }
+        Ok(())
+    }
+
     fn string_directive_value(statement: &Statement) -> Option<&str> {
         let Stmt::Expr(expression) = statement.kind() else {
             return None;

@@ -1,3 +1,4 @@
+mod address;
 mod block;
 mod fast_path;
 mod function_mode;
@@ -8,6 +9,7 @@ mod private;
 mod super_property;
 mod types;
 
+pub use address::BytecodeAddress;
 pub use block::BytecodeBlock;
 pub use fast_path::BytecodeDirectThrow;
 pub use function_mode::BytecodeNewTargetMode;
@@ -19,11 +21,11 @@ pub use numeric::{
 pub use private::{BytecodeClassMemberKey, BytecodePrivateName};
 pub use super_property::BytecodeSuperProperty;
 pub use types::{
-    BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding,
-    BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassField, BytecodeClassMember,
-    BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode, BytecodeDynamicProperty,
-    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionInit,
-    BytecodeFunctionParam, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCallSite, BytecodeCatch,
+    BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind,
+    BytecodeCompletion, BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
+    BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionInit, BytecodeFunctionParam,
+    BytecodeInstruction, BytecodeObjectProperty, BytecodePattern, BytecodePatternKey,
+    BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram, BytecodeProperty,
+    BytecodeSwitchCase,
 };

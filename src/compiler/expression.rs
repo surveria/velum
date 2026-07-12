@@ -84,22 +84,12 @@ impl BytecodeCompiler<'_> {
             | Expr::DestructuringAssignment { .. }
             | Expr::Update { .. }
             | Expr::CompoundAssignment { .. }
+            | Expr::PropertyAssignment { .. }
+            | Expr::ComputedPropertyAssignment { .. }
             | Expr::SuperPropertyAssignment { .. }
             | Expr::SuperComputedPropertyAssignment { .. } => {
                 return self.compile_mutation_expr(expr);
             }
-            Expr::PropertyAssignment {
-                object,
-                property,
-                access,
-                expr,
-            } => return self.compile_static_property_assignment(object, property, *access, expr),
-            Expr::ComputedPropertyAssignment {
-                object,
-                property,
-                access,
-                expr,
-            } => return self.compile_computed_property_assignment(object, property, *access, expr),
             Expr::Member {
                 object,
                 property,
@@ -208,6 +198,22 @@ impl BytecodeCompiler<'_> {
                 target,
                 expr,
             } => self.compile_compound_assignment(*op, *strict, target, expr),
+            Expr::PropertyAssignment {
+                object,
+                property,
+                access,
+                strict,
+                expr,
+            } => self.compile_static_property_assignment(object, property, *access, *strict, expr),
+            Expr::ComputedPropertyAssignment {
+                object,
+                property,
+                access,
+                strict,
+                expr,
+            } => {
+                self.compile_computed_property_assignment(object, property, *access, *strict, expr)
+            }
             Expr::SuperPropertyAssignment {
                 property,
                 access,
