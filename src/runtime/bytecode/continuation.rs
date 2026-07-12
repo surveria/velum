@@ -397,6 +397,16 @@ impl Context {
         Ok(())
     }
 
+    pub(super) fn pop_owned_bytecode_continuation_at(
+        &mut self,
+        activation_index: usize,
+    ) -> Result<()> {
+        self.pop_bytecode_continuation(BytecodeContinuationHandle {
+            activation_index,
+            owns_activation: true,
+        })
+    }
+
     pub(super) fn ensure_running_function_continuation(&self, function: FunctionId) -> Result<()> {
         let continuation = self
             .activation_frames

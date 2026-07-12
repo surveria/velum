@@ -13,8 +13,9 @@ use crate::{
         bytecode::BytecodeOutcome,
         control::Completion,
         object::{
-            AccessorPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, PropertyConfigurable,
-            PropertyEnumerable, PropertyUpdate,
+            AccessorPropertyUpdate, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
+            PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
+            PropertyWritable,
         },
         property::static_names::StaticNameAtomCacheHandle,
     },
@@ -46,12 +47,20 @@ enum EvaluationState {
 }
 
 #[derive(Debug)]
+enum ExportResolution {
+    Found(BindingCell),
+    NotFound,
+    Ambiguous,
+}
+
+#[derive(Debug)]
 struct PendingModule {
     name: String,
     module: CompiledModule,
     dependencies: BTreeMap<String, usize>,
     scope: Option<BindingScope>,
     namespace: Option<Value>,
+    namespace_binding: Option<BindingCell>,
     state: EvaluationState,
 }
 
@@ -63,6 +72,7 @@ impl PendingModule {
             dependencies: BTreeMap::new(),
             scope: None,
             namespace: None,
+            namespace_binding: None,
             state: EvaluationState::Pending,
         }
     }
@@ -97,9 +107,26 @@ impl Context {
         self.load_module_dependencies(0, &mut graph, &mut indices, loader)?;
         self.instantiate_module_graph(&mut graph)?;
         self.link_module_graph(&mut graph)?;
-        let result = self.evaluate_module(0, &mut graph)?;
+        let result =
+            self.with_module_evaluation(|context| context.evaluate_module(0, &mut graph))?;
         self.persist_module_graph(graph)?;
         Ok(result)
+    }
+
+    fn with_module_evaluation<T>(
+        &mut self,
+        evaluate: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.module_evaluation_depth = self
+            .module_evaluation_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("module evaluation depth overflowed"))?;
+        let result = evaluate(self);
+        self.module_evaluation_depth = self
+            .module_evaluation_depth
+            .checked_sub(1)
+            .ok_or_else(|| Error::runtime("module evaluation depth underflowed"))?;
+        result
     }
 
     fn load_module_dependencies<L: ModuleLoader>(
@@ -170,6 +197,7 @@ impl Context {
 
     fn link_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
         self.initialize_module_namespaces(graph)?;
+        self.validate_indirect_exports(graph)?;
         self.populate_module_namespaces(graph)?;
         for module_index in 0..graph.len() {
             let imports = graph
@@ -187,15 +215,12 @@ impl Context {
                     .ok_or_else(|| Error::runtime("module dependency was not loaded"))?;
                 let cell = match import.import_name() {
                     ModuleImportName::Name(name) => {
-                        self.resolve_export_cell(graph, dependency, name, &mut BTreeSet::new())?
+                        self.required_export_cell(graph, dependency, name)?
                     }
-                    ModuleImportName::Namespace => {
-                        let namespace = graph
-                            .get(dependency)
-                            .and_then(|module| module.namespace.clone())
-                            .ok_or_else(|| Error::runtime("module namespace is missing"))?;
-                        BindingCell::new(namespace, false, crate::syntax::DeclKind::Const)
-                    }
+                    ModuleImportName::Namespace => graph
+                        .get(dependency)
+                        .and_then(|module| module.namespace_binding.clone())
+                        .ok_or_else(|| Error::runtime("module namespace binding is missing"))?,
                 };
                 linked.push((import.local_name().to_owned(), cell));
             }
@@ -209,6 +234,24 @@ impl Context {
                     .get(atom)
                     .ok_or_else(|| Error::runtime("module import binding is not declared"))?;
                 import_cell.alias_to(cell)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_indirect_exports(&mut self, graph: &[PendingModule]) -> Result<()> {
+        for module_index in 0..graph.len() {
+            let exports = graph
+                .get(module_index)
+                .ok_or_else(|| Error::runtime("module export owner is missing"))?
+                .module
+                .exports()
+                .to_vec();
+            for export in exports {
+                let ModuleExport::Indirect { export_name, .. } = export else {
+                    continue;
+                };
+                self.required_export_cell(graph, module_index, &export_name)?;
             }
         }
         Ok(())
@@ -228,7 +271,13 @@ impl Context {
             };
             self.objects
                 .set_prototype_value(namespace_id, &Value::Null)?;
-            pending.namespace = Some(Value::Object(namespace_id));
+            let namespace = Value::Object(namespace_id);
+            pending.namespace_binding = Some(BindingCell::new(
+                namespace.clone(),
+                false,
+                crate::syntax::DeclKind::Const,
+            ));
+            pending.namespace = Some(namespace);
         }
         Ok(())
     }
@@ -245,7 +294,15 @@ impl Context {
             };
             for name in &names {
                 let cell =
-                    self.resolve_export_cell(graph, module_index, name, &mut BTreeSet::new())?;
+                    match self.resolve_export(graph, module_index, name, &mut BTreeSet::new())? {
+                        ExportResolution::Found(cell) => cell,
+                        ExportResolution::Ambiguous => continue,
+                        ExportResolution::NotFound => {
+                            return Err(Error::runtime(format!(
+                                "module namespace export '{name}' could not be resolved"
+                            )));
+                        }
+                    };
                 let getter_name = format!("%module-namespace:{module_index}:{name}%");
                 let binding_name = name.clone();
                 let getter = self.create_internal_host_function(getter_name, move |_call| {
@@ -265,9 +322,33 @@ impl Context {
                     self.limits.max_object_properties,
                 )?;
             }
+            self.define_module_namespace_to_string_tag(*namespace_id)?;
             self.objects.prevent_extensions(*namespace_id)?;
         }
         Ok(())
+    }
+
+    fn define_module_namespace_to_string_tag(
+        &mut self,
+        namespace: crate::value::ObjectId,
+    ) -> Result<()> {
+        let symbol = self.symbol_constructor_value()?;
+        let Value::Symbol(tag) = self.get_named(&symbol, "toStringTag")? else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let value = self.heap_string_value("Module")?;
+        self.objects.define_property(
+            namespace,
+            PropertyKey::symbol(tag.id()),
+            "[Symbol.toStringTag]",
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     fn module_export_names(
@@ -307,16 +388,38 @@ impl Context {
         Ok(names)
     }
 
-    fn resolve_export_cell(
+    fn required_export_cell(
+        &mut self,
+        graph: &[PendingModule],
+        module_index: usize,
+        export_name: &str,
+    ) -> Result<BindingCell> {
+        match self.resolve_export(graph, module_index, export_name, &mut BTreeSet::new())? {
+            ExportResolution::Found(cell) => Ok(cell),
+            ExportResolution::NotFound => {
+                let module_name = graph
+                    .get(module_index)
+                    .map_or("<missing>", |module| module.name.as_str());
+                Err(Error::runtime(format!(
+                    "module '{module_name}' does not export '{export_name}'"
+                )))
+            }
+            ExportResolution::Ambiguous => Err(Error::runtime(format!(
+                "module export '{export_name}' is ambiguous"
+            ))),
+        }
+    }
+
+    fn resolve_export(
         &mut self,
         graph: &[PendingModule],
         module_index: usize,
         export_name: &str,
         resolving: &mut BTreeSet<(usize, String)>,
-    ) -> Result<BindingCell> {
+    ) -> Result<ExportResolution> {
         let key = (module_index, export_name.to_owned());
         if !resolving.insert(key.clone()) {
-            return Err(Error::runtime("cyclic module export resolution"));
+            return Ok(ExportResolution::NotFound);
         }
         let module = graph
             .get(module_index)
@@ -335,7 +438,7 @@ impl Context {
                         .and_then(|scope| scope.get(atom))
                         .ok_or_else(|| Error::runtime("local module export is not declared"));
                     resolving.remove(&key);
-                    return result;
+                    return result.map(ExportResolution::Found);
                 }
                 ModuleExport::Indirect {
                     export_name: candidate,
@@ -346,8 +449,7 @@ impl Context {
                         module.dependencies.get(request).copied().ok_or_else(|| {
                             Error::runtime("indirect export dependency is missing")
                         })?;
-                    let result =
-                        self.resolve_export_cell(graph, dependency, import_name, resolving);
+                    let result = self.resolve_export(graph, dependency, import_name, resolving);
                     resolving.remove(&key);
                     return result;
                 }
@@ -361,14 +463,12 @@ impl Context {
                         })?;
                     let namespace = graph
                         .get(dependency)
-                        .and_then(|pending| pending.namespace.clone())
-                        .ok_or_else(|| Error::runtime("exported module namespace is missing"))?;
+                        .and_then(|pending| pending.namespace_binding.clone())
+                        .ok_or_else(|| {
+                            Error::runtime("exported module namespace binding is missing")
+                        })?;
                     resolving.remove(&key);
-                    return Ok(BindingCell::new(
-                        namespace,
-                        false,
-                        crate::syntax::DeclKind::Const,
-                    ));
+                    return Ok(ExportResolution::Found(namespace));
                 }
                 ModuleExport::Star { request } if export_name != "default" => {
                     let dependency = module
@@ -376,17 +476,22 @@ impl Context {
                         .get(request)
                         .copied()
                         .ok_or_else(|| Error::runtime("star export dependency is missing"))?;
-                    if let Ok(cell) =
-                        self.resolve_export_cell(graph, dependency, export_name, resolving)
-                    {
-                        if star_result
-                            .as_ref()
-                            .is_some_and(|existing: &BindingCell| !existing.same_cell(&cell))
-                        {
-                            resolving.remove(&key);
-                            return Err(Error::runtime("ambiguous star module export"));
+                    match self.resolve_export(graph, dependency, export_name, resolving)? {
+                        ExportResolution::Found(cell) => {
+                            if star_result
+                                .as_ref()
+                                .is_some_and(|existing: &BindingCell| !existing.same_cell(&cell))
+                            {
+                                resolving.remove(&key);
+                                return Ok(ExportResolution::Ambiguous);
+                            }
+                            star_result = Some(cell);
                         }
-                        star_result = Some(cell);
+                        ExportResolution::Ambiguous => {
+                            resolving.remove(&key);
+                            return Ok(ExportResolution::Ambiguous);
+                        }
+                        ExportResolution::NotFound => {}
                     }
                 }
                 ModuleExport::Local { .. }
@@ -396,12 +501,7 @@ impl Context {
             }
         }
         resolving.remove(&key);
-        star_result.ok_or_else(|| {
-            Error::runtime(format!(
-                "module '{}' does not export '{export_name}'",
-                module.name
-            ))
-        })
+        Ok(star_result.map_or(ExportResolution::NotFound, ExportResolution::Found))
     }
 
     fn evaluate_module(
@@ -453,7 +553,7 @@ impl Context {
             .get_mut(module_index)
             .ok_or_else(|| Error::runtime("module evaluation index disappeared"))?;
         module.scope = Some(scope);
-        let value = Self::module_outcome_value(outcome?)?;
+        let value = self.module_outcome_value(outcome?)?;
         module.state = EvaluationState::Evaluated;
         Ok(value)
     }
@@ -472,14 +572,27 @@ impl Context {
             atom_cache,
             binding_cache,
             BindingLayout::clone(script.binding_layout()),
-            |context| context.eval_bytecode_program(script.bytecode()),
+            |context| context.eval_bytecode_program_with_jobs(script.bytecode()),
         )
     }
 
-    fn module_outcome_value(outcome: BytecodeOutcome) -> Result<Value> {
+    fn module_outcome_value(&self, outcome: BytecodeOutcome) -> Result<Value> {
+        let span = outcome.span();
         match outcome.completion() {
             Completion::Normal(value) => Ok(value),
-            Completion::Throw(value) => Err(Error::javascript(value)),
+            Completion::Throw(value) => {
+                let metadata = if let Value::Object(id) = &value {
+                    self.objects.error_metadata(*id)?.cloned()
+                } else {
+                    None
+                };
+                Err(Error::javascript_with_metadata(
+                    self.identity.clone(),
+                    value,
+                    metadata,
+                    span,
+                ))
+            }
             Completion::Return(_) | Completion::ReturnDirect(_) => {
                 Err(Error::runtime("return completion escaped module"))
             }

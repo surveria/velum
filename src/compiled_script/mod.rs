@@ -13,6 +13,7 @@ use crate::{
     runtime::limits::RuntimeLimits,
     source::SourceId,
 };
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
@@ -119,6 +120,16 @@ impl CompiledScript {
             CompileMode::Module,
         )?;
         let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
+        let imported_exports = module
+            .imports
+            .iter()
+            .map(|entry| {
+                (
+                    entry.local_name.clone(),
+                    (entry.request.clone(), entry.import_name.clone()),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         let imports = module
             .imports
             .into_iter()
@@ -141,9 +152,24 @@ impl CompiledScript {
                 parser::ModuleExportEntry::Local {
                     export_name,
                     local_name,
-                } => ModuleExport::Local {
-                    export_name,
-                    local_name,
+                } => match imported_exports.get(&local_name) {
+                    Some((request, parser::ModuleImportName::Name(import_name))) => {
+                        ModuleExport::Indirect {
+                            export_name,
+                            import_name: import_name.clone(),
+                            request: request.clone(),
+                        }
+                    }
+                    Some((request, parser::ModuleImportName::Namespace)) => {
+                        ModuleExport::Namespace {
+                            export_name,
+                            request: request.clone(),
+                        }
+                    }
+                    None => ModuleExport::Local {
+                        export_name,
+                        local_name,
+                    },
                 },
                 parser::ModuleExportEntry::Indirect {
                     export_name,

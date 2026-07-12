@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
 
-use super::{test262_compat_harness, timing};
+use super::{test262_compat_harness, test262_module_loader::Test262ModuleLoader, timing};
 
 const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
@@ -26,6 +26,7 @@ const FLAG_NO_STRICT: &str = "noStrict";
 const FLAG_ONLY_STRICT: &str = "onlyStrict";
 const FLAG_RAW: &str = "raw";
 const NEGATIVE_PHASE_PARSE: &str = "parse";
+const NEGATIVE_PHASE_RESOLUTION: &str = "resolution";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
@@ -155,16 +156,16 @@ fn parse_metadata_yaml(yaml: &str, relative_path: &str) -> anyhow::Result<Test26
 }
 
 fn variant_plans(metadata: &Test262Metadata) -> Vec<VariantPlan> {
-    if metadata.has_flag(FLAG_RAW) {
-        return vec![VariantPlan::Run {
-            name: RAW_VARIANT,
-            strict: false,
-        }];
-    }
     if metadata.has_flag(FLAG_MODULE) {
         return vec![VariantPlan::Run {
             name: MODULE_VARIANT,
             strict: true,
+        }];
+    }
+    if metadata.has_flag(FLAG_RAW) {
+        return vec![VariantPlan::Run {
+            name: RAW_VARIANT,
+            strict: false,
         }];
     }
     if metadata.has_flag(FLAG_ONLY_STRICT) {
@@ -223,14 +224,22 @@ fn execute_variant_result(
         }
     }
 
-    let source = variant_source(source, strict);
-    let result = context.eval(&source);
+    let result = if metadata.has_flag(FLAG_MODULE) {
+        let mut loader = Test262ModuleLoader::new(test262_dir);
+        context.eval_module_named(relative_path, source, &mut loader)
+    } else {
+        let source = variant_source(source, strict);
+        context.eval(&source)
+    };
     if let Some(negative) = &metadata.negative {
         return ensure_negative_result(relative_path, negative, result);
     }
 
     result.map_err(|error| {
         anyhow::anyhow!("upstream Test262 case '{relative_path}' failed: {error}")
+    })?;
+    context.run_jobs().map_err(|error| {
+        anyhow::anyhow!("upstream Test262 case '{relative_path}' Promise jobs failed: {error}")
     })?;
     if metadata.has_flag(FLAG_ASYNC) {
         return ensure_async_completion(relative_path, context.output());
@@ -338,6 +347,9 @@ fn ensure_negative_result(
     if negative.phase == NEGATIVE_PHASE_PARSE {
         return ensure_negative_parse_result(relative_path, negative, result);
     }
+    if negative.phase == NEGATIVE_PHASE_RESOLUTION {
+        return ensure_negative_resolution_result(relative_path, negative, result);
+    }
     if negative.phase == NEGATIVE_PHASE_RUNTIME {
         return ensure_negative_runtime_result(relative_path, negative, result);
     }
@@ -346,6 +358,25 @@ fn ensure_negative_result(
         relative_path,
         negative.phase
     )
+}
+
+fn ensure_negative_resolution_result(
+    relative_path: &str,
+    negative: &NegativeMetadata,
+    result: rs_quickjs::Result<rs_quickjs::Value>,
+) -> anyhow::Result<()> {
+    match result {
+        Ok(_) => bail!(
+            "upstream negative resolution case '{relative_path}' unexpectedly linked successfully"
+        ),
+        Err(Error::Lex { .. } | Error::Parse { .. } | Error::Runtime { .. }) => Ok(()),
+        Err(error) => bail!(
+            "upstream negative resolution case '{}' expected {} during linking, got {}",
+            relative_path,
+            negative.error_type,
+            error
+        ),
+    }
 }
 
 fn ensure_negative_parse_result(
@@ -521,6 +552,17 @@ bad source
     fn plans_module_tests_as_one_strict_variant() -> TestResult {
         ensure_plans(
             &variant_plans(&metadata_with_flags(&[FLAG_MODULE])),
+            &[VariantPlan::Run {
+                name: MODULE_VARIANT,
+                strict: true,
+            }],
+        )
+    }
+
+    #[test]
+    fn keeps_raw_module_tests_on_the_module_goal() -> TestResult {
+        ensure_plans(
+            &variant_plans(&metadata_with_flags(&[FLAG_MODULE, FLAG_RAW])),
             &[VariantPlan::Run {
                 name: MODULE_VARIANT,
                 strict: true,

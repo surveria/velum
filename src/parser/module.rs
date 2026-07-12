@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ast::{DeclKind, Statement, Stmt},
+    ast::{DeclKind, Expr, Statement, Stmt},
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -135,7 +135,11 @@ impl Parser {
             let local_name = if self.match_contextual_module_word(AS_KEYWORD) {
                 self.consume_binding_identifier("expected local import binding")?
             } else {
-                self.static_binding_name(import_name.clone())?
+                let name = self.static_name(import_name.clone())?;
+                if self.is_strict_mode() {
+                    self.validate_function_name_in_strict_code(&name)?;
+                }
+                self.static_binding(name)?
             };
             pending.push((import_name, local_name));
             if !self.match_kind(&TokenKind::Comma) {
@@ -174,22 +178,54 @@ impl Parser {
         }
         if self.match_kind(&TokenKind::Default) {
             let start = self.current_span();
+            let async_function = self.check(&TokenKind::Async)
+                && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function);
+            let declaration_like =
+                self.check(&TokenKind::Function) || self.check(&TokenKind::Class) || async_function;
             let expression = self.assignment_expression()?;
-            let binding = self.static_binding_name("%default%".to_owned())?;
+            let declaration_name = if declaration_like {
+                match expression.kind() {
+                    Expr::Function {
+                        name: Some(name), ..
+                    } => Some(name.name().as_str().to_owned()),
+                    Expr::Class(class) => class.name.as_ref().map(|name| name.as_str().to_owned()),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let binding = self.static_binding_name("default".to_owned())?;
             statements.push(self.statement_node(
                 start,
                 Stmt::VarDecl {
-                    name: binding,
+                    name: binding.clone(),
                     kind: DeclKind::Const,
                     init: Some(expression),
                 },
             ));
+            if let Some(name) = declaration_name {
+                let named_binding = self.static_binding_name(name)?;
+                let default_value = self.expression_node(start, Expr::Identifier(binding));
+                statements.push(self.statement_node(
+                    start,
+                    Stmt::VarDecl {
+                        name: named_binding,
+                        kind: DeclKind::Const,
+                        init: Some(default_value),
+                    },
+                ));
+            }
             module.exports.push(ModuleExportEntry::Local {
                 export_name: "default".to_owned(),
-                local_name: "%default%".to_owned(),
+                local_name: "default".to_owned(),
             });
-            self.consume_optional_semicolon();
-            return Ok(());
+            if declaration_like {
+                self.consume_optional_semicolon();
+                return Ok(());
+            }
+            return self.consume_statement_terminator(
+                "expected terminator after default export expression",
+            );
         }
 
         let start = self.current_span();
@@ -212,13 +248,14 @@ impl Parser {
     fn module_named_exports(&mut self, module: &mut ModuleSyntax) -> Result<()> {
         let mut names = Vec::new();
         while !self.check(&TokenKind::RBrace) {
+            let local_is_string = matches!(self.peek_kind(0), Some(TokenKind::String(_)));
             let local_name = self.module_identifier_name(true)?;
             let export_name = if self.match_contextual_module_word(AS_KEYWORD) {
                 self.module_identifier_name(true)?
             } else {
                 local_name.clone()
             };
-            names.push((local_name, export_name));
+            names.push((local_name, export_name, local_is_string));
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -227,7 +264,7 @@ impl Parser {
         if self.match_contextual_module_word(FROM_KEYWORD) {
             let request = self.module_specifier()?;
             Self::remember_module_request(module, &request);
-            for (import_name, export_name) in names {
+            for (import_name, export_name, _) in names {
                 module.exports.push(ModuleExportEntry::Indirect {
                     export_name,
                     import_name,
@@ -235,7 +272,12 @@ impl Parser {
                 });
             }
         } else {
-            for (local_name, export_name) in names {
+            for (local_name, export_name, local_is_string) in names {
+                if local_is_string {
+                    return Err(
+                        self.parse_error("string export names require an explicit module source")
+                    );
+                }
                 module.exports.push(ModuleExportEntry::Local {
                     export_name,
                     local_name,
@@ -351,6 +393,7 @@ impl Parser {
         module: &ModuleSyntax,
         statements: &[Statement],
     ) -> Result<()> {
+        Self::validate_module_statement_list(statements)?;
         let mut exported = BTreeSet::new();
         let mut declared = BTreeSet::new();
         for statement in statements {
@@ -377,6 +420,74 @@ impl Parser {
                     format!("module export '{local_name}' is not declared"),
                     0,
                 ));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_module_statement_list(statements: &[Statement]) -> Result<()> {
+        for statement in statements {
+            match statement.kind() {
+                Stmt::Return(_) => {
+                    return Err(Error::parse_at(
+                        "return statement is not allowed in module code",
+                        statement.span(),
+                    ));
+                }
+                Stmt::Block(statements) | Stmt::DeclList(statements) => {
+                    Self::validate_module_statement_list(statements)?;
+                }
+                Stmt::If {
+                    consequent,
+                    alternate,
+                    ..
+                } => {
+                    Self::validate_module_statement_list(std::slice::from_ref(consequent))?;
+                    if let Some(alternate) = alternate {
+                        Self::validate_module_statement_list(std::slice::from_ref(alternate))?;
+                    }
+                }
+                Stmt::While { body, .. }
+                | Stmt::DoWhile { body, .. }
+                | Stmt::With { body, .. }
+                | Stmt::Label { body, .. }
+                | Stmt::ForIn { body, .. }
+                | Stmt::ForOf { body, .. } => {
+                    Self::validate_module_statement_list(std::slice::from_ref(body))?;
+                }
+                Stmt::For { init, body, .. } => {
+                    if let Some(init) = init {
+                        Self::validate_module_statement_list(std::slice::from_ref(init))?;
+                    }
+                    Self::validate_module_statement_list(std::slice::from_ref(body))?;
+                }
+                Stmt::Switch { cases, .. } => {
+                    for case in cases {
+                        Self::validate_module_statement_list(&case.statements)?;
+                    }
+                }
+                Stmt::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    Self::validate_module_statement_list(body)?;
+                    if let Some(catch) = catch {
+                        Self::validate_module_statement_list(&catch.body)?;
+                    }
+                    if let Some(finally_body) = finally_body {
+                        Self::validate_module_statement_list(finally_body)?;
+                    }
+                }
+                Stmt::Empty
+                | Stmt::Break(_)
+                | Stmt::Continue(_)
+                | Stmt::Throw(_)
+                | Stmt::FunctionDecl { .. }
+                | Stmt::VarDecl { .. }
+                | Stmt::PatternDecl { .. }
+                | Stmt::ClassDecl { .. }
+                | Stmt::Expr(_) => {}
             }
         }
         Ok(())

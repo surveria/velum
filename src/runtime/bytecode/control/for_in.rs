@@ -27,8 +27,23 @@ impl Context {
         body: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let object = self.eval_bytecode_expression(object)?;
-        let keys = self.enumerable_keys(&object)?;
+        let keys = if self.resumes_bytecode_control() {
+            Vec::new()
+        } else {
+            let object = match self.eval_bytecode_block(object)? {
+                Completion::Normal(value) => value,
+                completion @ (Completion::Throw(_)
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => return Ok(Some(completion)),
+                completion @ (Completion::Return(_)
+                | Completion::ReturnDirect(_)
+                | Completion::Break { .. }
+                | Completion::Continue { .. }) => completion.into_result()?,
+            };
+            self.enumerable_keys(&object)?
+        };
         let completion = match target {
             BytecodeForInTarget::Binding {
                 name,

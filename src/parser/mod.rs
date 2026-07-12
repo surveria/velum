@@ -207,6 +207,7 @@ impl Parser {
             statements.push(statement);
         }
         if let Some(module) = module.as_ref() {
+            self.validate_module_declarations(&statements)?;
             Self::validate_module_syntax(module, &statements)?;
         }
         let usage = ParseUsage {
@@ -272,6 +273,9 @@ impl Parser {
             && name.as_str() == YIELD_IDENTIFIER_NAME
         {
             return Err(self.parse_error("yield is not a valid binding identifier"));
+        }
+        if self.is_strict_mode() {
+            self.validate_function_name_in_strict_code(&name)?;
         }
         self.static_binding(name)
     }
@@ -620,6 +624,12 @@ impl Parser {
         is_iteration_target: bool,
         parse: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
+        if labels
+            .iter()
+            .any(|label| self.control_context.has_label(label))
+        {
+            return Err(self.parse_error("duplicate label in labeled statement"));
+        }
         let previous_len = self.control_context.labels.len();
         self.control_context
             .push_labels(labels, is_iteration_target)?;

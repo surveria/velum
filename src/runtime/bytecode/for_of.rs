@@ -71,7 +71,18 @@ impl Context {
         let iterator = if self.resumes_bytecode_control() {
             None
         } else {
-            let iterable = self.eval_bytecode_expression(object)?;
+            let iterable = match self.eval_bytecode_block(object)? {
+                Completion::Normal(value) => value,
+                completion @ (Completion::Throw(_)
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => return Ok(Some(completion)),
+                completion @ (Completion::Return(_)
+                | Completion::ReturnDirect(_)
+                | Completion::Break { .. }
+                | Completion::Continue { .. }) => completion.into_result()?,
+            };
             if asynchronous {
                 let (source, await_yielded_values) = self.get_async_iterator(&iterable)?;
                 Some(ForOfIterator::Asynchronous(AsyncIteratorContinuation::new(

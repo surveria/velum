@@ -1755,6 +1755,7 @@ globals
 builtin_globals
 locals
 modules
+module_evaluation_depth
 activation_frames
 functions
 native_functions

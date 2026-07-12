@@ -49,6 +49,7 @@ mod test262_compat_harness;
 mod test262_external;
 mod test262_full;
 mod test262_metadata;
+mod test262_module_loader;
 mod test262_parallel;
 mod timing;
 use cases::{DifferentialCase, EngineCase, Expectation};
