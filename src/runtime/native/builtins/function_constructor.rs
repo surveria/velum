@@ -2,12 +2,12 @@ use std::rc::Rc;
 
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{
         AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
     },
+    runtime::{Context, function::NATIVE_FUNCTION_SOURCE_TEXT},
     syntax::FunctionKind,
     value::{ObjectId, Value},
 };
@@ -270,7 +270,7 @@ impl Context {
         let source = if let Value::Function(id) = this_value {
             self.function_source_text(*id)?
         } else if self.semantic_is_callable(this_value)? {
-            "function()".to_owned()
+            NATIVE_FUNCTION_SOURCE_TEXT.to_owned()
         } else {
             return Err(Error::type_error(
                 "Function.prototype.toString requires a callable receiver",
