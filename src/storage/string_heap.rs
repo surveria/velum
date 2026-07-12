@@ -26,24 +26,58 @@ impl StringId {
 
 #[derive(Clone, Debug, Eq)]
 pub struct JsString {
-    id: StringId,
+    owner: Option<StringOwner>,
     data: StringDataRef,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StringOwner {
+    identity: VmIdentity,
+    id: StringId,
+}
+
 impl JsString {
-    const fn new(id: StringId, data: StringDataRef) -> Self {
-        Self { id, data }
+    const fn new_owned(identity: VmIdentity, id: StringId, data: StringDataRef) -> Self {
+        Self {
+            owner: Some(StringOwner { identity, id }),
+            data,
+        }
     }
 
-    /// Returns the VM owner and storage generation of this heap string.
+    /// Creates a VM-independent JavaScript string from well-formed UTF-8.
     #[must_use]
-    pub fn identity(&self) -> &VmIdentity {
-        &self.data.0.identity
+    pub fn from_utf8(text: String) -> Self {
+        let units = text.encode_utf16().collect::<Vec<_>>();
+        Self {
+            owner: None,
+            data: StringDataRef::new(units, Some(text)),
+        }
+    }
+
+    /// Creates a VM-independent JavaScript string from exact UTF-16 code units.
+    #[must_use]
+    pub fn from_utf16(units: Vec<u16>) -> Self {
+        Self {
+            owner: None,
+            data: StringDataRef::new(units, None),
+        }
+    }
+
+    /// Returns the VM owner and storage generation after heap admission.
+    #[must_use]
+    pub fn identity(&self) -> Option<&VmIdentity> {
+        self.owner.as_ref().map(|owner| &owner.identity)
     }
 
     #[must_use]
-    pub const fn id(&self) -> StringId {
-        self.id
+    pub fn id(&self) -> Option<StringId> {
+        self.owner.as_ref().map(|owner| owner.id)
+    }
+
+    /// Returns whether this string has been admitted to a VM string heap.
+    #[must_use]
+    pub const fn is_heap_owned(&self) -> bool {
+        self.owner.is_some()
     }
 
     /// Returns UTF-8 text, replacing lone surrogates with U+FFFD.
@@ -90,7 +124,6 @@ impl PartialEq for JsString {
 
 #[derive(Debug)]
 struct StringData {
-    identity: VmIdentity,
     units: Rc<[u16]>,
     /// UTF-8 for well-formed strings and replacement-character rendering for
     /// strings containing lone surrogates. JavaScript semantics use `units`.
@@ -102,14 +135,13 @@ struct StringData {
 struct StringDataRef(Rc<StringData>);
 
 impl StringDataRef {
-    fn new(identity: VmIdentity, units: Vec<u16>, utf8: Option<String>) -> Self {
+    fn new(units: Vec<u16>, utf8: Option<String>) -> Self {
         let decoded = String::from_utf16(&units);
         let (text, well_formed) = decoded.map_or_else(
             |_| (String::from_utf16_lossy(&units), false),
             |text| (utf8.unwrap_or(text), true),
         );
         Self(Rc::new(StringData {
-            identity,
             units: Rc::from(units.into_boxed_slice()),
             text,
             well_formed,
@@ -228,10 +260,14 @@ impl StringHeap {
             .and_then(Option::as_ref)
             .cloned()
             .ok_or_else(|| Error::runtime("string id is not defined"))?;
-        Ok(JsString::new(id, data))
+        Ok(JsString::new_owned(self.identity.clone(), id, data))
     }
 
     fn insert_string(&mut self, units: Vec<u16>, utf8: Option<String>) -> Result<JsString> {
+        self.insert_data(&StringDataRef::new(units, utf8))
+    }
+
+    fn insert_data(&mut self, data: &StringDataRef) -> Result<JsString> {
         if self.live >= self.max_count {
             return Err(Error::limit(format!(
                 "HeapString record count exceeded {}",
@@ -245,7 +281,6 @@ impl StringHeap {
                 .map_err(|error| Error::limit(format!("string heap exhausted: {error}")))?;
         }
         let id = StringId::from_index(index)?;
-        let data = StringDataRef::new(self.identity.clone(), units, utf8);
         let updated_bytes = self
             .bytes
             .checked_add(data.storage_bytes())

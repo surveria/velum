@@ -237,10 +237,13 @@ impl Context {
             Value::String(text) => self.check_string_len(text)?,
             Value::HeapString(text) => {
                 self.check_utf16_string_len(text.as_utf16())?;
-                if text.identity() != self.identity() {
+                if text.identity() != Some(self.identity()) {
                     return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
                 }
-                self.strings.get(text.id())?;
+                let Some(id) = text.id() else {
+                    return Err(Error::runtime("string is not owned by a VM"));
+                };
+                self.strings.get(id)?;
             }
             Value::Symbol(symbol) => {
                 if let Some(description) = symbol.description() {

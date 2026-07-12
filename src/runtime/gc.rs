@@ -410,7 +410,9 @@ impl Reachability {
     }
 
     fn mark_string(&mut self, string: &crate::storage::string_heap::JsString) -> bool {
-        let id = string.id();
+        let Some(id) = string.id() else {
+            return false;
+        };
         if !self.strings.insert(id) {
             return false;
         }

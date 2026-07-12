@@ -123,7 +123,7 @@ impl SymbolTable {
 
     pub fn create(&mut self, description: Option<JsString>) -> Result<JsSymbol> {
         if let Some(value) = &description
-            && value.identity() != &self.identity
+            && value.identity() != Some(&self.identity)
         {
             return Err(Error::runtime(FOREIGN_SYMBOL_DESCRIPTION_ERROR));
         }
@@ -159,7 +159,7 @@ impl SymbolTable {
     }
 
     pub fn for_key(&mut self, key: JsString) -> Result<JsSymbol> {
-        if key.identity() != &self.identity {
+        if key.identity() != Some(&self.identity) {
             return Err(Error::runtime(FOREIGN_SYMBOL_REGISTRY_KEY_ERROR));
         }
         if let Some((_, id)) = self
