@@ -172,7 +172,7 @@ fn array_species_ignores_a_foreign_realms_intrinsic_array_constructor() -> TestR
     let mut context = runtime.context();
     context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
     let result = context.eval(
-        r#"
+        r"
         var other = __createRealm();
         var array = [];
         var callCount = 0;
@@ -185,7 +185,7 @@ fn array_species_ignores_a_foreign_realms_intrinsic_array_constructor() -> TestR
             other.Array.prototype !== Array.prototype &&
             other.Object.prototype !== Object.prototype &&
             callCount === 0;
-        "#,
+        ",
     )?;
     assert_eq!(result, Value::Bool(true));
     Ok(())
