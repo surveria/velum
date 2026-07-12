@@ -35,20 +35,14 @@ pub(in crate::runtime) fn abstract_equality(
         ),
         (Value::BigInt(left), Value::Number(right)) => Ok(left.equals_number(*right)),
         (Value::Number(left), Value::BigInt(right)) => Ok(right.equals_number(*left)),
-        (Value::BigInt(left), Value::String(right)) => {
-            Ok(crate::value::JsBigInt::parse_string(right).is_some_and(|right| &right == left))
-        }
-        (Value::String(left), Value::BigInt(right)) => {
-            Ok(crate::value::JsBigInt::parse_string(left).is_some_and(|left| &left == right))
-        }
-        (Value::BigInt(left), Value::HeapString(right)) => {
-            Ok(crate::value::JsBigInt::parse_string(right.as_str())
-                .is_some_and(|right| &right == left))
-        }
-        (Value::HeapString(left), Value::BigInt(right)) => {
-            Ok(crate::value::JsBigInt::parse_string(left.as_str())
-                .is_some_and(|left| &left == right))
-        }
+        (Value::BigInt(left), right) if right.is_string() => Ok(right
+            .string_text()
+            .and_then(crate::value::JsBigInt::parse_string)
+            .is_some_and(|right| &right == left)),
+        (left, Value::BigInt(right)) if left.is_string() => Ok(left
+            .string_text()
+            .and_then(crate::value::JsBigInt::parse_string)
+            .is_some_and(|left| &left == right)),
         (left, right) if !is_primitive(left) && is_primitive(right) => {
             let primitive = context.to_primitive(left, PreferredType::Default)?;
             abstract_equality(context, &primitive, right)

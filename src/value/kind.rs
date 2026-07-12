@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use crate::storage::{string_heap::JsString, symbol::JsSymbol};
 
@@ -38,6 +38,26 @@ impl Value {
     pub(crate) const fn as_number(&self) -> Option<f64> {
         match self {
             Self::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn is_string(&self) -> bool {
+        matches!(self, Self::String(_) | Self::HeapString(_))
+    }
+
+    pub(crate) fn string_text(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value.as_str()),
+            Self::HeapString(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn string_units(&self) -> Option<Cow<'_, [u16]>> {
+        match self {
+            Self::String(value) => Some(Cow::Owned(value.encode_utf16().collect())),
+            Self::HeapString(value) => Some(Cow::Borrowed(value.as_utf16())),
             _ => None,
         }
     }

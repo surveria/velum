@@ -42,18 +42,14 @@ enum BigIntStringOrdering {
 
 fn bigint_string_ordering(left: &Value, right: &Value) -> BigIntStringOrdering {
     let ordering = match (left, right) {
-        (Value::BigInt(left), Value::String(right)) => {
-            crate::value::JsBigInt::parse_string(right).map(|right| left.cmp(&right))
-        }
-        (Value::BigInt(left), Value::HeapString(right)) => {
-            crate::value::JsBigInt::parse_string(right.as_str()).map(|right| left.cmp(&right))
-        }
-        (Value::String(left), Value::BigInt(right)) => {
-            crate::value::JsBigInt::parse_string(left).map(|left| left.cmp(right))
-        }
-        (Value::HeapString(left), Value::BigInt(right)) => {
-            crate::value::JsBigInt::parse_string(left.as_str()).map(|left| left.cmp(right))
-        }
+        (Value::BigInt(left), right) if right.is_string() => right
+            .string_text()
+            .and_then(crate::value::JsBigInt::parse_string)
+            .map(|right| left.cmp(&right)),
+        (left, Value::BigInt(right)) if left.is_string() => left
+            .string_text()
+            .and_then(crate::value::JsBigInt::parse_string)
+            .map(|left| left.cmp(right)),
         _ => return BigIntStringOrdering::NotApplicable,
     };
     ordering.map_or(
@@ -63,11 +59,7 @@ fn bigint_string_ordering(left: &Value, right: &Value) -> BigIntStringOrdering {
 }
 
 fn string_value(value: &Value) -> Option<&str> {
-    match value {
-        Value::String(value) => Some(value.as_str()),
-        Value::HeapString(value) => Some(value.as_str()),
-        _ => None,
-    }
+    value.string_text()
 }
 
 fn string_relational_compare(op: BinaryOp, left: &str, right: &str) -> bool {

@@ -209,12 +209,12 @@ impl Context {
     #[allow(clippy::wrong_self_convention)]
     pub(in crate::runtime) fn to_utf16_string(&mut self, value: &Value) -> Result<Vec<u16>> {
         let primitive = self.to_primitive(value, PreferredType::String)?;
-        let units = match primitive {
-            Value::String(text) => text.encode_utf16().collect(),
-            Value::HeapString(text) => text.as_utf16().to_vec(),
-            primitive => to_string_primitive(&primitive)?
+        let units = if let Some(units) = primitive.string_units() {
+            units.into_owned()
+        } else {
+            to_string_primitive(&primitive)?
                 .encode_utf16()
-                .collect::<Vec<_>>(),
+                .collect::<Vec<_>>()
         };
         self.check_utf16_string_len(&units)?;
         Ok(units)
@@ -297,8 +297,10 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         Value::Bool(value) => Ok(f64::from(u8::from(*value))),
         Value::Number(value) => Ok(*value),
         Value::BigInt(_) => Err(Error::type_error(CANNOT_CONVERT_BIGINT_ERROR)),
-        Value::String(value) => Ok(string_to_number(value)),
-        Value::HeapString(value) => Ok(string_to_number(value.as_str())),
+        Value::String(_) | Value::HeapString(_) => value
+            .string_text()
+            .map(string_to_number)
+            .ok_or_else(|| Error::runtime("string value lost its text")),
         Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_ERROR)),
         Value::Function(_)
         | Value::NativeFunction(_)
@@ -313,12 +315,12 @@ pub(in crate::runtime) fn to_bigint_primitive(value: &Value) -> Result<JsBigInt>
     match value {
         Value::BigInt(value) => Ok(value.clone()),
         Value::Bool(value) => Ok(JsBigInt::from_u64(u64::from(*value))),
-        Value::String(value) => JsBigInt::parse_string(value).ok_or_else(|| {
-            Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
-        }),
-        Value::HeapString(value) => JsBigInt::parse_string(value.as_str()).ok_or_else(|| {
-            Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
-        }),
+        Value::String(_) | Value::HeapString(_) => value
+            .string_text()
+            .and_then(JsBigInt::parse_string)
+            .ok_or_else(|| {
+                Error::exception(ErrorName::SyntaxError, CANNOT_CONVERT_TO_BIGINT_ERROR)
+            }),
         Value::Undefined
         | Value::Null
         | Value::Number(_)
@@ -337,8 +339,9 @@ pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
         Value::Bool(value) => *value,
         Value::Number(value) => *value != 0.0 && !value.is_nan(),
         Value::BigInt(value) => !value.is_zero(),
-        Value::String(value) => !value.is_empty(),
-        Value::HeapString(value) => !value.as_str().is_empty(),
+        Value::String(_) | Value::HeapString(_) => {
+            value.string_text().is_some_and(|value| !value.is_empty())
+        }
         Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
@@ -354,8 +357,10 @@ pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
         Value::Bool(value) => Ok(if *value { "true" } else { "false" }.to_owned()),
         Value::Number(value) => Ok(format_ecmascript_number(*value)),
         Value::BigInt(value) => Ok(value.to_string()),
-        Value::String(value) => Ok(value.clone()),
-        Value::HeapString(value) => Ok(value.as_str().to_owned()),
+        Value::String(_) | Value::HeapString(_) => value
+            .string_text()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::runtime("string value lost its text")),
         Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_TO_STRING_ERROR)),
         Value::Function(_)
         | Value::NativeFunction(_)
