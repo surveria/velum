@@ -3,9 +3,8 @@ use crate::{
     runtime::{
         Context,
         object::{
-            AccessorPropertyDescriptor, AccessorPropertyUpdate, DataPropertyDescriptor,
-            DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable, PropertyUpdate,
-            PropertyWritable,
+            AccessorPropertyUpdate, DataPropertyUpdate, OwnPropertyDescriptor,
+            PropertyConfigurable, PropertyUpdate, PropertyWritable,
         },
     },
     value::Value,
@@ -85,7 +84,9 @@ impl Context {
         let extensible = match object_ref.value {
             Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_is_extensible(*id)?,
             Value::Object(id) => self.objects.is_extensible(*id)?,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => true,
+            Value::Function(id) => self.function_is_extensible(*id)?,
+            Value::NativeFunction(id) => self.native_function_is_extensible(*id)?,
+            Value::HostFunction(_) => true,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -113,7 +114,15 @@ impl Context {
                 self.objects.prevent_extensions(*id)?;
                 true
             }
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => true,
+            Value::Function(id) => {
+                self.prevent_function_extensions(*id)?;
+                true
+            }
+            Value::NativeFunction(id) => {
+                self.prevent_native_function_extensions(*id)?;
+                true
+            }
+            Value::HostFunction(_) => true,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -143,7 +152,21 @@ impl Context {
                 return Ok(Some(true));
             }
             Value::Object(_) => {}
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
+            Value::Function(id) => {
+                match level {
+                    SemanticIntegrityLevel::Sealed => self.seal_function(*id)?,
+                    SemanticIntegrityLevel::Frozen => self.freeze_function(*id)?,
+                }
+                return Ok(Some(true));
+            }
+            Value::NativeFunction(id) => {
+                match level {
+                    SemanticIntegrityLevel::Sealed => self.seal_native_function(*id)?,
+                    SemanticIntegrityLevel::Frozen => self.freeze_native_function(*id)?,
+                }
+                return Ok(Some(true));
+            }
+            Value::HostFunction(_) => {
                 return Ok(Some(true));
             }
             Value::Undefined
@@ -163,8 +186,8 @@ impl Context {
             let Some(descriptor) = self.semantic_own_property_descriptor(target, &property)? else {
                 continue;
             };
-            let (update, complete) = Self::integrity_property_update(descriptor, level);
-            let descriptor_value = self.create_property_descriptor_object(&complete)?;
+            let update = Self::integrity_property_update(&descriptor, level);
+            let descriptor_value = self.create_property_update_object(&update)?;
             if !self.semantic_define_own_property_update_with_descriptor(
                 target,
                 &mut property,
@@ -193,9 +216,19 @@ impl Context {
                 };
             }
             Value::Object(_) => {}
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
-                return Ok(Some(false));
+            Value::Function(id) => {
+                return match level {
+                    SemanticIntegrityLevel::Sealed => self.function_is_sealed(*id).map(Some),
+                    SemanticIntegrityLevel::Frozen => self.function_is_frozen(*id).map(Some),
+                };
             }
+            Value::NativeFunction(id) => {
+                return match level {
+                    SemanticIntegrityLevel::Sealed => self.native_function_is_sealed(*id).map(Some),
+                    SemanticIntegrityLevel::Frozen => self.native_function_is_frozen(*id).map(Some),
+                };
+            }
+            Value::HostFunction(_) => return Ok(Some(false)),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -221,44 +254,19 @@ impl Context {
     }
 
     fn integrity_property_update(
-        descriptor: OwnPropertyDescriptor,
+        descriptor: &OwnPropertyDescriptor,
         level: SemanticIntegrityLevel,
-    ) -> (PropertyUpdate, OwnPropertyDescriptor) {
+    ) -> PropertyUpdate {
         match descriptor {
-            OwnPropertyDescriptor::Data(descriptor) => {
-                let writable = match level {
-                    SemanticIntegrityLevel::Sealed => descriptor.writable(),
-                    SemanticIntegrityLevel::Frozen => PropertyWritable::No,
-                };
-                let complete = DataPropertyDescriptor::new(
-                    descriptor.value(),
-                    writable,
-                    descriptor.enumerable(),
-                    PropertyConfigurable::No,
-                );
-                let update = PropertyUpdate::Data(DataPropertyUpdate::new(
-                    None,
-                    matches!(level, SemanticIntegrityLevel::Frozen).then_some(PropertyWritable::No),
-                    None,
-                    Some(PropertyConfigurable::No),
-                ));
-                (update, OwnPropertyDescriptor::Data(complete))
-            }
-            OwnPropertyDescriptor::Accessor(descriptor) => {
-                let complete = AccessorPropertyDescriptor::new(
-                    descriptor.get(),
-                    descriptor.set(),
-                    descriptor.enumerable(),
-                    PropertyConfigurable::No,
-                );
-                let update = PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
-                    None,
-                    None,
-                    None,
-                    Some(PropertyConfigurable::No),
-                ));
-                (update, OwnPropertyDescriptor::Accessor(complete))
-            }
+            OwnPropertyDescriptor::Data(_) => PropertyUpdate::Data(DataPropertyUpdate::new(
+                None,
+                matches!(level, SemanticIntegrityLevel::Frozen).then_some(PropertyWritable::No),
+                None,
+                Some(PropertyConfigurable::No),
+            )),
+            OwnPropertyDescriptor::Accessor(_) => PropertyUpdate::Accessor(
+                AccessorPropertyUpdate::new(None, None, None, Some(PropertyConfigurable::No)),
+            ),
         }
     }
 

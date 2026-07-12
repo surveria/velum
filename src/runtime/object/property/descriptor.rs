@@ -249,6 +249,22 @@ impl AccessorPropertyUpdate {
         )
     }
 
+    pub(in crate::runtime) fn get(&self) -> Option<Value> {
+        self.get.clone()
+    }
+
+    pub(in crate::runtime) fn set(&self) -> Option<Value> {
+        self.set.clone()
+    }
+
+    pub(in crate::runtime) const fn enumerable(&self) -> Option<PropertyEnumerable> {
+        self.enumerable
+    }
+
+    pub(in crate::runtime) const fn configurable(&self) -> Option<PropertyConfigurable> {
+        self.configurable
+    }
+
     pub(in crate::runtime) const fn trace_values(&self) -> [Option<&Value>; 2] {
         [self.get.as_ref(), self.set.as_ref()]
     }
@@ -469,7 +485,7 @@ impl ObjectProperty {
         Ok(())
     }
 
-    pub(in crate::runtime::object) const fn seal(&mut self) {
+    pub(in crate::runtime) const fn seal(&mut self) {
         match &mut self.payload {
             ObjectPropertyPayload::Data(descriptor) => {
                 descriptor.configurable = PropertyConfigurable::No;
@@ -481,7 +497,7 @@ impl ObjectProperty {
         self.version = self.version.saturating_add(1);
     }
 
-    pub(in crate::runtime::object) const fn freeze(&mut self) {
+    pub(in crate::runtime) const fn freeze(&mut self) {
         match &mut self.payload {
             ObjectPropertyPayload::Data(descriptor) => {
                 descriptor.writable = PropertyWritable::No;

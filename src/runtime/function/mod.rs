@@ -714,28 +714,6 @@ impl Context {
         self.finish_semantic_property_presence(presence, property)
     }
 
-    pub(crate) fn set_native_function_property_key(
-        &mut self,
-        id: NativeFunctionId,
-        property: &str,
-        key: PropertyKey,
-        value: Value,
-    ) -> Result<()> {
-        let property_kind = FunctionPropertyKind::from_name(property);
-        if property_kind.is_prototype() {
-            self.native_function(id)?;
-            return Ok(());
-        }
-        if self.native_function(id)?.has_intrinsic_property(property) {
-            return Ok(());
-        }
-        let max_properties = self.limits.max_object_properties;
-        let function = self.native_function_mut(id)?;
-        function
-            .properties_mut()
-            .set(key, property_kind, value, max_properties)
-    }
-
     pub(crate) fn define_native_function_property_key(
         &mut self,
         id: NativeFunctionId,
@@ -772,14 +750,6 @@ impl Context {
         }
         let function = self.native_function_mut(id)?;
         function.properties_mut().delete(property, property_kind)
-    }
-
-    pub(crate) fn native_function_enumerable_keys(
-        &self,
-        id: NativeFunctionId,
-    ) -> Result<Vec<String>> {
-        let function = self.native_function(id)?;
-        function.properties().keys(&self.atoms)
     }
 
     fn function_name_value(&mut self, name: Option<&StaticName>) -> Result<Value> {

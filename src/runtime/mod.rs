@@ -592,16 +592,10 @@ impl Context {
     }
 
     pub(crate) fn enumerable_keys(&mut self, object: &Value) -> Result<Vec<String>> {
-        if let Value::Object(id) = object
-            && self.objects.is_proxy(*id)
+        if matches!(object, Value::Function(_) | Value::NativeFunction(_))
+            || matches!(object, Value::Object(id) if self.objects.is_proxy(*id))
         {
             return self.semantic_enumerable_property_keys(object);
-        }
-        if let Value::Function(id) = object {
-            return self.function_enumerable_keys(*id);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.native_function_enumerable_keys(*id);
         }
         enumerable_property_keys(&self.objects, &self.atoms, object)
     }
