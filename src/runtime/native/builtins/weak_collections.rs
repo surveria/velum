@@ -4,9 +4,12 @@ use crate::{
         Context,
         call::RuntimeCallArgs,
         collections::{CollectionId, CollectionKind},
-        object::{ObjectPropertyInit, PropertyEnumerable},
+        object::{
+            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+            PropertyKey, PropertyUpdate, PropertyWritable,
+        },
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::{NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
@@ -18,8 +21,15 @@ const WEAK_COLLECTION_SET_NAME: &str = "set";
 const WEAK_COLLECTION_ADD_NAME: &str = "add";
 const WEAK_COLLECTION_HAS_NAME: &str = "has";
 const WEAK_COLLECTION_DELETE_NAME: &str = "delete";
+const WEAK_MAP_GET_OR_INSERT_NAME: &str = "getOrInsert";
+const WEAK_MAP_GET_OR_INSERT_COMPUTED_NAME: &str = "getOrInsertComputed";
+const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const WEAK_MAP_ENTRY_NOT_OBJECT_ERROR: &str = "WeakMap iterable entries must be objects";
 const WEAK_KEY_ERROR: &str = "WeakMap and WeakSet keys must be objects or symbols";
+const WEAK_COLLECTION_ADDER_ERROR: &str = "weak collection adder must be callable";
+const WEAK_MAP_CALLBACK_ERROR: &str =
+    "WeakMap.prototype.getOrInsertComputed callback must be callable";
 
 impl Context {
     pub(in crate::runtime::native) fn weak_map_constructor_value(&mut self) -> Result<Value> {
@@ -115,7 +125,61 @@ impl Context {
             let method = self.weak_collection_method_value(*method_kind)?;
             self.define_non_enumerable_object_property(prototype, name, method)?;
         }
+        if kind == CollectionKind::WeakMap {
+            self.install_modern_weak_map_methods(prototype)?;
+        }
+        self.install_weak_collection_to_string_tag(prototype, kind)
+    }
+
+    fn install_modern_weak_map_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        for (name, kind) in [
+            (
+                WEAK_MAP_GET_OR_INSERT_NAME,
+                NativeFunctionKind::WeakMapGetOrInsert,
+            ),
+            (
+                WEAK_MAP_GET_OR_INSERT_COMPUTED_NAME,
+                NativeFunctionKind::WeakMapGetOrInsertComputed,
+            ),
+        ] {
+            let method = self.create_ephemeral_native_function(kind, Value::Undefined)?;
+            self.define_non_enumerable_object_property(prototype, name, method)?;
+        }
         Ok(())
+    }
+
+    fn install_weak_collection_to_string_tag(
+        &mut self,
+        prototype: ObjectId,
+        kind: CollectionKind,
+    ) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(symbol) = tag_symbol else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let tag = match kind {
+            CollectionKind::WeakMap => WEAK_MAP_NAME,
+            CollectionKind::WeakSet => WEAK_SET_NAME,
+            CollectionKind::Map | CollectionKind::Set => {
+                return Err(Error::runtime(
+                    "strong collection routed to WeakMap or WeakSet tag",
+                ));
+            }
+        };
+        let value = self.heap_string_value(tag)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            TO_STRING_TAG_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     pub(in crate::runtime::native) fn construct_weak_collection_object(
@@ -148,7 +212,7 @@ impl Context {
         self.bind_collection_object(*object_id, kind, collection)?;
         let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         if !matches!(iterable, Value::Undefined | Value::Null) {
-            self.seed_weak_collection_from_iterable(kind, collection, &iterable)?;
+            self.seed_weak_collection_from_iterable(kind, &object, &iterable)?;
         }
         Ok(object)
     }
@@ -156,14 +220,27 @@ impl Context {
     fn seed_weak_collection_from_iterable(
         &mut self,
         kind: CollectionKind,
-        collection: CollectionId,
+        object: &Value,
         iterable: &Value,
     ) -> Result<()> {
+        let adder_name = match kind {
+            CollectionKind::WeakMap => WEAK_COLLECTION_SET_NAME,
+            CollectionKind::WeakSet => WEAK_COLLECTION_ADD_NAME,
+            CollectionKind::Map | CollectionKind::Set => {
+                return Err(Error::runtime(
+                    "strong collection routed to WeakMap or WeakSet seeding",
+                ));
+            }
+        };
+        let adder = self.get_named(object, adder_name)?;
+        if !self.semantic_is_callable(&adder)? {
+            return Err(Error::type_error(WEAK_COLLECTION_ADDER_ERROR));
+        }
         let mut source = self.get_iterator(iterable)?;
         loop {
             match self.iterator_step(&mut source)? {
                 crate::runtime::abstract_operations::IteratorStep::Value(item) => {
-                    let outcome = self.seed_weak_collection_entry(kind, collection, item);
+                    let outcome = self.seed_weak_collection_entry(kind, object, &adder, item);
                     if let Err(error) = outcome {
                         return Err(self.iterator_close_on_error(&mut source, error));
                     }
@@ -179,23 +256,96 @@ impl Context {
     fn seed_weak_collection_entry(
         &mut self,
         kind: CollectionKind,
-        collection: CollectionId,
+        object: &Value,
+        adder: &Value,
         item: Value,
     ) -> Result<()> {
-        match kind {
+        let args = match kind {
             CollectionKind::WeakMap => {
                 if !matches!(item, Value::Object(_)) {
                     return Err(Error::type_error(WEAK_MAP_ENTRY_NOT_OBJECT_ERROR));
                 }
                 let key = self.get_named(&item, "0")?;
                 let value = self.get_named(&item, "1")?;
-                self.weak_map_set_entry(collection, key, value)
+                vec![key, value]
             }
-            CollectionKind::WeakSet => self.weak_set_add_entry(collection, item),
-            CollectionKind::Map | CollectionKind::Set => Err(Error::runtime(
-                "strong collection routed to WeakMap or WeakSet",
-            )),
+            CollectionKind::WeakSet => vec![item],
+            CollectionKind::Map | CollectionKind::Set => {
+                return Err(Error::runtime(
+                    "strong collection routed to WeakMap or WeakSet seeding",
+                ));
+            }
+        };
+        self.call_value(adder, &args, object.clone()).map(|_| ())
+    }
+
+    pub(in crate::runtime) fn eval_modern_collection_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        if let Some(result) = self.eval_modern_map_native_function_kind(kind, args, this_value) {
+            return Some(result);
         }
+        self.eval_modern_weak_map_native_function_kind(kind, args, this_value)
+    }
+
+    fn eval_modern_weak_map_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::WeakMapGetOrInsert => {
+                Some(self.eval_weak_map_get_or_insert(args, this_value))
+            }
+            NativeFunctionKind::WeakMapGetOrInsertComputed => {
+                Some(self.eval_weak_map_get_or_insert_computed(args, this_value))
+            }
+            _ => None,
+        }
+    }
+
+    fn eval_weak_map_get_or_insert(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let collection = self.collection_from_this(this_value, CollectionKind::WeakMap)?;
+        let key = first_arg(&args);
+        if !self.can_be_held_weakly(&key)? {
+            return Err(Error::type_error(WEAK_KEY_ERROR));
+        }
+        if let Some(value) = self.collection_get(collection, &key)? {
+            return Ok(value);
+        }
+        let value = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        self.collection_set(collection, key, value.clone())?;
+        Ok(value)
+    }
+
+    fn eval_weak_map_get_or_insert_computed(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let collection = self.collection_from_this(this_value, CollectionKind::WeakMap)?;
+        let callback = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        if !self.semantic_is_callable(&callback)? {
+            return Err(Error::type_error(WEAK_MAP_CALLBACK_ERROR));
+        }
+        let key = first_arg(&args);
+        if !self.can_be_held_weakly(&key)? {
+            return Err(Error::type_error(WEAK_KEY_ERROR));
+        }
+        if let Some(value) = self.collection_get(collection, &key)? {
+            return Ok(value);
+        }
+        let value = self.call_value(&callback, std::slice::from_ref(&key), Value::Undefined)?;
+        self.collection_set(collection, key, value.clone())?;
+        Ok(value)
     }
 
     pub(in crate::runtime::native) fn eval_weak_map_get(
@@ -205,7 +355,7 @@ impl Context {
     ) -> Result<Value> {
         let collection = self.collection_from_this(this_value, CollectionKind::WeakMap)?;
         let key = first_arg(&args);
-        if !Self::can_be_held_weakly(&key) {
+        if !self.can_be_held_weakly(&key)? {
             return Ok(Value::Undefined);
         }
         Ok(self
@@ -244,7 +394,7 @@ impl Context {
     ) -> Result<Value> {
         let collection = self.collection_from_this(this_value, kind)?;
         let key = first_arg(&args);
-        if !Self::can_be_held_weakly(&key) {
+        if !self.can_be_held_weakly(&key)? {
             return Ok(Value::Bool(false));
         }
         Ok(Value::Bool(self.collection_has(collection, &key)?))
@@ -258,7 +408,7 @@ impl Context {
     ) -> Result<Value> {
         let collection = self.collection_from_this(this_value, kind)?;
         let key = first_arg(&args);
-        if !Self::can_be_held_weakly(&key) {
+        if !self.can_be_held_weakly(&key)? {
             return Ok(Value::Bool(false));
         }
         Ok(Value::Bool(self.collection_delete(collection, &key)?))
@@ -270,17 +420,25 @@ impl Context {
         key: Value,
         value: Value,
     ) -> Result<()> {
-        if !Self::can_be_held_weakly(&key) {
+        if !self.can_be_held_weakly(&key)? {
             return Err(Error::type_error(WEAK_KEY_ERROR));
         }
         self.collection_set(collection, key, value)
     }
 
     fn weak_set_add_entry(&mut self, collection: CollectionId, value: Value) -> Result<()> {
-        if !Self::can_be_held_weakly(&value) {
+        if !self.can_be_held_weakly(&value)? {
             return Err(Error::type_error(WEAK_KEY_ERROR));
         }
         self.collection_set(collection, value.clone(), value)
+    }
+
+    fn can_be_held_weakly(&self, value: &Value) -> Result<bool> {
+        match value {
+            Value::Object(_) => Ok(true),
+            Value::Symbol(symbol) => Ok(self.symbols.key_for(symbol.id())?.is_none()),
+            _ => Ok(false),
+        }
     }
 }
 

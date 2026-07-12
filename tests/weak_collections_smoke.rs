@@ -116,3 +116,116 @@ fn weak_collection_constructors_and_receivers_are_validated() -> TestResult {
         "TypeError:TypeError:TypeError:TypeError:TypeError:true:true:true:true",
     )
 }
+
+#[test]
+fn weak_map_upserts_preserve_callbacks_and_mutations() -> TestResult {
+    ensure_string(
+        r#"
+        "use strict";
+        const map = new WeakMap();
+        const present = {};
+        const missing = Symbol("missing");
+        map.set(present, 1);
+        let calls = 0;
+        const existing = map.getOrInsertComputed(present, function () {
+            calls += 1;
+            return 2;
+        });
+        const inserted = map.getOrInsertComputed(missing, function (key) {
+            calls += 1;
+            map.set(key, 3);
+            return this === undefined && arguments.length === 1 && key === missing ? 4 : 0;
+        });
+        const direct = {};
+        "" + existing + ":" + inserted + ":" + map.get(missing)
+            + ":" + map.getOrInsert(direct, 5) + ":" + calls
+            + ":" + WeakMap.prototype.getOrInsert.length
+            + ":" + WeakMap.prototype.getOrInsertComputed.name
+        "#,
+        "1:4:4:5:1:2:getOrInsertComputed",
+    )
+}
+
+#[test]
+fn weak_collection_constructors_use_dynamic_adders_and_close_iterators() -> TestResult {
+    ensure_string(
+        r#"
+        const key = {};
+        const original = WeakMap.prototype.set;
+        let receiverMatches = false;
+        let observedValue = 0;
+        WeakMap.prototype.set = function (entryKey, value) {
+            receiverMatches = this instanceof WeakMap;
+            observedValue = value;
+            return original.call(this, entryKey, value);
+        };
+        const seeded = new WeakMap([[key, 7]]);
+        let closed = 0;
+        const iterable = {};
+        iterable[Symbol.iterator] = function () {
+            return {
+                next: function () { return { value: [key, 8], done: false }; },
+                return: function () { closed += 1; return {}; }
+            };
+        };
+        WeakMap.prototype.set = function () { throw new RangeError("stop"); };
+        let errorName = "none";
+        try {
+            new WeakMap(iterable);
+        } catch (error) {
+            errorName = error.name;
+        }
+        "" + receiverMatches + ":" + observedValue + ":" + seeded.get(key)
+            + ":" + errorName + ":" + closed
+        "#,
+        "true:7:7:RangeError:1",
+    )
+}
+
+#[test]
+fn registered_symbols_are_not_weak_keys() -> TestResult {
+    ensure_string(
+        r#"
+        function kind(callback) {
+            try {
+                callback();
+                return "none";
+            } catch (error) {
+                return error instanceof TypeError ? "TypeError" : "other";
+            }
+        }
+        const key = Symbol.for("registered");
+        const map = new WeakMap();
+        const set = new WeakSet();
+        "" + kind(function () { map.set(key, 1); })
+            + ":" + kind(function () { map.getOrInsert(key, 1); })
+            + ":" + kind(function () { map.getOrInsertComputed(key, function () { return 1; }); })
+            + ":" + kind(function () { set.add(key); })
+            + ":" + (map.get(key) === undefined) + ":" + map.has(key)
+        "#,
+        "TypeError:TypeError:TypeError:TypeError:true:false",
+    )
+}
+
+#[test]
+fn weak_collection_to_string_tags_have_standard_descriptors() -> TestResult {
+    ensure_string(
+        r#"
+        const mapDescriptor = Object.getOwnPropertyDescriptor(
+            WeakMap.prototype,
+            Symbol.toStringTag
+        );
+        const setDescriptor = Object.getOwnPropertyDescriptor(
+            WeakSet.prototype,
+            Symbol.toStringTag
+        );
+        "" + WeakMap.prototype[Symbol.toStringTag]
+            + ":" + WeakSet.prototype[Symbol.toStringTag]
+            + ":" + mapDescriptor.writable + ":" + mapDescriptor.enumerable
+            + ":" + mapDescriptor.configurable
+            + ":" + setDescriptor.writable + ":" + setDescriptor.enumerable
+            + ":" + setDescriptor.configurable
+        "#,
+        "WeakMap:WeakSet:false:false:true:false:false:true",
+    )
+}
