@@ -176,6 +176,10 @@ fn supports_observable_string_and_regexp_split_protocols() -> TestResult {
         let split = regexp[Symbol.split]("a,b", 3);
 
         let surrogateParts = "\uD83D\uDE00".split("");
+        let tags = "A<B>bold</B>and<CODE>coded</CODE>".split(/<(\/)?([^<>]+)>/);
+        let original = /<(\/)?([^<>]+)>/;
+        let clone = new RegExp(original, original.flags + "y");
+        let clonedMatch = clone.exec("</B>");
         order.join("|") === "method|call" &&
             dispatched[0] === 7 &&
             dispatched[1] === true &&
@@ -186,6 +190,11 @@ fn supports_observable_string_and_regexp_split_protocols() -> TestResult {
             surrogateParts.length === 2 &&
             surrogateParts[0].charCodeAt(0) === 0xD83D &&
             surrogateParts[1].charCodeAt(0) === 0xDE00 &&
+            tags.length === 13 &&
+            tags[4] === "/" &&
+            tags[5] === "B" &&
+            clonedMatch[1] === "/" &&
+            clonedMatch[2] === "B" &&
             "1001".split(1, 1)[0] === "" ? 42 : 0
         "#,
     )?;
