@@ -10,7 +10,7 @@ use crate::{
 use super::{Parser, literal::ObjectPropertyName};
 
 impl Parser {
-    pub(super) fn next_is_binding_pattern(&self) -> bool {
+    pub(super) fn next_is_binding_pattern(&mut self) -> bool {
         self.check(&TokenKind::LBrace) || self.check(&TokenKind::LBracket)
     }
 

@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use crate::{Error, SourceId, SourceSpan};
 
 use super::{
@@ -11,6 +9,7 @@ use super::{
 struct BufferedToken {
     checkpoint: LexerCheckpoint,
     goal: LexicalGoal,
+    goal_sensitive: bool,
     token: Token,
 }
 
@@ -20,39 +19,42 @@ struct TokenStreamState {
 }
 
 pub struct TokenStream {
-    state: RefCell<TokenStreamState>,
+    state: TokenStreamState,
 }
 
 impl TokenStream {
     pub(crate) fn new(source: &str, source_id: SourceId) -> Self {
         Self {
-            state: RefCell::new(TokenStreamState {
+            state: TokenStreamState {
                 lexer: Lexer::new(source, source_id),
                 tokens: Vec::new(),
-            }),
+            },
         }
     }
 
-    pub(crate) fn get(&self, index: usize) -> Option<Token> {
+    pub(crate) fn get(&mut self, index: usize) -> Option<&Token> {
         self.get_with_goal(index, None)
     }
 
+    pub(crate) fn cached(&self, index: usize) -> Option<&Token> {
+        self.state.tokens.get(index).map(|entry| &entry.token)
+    }
+
     pub(crate) fn get_with_goal(
-        &self,
+        &mut self,
         index: usize,
         requested_goal: Option<LexicalGoal>,
-    ) -> Option<Token> {
-        let mut state = self.state.borrow_mut();
-        Self::invalidate_conflicting_slash(&mut state, index, requested_goal);
-        while state.tokens.len() <= index {
-            if let Some(error) = Self::terminal_error(&state) {
-                return Some(error);
+    ) -> Option<&Token> {
+        Self::invalidate_conflicting_slash(&mut self.state, index, requested_goal);
+        while self.state.tokens.len() <= index {
+            if Self::has_terminal_error(&self.state) {
+                return self.state.tokens.last().map(|entry| &entry.token);
             }
             let goal = requested_goal
-                .filter(|_| state.tokens.len() == index)
-                .unwrap_or_else(|| Self::automatic_goal(&state));
-            let checkpoint = state.lexer.checkpoint();
-            let token = match state.lexer.next_token(goal) {
+                .filter(|_| self.state.tokens.len() == index)
+                .unwrap_or_else(|| Self::automatic_goal(&self.state));
+            let checkpoint = self.state.lexer.checkpoint();
+            let token = match self.state.lexer.next_token(goal) {
                 Ok(token) => token,
                 Err(error) => Token {
                     span: Self::error_span(&error),
@@ -61,13 +63,15 @@ impl TokenStream {
                     identifier_escaped: false,
                 },
             };
-            state.tokens.push(BufferedToken {
+            let goal_sensitive = Self::goal_sensitive(&self.state.lexer, &token);
+            self.state.tokens.push(BufferedToken {
                 checkpoint,
                 goal,
+                goal_sensitive,
                 token,
             });
         }
-        state.tokens.get(index).map(|entry| entry.token.clone())
+        self.state.tokens.get(index).map(|entry| &entry.token)
     }
 
     fn invalidate_conflicting_slash(
@@ -81,12 +85,20 @@ impl TokenStream {
         let Some(entry) = state.tokens.get(index) else {
             return;
         };
-        if entry.goal == requested_goal {
+        if entry.goal == requested_goal || !entry.goal_sensitive {
             return;
         }
         let checkpoint = entry.checkpoint.clone();
         state.tokens.truncate(index);
         state.lexer.restore(&checkpoint);
+    }
+
+    fn goal_sensitive(lexer: &Lexer, token: &Token) -> bool {
+        matches!(
+            token.kind,
+            TokenKind::Slash | TokenKind::SlashEqual | TokenKind::RegExp { .. }
+        ) || matches!(token.kind, TokenKind::LexicalError(_))
+            && lexer.is_slash_offset(token.span.start())
     }
 
     /// Supplies speculative lookahead only. Parser-selected goals replace it
@@ -101,10 +113,11 @@ impl TokenStream {
         })
     }
 
-    fn terminal_error(state: &TokenStreamState) -> Option<Token> {
-        state.tokens.last().and_then(|entry| {
-            matches!(entry.token.kind, TokenKind::LexicalError(_)).then(|| entry.token.clone())
-        })
+    fn has_terminal_error(state: &TokenStreamState) -> bool {
+        state
+            .tokens
+            .last()
+            .is_some_and(|entry| matches!(entry.token.kind, TokenKind::LexicalError(_)))
     }
 
     const fn error_span(error: &Error) -> SourceSpan {

@@ -42,11 +42,9 @@ impl Parser {
         }
     }
 
-    pub(super) fn await_starts_identifier_assignment(&self) -> bool {
+    pub(super) fn await_starts_identifier_assignment(&mut self) -> bool {
         !self.await_identifier_is_reserved()
-            && self
-                .peek_kind(1)
-                .is_some_and(|kind| await_identifier_continuation(&kind))
+            && self.peek_kind(1).is_some_and(await_identifier_continuation)
     }
 }
 

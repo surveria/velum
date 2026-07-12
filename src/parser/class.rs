@@ -251,7 +251,7 @@ impl Parser {
         Ok(ClassKeySeed::Private(self.static_name(text)?))
     }
 
-    fn class_static_block_start(&self) -> bool {
+    fn class_static_block_start(&mut self) -> bool {
         matches!(self.peek_kind(0), Some(TokenKind::Identifier(name)) if name == CLASS_STATIC_KEYWORD)
             && self.peek_kind_is(1, &TokenKind::LBrace)
     }
@@ -522,17 +522,14 @@ impl Parser {
         }
     }
 
-    fn class_async_method_start(&self) -> bool {
+    fn class_async_method_start(&mut self) -> bool {
         if !self.peek_kind_is(0, &TokenKind::Async) || self.peek_has_line_terminator_before(1) {
             return false;
         }
         if self.peek_kind_is(1, &TokenKind::Star) {
-            return self
-                .peek_kind(2)
-                .is_some_and(|kind| class_element_name_start(&kind));
+            return self.peek_kind(2).is_some_and(class_element_name_start);
         }
-        self.peek_kind(1)
-            .is_some_and(|kind| class_element_name_start(&kind))
+        self.peek_kind(1).is_some_and(class_element_name_start)
     }
 
     fn class_member_key_name(key: &ClassKeySeed) -> Option<StaticName> {

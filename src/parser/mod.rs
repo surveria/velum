@@ -398,26 +398,28 @@ impl Parser {
         self.static_names.intern_borrowed(name, offset)
     }
 
-    pub(super) fn next_is_identifier(&self) -> bool {
+    pub(super) fn next_is_identifier(&mut self) -> bool {
+        let await_is_identifier = !self.await_identifier_is_reserved();
+        let let_is_identifier = !self.is_strict_mode();
         self.peek().is_some_and(|token| {
             Self::is_identifier_name(&token.kind)
-                || (token.kind == TokenKind::Await && !self.await_identifier_is_reserved())
-                || (token.kind == TokenKind::Let && !self.is_strict_mode())
+                || (token.kind == TokenKind::Await && await_is_identifier)
+                || (token.kind == TokenKind::Let && let_is_identifier)
         })
     }
 
-    pub(super) fn peek_kind(&self, offset: usize) -> Option<TokenKind> {
+    pub(super) fn peek_kind(&mut self, offset: usize) -> Option<&TokenKind> {
         let cursor = self.cursor.checked_add(offset)?;
-        self.tokens.get(cursor).map(|token| token.kind)
+        self.tokens.get(cursor).map(|token| &token.kind)
     }
 
-    pub(super) fn peek_kind_is(&self, offset: usize, expected: &TokenKind) -> bool {
+    pub(super) fn peek_kind_is(&mut self, offset: usize, expected: &TokenKind) -> bool {
         self.peek_kind(offset)
-            .is_some_and(|kind| token_kind_eq(&kind, expected))
+            .is_some_and(|kind| token_kind_eq(kind, expected))
     }
 
     pub(super) fn peek_kind_is_no_line_terminator(
-        &self,
+        &mut self,
         offset: usize,
         expected: &TokenKind,
     ) -> bool {
@@ -426,16 +428,18 @@ impl Parser {
         })
     }
 
-    pub(super) fn peek_has_line_terminator_before(&self, offset: usize) -> bool {
+    pub(super) fn peek_has_line_terminator_before(&mut self, offset: usize) -> bool {
         self.peek_token(offset)
             .is_some_and(|token| token.line_terminator_before)
     }
 
-    pub(super) fn peek_is_identifier_name(&self, offset: usize) -> bool {
+    pub(super) fn peek_is_identifier_name(&mut self, offset: usize) -> bool {
+        let await_is_identifier = !self.await_identifier_is_reserved();
+        let let_is_identifier = !self.is_strict_mode();
         self.peek_kind(offset).is_some_and(|kind| {
-            Self::is_identifier_name(&kind)
-                || (kind == TokenKind::Await && !self.await_identifier_is_reserved())
-                || (kind == TokenKind::Let && !self.is_strict_mode())
+            Self::is_identifier_name(kind)
+                || (*kind == TokenKind::Await && await_is_identifier)
+                || (*kind == TokenKind::Let && let_is_identifier)
         })
     }
 
@@ -491,7 +495,7 @@ impl Parser {
         }
     }
 
-    pub(super) fn check(&self, expected: &TokenKind) -> bool {
+    pub(super) fn check(&mut self, expected: &TokenKind) -> bool {
         let goal = matches!(expected, TokenKind::Slash | TokenKind::SlashEqual)
             .then_some(LexicalGoal::Div);
         self.tokens
@@ -516,23 +520,23 @@ impl Parser {
     }
 
     fn advance_with_goal(&mut self, goal: Option<LexicalGoal>) -> Option<Token> {
-        let token = self.tokens.get_with_goal(self.cursor, goal)?;
+        let token = self.tokens.get_with_goal(self.cursor, goal)?.clone();
         if !matches!(token.kind, TokenKind::Eof | TokenKind::LexicalError(_)) {
             self.cursor = self.cursor.saturating_add(1);
         }
         Some(token)
     }
 
-    pub(super) fn at_end(&self) -> bool {
+    pub(super) fn at_end(&mut self) -> bool {
         self.peek()
             .is_none_or(|token| matches!(token.kind, TokenKind::Eof))
     }
 
-    pub(super) fn peek(&self) -> Option<Token> {
+    pub(super) fn peek(&mut self) -> Option<&Token> {
         self.tokens.get(self.cursor)
     }
 
-    fn peek_token(&self, offset: usize) -> Option<Token> {
+    fn peek_token(&mut self, offset: usize) -> Option<&Token> {
         let cursor = self.cursor.checked_add(offset)?;
         self.tokens.get(cursor)
     }
@@ -546,11 +550,12 @@ impl Parser {
     }
 
     pub(super) fn current_span(&self) -> SourceSpan {
-        self.peek()
+        self.tokens
+            .cached(self.cursor)
             .or_else(|| {
                 self.cursor
                     .checked_sub(1)
-                    .and_then(|cursor| self.tokens.get(cursor))
+                    .and_then(|cursor| self.tokens.cached(cursor))
             })
             .map_or(SourceSpan::point(SourceId::UNKNOWN, 0), |token| token.span)
     }
@@ -558,17 +563,15 @@ impl Parser {
     pub(super) fn previous_span(&self) -> SourceSpan {
         self.cursor
             .checked_sub(1)
-            .and_then(|cursor| self.tokens.get(cursor))
+            .and_then(|cursor| self.tokens.cached(cursor))
             .map_or_else(|| self.current_span(), |token| token.span)
     }
 
     pub(super) fn parse_error(&self, message: impl Into<String>) -> Error {
-        if let Some(Token {
-            kind: TokenKind::LexicalError(error),
-            ..
-        }) = self.peek()
+        if let Some(token) = self.tokens.cached(self.cursor)
+            && let TokenKind::LexicalError(error) = &token.kind
         {
-            return *error;
+            return (**error).clone();
         }
         Error::parse_at(message, self.current_span())
     }

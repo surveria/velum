@@ -74,6 +74,12 @@ impl Lexer {
         self.pending = None;
     }
 
+    pub(super) fn is_slash_offset(&self, offset: usize) -> bool {
+        self.source
+            .get(offset..)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+    }
+
     pub(super) fn next_token(&mut self, goal: LexicalGoal) -> Result<Token> {
         loop {
             let Some((offset, ch)) = self.peek() else {

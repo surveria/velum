@@ -107,7 +107,7 @@ impl Parser {
     /// identifier followed by anything that can start a property name is an
     /// accessor; otherwise it is an ordinary key (`{get: 1}`, `{get() {}}`,
     /// `{get}`), which falls through to the regular property paths.
-    fn object_accessor_start(&self) -> Option<ObjectPropertyKind> {
+    fn object_accessor_start(&mut self) -> Option<ObjectPropertyKind> {
         let TokenKind::Identifier(name) = self.peek_kind(0)? else {
             return None;
         };
@@ -117,7 +117,7 @@ impl Parser {
             _ => return None,
         };
         self.peek_kind(1)
-            .is_some_and(|kind| is_object_property_name_start(&kind))
+            .is_some_and(is_object_property_name_start)
             .then_some(kind)
     }
 
@@ -200,16 +200,12 @@ impl Parser {
         Ok(ObjectProperty { key, kind, value })
     }
 
-    fn async_object_method_start(&self) -> bool {
+    fn async_object_method_start(&mut self) -> bool {
         self.peek_kind_is(0, &TokenKind::Async)
             && !self.peek_has_line_terminator_before(1)
-            && (self
-                .peek_kind(1)
-                .is_some_and(|kind| is_object_property_name_start(&kind))
+            && (self.peek_kind(1).is_some_and(is_object_property_name_start)
                 || (self.peek_kind_is(1, &TokenKind::Star)
-                    && self
-                        .peek_kind(2)
-                        .is_some_and(|kind| is_object_property_name_start(&kind))))
+                    && self.peek_kind(2).is_some_and(is_object_property_name_start)))
     }
 
     fn object_method_property(

@@ -253,7 +253,7 @@ impl Parser {
         Ok(())
     }
 
-    fn validate_default_export_keyword(&self) -> Result<()> {
+    fn validate_default_export_keyword(&mut self) -> Result<()> {
         if self
             .peek()
             .is_some_and(|token| token.kind == TokenKind::Default && token.identifier_escaped)

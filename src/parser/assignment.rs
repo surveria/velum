@@ -39,7 +39,7 @@ impl Parser {
         self.assignment_expr(target, operator, value, offset)
     }
 
-    fn next_is_yield_identifier(&self) -> bool {
+    fn next_is_yield_identifier(&mut self) -> bool {
         self.peek().is_some_and(|token| {
             matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
         })
@@ -82,15 +82,15 @@ impl Parser {
     /// matching outer delimiter is immediately followed by `=`. This keeps
     /// ordinary literal parsing on the existing expression path without
     /// speculative parser-table mutations.
-    fn assignment_pattern_followed_by_equal(&self) -> bool {
+    fn assignment_pattern_followed_by_equal(&mut self) -> bool {
         let Some(offset) = self.outer_literal_closing_offset() else {
             return false;
         };
         self.peek_kind(offset.saturating_add(1))
-            .is_some_and(|next| next == TokenKind::Equal)
+            .is_some_and(|next| next == &TokenKind::Equal)
     }
 
-    pub(super) fn literal_starts_assignment_target(&self) -> bool {
+    pub(super) fn literal_starts_assignment_target(&mut self) -> bool {
         let Some(offset) = self.outer_literal_closing_offset() else {
             return false;
         };
@@ -100,7 +100,7 @@ impl Parser {
         )
     }
 
-    pub(super) fn outer_literal_closing_offset(&self) -> Option<usize> {
+    pub(super) fn outer_literal_closing_offset(&mut self) -> Option<usize> {
         let first = self.peek_kind(0)?;
         let first = match first {
             TokenKind::LBrace => Delimiter::Brace,

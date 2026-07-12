@@ -164,7 +164,7 @@ impl Parser {
         Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
     }
 
-    fn using_of_lookahead(&self) -> bool {
+    fn using_of_lookahead(&mut self) -> bool {
         self.peek_token(1).is_some_and(|token| {
             !token.identifier_escaped
                 && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
@@ -215,14 +215,14 @@ impl Parser {
         None
     }
 
-    fn next_is_contextual_of(&self) -> bool {
+    fn next_is_contextual_of(&mut self) -> bool {
         self.peek().is_some_and(|token| {
             !token.identifier_escaped
                 && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
         })
     }
 
-    fn for_in_assignment_target_start(&self) -> bool {
+    fn for_in_assignment_target_start(&mut self) -> bool {
         self.peek().is_some_and(|token| {
             matches!(
                 &token.kind,
@@ -231,7 +231,7 @@ impl Parser {
         })
     }
 
-    fn for_in_assignment_pattern_start(&self) -> bool {
+    fn for_in_assignment_pattern_start(&mut self) -> bool {
         let Some(closing) = self.outer_literal_closing_offset() else {
             return false;
         };
