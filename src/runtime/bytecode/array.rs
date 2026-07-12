@@ -140,10 +140,11 @@ impl Context {
                 strict,
             );
         }
-        let Some(mutation) =
-            self.try_array_index_read_modify_write(object, index.index()?, |_, old_value| {
-                Self::updated_bytecode_number(old_value, op)
-            })?
+        let Some(mutation) = self.try_array_index_read_modify_write(
+            object,
+            index.index()?,
+            |context, old_value| context.bytecode_update_values(old_value, op),
+        )?
         else {
             return self.eval_bytecode_update_static_property(
                 object,
@@ -179,8 +180,8 @@ impl Context {
             return Ok(None);
         };
         let Some(mutation) =
-            self.try_array_index_read_modify_write(object, index, |_, old_value| {
-                Self::updated_bytecode_number(old_value, op)
+            self.try_array_index_read_modify_write(object, index, |context, old_value| {
+                context.bytecode_update_values(old_value, op)
             })?
         else {
             return Ok(None);
@@ -213,7 +214,11 @@ impl Context {
         let Some(mutation) = self.try_array_index_read_modify_write(
             object,
             index.index()?,
-            |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+            |context, old_value| {
+                context
+                    .eval_bytecode_compound_value(op, old_value, right)
+                    .map(|new_value| (old_value.clone(), new_value))
+            },
         )?
         else {
             return self.eval_bytecode_static_compound_assignment(
@@ -251,7 +256,9 @@ impl Context {
         };
         let Some(mutation) =
             self.try_array_index_read_modify_write(object, index, |context, old_value| {
-                context.eval_bytecode_compound_value(op, old_value, right)
+                context
+                    .eval_bytecode_compound_value(op, old_value, right)
+                    .map(|new_value| (old_value.clone(), new_value))
             })?
         else {
             return Ok(None);
@@ -264,7 +271,7 @@ impl Context {
         &mut self,
         object: &Value,
         index: usize,
-        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<(Value, Value)>,
     ) -> Result<Option<ArrayIndexMutation>> {
         let Value::Object(id) = object else {
             return Ok(None);
@@ -273,7 +280,7 @@ impl Context {
             return Ok(None);
         };
         let old_value = self.runtime_value(old_value)?;
-        let new_value = update(self, &old_value)?;
+        let (old_value, new_value) = update(self, &old_value)?;
         let new_value = self.runtime_value(new_value)?;
         if self.objects.set_array_index_if_array(
             *id,

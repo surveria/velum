@@ -21,7 +21,11 @@ impl Context {
             object,
             property,
             access,
-            |context, old_value| context.eval_numeric_compound_value(op, old_value, rhs),
+            |context, old_value| {
+                context
+                    .eval_numeric_compound_value(op, old_value, rhs)
+                    .map(|new_value| (old_value.clone(), new_value))
+            },
         )? {
             return Ok(value);
         }

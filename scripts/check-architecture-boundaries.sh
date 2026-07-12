@@ -1115,6 +1115,29 @@ src/compiler/mod.rs'
   fi
 }
 
+check_update_numeric_coercion_boundary() {
+  local runtime_owners
+
+  runtime_owners="$(
+    function_owners 'fn[[:space:]]+bytecode_update_values[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "update numeric coercion owner allowlist" \
+    "${runtime_owners}" \
+    'src/runtime/bytecode/ops/assignment.rs:bytecode_update_values'
+
+  for source in \
+    'let number = self.to_number(value)?;' \
+    'context.bytecode_update_values(value, op)' \
+    'context.bytecode_update_values(old_value, op)' \
+    'let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;' \
+    'let (current, updated) = self.bytecode_update_values(&current, op)?;'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src/runtime/bytecode"; then
+      fail "update numeric coercion boundary changed; required shared source '${source}' is missing"
+    fi
+  done
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1982,6 +2005,7 @@ run_checks() {
   check_named_function_binding_boundary
   check_function_name_inference_boundary
   check_destructuring_assignment_boundary
+  check_update_numeric_coercion_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -2144,6 +2168,12 @@ mutate_function_name_inference_owner() {
 mutate_destructuring_assignment_owner() {
   local fixture_root="$1"
   printf '\nfn eval_resumable_destructure() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/class.rs"
+}
+
+mutate_update_numeric_coercion_owner() {
+  local fixture_root="$1"
+  printf '\nfn bytecode_update_values() {}\n' \
     >>"${fixture_root}/src/runtime/bytecode/class.rs"
 }
 
@@ -2578,6 +2608,8 @@ run_self_tests() {
     'function name runtime owner allowlist changed' mutate_function_name_inference_owner
   expect_guard_failure "${temp_dir}" destructuring-assignment-owner \
     'destructuring runtime owner allowlist changed' mutate_destructuring_assignment_owner
+  expect_guard_failure "${temp_dir}" update-numeric-coercion-owner \
+    'update numeric coercion owner allowlist changed' mutate_update_numeric_coercion_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

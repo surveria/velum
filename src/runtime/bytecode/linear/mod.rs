@@ -556,7 +556,7 @@ impl Context {
                 prefix,
             } => {
                 let old_value = cell.value(binding.name())?;
-                let new_value = Self::updated_bytecode_number(&old_value, *op)?;
+                let (old_value, new_value) = self.bytecode_update_values(&old_value, *op)?;
                 self.checked_value(new_value.clone())?;
                 self.assign_bytecode_cell(binding, cell, new_value.clone())?;
                 state
@@ -665,7 +665,7 @@ impl Context {
                 prefix,
             } => {
                 let old_value = cell.value(binding.name())?;
-                let new_value = Self::updated_bytecode_number(&old_value, *op)?;
+                let (old_value, new_value) = self.bytecode_update_values(&old_value, *op)?;
                 self.checked_value(new_value.clone())?;
                 self.assign_bytecode_cell(binding, cell, new_value.clone())?;
                 state.last = if *prefix { new_value } else { old_value };
