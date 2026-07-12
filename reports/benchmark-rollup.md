@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-jetstream-report-20260712T061158Z.yaml`
-- Task: JetStream shell benchmark lane
-- Performance: 8.86x (4/5 >1.00x) (from `rsqjs-test-report-20260712T055326Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T055326Z.md`)
+- `rsqjs-test-report-20260712T063646Z.md`
+- Task: PR #487: runtime: implement Annex B eval block functions
+- Performance: 8.82x (4/5 >1.00x) (from `rsqjs-test-report-20260712T063646Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T063646Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 68926 passed / 33652 failed (67.19%) (from `rsqjs-test-report-20260712T055326Z.md`)
+- Full Test262: 69614 passed / 32964 failed (67.86%) (from `rsqjs-test-report-20260712T063646Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -473,3 +473,4 @@ Latest report:
 | `20260712T054408Z` `10ad681` PR #484: runtime: implement eval lexical environments | 8.93x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68758 passed / 33820 failed (67.03%) |
 | `20260712T055326Z` `552d206` PR #486: runtime: complete Promise keyed combinators | 8.86x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 68926 passed / 33652 failed (67.19%) |
 | `20260712T061158Z` `3dbeef5` JetStream shell benchmark lane | - (0/0 >1.00x) | - (0/0 >1.00x) | 24.03x (6/7 >1.00x) | - |
+| `20260712T063646Z` `3dbeef5` PR #487: runtime: implement Annex B eval block functions | 8.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 69614 passed / 32964 failed (67.86%) |
