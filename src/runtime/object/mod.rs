@@ -46,7 +46,7 @@ pub(in crate::runtime) use typed_array::{
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
 pub const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
-const PROTOTYPE_PROPERTY: &str = "__proto__";
+pub(in crate::runtime) const PROTOTYPE_PROPERTY: &str = "__proto__";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectPropertyValue {

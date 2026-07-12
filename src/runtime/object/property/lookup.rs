@@ -226,7 +226,7 @@ impl ObjectHeap {
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
-            if object.has_uncacheable_own_property(property)? {
+            if object.proxy_value.is_some() || object.has_uncacheable_own_property(property)? {
                 return Ok(CacheablePropertyLookup::uncacheable(guard));
             }
             if let Some(hit) =

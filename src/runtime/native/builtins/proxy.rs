@@ -158,7 +158,12 @@ impl Context {
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_GET)? else {
-            return self.get(&target, property);
+            let Some(read) =
+                self.semantic_property_read_with_receiver(&target, &receiver, property)?
+            else {
+                return Err(Error::type_error("proxy target is not an object"));
+            };
+            return self.finish_semantic_property_read(read, &receiver, property);
         };
         let key = self.proxy_property_key_value(property)?;
         self.call(&trap, &[target, key, receiver], handler)?

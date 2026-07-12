@@ -12,9 +12,6 @@ use crate::{
 
 use super::PROTOTYPE_PROPERTY;
 
-const ARRAY_INDEX_PROPERTY_LIMIT: u32 = u32::MAX;
-const ARRAY_LENGTH_PROPERTY: &str = "length";
-
 impl Context {
     /// Validated per-site cache hit for a plain-object read. The cache is
     /// only ever filled from the plain-object tail of the lookup chain and
@@ -148,7 +145,7 @@ impl Context {
         property: &DynamicPropertyKey,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
-        self.has_cached_property_lookup_value(object, property.name(), property.lookup(), access)
+        self.has_cached_property_lookup_value(object, property.lookup(), access)
     }
 
     pub(crate) fn has_cached_property_name_value(
@@ -158,13 +155,12 @@ impl Context {
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
         let lookup = self.property_lookup(property);
-        self.has_cached_property_lookup_value(object, property, lookup, access)
+        self.has_cached_property_lookup_value(object, lookup, access)
     }
 
     fn has_cached_property_lookup_value(
         &mut self,
         object: &Value,
-        property: &str,
         lookup: PropertyLookup<'_>,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
@@ -174,9 +170,6 @@ impl Context {
         match presence {
             SemanticPropertyPresence::Resolved(value) => Ok(value),
             SemanticPropertyPresence::ObjectTail(id) => {
-                if lookup.key().is_none() && !property_name_needs_virtual_lookup(property) {
-                    return Ok(false);
-                }
                 self.has_cached_object_property_lookup(id, lookup, access)
             }
         }
@@ -189,9 +182,11 @@ impl Context {
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
         let Some(cache) = self.current_static_name_atom_cache() else {
-            let object_value = Value::Object(object);
-            let value = get_property(&self.objects, &object_value, lookup)?;
-            return self.runtime_property_value(value);
+            return self.finish_semantic_property_read(
+                SemanticPropertyRead::ObjectTail(object),
+                &Value::Object(object),
+                lookup,
+            );
         };
         if let Some(cached_lookup) = cache.property_lookup(access)?
             && cached_lookup.matches_property(lookup)
@@ -219,22 +214,25 @@ impl Context {
                 cache.remember_property_lookup(access, candidate)?;
                 Ok(Value::Undefined)
             }
-            CacheablePropertyValue::Uncacheable => {
-                let object_value = Value::Object(object);
-                let value = get_property(&self.objects, &object_value, lookup)?;
-                self.runtime_property_value(value)
-            }
+            CacheablePropertyValue::Uncacheable => self.finish_semantic_property_read(
+                SemanticPropertyRead::ObjectTail(object),
+                &Value::Object(object),
+                lookup,
+            ),
         }
     }
 
     fn has_cached_object_property_lookup(
-        &self,
+        &mut self,
         object: ObjectId,
         lookup: PropertyLookup<'_>,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
         let Some(cache) = self.current_static_name_atom_cache() else {
-            return has_property(&self.objects, &Value::Object(object), lookup);
+            return self.finish_semantic_property_presence(
+                SemanticPropertyPresence::ObjectTail(object),
+                lookup,
+            );
         };
         if let Some(cached_lookup) = cache.property_lookup(access)?
             && cached_lookup.matches_property(lookup)
@@ -262,20 +260,10 @@ impl Context {
                 cache.remember_property_lookup(access, candidate)?;
                 Ok(false)
             }
-            CacheablePropertyPresence::Uncacheable => {
-                has_property(&self.objects, &Value::Object(object), lookup)
-            }
+            CacheablePropertyPresence::Uncacheable => self.finish_semantic_property_presence(
+                SemanticPropertyPresence::ObjectTail(object),
+                lookup,
+            ),
         }
     }
-}
-
-fn property_name_needs_virtual_lookup(property: &str) -> bool {
-    property == ARRAY_LENGTH_PROPERTY || is_array_index_property_name(property)
-}
-
-fn is_array_index_property_name(property: &str) -> bool {
-    let Ok(index) = property.parse::<u32>() else {
-        return false;
-    };
-    index != ARRAY_INDEX_PROPERTY_LIMIT && index.to_string() == property
 }
