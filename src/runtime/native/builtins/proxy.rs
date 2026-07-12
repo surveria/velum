@@ -145,7 +145,7 @@ impl Context {
 
     /// Resolve the wrapped target and handler for a proxy object, raising a
     /// `TypeError` when the proxy has been revoked.
-    fn proxy_target_handler(&self, id: ObjectId) -> Result<(Value, Value)> {
+    pub(in crate::runtime) fn proxy_target_handler(&self, id: ObjectId) -> Result<(Value, Value)> {
         let proxy = self
             .objects
             .proxy_value(id)?

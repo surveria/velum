@@ -29,7 +29,7 @@ if (!deleted || !("constructor" in Camera.prototype)) {
 if (!("constructor" in object) || !("constructor" in primitiveProto)) {
     throw new Test262Error("ordinary objects should inherit constructor");
 }
-if ("constructor" in nullProto || nullProto.__proto__ !== null) {
+if ("constructor" in nullProto || nullProto.__proto__ !== undefined) {
     throw new Test262Error("null-prototype object should not inherit Object.prototype");
 }
 

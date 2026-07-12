@@ -181,6 +181,12 @@ impl Context {
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(object, lookup.name())?;
+        let lookup = if lookup.key().is_none() {
+            self.property_lookup(lookup.name())
+        } else {
+            lookup
+        };
         let Some(cache) = self.current_static_name_atom_cache() else {
             return self.finish_semantic_property_read(
                 SemanticPropertyRead::ObjectTail(object),
@@ -228,6 +234,12 @@ impl Context {
         lookup: PropertyLookup<'_>,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(object, lookup.name())?;
+        let lookup = if lookup.key().is_none() {
+            self.property_lookup(lookup.name())
+        } else {
+            lookup
+        };
         let Some(cache) = self.current_static_name_atom_cache() else {
             return self.finish_semantic_property_presence(
                 SemanticPropertyPresence::ObjectTail(object),

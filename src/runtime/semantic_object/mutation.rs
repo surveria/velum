@@ -15,6 +15,7 @@ use crate::{
 use super::{SemanticPropertyDelete, SemanticPropertyWrite};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
+const LEGACY_PROTO_PROPERTY: &str = "__proto__";
 
 impl Context {
     /// Runs shared object-like `[[Set]]` pre-dispatch. Only an ordinary object
@@ -227,6 +228,16 @@ impl Context {
             return self
                 .proxy_set(*id, property.lookup(), value, receiver.clone())
                 .map(Some);
+        }
+        if let Value::Object(id) = object_ref.value
+            && property.name() == LEGACY_PROTO_PROPERTY
+        {
+            self.ensure_object_prototype_intrinsic_for_ordinary_lookup(*id, property.name())?;
+            if property.key().is_none() {
+                let name = property.name().to_owned();
+                let key = self.intern_property_key(&name)?;
+                property.remember_key(key);
+            }
         }
         if matches!(object_ref.value, Value::HostFunction(_)) {
             return Ok(Some(false));
