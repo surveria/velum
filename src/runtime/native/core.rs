@@ -214,6 +214,7 @@ impl Context {
                 self.eval_async_generator_function_constructor(args)
             }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
@@ -324,11 +325,12 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let atom = self.intern_atom(name)?;
-        if self.builtin_globals.contains(atom) {
+        if self.realm.builtin_globals.contains(atom) {
             return Ok(());
         }
         self.ensure_extra_binding_capacity(1)?;
-        self.builtin_globals
+        self.realm
+            .builtin_globals
             .insert(atom, BindingCell::new(value, false, DeclKind::Const))?;
         Ok(())
     }
@@ -468,6 +470,7 @@ impl Context {
             ));
         }
         let adds_registry_entry = self
+            .realm
             .native_function_registry
             .insertion_adds_entry(kind, id)?;
         let cache_reservation = if adds_registry_entry {
@@ -478,7 +481,7 @@ impl Context {
         } else {
             None
         };
-        self.native_function_registry.insert(kind, id)?;
+        self.realm.native_function_registry.insert(kind, id)?;
         if let Some(reservation) = cache_reservation {
             reservation.commit()?;
         }
@@ -486,7 +489,7 @@ impl Context {
             self.push_native_function_unregistered_with_id(id, kind, prototype, name)
         {
             if adds_registry_entry {
-                self.native_function_registry.remove(kind, id)?;
+                self.realm.native_function_registry.remove(kind, id)?;
                 self.storage_ledger
                     .release_count(crate::runtime::VmStorageKind::CacheEntry, 1)?;
             }
@@ -511,7 +514,7 @@ impl Context {
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::NativeFunction, 1)?;
-        let mut function = NativeFunction::new(kind, prototype, name);
+        let mut function = NativeFunction::new(kind, prototype, name, self.active_realm_index());
         function
             .properties_mut()
             .activate_storage(self.storage_ledger.clone())?;
@@ -531,7 +534,7 @@ impl Context {
         &self,
         kind: NativeFunctionKind,
     ) -> Option<NativeFunctionId> {
-        self.native_function_registry.get(kind)
+        self.realm.native_function_registry.get(kind)
     }
 
     pub(super) const fn eval_native_unary_argument_value(

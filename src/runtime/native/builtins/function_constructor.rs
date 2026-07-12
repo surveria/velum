@@ -43,7 +43,7 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(in crate::runtime::native) fn async_function_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn async_function_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::AsyncFunction) {
             return Ok(Value::NativeFunction(id));
         }
@@ -68,9 +68,9 @@ impl Context {
         }
 
         self.async_function_constructor_value()?;
+        let prototype_id = self.create_async_generator_function_prototype()?;
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
-        let prototype_id = self.create_async_generator_function_prototype(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::AsyncGeneratorFunction)?;
         self.push_native_function_with_id(
@@ -79,6 +79,7 @@ impl Context {
             prototype,
             name,
         )?;
+        self.install_async_generator_function_constructor(prototype_id, constructor.clone())?;
         Ok(constructor)
     }
 
@@ -101,6 +102,13 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Async)
+    }
+
+    pub(in crate::runtime::native) fn eval_generator_function_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Generator)
     }
 
     pub(in crate::runtime::native) fn eval_async_generator_function_constructor(
@@ -237,10 +245,7 @@ impl Context {
         prototype: ObjectId,
         prototype_value: &Value,
     ) -> Result<()> {
-        let thrower = self.create_ephemeral_native_function(
-            NativeFunctionKind::ThrowTypeError,
-            prototype_value.clone(),
-        )?;
+        let thrower = self.create_realm_throw_type_error(prototype_value.clone())?;
         for property in [
             FUNCTION_RESTRICTED_ARGUMENTS_PROPERTY,
             FUNCTION_RESTRICTED_CALLER_PROPERTY,
@@ -260,6 +265,34 @@ impl Context {
             )?;
         }
         Ok(())
+    }
+
+    fn create_realm_throw_type_error(&mut self, prototype: Value) -> Result<Value> {
+        if let Some(id) = self.realm.throw_type_error {
+            return Ok(Value::NativeFunction(id));
+        }
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::Association, 1)?;
+        let thrower =
+            self.create_ephemeral_native_function(NativeFunctionKind::ThrowTypeError, prototype)?;
+        let Value::NativeFunction(id) = thrower else {
+            return Err(Error::runtime("ThrowTypeError intrinsic is not native"));
+        };
+        self.realm.throw_type_error = Some(id);
+        reservation.commit()?;
+        Ok(Value::NativeFunction(id))
+    }
+
+    pub(in crate::runtime) fn realm_throw_type_error(&mut self) -> Result<Value> {
+        if let Some(id) = self.realm.throw_type_error {
+            return Ok(Value::NativeFunction(id));
+        }
+        self.function_constructor_value()?;
+        self.realm
+            .throw_type_error
+            .map(Value::NativeFunction)
+            .ok_or_else(|| Error::runtime("ThrowTypeError intrinsic is not initialized"))
     }
 
     pub(in crate::runtime::native) fn eval_function_prototype_to_string(

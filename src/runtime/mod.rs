@@ -13,7 +13,7 @@ use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
-use crate::storage::symbol::SymbolTable;
+use crate::storage::symbol::{SymbolId, SymbolTable};
 use crate::syntax::{FunctionKind, StaticBindingId};
 use crate::value::{ErrorName, FunctionId, Value};
 
@@ -49,6 +49,7 @@ mod optimizer;
 mod private;
 pub mod promise;
 pub mod property;
+mod realm;
 mod resource_scope;
 pub mod retained_values;
 mod roots;
@@ -66,12 +67,14 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
-use native::{NativeFunctionKind, NativeFunctionRegistry};
+use native::NativeFunctionKind;
 use optimizer::Optimizer;
 pub use optimizer::{OptimizationMode, VmOptimizationSnapshot};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
+pub use realm::RealmId;
+use realm::{RealmIndex, RealmState};
 pub use retained_values::RetainedValue;
 use retained_values::RetainedValueRegistry;
 pub use roots::{VmRootKind, VmRootSnapshot};
@@ -93,6 +96,7 @@ pub struct Context {
     atoms: AtomTable,
     strings: StringHeap,
     symbols: SymbolTable,
+    well_known_symbols: Vec<(&'static str, SymbolId)>,
     well_known_properties: WellKnownPropertyKeys,
     /// VM-local id of the well-known `Symbol.iterator` symbol, cached when the
     /// `Symbol` builtin installs its well-known symbol properties.
@@ -101,33 +105,26 @@ pub struct Context {
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
-    globals: BindingScope,
-    builtin_globals: BindingScope,
+    active_realm: RealmIndex,
+    realm: RealmState,
+    inactive_realms: Vec<Option<RealmState>>,
     locals: Vec<BindingScope>,
     modules: Vec<module::ModuleRecord>,
     module_evaluation_depth: usize,
     activation_frames: Vec<activation::ActivationFrame>,
     functions: SlotArena<Function>,
     native_functions: SlotArena<native::NativeFunction>,
-    native_function_registry: NativeFunctionRegistry,
     bound_functions: SlotArena<BoundFunction>,
     pub(crate) host_functions: SlotArena<HostFunction>,
     objects: ObjectHeap,
-    global_object: Option<crate::value::ObjectId>,
     collections: SlotArena<collections::CollectionData>,
     collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
     collection_iterators: SlotArena<collections::CollectionIteratorState>,
     generators: SlotArena<generator::GeneratorData>,
     generator_object_slots: Vec<Option<generator::GeneratorId>>,
-    generator_prototype: Option<crate::value::ObjectId>,
-    generator_function_prototype: Option<crate::value::ObjectId>,
-    async_iterator_prototype: Option<crate::value::ObjectId>,
-    async_generator_prototype: Option<crate::value::ObjectId>,
-    async_generator_function_prototype: Option<crate::value::ObjectId>,
     promises: SlotArena<Promise>,
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
-    promise_prototype: Option<crate::value::ObjectId>,
     retained_values: RetainedValueRegistry,
     transient_roots: TransientRootRegistry,
     output: Vec<String>,
@@ -141,6 +138,7 @@ pub struct Context {
 
 #[derive(Debug, Clone)]
 struct Function {
+    realm: RealmIndex,
     self_binding: Option<function::FunctionSelfBinding>,
     arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,
@@ -209,10 +207,12 @@ enum CallReference {
         this_value: Value,
     },
     Native {
+        id: crate::value::NativeFunctionId,
         kind: native::NativeFunctionKind,
         this_value: Value,
     },
     DirectNative {
+        id: crate::value::NativeFunctionId,
         target: NativeCallTarget,
         this_value: Value,
         strict: bool,
@@ -224,8 +224,15 @@ impl CallReference {
         match self {
             Self::Function { id, .. } => Self::Function { id, this_value },
             Self::Generic { callee, .. } => Self::Generic { callee, this_value },
-            Self::Native { kind, .. } => Self::Native { kind, this_value },
-            Self::DirectNative { target, strict, .. } => Self::DirectNative {
+            Self::Native { id, kind, .. } => Self::Native {
+                id,
+                kind,
+                this_value,
+            },
+            Self::DirectNative {
+                id, target, strict, ..
+            } => Self::DirectNative {
+                id,
                 target,
                 this_value,
                 strict,
@@ -331,7 +338,7 @@ impl Context {
     }
 
     pub(in crate::runtime) const fn optional_optimizations_enabled(&self) -> bool {
-        self.optimizer.optional_paths_enabled()
+        self.optimizer.optional_paths_enabled() && self.inactive_realms.len() == 1
     }
 
     fn with_performance_clock(
@@ -359,39 +366,33 @@ impl Context {
                 identity.clone(),
                 storage_limits.max_count(VmStorageKind::Symbol),
             ),
+            well_known_symbols: Vec::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
             iterator_symbol: None,
             descriptor_property_keys: None,
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
-            globals: BindingScope::new_active(storage_ledger.clone()),
-            builtin_globals: BindingScope::new_active(storage_ledger.clone()),
+            active_realm: RealmIndex::ROOT,
+            realm: RealmState::new(storage_ledger.clone()),
+            inactive_realms: vec![None],
             locals: Vec::new(),
             modules: Vec::new(),
             module_evaluation_depth: 0,
             activation_frames: Vec::new(),
             functions: SlotArena::new(),
             native_functions: SlotArena::new(),
-            native_function_registry: NativeFunctionRegistry::new(),
             bound_functions: SlotArena::new(),
             host_functions: SlotArena::new(),
             objects: ObjectHeap::new(storage_limits, storage_ledger.clone()),
-            global_object: None,
             collections: SlotArena::new(),
             collection_object_slots: Vec::new(),
             collection_iterators: SlotArena::new(),
             generators: SlotArena::new(),
             generator_object_slots: Vec::new(),
-            generator_prototype: None,
-            generator_function_prototype: None,
-            async_iterator_prototype: None,
-            async_generator_prototype: None,
-            async_generator_function_prototype: None,
             promises: SlotArena::new(),
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
-            promise_prototype: None,
             retained_values: RetainedValueRegistry::new(identity, storage_ledger.clone()),
             transient_roots: TransientRootRegistry::new(storage_ledger),
             output: Vec::new(),
@@ -453,8 +454,8 @@ impl Context {
                 RuntimeCallArgs::values(args),
                 this_value,
             ),
-            CallValueCache::NativeFunction { kind, .. } => self
-                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+            CallValueCache::NativeFunction { function, kind } => self
+                .eval_native_function_in_realm(function, kind, args, &this_value)
                 .map(Completion::Normal),
             CallValueCache::HostFunction(id) => self
                 .eval_host_function(id, RuntimeCallArgs::values(args))
@@ -486,19 +487,28 @@ impl Context {
                     this_value,
                 ),
             CallReference::DirectNative {
+                id,
                 target,
                 this_value,
                 strict,
             } => {
-                let value = if target == NativeCallTarget::Eval {
-                    self.eval_eval_function_with_strict(RuntimeCallArgs::values(args), strict)?
-                } else {
-                    self.eval_direct_native_call_target(target, args, &this_value)?
-                };
+                let realm = self.native_function(id)?.realm();
+                let value = self.with_realm(realm, |context| {
+                    if target == NativeCallTarget::Eval {
+                        context
+                            .eval_eval_function_with_strict(RuntimeCallArgs::values(args), strict)
+                    } else {
+                        context.eval_direct_native_call_target(target, args, &this_value)
+                    }
+                })?;
                 Ok(Completion::Normal(value))
             }
-            CallReference::Native { kind, this_value } => self
-                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+            CallReference::Native {
+                id,
+                kind,
+                this_value,
+            } => self
+                .eval_native_function_in_realm(id, kind, args, &this_value)
                 .map(Completion::Normal),
             CallReference::Generic { callee, this_value } => self.call(&callee, args, this_value),
         }
@@ -545,6 +555,7 @@ impl Context {
                 && self.direct_native_call_kind(id, target).is_some()
             {
                 return Ok(CallReference::DirectNative {
+                    id,
                     target,
                     this_value: Value::Undefined,
                     strict,
@@ -552,6 +563,7 @@ impl Context {
             }
             if let Some(kind) = self.cached_static_binding_native_call_kind(callee.name(), id)? {
                 return Ok(CallReference::Native {
+                    id,
                     kind,
                     this_value: Value::Undefined,
                 });
@@ -559,6 +571,7 @@ impl Context {
             let kind = self.native_function(id)?.kind();
             self.remember_static_binding_native_call_kind(callee.name(), id, kind)?;
             return Ok(CallReference::Native {
+                id,
                 kind,
                 this_value: Value::Undefined,
             });
@@ -656,10 +669,23 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         new_target: Value,
     ) -> Result<Value> {
-        let prototype = self.constructor_instance_prototype(&new_target)?;
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_constructor_value_in_active_realm(id, args, new_target)
+        })
+    }
+
+    fn eval_function_constructor_value_in_active_realm(
+        &mut self,
+        id: crate::value::FunctionId,
+        args: RuntimeCallArgs<'_>,
+        new_target: Value,
+    ) -> Result<Value> {
+        let prototype = self
+            .constructor_instance_prototype_with_default(&new_target, NativeFunctionKind::Object)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
-            prototype,
+            Some(prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,

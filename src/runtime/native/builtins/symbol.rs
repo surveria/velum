@@ -241,7 +241,7 @@ impl Context {
     fn install_well_known_symbols(&mut self, constructor: NativeFunctionId) -> Result<()> {
         for name in WELL_KNOWN_SYMBOL_PROPERTIES {
             let description = well_known_symbol_description(name)?;
-            let value = self.create_symbol_value(Some(&description))?;
+            let value = self.well_known_symbol_value(name, &description)?;
             if *name == SYMBOL_ITERATOR_PROPERTY
                 && let Value::Symbol(symbol) = &value
             {
@@ -261,6 +261,38 @@ impl Context {
             )?;
         }
         Ok(())
+    }
+
+    fn well_known_symbol_value(&mut self, name: &'static str, description: &str) -> Result<Value> {
+        if let Some((_, id)) = self
+            .well_known_symbols
+            .iter()
+            .find(|(registered, _)| registered == &name)
+        {
+            return self.symbols.get(*id).cloned().map(Value::Symbol);
+        }
+        self.well_known_symbols.try_reserve(1).map_err(|error| {
+            Error::limit(format!("well-known symbol registry exhausted: {error}"))
+        })?;
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Association, 1)?;
+        let value = match self.create_symbol_value(Some(description)) {
+            Ok(value) => value,
+            Err(error) => {
+                self.storage_ledger
+                    .release_count(crate::runtime::VmStorageKind::Association, 1)?;
+                return Err(error);
+            }
+        };
+        let Value::Symbol(symbol) = &value else {
+            self.storage_ledger
+                .release_count(crate::runtime::VmStorageKind::Association, 1)?;
+            return Err(Error::runtime(
+                "well-known symbol creation returned a non-symbol",
+            ));
+        };
+        self.well_known_symbols.push((name, symbol.id()));
+        Ok(value)
     }
 
     fn install_symbol_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {

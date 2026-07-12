@@ -6,8 +6,8 @@ use crate::{
         control::{Completion, runtime_exception_value},
         native::NativeFunctionKind,
         object::{
-            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
-            PropertyKey, PropertyUpdate, PropertyWritable,
+            DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+            PropertyUpdate, PropertyWritable,
         },
         promise::{PromiseId, PromiseReaction},
     },
@@ -34,9 +34,8 @@ impl Context {
 
     pub(in crate::runtime) fn create_async_generator_function_prototype(
         &mut self,
-        constructor: Value,
     ) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_generator_function_prototype {
+        if let Some(prototype) = self.realm.async_generator_function_prototype {
             return Ok(prototype);
         }
         let async_function_prototype = self.async_function_constructor_prototype_value()?;
@@ -45,30 +44,17 @@ impl Context {
         };
         let async_generator_prototype = self.async_generator_prototype_id()?;
         let constructor_key = self.object_constructor_property_key()?;
-        let prototype = self.objects.create_with_prototype_property(
+        let value = self.objects.create_with_prototype(
             Some(async_function_prototype),
-            ObjectPropertyInit::new(
-                constructor_key,
-                "constructor",
-                constructor,
-                PropertyEnumerable::No,
-            ),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        self.objects.define_property(
-            prototype,
-            constructor_key,
-            "constructor",
-            PropertyUpdate::Data(DataPropertyUpdate::new(
-                None,
-                Some(PropertyWritable::No),
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::Yes),
-            )),
-            self.limits.max_object_properties,
-        )?;
+        let Value::Object(prototype) = value else {
+            return Err(Error::runtime(
+                "async generator function prototype creation failed",
+            ));
+        };
         let prototype_key = self.intern_property_key("prototype")?;
         self.objects.define_property(
             prototype,
@@ -97,12 +83,32 @@ impl Context {
         self.install_to_string_tag(prototype, "AsyncGeneratorFunction")?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_generator_function_prototype = Some(prototype);
+        self.realm.async_generator_function_prototype = Some(prototype);
         Ok(prototype)
     }
 
+    pub(in crate::runtime) fn install_async_generator_function_constructor(
+        &mut self,
+        prototype: ObjectId,
+        constructor: Value,
+    ) -> Result<()> {
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.define_property(
+            prototype,
+            constructor_key,
+            "constructor",
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(constructor),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
     pub(in crate::runtime) fn async_generator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_generator_prototype {
+        if let Some(prototype) = self.realm.async_generator_prototype {
             return Ok(prototype);
         }
         let parent = self.async_iterator_prototype_id()?;
@@ -119,12 +125,12 @@ impl Context {
         self.install_async_generator_prototype(prototype)?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_generator_prototype = Some(prototype);
+        self.realm.async_generator_prototype = Some(prototype);
         Ok(prototype)
     }
 
     fn async_iterator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.async_iterator_prototype {
+        if let Some(prototype) = self.realm.async_iterator_prototype {
             return Ok(prototype);
         }
         let constructor_key = self.object_constructor_property_key()?;
@@ -159,7 +165,7 @@ impl Context {
         )?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.async_iterator_prototype = Some(prototype);
+        self.realm.async_iterator_prototype = Some(prototype);
         Ok(prototype)
     }
 

@@ -69,7 +69,11 @@ impl Context {
             .map(|binding| {
                 let atom = self.intern_static_name_atom(binding.name())?;
                 let frame = function_arguments_binding_frame(binding.id(), layout)?;
-                Ok(super::FunctionArgumentsBinding::new(atom, frame))
+                Ok(super::FunctionArgumentsBinding::new(
+                    atom,
+                    frame,
+                    bytecode.strict() || !bytecode.simple_parameters,
+                ))
             })
             .transpose()
     }
@@ -162,6 +166,7 @@ impl Context {
 
     pub(super) fn arguments_binding_scope(
         &mut self,
+        function: FunctionId,
         binding: FunctionArgumentsBinding,
         original_args: &[Value],
     ) -> Result<BindingScope> {
@@ -176,7 +181,7 @@ impl Context {
         }
         self.ensure_extra_binding_capacity(1)?;
         let cell = BindingCell::new(
-            self.create_arguments_object(original_args)?,
+            self.create_arguments_object(function, binding.unmapped(), original_args)?,
             true,
             DeclKind::Var,
         );
@@ -459,11 +464,16 @@ pub(in crate::runtime) struct FunctionScopeTemplate {
 pub(in crate::runtime) struct FunctionArgumentsBinding {
     atom: AtomId,
     frame: CompiledBindingFrame,
+    unmapped: bool,
 }
 
 impl FunctionArgumentsBinding {
-    pub(super) const fn new(atom: AtomId, frame: CompiledBindingFrame) -> Self {
-        Self { atom, frame }
+    pub(super) const fn new(atom: AtomId, frame: CompiledBindingFrame, unmapped: bool) -> Self {
+        Self {
+            atom,
+            frame,
+            unmapped,
+        }
     }
 
     pub(super) const fn atom(self) -> AtomId {
@@ -472,6 +482,10 @@ impl FunctionArgumentsBinding {
 
     pub(super) const fn frame(self) -> CompiledBindingFrame {
         self.frame
+    }
+
+    pub(super) const fn unmapped(self) -> bool {
+        self.unmapped
     }
 }
 

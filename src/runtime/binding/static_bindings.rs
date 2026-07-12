@@ -376,7 +376,7 @@ impl Context {
         let Some(atom) = self.atom(binding.name().name()) else {
             return Ok(());
         };
-        let Some(builtin) = self.builtin_globals.get(atom) else {
+        let Some(builtin) = self.realm.builtin_globals.get(atom) else {
             return Ok(());
         };
         if builtin.same_cell(cell) {

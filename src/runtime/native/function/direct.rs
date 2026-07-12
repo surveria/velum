@@ -507,6 +507,7 @@ impl Context {
                 self.eval_error_prototype_to_string(args, this_value)
             }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::FunctionPrototypeBind => {
                 self.eval_function_prototype_bind(args, this_value)
             }

@@ -78,6 +78,11 @@ impl Context {
         let mut constructor = self.get_named(original, ARRAY_CONSTRUCTOR_PROPERTY)?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         roots.add_values(std::iter::once(&constructor))?;
+        if self.semantic_is_constructor(&constructor)?
+            && self.is_foreign_intrinsic_array_constructor(&constructor)?
+        {
+            constructor = Value::Undefined;
+        }
         if self.semantic_object_ref(&constructor)?.is_some() {
             let species_key = self.array_species_key()?;
             constructor = self.get(

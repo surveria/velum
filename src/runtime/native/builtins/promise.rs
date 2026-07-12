@@ -89,10 +89,8 @@ impl Context {
         new_target: &Value,
     ) -> Result<Value> {
         let executor = self.promise_executor_argument(args)?;
-        let prototype = match self.constructor_instance_prototype(new_target)? {
-            Some(prototype) => prototype,
-            None => self.promise_constructor_prototype()?,
-        };
+        let prototype = self
+            .constructor_instance_prototype_with_default(new_target, NativeFunctionKind::Promise)?;
         let (promise, object) = self.create_pending_promise_with_prototype(prototype)?;
         self.run_promise_executor(promise, object, executor)
     }
@@ -719,7 +717,7 @@ impl Context {
     }
 
     fn promise_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<Value> {
-        if let Some(prototype) = self.promise_prototype {
+        if let Some(prototype) = self.realm.promise_prototype {
             self.define_non_enumerable_object_property(
                 prototype,
                 OBJECT_CONSTRUCTOR_PROPERTY,
@@ -743,7 +741,7 @@ impl Context {
         )?;
         self.storage_ledger
             .grow_count(crate::runtime::VmStorageKind::Association, 1)?;
-        self.promise_prototype = Some(prototype);
+        self.realm.promise_prototype = Some(prototype);
         Ok(Value::Object(prototype))
     }
 }

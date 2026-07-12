@@ -211,6 +211,7 @@ impl Context {
         self.functions.insert_at_next(
             id.index(),
             super::Function {
+                realm: self.active_realm_index(),
                 self_binding,
                 arguments_binding,
                 param_binding_ids,
@@ -282,6 +283,18 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_call_completion_in_active_realm(id, args, this_value)
+        })
+    }
+
+    fn eval_function_call_completion_in_active_realm(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let this_value = self.function_direct_call_this(id, this_value)?;
         let new_target = self.function_direct_call_new_target(id)?;
@@ -326,6 +339,18 @@ impl Context {
     }
 
     pub(crate) fn eval_function_completion_with_this(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_completion_with_this_in_active_realm(id, args, this_value)
+        })
+    }
+
+    fn eval_function_completion_with_this_in_active_realm(
         &mut self,
         id: FunctionId,
         args: RuntimeCallArgs<'_>,
@@ -417,7 +442,7 @@ impl Context {
             }
         }
         let arguments_scope = match arguments_binding
-            .map(|binding| self.arguments_binding_scope(binding, raw_args))
+            .map(|binding| self.arguments_binding_scope(id, binding, raw_args))
             .transpose()
         {
             Ok(scope) => scope,
@@ -619,28 +644,6 @@ impl Context {
             property.name(),
             FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY | FUNCTION_PROTOTYPE_CALLER_PROPERTY
         )
-    }
-
-    pub(crate) fn native_function_object_prototype_value(
-        &mut self,
-        id: NativeFunctionId,
-    ) -> Result<Value> {
-        let kind = self.native_function(id)?.kind();
-        if matches!(kind, NativeFunctionKind::TypedArray(_)) {
-            return self.typed_array_intrinsic_constructor_value();
-        }
-        if let NativeFunctionKind::ErrorConstructor(name) = kind
-            && name != crate::value::ErrorName::Base
-        {
-            return self.error_constructor_value(crate::value::ErrorName::Base);
-        }
-        if matches!(
-            kind,
-            NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction
-        ) {
-            return self.function_constructor_value();
-        }
-        self.function_constructor_prototype_value()
     }
 
     pub(crate) fn native_function_own_property_descriptor_lookup(

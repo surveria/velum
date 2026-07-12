@@ -302,7 +302,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn generator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(prototype) = self.generator_prototype {
+        if let Some(prototype) = self.realm.generator_prototype {
             return Ok(prototype);
         }
         // %GeneratorPrototype% inherits the iterator helpers through
@@ -321,14 +321,53 @@ impl Context {
         self.install_generator_prototype(prototype)?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.generator_prototype = Some(prototype);
+        self.realm.generator_prototype = Some(prototype);
         Ok(prototype)
     }
 
     pub(in crate::runtime) fn generator_function_prototype_value(&mut self) -> Result<Value> {
-        if let Some(prototype) = self.generator_function_prototype {
+        if let Some(prototype) = self.realm.generator_function_prototype {
             return Ok(Value::Object(prototype));
         }
+        self.generator_function_constructor_value()?;
+        self.realm
+            .generator_function_prototype
+            .map(Value::Object)
+            .ok_or_else(|| Error::runtime("generator function prototype disappeared"))
+    }
+
+    pub(in crate::runtime) fn generator_function_constructor_value(&mut self) -> Result<Value> {
+        if let Some(id) = self.native_function_id(NativeFunctionKind::GeneratorFunction) {
+            return Ok(Value::NativeFunction(id));
+        }
+        self.function_constructor_value()?;
+        let prototype = self.create_generator_function_prototype()?;
+        let id = self.next_native_function_id();
+        let constructor = Value::NativeFunction(id);
+        let name = self.native_function_name_value(NativeFunctionKind::GeneratorFunction)?;
+        self.push_native_function_with_id(
+            id,
+            NativeFunctionKind::GeneratorFunction,
+            Value::Object(prototype),
+            name,
+        )?;
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.define_property(
+            prototype,
+            constructor_key,
+            "constructor",
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(constructor.clone()),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        Ok(constructor)
+    }
+
+    fn create_generator_function_prototype(&mut self) -> Result<ObjectId> {
         let function_prototype = self.function_constructor_prototype_value()?;
         let Value::Object(function_prototype) = function_prototype else {
             return Err(Error::runtime("Function prototype is not an object"));
@@ -359,10 +398,22 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        self.objects.define_property(
+            generator_prototype,
+            constructor_key,
+            "constructor",
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Object(prototype)),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
-        self.generator_function_prototype = Some(prototype);
-        Ok(Value::Object(prototype))
+        self.realm.generator_function_prototype = Some(prototype);
+        Ok(prototype)
     }
 
     fn install_generator_prototype(&mut self, prototype: ObjectId) -> Result<()> {

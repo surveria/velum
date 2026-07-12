@@ -193,7 +193,7 @@ impl Context {
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
-            self.sync_global_object_property_binding(property.as_str(), sync_value)?;
+            self.sync_global_object_property_binding(*id, property.as_str(), sync_value)?;
         }
         Ok(())
     }
@@ -231,7 +231,7 @@ impl Context {
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
-            self.sync_global_object_property_binding(property.name(), sync_value)?;
+            self.sync_global_object_property_binding(*id, property.name(), sync_value)?;
         }
         Ok(())
     }
@@ -368,12 +368,19 @@ impl Context {
             reference.set(self, name, value.clone())?;
             return Ok(value);
         }
-        let binding = self
-            .get_or_materialize_binding_bytecode(name)?
-            .ok_or_else(|| reference_error_undefined(name.name()))?;
-        let old_value = binding.value(name.name())?;
+        let binding = self.get_or_materialize_binding_bytecode(name)?;
+        let old_value = if let Some(binding) = &binding {
+            binding.value(name.name())?
+        } else {
+            self.unresolved_global_property_value(name.name().name())?
+                .ok_or_else(|| reference_error_undefined(name.name()))?
+        };
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        self.assign_bytecode_cell(name, &binding, value.clone())?;
+        if let Some(binding) = binding {
+            self.assign_bytecode_cell(name, &binding, value.clone())?;
+        } else {
+            self.assign_bytecode_or_create_sloppy_global(name, value.clone())?;
+        }
         Ok(value)
     }
 

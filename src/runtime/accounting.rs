@@ -392,8 +392,9 @@ impl Context {
     }
 
     fn record_binding_storage(&self, counter: &mut StorageCounter) -> Result<()> {
-        counter.record(VmStorageKind::Binding, self.globals.len())?;
-        counter.record(VmStorageKind::Binding, self.builtin_globals.len())?;
+        for realm in self.realm_states() {
+            counter.record(VmStorageKind::Binding, realm.binding_count()?)?;
+        }
         for scope in &self.locals {
             counter.record(VmStorageKind::Binding, scope.len())?;
         }
@@ -549,11 +550,9 @@ impl Context {
         )?;
         counter.record(VmStorageKind::CacheEntry, self.atoms.index_entry_count())?;
         counter.record(VmStorageKind::CacheEntry, self.strings.index_entry_count())?;
-        counter.record(VmStorageKind::CacheEntry, self.globals.index_entry_count()?)?;
-        counter.record(
-            VmStorageKind::CacheEntry,
-            self.builtin_globals.index_entry_count()?,
-        )?;
+        for realm in self.realm_states() {
+            counter.record(VmStorageKind::CacheEntry, realm.cache_entry_count()?)?;
+        }
         for scope in &self.locals {
             counter.record(VmStorageKind::CacheEntry, scope.index_entry_count()?)?;
         }
@@ -575,15 +574,15 @@ impl Context {
         }
         counter.record(
             VmStorageKind::CacheEntry,
-            self.native_function_registry.ids().count(),
-        )?;
-        counter.record(
-            VmStorageKind::CacheEntry,
             self.suspended_generator_cache_entry_count()?,
         )
     }
 
     fn record_association_storage(&self, counter: &mut StorageCounter) -> Result<()> {
+        counter.record(
+            VmStorageKind::Association,
+            self.inactive_realms.len().saturating_sub(1),
+        )?;
         counter.record(
             VmStorageKind::Association,
             self.collection_object_slots.iter().flatten().count(),
@@ -592,6 +591,7 @@ impl Context {
             VmStorageKind::Association,
             self.symbols.registry_entry_count(),
         )?;
+        counter.record(VmStorageKind::Association, self.well_known_symbols.len())?;
         counter.record(
             VmStorageKind::Association,
             self.promise_object_slots.iter().flatten().count(),
@@ -601,34 +601,9 @@ impl Context {
             VmStorageKind::Association,
             self.generator_object_slots.iter().flatten().count(),
         )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.global_object.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.promise_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.generator_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.generator_function_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.async_iterator_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.async_generator_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.async_generator_function_prototype.is_some()),
-        )?;
+        for realm in self.realm_states() {
+            counter.record(VmStorageKind::Association, realm.association_count())?;
+        }
         counter.record(
             VmStorageKind::Association,
             self.async_generator_request_count()?,

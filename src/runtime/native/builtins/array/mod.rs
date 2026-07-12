@@ -27,7 +27,7 @@ const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
 const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
-    pub(in crate::runtime::native) fn array_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn array_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Array) {
             return Ok(Value::NativeFunction(id));
         }

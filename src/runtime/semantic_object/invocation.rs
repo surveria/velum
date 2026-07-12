@@ -62,7 +62,7 @@ impl Context {
             ),
             Value::NativeFunction(id) => {
                 let kind = self.native_function(*id)?.kind();
-                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+                self.eval_native_function_in_realm(*id, kind, args, &this_value)
                     .map(Completion::Normal)
             }
             Value::HostFunction(id) => self
@@ -136,41 +136,17 @@ impl Context {
                 self.eval_function_constructor_value(*id, RuntimeCallArgs::values(args), new_target)
             }
             Value::NativeFunction(id) => {
-                let kind = self.native_function(*id)?.kind();
-                if let NativeFunctionKind::BoundFunction(bound) = kind {
-                    return self.eval_bound_function_construct(
-                        bound,
+                let function = self.native_function(*id)?;
+                let kind = function.kind();
+                let realm = function.realm();
+                self.with_realm(realm, |context| {
+                    context.construct_native_function_in_active_realm(
+                        kind,
                         args,
                         constructor,
                         new_target,
-                    );
-                }
-                if let NativeFunctionKind::ErrorConstructor(name) = kind {
-                    let prototype = self.constructor_instance_prototype(&new_target)?;
-                    return self
-                        .eval_direct_error_constructor_with_prototype(name, args, prototype);
-                }
-                if kind == NativeFunctionKind::Promise {
-                    return self.construct_promise_with_new_target(args, &new_target);
-                }
-                if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
-                    return self.construct_iterator_object(constructor, &new_target);
-                }
-                if kind
-                    == NativeFunctionKind::DisposableStack(
-                        crate::runtime::native::DisposableStackFunctionKind::Constructor,
                     )
-                {
-                    return self.construct_disposable_stack_with_new_target(&new_target);
-                }
-                if kind
-                    == NativeFunctionKind::AsyncDisposableStack(
-                        crate::runtime::native::AsyncDisposableStackFunctionKind::Constructor,
-                    )
-                {
-                    return self.construct_async_disposable_stack_with_new_target(&new_target);
-                }
-                self.construct_native_with_new_target(kind, args, constructor, &new_target)
+                })
             }
             Value::Object(id) if self.objects.proxy_constructability(*id)? => {
                 self.proxy_construct(*id, args, new_target)
@@ -189,6 +165,46 @@ impl Context {
         }
     }
 
+    fn construct_native_function_in_active_realm(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        constructor: &Value,
+        new_target: Value,
+    ) -> Result<Value> {
+        if let NativeFunctionKind::BoundFunction(bound) = kind {
+            return self.eval_bound_function_construct(bound, args, constructor, new_target);
+        }
+        if let NativeFunctionKind::ErrorConstructor(name) = kind {
+            let prototype = self.constructor_instance_prototype_with_default(
+                &new_target,
+                NativeFunctionKind::ErrorConstructor(name),
+            )?;
+            return self.eval_direct_error_constructor_with_prototype(name, args, Some(prototype));
+        }
+        if kind == NativeFunctionKind::Promise {
+            return self.construct_promise_with_new_target(args, &new_target);
+        }
+        if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
+            return self.construct_iterator_object(constructor, &new_target);
+        }
+        if kind
+            == NativeFunctionKind::DisposableStack(
+                crate::runtime::native::DisposableStackFunctionKind::Constructor,
+            )
+        {
+            return self.construct_disposable_stack_with_new_target(&new_target);
+        }
+        if kind
+            == NativeFunctionKind::AsyncDisposableStack(
+                crate::runtime::native::AsyncDisposableStackFunctionKind::Constructor,
+            )
+        {
+            return self.construct_async_disposable_stack_with_new_target(&new_target);
+        }
+        self.construct_native_with_new_target(kind, args, constructor, &new_target)
+    }
+
     fn construct_native_with_new_target(
         &mut self,
         kind: NativeFunctionKind,
@@ -197,10 +213,13 @@ impl Context {
         new_target: &Value,
     ) -> Result<Value> {
         if kind == NativeFunctionKind::Object && !same_value(constructor, new_target) {
-            let prototype = self.constructor_instance_prototype(new_target)?;
+            let prototype = self.constructor_instance_prototype_with_default(
+                new_target,
+                NativeFunctionKind::Object,
+            )?;
             let constructor_key = self.object_constructor_property_key()?;
             return self.objects.create_with_prototype(
-                prototype,
+                Some(prototype),
                 constructor_key,
                 self.limits.max_objects,
                 self.limits.max_object_properties,
@@ -211,9 +230,7 @@ impl Context {
         if same_value(constructor, new_target) || kind == NativeFunctionKind::Proxy {
             return Ok(value);
         }
-        let Some(prototype) = self.constructor_instance_prototype(new_target)? else {
-            return Ok(value);
-        };
+        let prototype = self.constructor_instance_prototype_with_default(new_target, kind)?;
         match self.semantic_try_set_prototype(&value, Value::Object(prototype))? {
             Some(true) => Ok(value),
             Some(false) | None => Err(Error::runtime(

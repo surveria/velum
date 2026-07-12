@@ -269,7 +269,7 @@ impl Context {
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
             if self.is_global_object_id(id) {
-                self.sync_global_object_property_binding(property.as_str(), value)?;
+                self.sync_global_object_property_binding(id, property.as_str(), value)?;
             }
             return Ok(());
         }
@@ -277,7 +277,7 @@ impl Context {
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
-            self.sync_global_object_property_binding(property.as_str(), value)?;
+            self.sync_global_object_property_binding(*id, property.as_str(), value)?;
         }
         Ok(())
     }
@@ -309,7 +309,7 @@ impl Context {
             return Ok(false);
         }
         if self.is_global_object_id(*id) {
-            self.sync_global_object_property_binding(property.as_str(), value)?;
+            self.sync_global_object_property_binding(*id, property.as_str(), value)?;
         }
         Ok(true)
     }
@@ -370,7 +370,7 @@ impl Context {
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
             if self.is_global_object_id(id) {
-                self.sync_global_object_property_binding(property.name(), value)?;
+                self.sync_global_object_property_binding(id, property.name(), value)?;
             }
             return Ok(());
         }
@@ -378,7 +378,7 @@ impl Context {
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
-            self.sync_global_object_property_binding(property.name(), value)?;
+            self.sync_global_object_property_binding(*id, property.name(), value)?;
         }
         Ok(())
     }
@@ -409,7 +409,7 @@ impl Context {
             return Ok(false);
         }
         if self.is_global_object_id(*id) {
-            self.sync_global_object_property_binding(property.name(), value)?;
+            self.sync_global_object_property_binding(*id, property.name(), value)?;
         }
         Ok(true)
     }

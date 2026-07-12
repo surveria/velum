@@ -205,11 +205,10 @@ impl Context {
         &mut self,
         new_target: &Value,
     ) -> Result<Value> {
-        let prototype = if let Some(prototype) = self.constructor_instance_prototype(new_target)? {
-            prototype
-        } else {
-            self.async_disposable_stack_intrinsic_prototype()?
-        };
+        let prototype = self.constructor_instance_prototype_with_default(
+            new_target,
+            NativeFunctionKind::AsyncDisposableStack(AsyncDisposableStackFunctionKind::Constructor),
+        )?;
         self.create_async_disposable_stack_with_prototype(prototype)
     }
 

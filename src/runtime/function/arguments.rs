@@ -4,8 +4,8 @@ use crate::{
         Context,
         native::NativeFunctionKind,
         object::{
-            DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
-            PropertyUpdate, PropertyWritable,
+            AccessorPropertyUpdate, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
+            PropertyKey, PropertyUpdate, PropertyWritable,
         },
     },
     value::Value,
@@ -14,6 +14,7 @@ use crate::{
 const ARGUMENTS_BINDING_NAME: &str = "arguments";
 const ARGUMENTS_ITERATOR_DISPLAY: &str = "[Symbol.iterator]";
 const ARGUMENTS_LENGTH_PROPERTY: &str = "length";
+const ARGUMENTS_CALLEE_PROPERTY: &str = "callee";
 
 impl Context {
     pub(super) fn active_function_has_arguments_binding(&self) -> bool {
@@ -29,8 +30,13 @@ impl Context {
     /// Creates the arguments value from the original passed arguments.
     /// Indexed values and `length` are ordinary own properties. The explicit
     /// Arguments builtin-class marker only supplies the internal brand. Mapped
-    /// parameter aliasing and `callee` are not modeled.
-    pub(super) fn create_arguments_object(&mut self, original_args: &[Value]) -> Result<Value> {
+    /// parameter aliasing is not modeled.
+    pub(super) fn create_arguments_object(
+        &mut self,
+        function: crate::value::FunctionId,
+        unmapped: bool,
+        original_args: &[Value],
+    ) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         let value = self.objects.create_with_prototype(
             None,
@@ -47,6 +53,11 @@ impl Context {
         self.install_arguments_values(*id, original_args)?;
         self.install_arguments_length(*id, original_args.len())?;
         self.install_arguments_iterator(*id)?;
+        if unmapped {
+            self.install_arguments_restricted_callee(*id)?;
+        } else {
+            self.install_arguments_callee(*id, function)?;
+        }
         Ok(value)
     }
 
@@ -109,6 +120,43 @@ impl Context {
             ARGUMENTS_ITERATOR_DISPLAY,
             PropertyUpdate::Data(DataPropertyUpdate::new(
                 Some(iterator),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn install_arguments_restricted_callee(&mut self, id: crate::value::ObjectId) -> Result<()> {
+        let thrower = self.realm_throw_type_error()?;
+        let key = self.intern_property_key(ARGUMENTS_CALLEE_PROPERTY)?;
+        self.objects.define_property(
+            id,
+            key,
+            ARGUMENTS_CALLEE_PROPERTY,
+            PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                Some(thrower.clone()),
+                Some(thrower),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn install_arguments_callee(
+        &mut self,
+        id: crate::value::ObjectId,
+        function: crate::value::FunctionId,
+    ) -> Result<()> {
+        let key = self.intern_property_key(ARGUMENTS_CALLEE_PROPERTY)?;
+        self.objects.define_property(
+            id,
+            key,
+            ARGUMENTS_CALLEE_PROPERTY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Function(function)),
                 Some(PropertyWritable::Yes),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::Yes),

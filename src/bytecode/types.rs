@@ -56,6 +56,7 @@ pub struct BytecodeFunction {
     capture_bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
     strict: bool,
+    pub(crate) simple_parameters: bool,
 }
 
 pub struct BytecodeFunctionInit {
@@ -68,6 +69,7 @@ pub struct BytecodeFunctionInit {
     pub capture_bindings: Rc<[StaticBinding]>,
     pub uses_arguments: bool,
     pub strict: bool,
+    pub simple_parameters: bool,
 }
 impl BytecodeFunction {
     pub(crate) fn new(init: BytecodeFunctionInit) -> Self {
@@ -81,6 +83,7 @@ impl BytecodeFunction {
             capture_bindings: init.capture_bindings,
             uses_arguments: init.uses_arguments,
             strict: init.strict,
+            simple_parameters: init.simple_parameters,
         }
     }
     pub const fn self_binding(&self) -> Option<&StaticBinding> {
@@ -140,11 +143,9 @@ impl BytecodeFunctionParam {
     pub const fn binding(&self) -> &StaticBinding {
         &self.binding
     }
-
     pub const fn has_default(&self) -> bool {
         self.has_default
     }
-
     pub const fn rest(&self) -> bool {
         self.rest
     }

@@ -177,8 +177,8 @@ check_storage_accounting_boundary() {
     'counter.record(VmStorageKind::Atom, self.atoms.len())?;' \
     'counter.record(VmStorageKind::HeapString, self.strings.len())?;' \
     'counter.record(VmStorageKind::Symbol, self.symbols.len())?;' \
-    'counter.record(VmStorageKind::Binding, self.globals.len())?;' \
-    'counter.record(VmStorageKind::Binding, self.builtin_globals.len())?;' \
+    'for realm in self.realm_states() {' \
+    'counter.record(VmStorageKind::Binding, realm.binding_count()?)?;' \
     'for scope in &self.locals {' \
     'for frame in &self.activation_frames {' \
     'for function in &self.functions {' \
@@ -200,18 +200,17 @@ check_storage_accounting_boundary() {
     'self.well_known_properties.entry_count(),' \
     'self.atoms.index_entry_count()' \
     'self.strings.index_entry_count()' \
-    'self.globals.index_entry_count()?' \
-    'self.builtin_globals.index_entry_count()?' \
+    'counter.record(VmStorageKind::CacheEntry, realm.cache_entry_count()?)?;' \
     'if let Some(keys) = self.descriptor_property_keys {' \
     'for cache in &self.static_name_atom_caches {' \
     'for cache in &self.static_binding_caches {' \
     'for layout in &self.static_binding_layouts {' \
-    'self.native_function_registry.ids().count(),' \
+    'self.inactive_realms.len().saturating_sub(1),' \
     'self.collection_object_slots.iter().flatten().count(),' \
     'self.symbols.registry_entry_count(),' \
+    'self.well_known_symbols.len())?;' \
     'self.promise_object_slots.iter().flatten().count(),' \
-    'usize::from(self.global_object.is_some()),' \
-    'usize::from(self.promise_prototype.is_some()),' \
+    'counter.record(VmStorageKind::Association, realm.association_count())?;' \
     'usize::from(self.iterator_symbol.is_some()),' \
     'counter.record(VmStorageKind::Module, self.modules.len())'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
@@ -1155,8 +1154,9 @@ check_direct_root_boundary() {
   fi
 
   for source in \
-    'visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;' \
-    'visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
+    'for realm in self.realm_states() {' \
+    'visit_scope(&realm.globals, VmRootKind::GlobalBinding, visitor)?;' \
+    'visit_scope(&realm.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
     'for scope in &self.locals {' \
     'for module in &self.modules {' \
     'visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;' \
@@ -1170,12 +1170,12 @@ check_direct_root_boundary() {
     'if let Some(function) = continuation.function_id() {' \
     'visitor.visit_value(VmRootKind::BytecodeFrame, &Value::Function(function))?;' \
     'visitor.visit_value(VmRootKind::BytecodeFrame, value)?;' \
-    'if let Some(id) = self.global_object {' \
-    'if let Some(id) = self.promise_prototype {' \
+    'for id in realm.anchor_objects() {' \
     'if let Some(symbol) = self.iterator_symbol {' \
     'for key in self.well_known_properties.keys() {' \
+    'for (_, id) in &self.well_known_symbols {' \
     'if let Some(keys) = self.descriptor_property_keys {' \
-    'for id in self.native_function_registry.ids() {' \
+    'for id in realm.native_function_ids() {' \
     'self.objects.visit_direct_roots(visitor)?;' \
     'for job in &self.promise_jobs {' \
     'self.retained_values.visit(visitor)?;' \
@@ -1740,30 +1740,25 @@ storage_ledger
 atoms
 strings
 symbols
+well_known_symbols
 well_known_properties
 iterator_symbol
-generator_prototype
-generator_function_prototype
-async_iterator_prototype
-async_generator_prototype
-async_generator_function_prototype
 descriptor_property_keys
 static_name_atom_caches
 static_binding_caches
 static_binding_layouts
-globals
-builtin_globals
+active_realm
+realm
+inactive_realms
 locals
 modules
 module_evaluation_depth
 activation_frames
 functions
 native_functions
-native_function_registry
 bound_functions
 host_functions
 objects
-global_object
 collections
 collection_object_slots
 collection_iterators
@@ -1772,7 +1767,6 @@ generator_object_slots
 promises
 promise_object_slots
 promise_jobs
-promise_prototype
 retained_values
 transient_roots
 output
@@ -2270,7 +2264,7 @@ mutate_bytecode_frame_root() {
 
 mutate_native_registry_root() {
   local fixture_root="$1"
-  sed -i '/for id in self.native_function_registry.ids() {/d' \
+  sed -i '/for id in realm.native_function_ids() {/d' \
     "${fixture_root}/src/runtime/roots.rs"
 }
 

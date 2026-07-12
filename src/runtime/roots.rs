@@ -183,8 +183,10 @@ impl Context {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;
-        visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;
+        for realm in self.realm_states() {
+            visit_scope(&realm.globals, VmRootKind::GlobalBinding, visitor)?;
+            visit_scope(&realm.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;
+        }
         for scope in &self.locals {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
@@ -227,26 +229,10 @@ impl Context {
                 }
             }
         }
-        if let Some(id) = self.global_object {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.promise_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.generator_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.generator_function_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.async_iterator_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.async_generator_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
-        }
-        if let Some(id) = self.async_generator_function_prototype {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
+        for realm in self.realm_states() {
+            for id in realm.anchor_objects() {
+                visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
+            }
         }
         if let Some(symbol) = self.iterator_symbol {
             visitor.visit_property_key(VmRootKind::RuntimeAnchor, PropertyKey::symbol(symbol))?;
@@ -265,8 +251,16 @@ impl Context {
                 &Value::Symbol(self.symbols.get(id)?.clone()),
             )?;
         }
-        for id in self.native_function_registry.ids() {
-            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
+        for (_, id) in &self.well_known_symbols {
+            visitor.visit_value(
+                VmRootKind::RuntimeAnchor,
+                &Value::Symbol(self.symbols.get(*id)?.clone()),
+            )?;
+        }
+        for realm in self.realm_states() {
+            for id in realm.native_function_ids() {
+                visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
+            }
         }
         self.objects.visit_direct_roots(visitor)?;
         for job in &self.promise_jobs {

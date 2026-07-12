@@ -14,6 +14,41 @@ use super::properties::FunctionPropertyKind;
 use crate::runtime::native::NativeFunctionKind;
 
 impl Context {
+    pub(crate) fn native_function_object_prototype_value(
+        &mut self,
+        id: NativeFunctionId,
+    ) -> Result<Value> {
+        let function = self.native_function(id)?;
+        let kind = function.kind();
+        let realm = function.realm();
+        self.with_realm(realm, |context| {
+            context.native_function_object_prototype_in_active_realm(kind)
+        })
+    }
+
+    fn native_function_object_prototype_in_active_realm(
+        &mut self,
+        kind: NativeFunctionKind,
+    ) -> Result<Value> {
+        if matches!(kind, NativeFunctionKind::TypedArray(_)) {
+            return self.typed_array_intrinsic_constructor_value();
+        }
+        if let NativeFunctionKind::ErrorConstructor(name) = kind
+            && name != crate::value::ErrorName::Base
+        {
+            return self.error_constructor_value(crate::value::ErrorName::Base);
+        }
+        if matches!(
+            kind,
+            NativeFunctionKind::AsyncFunction
+                | NativeFunctionKind::AsyncGeneratorFunction
+                | NativeFunctionKind::GeneratorFunction
+        ) {
+            return self.function_constructor_value();
+        }
+        self.function_constructor_prototype_value()
+    }
+
     pub(crate) fn define_native_function_accessor_property_key(
         &mut self,
         id: NativeFunctionId,
@@ -178,7 +213,18 @@ impl Context {
     }
 
     pub(crate) fn function_object_prototype_value(&mut self, id: FunctionId) -> Result<Value> {
-        let kind = self.function(id)?.kind;
+        let function = self.function(id)?;
+        let kind = function.kind;
+        let realm = function.realm;
+        self.with_realm(realm, |context| {
+            context.function_object_prototype_in_active_realm(kind)
+        })
+    }
+
+    fn function_object_prototype_in_active_realm(
+        &mut self,
+        kind: crate::syntax::FunctionKind,
+    ) -> Result<Value> {
         if kind.is_async_generator() {
             return self.async_generator_function_prototype_value();
         }
