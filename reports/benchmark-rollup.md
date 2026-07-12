@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T000814Z.md`
-- Task: PR #477: parser: add class async and generator methods
-- Performance: 9.13x (4/5 >1.00x) (from `rsqjs-test-report-20260712T000814Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T000814Z.md`)
+- `rsqjs-test-report-20260712T001208Z.md`
+- Task: PR #478: AS-09r: complete Promise.all semantics
+- Performance: 8.82x (4/5 >1.00x) (from `rsqjs-test-report-20260712T001208Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T001208Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 66673 passed / 35905 failed (65.00%) (from `rsqjs-test-report-20260712T000814Z.md`)
+- Full Test262: 66815 passed / 35763 failed (65.14%) (from `rsqjs-test-report-20260712T001208Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -463,3 +463,4 @@ Latest report:
 | `20260711T224535Z` `8f8fc2d` PR #475: ci: tolerate host-owned writable benchmark lock files | 9.02x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58620 passed / 43958 failed (57.15%) |
 | `20260711T232050Z` `e1f246b` PR #476: AS-09q: complete Symbol.species constructor accessors | 9.03x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58682 passed / 43896 failed (57.21%) |
 | `20260712T000814Z` `91ece91` PR #477: parser: add class async and generator methods | 9.13x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66673 passed / 35905 failed (65.00%) |
+| `20260712T001208Z` `041a48d` PR #478: AS-09r: complete Promise.all semantics | 8.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 66815 passed / 35763 failed (65.14%) |
