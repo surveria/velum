@@ -43,7 +43,7 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(in crate::runtime::native) fn async_function_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn async_function_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::AsyncFunction) {
             return Ok(Value::NativeFunction(id));
         }
@@ -68,9 +68,9 @@ impl Context {
         }
 
         self.async_function_constructor_value()?;
+        let prototype_id = self.create_async_generator_function_prototype()?;
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
-        let prototype_id = self.create_async_generator_function_prototype(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::AsyncGeneratorFunction)?;
         self.push_native_function_with_id(
@@ -79,6 +79,7 @@ impl Context {
             prototype,
             name,
         )?;
+        self.install_async_generator_function_constructor(prototype_id, constructor.clone())?;
         Ok(constructor)
     }
 
@@ -101,6 +102,13 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Async)
+    }
+
+    pub(in crate::runtime::native) fn eval_generator_function_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Generator)
     }
 
     pub(in crate::runtime::native) fn eval_async_generator_function_constructor(

@@ -4,6 +4,7 @@ use crate::{
     runtime::object::{
         DataPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyWritable,
     },
+    runtime::realm::RealmIndex,
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     value::Value,
 };
@@ -131,6 +132,7 @@ pub(in crate::runtime) use typed_array_kind::TypedArrayFunctionKind;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunction {
+    realm: RealmIndex,
     kind: NativeFunctionKind,
     properties: FunctionProperties,
 }
@@ -140,6 +142,7 @@ impl NativeFunction {
         kind: NativeFunctionKind,
         prototype: Value,
         name: Value,
+        realm: RealmIndex,
     ) -> Self {
         let prototype_default = kind.has_own_prototype_property().then(|| {
             DataPropertyDescriptor::new(
@@ -152,6 +155,7 @@ impl NativeFunction {
         let intrinsic_defaults =
             FunctionIntrinsicDefaults::new(Value::Number(kind.length()), name, prototype_default);
         Self {
+            realm,
             kind,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
         }
@@ -159,6 +163,10 @@ impl NativeFunction {
 
     pub(in crate::runtime) const fn kind(&self) -> NativeFunctionKind {
         self.kind
+    }
+
+    pub(in crate::runtime) const fn realm(&self) -> RealmIndex {
+        self.realm
     }
 
     pub(in crate::runtime) const fn properties(&self) -> &FunctionProperties {

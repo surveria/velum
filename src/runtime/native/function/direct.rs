@@ -23,6 +23,19 @@ const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
 }
 
 impl Context {
+    pub(in crate::runtime) fn eval_native_function_in_realm(
+        &mut self,
+        id: NativeFunctionId,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let realm = self.native_function(id)?.realm();
+        self.with_realm(realm, |context| {
+            context.eval_direct_or_generic_native_function_kind(kind, args, this_value)
+        })
+    }
+
     pub(crate) fn eval_direct_native_property_call(
         &mut self,
         target: NativeCallTarget,
@@ -507,6 +520,7 @@ impl Context {
                 self.eval_error_prototype_to_string(args, this_value)
             }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::FunctionPrototypeBind => {
                 self.eval_function_prototype_bind(args, this_value)
             }

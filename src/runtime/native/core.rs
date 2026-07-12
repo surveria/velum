@@ -214,6 +214,7 @@ impl Context {
                 self.eval_async_generator_function_constructor(args)
             }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
@@ -513,7 +514,7 @@ impl Context {
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::NativeFunction, 1)?;
-        let mut function = NativeFunction::new(kind, prototype, name);
+        let mut function = NativeFunction::new(kind, prototype, name, self.active_realm_index());
         function
             .properties_mut()
             .activate_storage(self.storage_ledger.clone())?;

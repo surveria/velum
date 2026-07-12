@@ -65,6 +65,17 @@ impl Context {
         continuation: DetachedFunctionExecution,
         resume: Completion,
     ) -> Result<Completion> {
+        let realm = self.function(continuation.function())?.realm;
+        self.with_realm(realm, |context| {
+            context.resume_function_execution_in_active_realm(continuation, resume)
+        })
+    }
+
+    fn resume_function_execution_in_active_realm(
+        &mut self,
+        continuation: DetachedFunctionExecution,
+        resume: Completion,
+    ) -> Result<Completion> {
         let function = continuation.function();
         let local_base = self.locals.len();
         let activation_base = self.activation_frames.len();

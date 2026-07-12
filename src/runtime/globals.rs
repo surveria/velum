@@ -270,7 +270,7 @@ impl Context {
     }
 
     pub(crate) fn is_global_object_id(&self, id: ObjectId) -> bool {
-        matches!(self.realm.global_object, Some(global) if global == id)
+        self.global_object_realm(id).is_some()
     }
 
     pub(crate) fn global_object_property_value(
@@ -278,9 +278,19 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<Value>> {
-        if !self.is_global_object_id(id) {
+        let Some(realm) = self.global_object_realm(id) else {
             return Ok(None);
-        }
+        };
+        self.with_realm(realm, |context| {
+            context.global_object_property_value_in_active_realm(id, lookup)
+        })
+    }
+
+    fn global_object_property_value_in_active_realm(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<Value>> {
         let object = Value::Object(id);
         if has_property(&self.objects, &object, lookup)? {
             let value = get_property(&self.objects, &object, lookup)?;
@@ -294,9 +304,19 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<bool>> {
-        if !self.is_global_object_id(id) {
+        let Some(realm) = self.global_object_realm(id) else {
             return Ok(None);
-        }
+        };
+        self.with_realm(realm, |context| {
+            context.global_object_has_property_in_active_realm(id, lookup)
+        })
+    }
+
+    fn global_object_has_property_in_active_realm(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<bool>> {
         let object = Value::Object(id);
         if has_property(&self.objects, &object, lookup)? {
             return Ok(Some(true));
@@ -310,9 +330,19 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<OwnPropertyDescriptor>> {
-        if !self.is_global_object_id(id) {
+        let Some(realm) = self.global_object_realm(id) else {
             return Ok(None);
-        }
+        };
+        self.with_realm(realm, |context| {
+            context.global_object_property_descriptor_in_active_realm(id, lookup)
+        })
+    }
+
+    fn global_object_property_descriptor_in_active_realm(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
         let Some(value) = self.global_binding_property_value(lookup.name())? else {
             return Ok(None);
         };
@@ -365,6 +395,20 @@ impl Context {
     }
 
     pub(crate) fn sync_global_object_property_binding(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let Some(realm) = self.global_object_realm(id) else {
+            return Ok(());
+        };
+        self.with_realm(realm, |context| {
+            context.sync_global_object_property_binding_in_active_realm(name, value)
+        })
+    }
+
+    fn sync_global_object_property_binding_in_active_realm(
         &mut self,
         name: &str,
         value: Value,

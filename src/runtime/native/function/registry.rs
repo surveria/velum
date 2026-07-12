@@ -284,7 +284,8 @@ const DATA_VIEW_SET_BIGUINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new
 const SHARED_ARRAY_BUFFER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(310);
 const SHARED_ARRAY_BUFFER_METHOD_SLOT_BASE: usize = 311;
 const ATOMICS_METHOD_SLOT_BASE: usize = 316;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 330;
+const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 331;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -437,6 +438,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ErrorConstructor(name) => Some(NativeFunctionSlot::error(name)),
         NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
+        NativeFunctionKind::GeneratorFunction => Some(GENERATOR_FUNCTION_SLOT),
         NativeFunctionKind::GeneratorNext => Some(GENERATOR_NEXT_SLOT),
         NativeFunctionKind::GeneratorReturn => Some(GENERATOR_RETURN_SLOT),
         NativeFunctionKind::GeneratorThrow => Some(GENERATOR_THROW_SLOT),

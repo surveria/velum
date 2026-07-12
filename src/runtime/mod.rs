@@ -49,6 +49,7 @@ mod optimizer;
 mod private;
 pub mod promise;
 pub mod property;
+mod realm;
 mod resource_scope;
 pub mod retained_values;
 mod roots;
@@ -66,12 +67,14 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
-use native::{NativeFunctionKind, NativeFunctionRegistry};
+use native::NativeFunctionKind;
 use optimizer::Optimizer;
 pub use optimizer::{OptimizationMode, VmOptimizationSnapshot};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
+pub use realm::RealmId;
+use realm::{RealmIndex, RealmState};
 pub use retained_values::RetainedValue;
 use retained_values::RetainedValueRegistry;
 pub use roots::{VmRootKind, VmRootSnapshot};
@@ -101,7 +104,9 @@ pub struct Context {
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
+    active_realm: RealmIndex,
     realm: RealmState,
+    inactive_realms: Vec<Option<RealmState>>,
     locals: Vec<BindingScope>,
     modules: Vec<module::ModuleRecord>,
     module_evaluation_depth: usize,
@@ -130,39 +135,9 @@ pub struct Context {
     call_depth: usize,
 }
 
-#[derive(Debug)]
-struct RealmState {
-    globals: BindingScope,
-    builtin_globals: BindingScope,
-    native_function_registry: NativeFunctionRegistry,
-    global_object: Option<crate::value::ObjectId>,
-    generator_prototype: Option<crate::value::ObjectId>,
-    generator_function_prototype: Option<crate::value::ObjectId>,
-    async_iterator_prototype: Option<crate::value::ObjectId>,
-    async_generator_prototype: Option<crate::value::ObjectId>,
-    async_generator_function_prototype: Option<crate::value::ObjectId>,
-    promise_prototype: Option<crate::value::ObjectId>,
-}
-
-impl RealmState {
-    fn new(storage_ledger: VmStorageLedger) -> Self {
-        Self {
-            globals: BindingScope::new_active(storage_ledger.clone()),
-            builtin_globals: BindingScope::new_active(storage_ledger),
-            native_function_registry: NativeFunctionRegistry::new(),
-            global_object: None,
-            generator_prototype: None,
-            generator_function_prototype: None,
-            async_iterator_prototype: None,
-            async_generator_prototype: None,
-            async_generator_function_prototype: None,
-            promise_prototype: None,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct Function {
+    realm: RealmIndex,
     self_binding: Option<function::FunctionSelfBinding>,
     arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,
@@ -231,10 +206,12 @@ enum CallReference {
         this_value: Value,
     },
     Native {
+        id: crate::value::NativeFunctionId,
         kind: native::NativeFunctionKind,
         this_value: Value,
     },
     DirectNative {
+        id: crate::value::NativeFunctionId,
         target: NativeCallTarget,
         this_value: Value,
         strict: bool,
@@ -246,8 +223,15 @@ impl CallReference {
         match self {
             Self::Function { id, .. } => Self::Function { id, this_value },
             Self::Generic { callee, .. } => Self::Generic { callee, this_value },
-            Self::Native { kind, .. } => Self::Native { kind, this_value },
-            Self::DirectNative { target, strict, .. } => Self::DirectNative {
+            Self::Native { id, kind, .. } => Self::Native {
+                id,
+                kind,
+                this_value,
+            },
+            Self::DirectNative {
+                id, target, strict, ..
+            } => Self::DirectNative {
+                id,
                 target,
                 this_value,
                 strict,
@@ -353,7 +337,7 @@ impl Context {
     }
 
     pub(in crate::runtime) const fn optional_optimizations_enabled(&self) -> bool {
-        self.optimizer.optional_paths_enabled()
+        self.optimizer.optional_paths_enabled() && self.inactive_realms.len() == 1
     }
 
     fn with_performance_clock(
@@ -387,7 +371,9 @@ impl Context {
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
+            active_realm: RealmIndex::ROOT,
             realm: RealmState::new(storage_ledger.clone()),
+            inactive_realms: vec![None],
             locals: Vec::new(),
             modules: Vec::new(),
             module_evaluation_depth: 0,
@@ -466,8 +452,8 @@ impl Context {
                 RuntimeCallArgs::values(args),
                 this_value,
             ),
-            CallValueCache::NativeFunction { kind, .. } => self
-                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+            CallValueCache::NativeFunction { function, kind } => self
+                .eval_native_function_in_realm(function, kind, args, &this_value)
                 .map(Completion::Normal),
             CallValueCache::HostFunction(id) => self
                 .eval_host_function(id, RuntimeCallArgs::values(args))
@@ -499,19 +485,28 @@ impl Context {
                     this_value,
                 ),
             CallReference::DirectNative {
+                id,
                 target,
                 this_value,
                 strict,
             } => {
-                let value = if target == NativeCallTarget::Eval {
-                    self.eval_eval_function_with_strict(RuntimeCallArgs::values(args), strict)?
-                } else {
-                    self.eval_direct_native_call_target(target, args, &this_value)?
-                };
+                let realm = self.native_function(id)?.realm();
+                let value = self.with_realm(realm, |context| {
+                    if target == NativeCallTarget::Eval {
+                        context
+                            .eval_eval_function_with_strict(RuntimeCallArgs::values(args), strict)
+                    } else {
+                        context.eval_direct_native_call_target(target, args, &this_value)
+                    }
+                })?;
                 Ok(Completion::Normal(value))
             }
-            CallReference::Native { kind, this_value } => self
-                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+            CallReference::Native {
+                id,
+                kind,
+                this_value,
+            } => self
+                .eval_native_function_in_realm(id, kind, args, &this_value)
                 .map(Completion::Normal),
             CallReference::Generic { callee, this_value } => self.call(&callee, args, this_value),
         }
@@ -558,6 +553,7 @@ impl Context {
                 && self.direct_native_call_kind(id, target).is_some()
             {
                 return Ok(CallReference::DirectNative {
+                    id,
                     target,
                     this_value: Value::Undefined,
                     strict,
@@ -565,6 +561,7 @@ impl Context {
             }
             if let Some(kind) = self.cached_static_binding_native_call_kind(callee.name(), id)? {
                 return Ok(CallReference::Native {
+                    id,
                     kind,
                     this_value: Value::Undefined,
                 });
@@ -572,6 +569,7 @@ impl Context {
             let kind = self.native_function(id)?.kind();
             self.remember_static_binding_native_call_kind(callee.name(), id, kind)?;
             return Ok(CallReference::Native {
+                id,
                 kind,
                 this_value: Value::Undefined,
             });
@@ -669,10 +667,23 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         new_target: Value,
     ) -> Result<Value> {
-        let prototype = self.constructor_instance_prototype(&new_target)?;
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_constructor_value_in_active_realm(id, args, new_target)
+        })
+    }
+
+    fn eval_function_constructor_value_in_active_realm(
+        &mut self,
+        id: crate::value::FunctionId,
+        args: RuntimeCallArgs<'_>,
+        new_target: Value,
+    ) -> Result<Value> {
+        let prototype = self
+            .constructor_instance_prototype_with_default(&new_target, NativeFunctionKind::Object)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
-            prototype,
+            Some(prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
@@ -715,5 +726,74 @@ impl Context {
         };
         self.objects.validate_id(id)?;
         Ok(Some(id))
+    }
+
+    pub(in crate::runtime) fn constructor_instance_prototype_with_default(
+        &mut self,
+        new_target: &Value,
+        default_kind: NativeFunctionKind,
+    ) -> Result<crate::value::ObjectId> {
+        if let Some(prototype) = self.constructor_instance_prototype(new_target)? {
+            return Ok(prototype);
+        }
+        let realm = self.callable_realm_index(new_target)?;
+        self.with_realm(realm, |context| {
+            context.native_constructor_default_prototype(default_kind)
+        })
+    }
+
+    fn callable_realm_index(&self, value: &Value) -> Result<RealmIndex> {
+        match value {
+            Value::Function(id) => self.function(*id).map(|function| function.realm),
+            Value::NativeFunction(id) => {
+                let function = self.native_function(*id)?;
+                if let NativeFunctionKind::BoundFunction(bound) = function.kind() {
+                    let target = self.bound_function_target(bound)?;
+                    return self.callable_realm_index(&target);
+                }
+                Ok(function.realm())
+            }
+            Value::Object(id) if self.objects.proxy_callability(*id)? => {
+                Err(Error::runtime("Proxy function realm is unavailable"))
+            }
+            Value::HostFunction(_)
+            | Value::Object(_)
+            | Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_) => Err(Error::type_error("new.target is not a constructor")),
+        }
+    }
+
+    fn native_constructor_default_prototype(
+        &mut self,
+        kind: NativeFunctionKind,
+    ) -> Result<crate::value::ObjectId> {
+        let constructor = match kind {
+            NativeFunctionKind::AsyncFunction => self.async_function_constructor_value()?,
+            NativeFunctionKind::AsyncGeneratorFunction => {
+                self.async_generator_function_constructor_value()?
+            }
+            NativeFunctionKind::GeneratorFunction => self.generator_function_constructor_value()?,
+            NativeFunctionKind::ErrorConstructor(name) => self.error_constructor_value(name)?,
+            _ => self
+                .builtin_value(kind.name())?
+                .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,
+        };
+        let Value::NativeFunction(id) = constructor else {
+            return Err(Error::runtime(
+                "default intrinsic constructor is not a native function",
+            ));
+        };
+        let Value::Object(prototype) = self.native_function(id)?.properties().prototype() else {
+            return Err(Error::runtime(
+                "default intrinsic constructor prototype is not an object",
+            ));
+        };
+        Ok(prototype)
     }
 }

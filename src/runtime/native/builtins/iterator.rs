@@ -471,10 +471,10 @@ impl Context {
         if constructor == new_target {
             return Err(Error::type_error(ITERATOR_ABSTRACT_ERROR));
         }
-        let prototype = match self.constructor_instance_prototype(new_target)? {
-            Some(id) => Some(id),
-            None => Some(self.iterator_prototype_object_id()?),
-        };
+        let prototype = Some(self.constructor_instance_prototype_with_default(
+            new_target,
+            NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor),
+        )?);
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
             prototype,

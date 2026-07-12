@@ -10,6 +10,7 @@ impl NativeFunctionKind {
             Self::Array
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
+                | Self::GeneratorFunction
                 | Self::AsyncDisposableStack(AsyncDisposableStackFunctionKind::Constructor)
                 | Self::Boolean
                 | Self::BigInt
@@ -46,6 +47,7 @@ impl NativeFunctionKind {
                 | Self::SharedArrayBuffer
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
+                | Self::GeneratorFunction
                 | Self::Boolean
                 | Self::BigInt
                 | Self::DataView(DataViewFunctionKind::Constructor)

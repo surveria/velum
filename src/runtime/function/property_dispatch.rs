@@ -178,7 +178,18 @@ impl Context {
     }
 
     pub(crate) fn function_object_prototype_value(&mut self, id: FunctionId) -> Result<Value> {
-        let kind = self.function(id)?.kind;
+        let function = self.function(id)?;
+        let kind = function.kind;
+        let realm = function.realm;
+        self.with_realm(realm, |context| {
+            context.function_object_prototype_in_active_realm(kind)
+        })
+    }
+
+    fn function_object_prototype_in_active_realm(
+        &mut self,
+        kind: crate::syntax::FunctionKind,
+    ) -> Result<Value> {
         if kind.is_async_generator() {
             return self.async_generator_function_prototype_value();
         }

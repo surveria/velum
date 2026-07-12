@@ -4,11 +4,11 @@ use crate::{
     api::owned_value::OwnedValue,
     error::{Error, Result},
     ownership::VmIdentity,
-    runtime::Context,
     runtime::RetainedValue,
     runtime::VmRootSnapshot,
     runtime::call::RuntimeCallArgs,
     runtime::retained_values::RetainedValueRegistry,
+    runtime::{Context, RealmId},
     syntax::DeclKind,
     value::{HostFunctionId, Value},
 };
@@ -25,6 +25,8 @@ type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
 pub enum HostOperation {
     /// Detaches an ordinary `ArrayBuffer` supplied as the first argument.
     DetachArrayBuffer,
+    /// Creates a VM-local realm and returns its global object.
+    CreateRealm,
 }
 
 pub trait IntoJsValue {
@@ -140,6 +142,7 @@ enum HostFunctionKind {
         allow_vm_handles: bool,
     },
     Operation(HostOperation),
+    RealmEval(RealmId),
 }
 
 impl HostFunction {
@@ -160,6 +163,13 @@ impl HostFunction {
         Self {
             name,
             kind: HostFunctionKind::Operation(operation),
+        }
+    }
+
+    const fn realm_eval(name: String, realm: RealmId) -> Self {
+        Self {
+            name,
+            kind: HostFunctionKind::RealmEval(realm),
         }
     }
 
@@ -214,8 +224,15 @@ impl HostFunction {
 
     const fn operation_kind(&self) -> Option<HostOperation> {
         match self.kind {
-            HostFunctionKind::Callback { .. } => None,
             HostFunctionKind::Operation(operation) => Some(operation),
+            HostFunctionKind::Callback { .. } | HostFunctionKind::RealmEval(_) => None,
+        }
+    }
+
+    fn realm_eval_target(&self) -> Option<RealmId> {
+        match &self.kind {
+            HostFunctionKind::RealmEval(realm) => Some(realm.clone()),
+            HostFunctionKind::Callback { .. } | HostFunctionKind::Operation(_) => None,
         }
     }
 
@@ -224,7 +241,7 @@ impl HostFunction {
             HostFunctionKind::Callback {
                 allow_vm_handles, ..
             } => allow_vm_handles,
-            HostFunctionKind::Operation(_) => false,
+            HostFunctionKind::Operation(_) | HostFunctionKind::RealmEval(_) => false,
         }
     }
 }
@@ -390,10 +407,22 @@ impl Context {
     where
         F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
     {
-        if name.is_empty() {
+        self.create_internal_host_function_value(HostFunction::new_internal(name, callback))
+    }
+
+    fn create_internal_realm_eval_function(
+        &mut self,
+        name: String,
+        realm: RealmId,
+    ) -> Result<Value> {
+        self.create_internal_host_function_value(HostFunction::realm_eval(name, realm))
+    }
+
+    fn create_internal_host_function_value(&mut self, function: HostFunction) -> Result<Value> {
+        if function.name.is_empty() {
             return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
         }
-        self.check_string_len(&name)?;
+        self.check_string_len(&function.name)?;
         let projected_count = self
             .host_functions
             .len()
@@ -401,7 +430,7 @@ impl Context {
             .ok_or_else(|| Error::limit("host callback count overflowed"))?;
         let projected_payload_bytes = self
             .host_callback_name_bytes()?
-            .checked_add(name.len())
+            .checked_add(function.name.len())
             .ok_or_else(|| Error::limit("host callback name bytes overflowed"))?;
         self.ensure_storage_totals(
             crate::runtime::VmStorageKind::HostCallback,
@@ -410,8 +439,7 @@ impl Context {
         )?;
         self.host_functions.reserve_insert()?;
         let id = HostFunctionId::new(self.host_functions.next_index());
-        self.host_functions
-            .insert_at_next(id.index(), HostFunction::new_internal(name, callback))?;
+        self.host_functions.insert_at_next(id.index(), function)?;
         Ok(Value::HostFunction(id))
     }
 
@@ -517,6 +545,11 @@ impl Context {
                 .eval_host_operation(operation, &values)
                 .map_err(|error| error.with_context(function.context_message()));
         }
+        if let Some(realm) = function.realm_eval_target() {
+            return self
+                .eval_realm_source_value(&realm, values.first().unwrap_or(&Value::Undefined))
+                .map_err(|error| error.with_context(function.context_message()));
+        }
         let allow_vm_handles = function.allows_vm_handles();
         let roots = self.root_snapshot()?;
         let value = function.call(
@@ -544,6 +577,12 @@ impl Context {
                 };
                 self.detach_host_array_buffer(*id)?;
                 Ok(Value::Undefined)
+            }
+            HostOperation::CreateRealm => {
+                let realm = self.create_realm()?;
+                let eval =
+                    self.create_internal_realm_eval_function("eval".to_owned(), realm.clone())?;
+                self.install_realm_global_eval(&realm, eval)
             }
         }
     }

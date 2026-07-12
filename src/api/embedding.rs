@@ -8,7 +8,7 @@ use crate::runtime::Context;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::{
-    OptimizationMode, RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot,
+    OptimizationMode, RealmId, RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot,
     VmGarbageCollectionReport, VmHeapReachabilitySnapshot, VmObjectEdgeSnapshot,
     VmOptimizationSnapshot, VmStorageSnapshot,
 };
@@ -201,6 +201,30 @@ impl Vm {
     /// survive across later VM calls.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         self.context.eval(source)
+    }
+
+    /// Creates an independent realm inside this VM.
+    ///
+    /// # Errors
+    /// Fails when realm bookkeeping exceeds configured VM storage limits.
+    pub fn create_realm(&mut self) -> Result<RealmId> {
+        self.context.create_realm()
+    }
+
+    /// Returns a realm's global object as a raw VM-local value.
+    ///
+    /// # Errors
+    /// Fails when `realm` belongs to another VM or is unavailable.
+    pub fn realm_global(&mut self, realm: &RealmId) -> Result<Value> {
+        self.context.realm_global(realm)
+    }
+
+    /// Evaluates script source in a realm owned by this VM.
+    ///
+    /// # Errors
+    /// Fails for a foreign realm or when compilation or evaluation fails.
+    pub fn eval_in_realm(&mut self, realm: &RealmId, source: &str) -> Result<Value> {
+        self.context.eval_in_realm(realm, source)
     }
 
     /// Evaluates source and copies its result into a VM-independent primitive.

@@ -61,7 +61,7 @@ impl WithBindingReference {
             && let Value::Object(id) = &self.object
             && context.is_global_object_id(*id)
         {
-            context.sync_global_object_property_binding(binding.name().as_str(), value)?;
+            context.sync_global_object_property_binding(*id, binding.name().as_str(), value)?;
         }
         Ok(())
     }

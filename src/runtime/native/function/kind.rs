@@ -45,6 +45,8 @@ const ERROR_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_NAME: &str = "Function";
+const GENERATOR_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GENERATOR_FUNCTION_NAME: &str = "GeneratorFunction";
 const GLOBAL_DECODE_URI_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const GLOBAL_DECODE_URI_NAME: &str = "decodeURI";
 const GLOBAL_DECODE_URI_COMPONENT_FUNCTION_LENGTH: f64 = 1.0;
@@ -302,6 +304,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ErrorConstructor(ErrorName),
     ErrorPrototypeToString,
     Function,
+    GeneratorFunction,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
     FunctionPrototypeApply,
@@ -621,7 +624,7 @@ impl NativeFunctionKind {
         FUNCTION_FUNCTION_LENGTH
     }
 
-    pub(in crate::runtime::native) const fn name(self) -> &'static str {
+    pub(in crate::runtime) const fn name(self) -> &'static str {
         if let Self::Date(kind) = self {
             return kind.name();
         }

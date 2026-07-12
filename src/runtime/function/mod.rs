@@ -211,6 +211,7 @@ impl Context {
         self.functions.insert_at_next(
             id.index(),
             super::Function {
+                realm: self.active_realm_index(),
                 self_binding,
                 arguments_binding,
                 param_binding_ids,
@@ -282,6 +283,18 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_call_completion_in_active_realm(id, args, this_value)
+        })
+    }
+
+    fn eval_function_call_completion_in_active_realm(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let this_value = self.function_direct_call_this(id, this_value)?;
         let new_target = self.function_direct_call_new_target(id)?;
@@ -326,6 +339,18 @@ impl Context {
     }
 
     pub(crate) fn eval_function_completion_with_this(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
+        let realm = self.function(id)?.realm;
+        self.with_realm(realm, |context| {
+            context.eval_function_completion_with_this_in_active_realm(id, args, this_value)
+        })
+    }
+
+    fn eval_function_completion_with_this_in_active_realm(
         &mut self,
         id: FunctionId,
         args: RuntimeCallArgs<'_>,
@@ -625,7 +650,18 @@ impl Context {
         &mut self,
         id: NativeFunctionId,
     ) -> Result<Value> {
-        let kind = self.native_function(id)?.kind();
+        let function = self.native_function(id)?;
+        let kind = function.kind();
+        let realm = function.realm();
+        self.with_realm(realm, |context| {
+            context.native_function_object_prototype_in_active_realm(kind)
+        })
+    }
+
+    fn native_function_object_prototype_in_active_realm(
+        &mut self,
+        kind: NativeFunctionKind,
+    ) -> Result<Value> {
         if matches!(kind, NativeFunctionKind::TypedArray(_)) {
             return self.typed_array_intrinsic_constructor_value();
         }
@@ -636,7 +672,9 @@ impl Context {
         }
         if matches!(
             kind,
-            NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction
+            NativeFunctionKind::AsyncFunction
+                | NativeFunctionKind::AsyncGeneratorFunction
+                | NativeFunctionKind::GeneratorFunction
         ) {
             return self.function_constructor_value();
         }

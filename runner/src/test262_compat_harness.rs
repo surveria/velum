@@ -1,11 +1,15 @@
 use rs_quickjs::{Context, HostOperation};
 
 const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
+const CREATE_REALM_HOST_NAME: &str = "__rsqjsTest262CreateRealm";
 
 const HOST_SOURCE: &str = r"
 var $262 = {
     global: globalThis,
     detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
+    createRealm: function createRealm() {
+        return { global: __rsqjsTest262CreateRealm() };
+    },
     evalScript: function evalScript(source) {
         return (0, eval)(source);
     }
@@ -179,5 +183,6 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
         DETACH_ARRAY_BUFFER_HOST_NAME,
         HostOperation::DetachArrayBuffer,
     )?;
+    context.register_host_operation(CREATE_REALM_HOST_NAME, HostOperation::CreateRealm)?;
     context.eval(HOST_SOURCE).map(|_| ())
 }
