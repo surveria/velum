@@ -8,6 +8,18 @@ use crate::{
 use super::LayoutBuilder;
 
 impl LayoutBuilder {
+    pub(super) fn resolve_declaration_if_with_sensitive(
+        &mut self,
+        binding: &StaticBinding,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        if self.with_scopes.is_empty() {
+            return Ok(());
+        }
+        self.resolve(binding, scope, function)
+    }
+
     pub(super) fn analyze_with_statement(
         &mut self,
         object: &Expression,

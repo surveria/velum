@@ -374,6 +374,9 @@ impl Context {
         {
             return cell.assign(name, value);
         }
+        if name != GLOBAL_THIS_NAME {
+            return Ok(());
+        }
         if let Some(cell) = self.builtin_global_cell(name) {
             return cell.assign(name, value);
         }

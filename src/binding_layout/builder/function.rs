@@ -47,7 +47,7 @@ impl LayoutBuilder {
                 "expected function declaration during binding analysis",
             ));
         };
-        self.resolve(name, scope, function)?;
+        self.resolve_declaration_if_with_sensitive(name, scope, function)?;
         self.analyze_function(
             *id,
             FunctionBindings::new(None, arguments_binding.as_ref()),

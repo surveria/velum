@@ -217,7 +217,7 @@ impl Context {
                 .objects
                 .typed_array_rejects_numeric_property(*id, property.name())?
         {
-            return Ok(Some(false));
+            return Ok(Some(true));
         }
         if let Value::Object(id) = object_ref.value
             && self.objects.is_proxy(*id)

@@ -315,15 +315,17 @@ impl LayoutBuilder {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
                 }
-                self.resolve(name, scope, function)
+                self.resolve_declaration_if_with_sensitive(name, scope, function)
             }
             Stmt::PatternDecl { pattern, init, .. } => {
                 self.analyze_expr(init, scope, function)?;
                 self.analyze_pattern_exprs(pattern, scope, function)?;
-                pattern.for_each_binding(&mut |binding| self.resolve(binding, scope, function))
+                pattern.for_each_binding(&mut |binding| {
+                    self.resolve_declaration_if_with_sensitive(binding, scope, function)
+                })
             }
             Stmt::ClassDecl { name, class } => {
-                self.resolve(name, scope, function)?;
+                self.resolve_declaration_if_with_sensitive(name, scope, function)?;
                 self.analyze_class(class, scope, function)
             }
         }
@@ -376,7 +378,7 @@ impl LayoutBuilder {
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare(loop_scope, name)?;
-                self.resolve(name, loop_scope, function)?;
+                self.resolve_declaration_if_with_sensitive(name, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
             ForInTarget::Binding {
@@ -384,7 +386,7 @@ impl LayoutBuilder {
                 kind: DeclKind::Var,
             } => {
                 self.declare(var_scope, name)?;
-                self.resolve(name, scope, function)?;
+                self.resolve_declaration_if_with_sensitive(name, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
             ForInTarget::PatternBinding {
@@ -393,8 +395,9 @@ impl LayoutBuilder {
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare_pattern(pattern, loop_scope)?;
-                pattern
-                    .for_each_binding(&mut |binding| self.resolve(binding, loop_scope, function))?;
+                pattern.for_each_binding(&mut |binding| {
+                    self.resolve_declaration_if_with_sensitive(binding, loop_scope, function)
+                })?;
                 self.analyze_pattern_exprs(pattern, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
@@ -403,7 +406,9 @@ impl LayoutBuilder {
                 kind: DeclKind::Var,
             } => {
                 self.declare_pattern(pattern, var_scope)?;
-                pattern.for_each_binding(&mut |binding| self.resolve(binding, scope, function))?;
+                pattern.for_each_binding(&mut |binding| {
+                    self.resolve_declaration_if_with_sensitive(binding, scope, function)
+                })?;
                 self.analyze_pattern_exprs(pattern, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
