@@ -71,6 +71,36 @@ fn applies_integer_conversion_and_float16_rounding() -> TestResult {
 }
 
 #[test]
+fn reads_and_writes_bigint_values_with_exact_endianness() -> TestResult {
+    ensure_eval(
+        r#"
+        let buffer = new ArrayBuffer(24);
+        let view = new DataView(buffer, 4, 16);
+        let bytes = new Uint8Array(buffer);
+        view.setBigUint64(0, 0x0123456789abcdefn);
+        view.setBigInt64(8, { valueOf() { return -2n; } }, true);
+
+        let failures = 0;
+        try { view.setBigInt64(0, 1); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        try { view.setUint32(0, 1n); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+
+        view.getBigUint64(0) === 0x0123456789abcdefn &&
+            bytes[4] === 0x01 && bytes[11] === 0xef &&
+            view.getBigInt64(8, true) === -2n &&
+            bytes[12] === 0xfe && bytes[19] === 0xff &&
+            DataView.prototype.getBigInt64.length === 1 &&
+            DataView.prototype.setBigUint64.length === 2 &&
+            failures === 2 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn validates_constructor_ranges_receivers_and_method_offsets() -> TestResult {
     ensure_eval(
         r"

@@ -5,7 +5,6 @@ use crate::{
 };
 
 use super::{ArrayIndex, ObjectHeap};
-use crate::runtime::object::typed_array_number;
 
 impl ObjectHeap {
     fn array_index_has_accessor_in_chain(&self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
@@ -46,8 +45,8 @@ impl ObjectHeap {
         id: ObjectId,
         index: usize,
     ) -> Result<Option<Value>> {
-        if let Some(number) = self.typed_array_number(id, index)? {
-            return Ok(Some(Value::Number(number)));
+        if let Some(value) = self.typed_array_value(id, index)? {
+            return Ok(Some(value));
         }
         if self.array_length_if_array(id)?.is_none() {
             return Ok(None);
@@ -82,7 +81,7 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<bool> {
         if self.typed_array(id)?.is_some() {
-            self.set_typed_array_number(id, index, typed_array_number(&value)?)?;
+            self.set_typed_array_value(id, index, &value)?;
             return Ok(true);
         }
         if self.array_length_if_array(id)?.is_none() {

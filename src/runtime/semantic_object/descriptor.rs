@@ -64,6 +64,34 @@ impl Context {
             ));
         };
         if let Value::Object(id) = object_ref.value
+            && let Some(index) = self
+                .objects
+                .typed_array_property_index(*id, property.name())?
+        {
+            let crate::runtime::object::TypedArrayPropertyIndex::Valid(index) = index else {
+                return Ok(false);
+            };
+            let PropertyUpdate::Data(update) = update else {
+                return Ok(false);
+            };
+            if update.configurable().is_some_and(|value| !value.is_yes())
+                || update.enumerable().is_some_and(|value| !value.is_yes())
+                || update.writable().is_some_and(|value| !value.is_yes())
+            {
+                return Ok(false);
+            }
+            if let Some(value) = update.value() {
+                let Some(view) = self.objects.typed_array(*id)? else {
+                    return Err(Error::runtime("typed array view is not available"));
+                };
+                let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
+                if !self.objects.set_typed_array_value(*id, index, &element)? {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+        if let Value::Object(id) = object_ref.value
             && property.name() == ARRAY_LENGTH_PROPERTY
             && self.objects.array_len_if_array(*id)?.is_some()
         {

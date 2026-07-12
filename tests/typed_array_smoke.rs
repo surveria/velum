@@ -130,7 +130,7 @@ fn supports_shared_array_buffer_views_and_constructor_metadata() -> TestResult {
         ];
         let metadata = names[0].name === "Int8Array" &&
             names[8].name === "Float64Array" &&
-            names[0].length === 1 && names[8].length === 1 &&
+            names[0].length === 3 && names[8].length === 3 &&
             Int16Array.BYTES_PER_ELEMENT === 2 &&
             Float64Array.BYTES_PER_ELEMENT === 8 &&
             Int16Array.prototype.BYTES_PER_ELEMENT === 2 &&
@@ -151,6 +151,64 @@ fn supports_shared_array_buffer_views_and_constructor_metadata() -> TestResult {
         &["24 3 6 2".to_owned(), "2 16 8".to_owned()],
     )?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_bigint_element_kinds_and_content_boundaries() -> TestResult {
+    ensure_eval(
+        r#"
+        let signed = new BigInt64Array([
+            0n,
+            9223372036854775807n,
+            9223372036854775808n,
+            -9223372036854775809n
+        ]);
+        let unsigned = new BigUint64Array([-1n, 18446744073709551616n, 5n]);
+        let sorted = new BigInt64Array([3n, -2n, 1n]).toSorted();
+        let mapped = signed.map(value => value + 1n);
+        let failures = 0;
+        try { new BigInt64Array([1]); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        try { new Uint8Array([1n]); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        try { new BigInt64Array(new Uint8Array(0)); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        let conversions = 0;
+        signed[0] = { valueOf() { conversions = conversions + 1; return 9n; } };
+        Reflect.defineProperty(signed, "1", {
+            value: { valueOf() { conversions = conversions + 1; return -7n; } }
+        });
+        let rejected = Reflect.defineProperty(signed, "2", {
+            value: 4n,
+            configurable: false
+        });
+        let descriptor = Object.getOwnPropertyDescriptor(
+            BigInt64Array.prototype,
+            "BYTES_PER_ELEMENT"
+        );
+        let indexDescriptor = Object.getOwnPropertyDescriptor(signed, "0");
+
+        signed[0] === 9n && signed[1] === -7n &&
+            signed[2] === -9223372036854775808n &&
+            signed[3] === 9223372036854775807n &&
+            unsigned[0] === 18446744073709551615n && unsigned[1] === 0n &&
+            unsigned[2] === 5n && sorted.join(",") === "-2,1,3" &&
+            mapped[0] === 1n && mapped[2] === -9223372036854775807n &&
+            BigInt64Array.length === 3 && BigUint64Array.length === 3 &&
+            BigInt64Array.BYTES_PER_ELEMENT === 8 &&
+            BigUint64Array.prototype.BYTES_PER_ELEMENT === 8 &&
+            descriptor.writable === false && descriptor.enumerable === false &&
+            descriptor.configurable === false && indexDescriptor.value === 9n &&
+            indexDescriptor.writable === true && indexDescriptor.enumerable === true &&
+            indexDescriptor.configurable === true &&
+            Object.keys(signed).join(",") === "0,1,2,3" &&
+            conversions === 2 && rejected === false && failures === 3 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
 }
 
 #[test]

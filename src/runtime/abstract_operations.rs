@@ -4,8 +4,8 @@ mod iterator;
 mod property_call;
 
 pub(in crate::runtime) use conversion::{
-    NumericValue, PreferredType, integer_or_infinity_from_number, is_primitive, to_boolean,
-    to_number_primitive, to_string_primitive,
+    NumericValue, PreferredType, integer_or_infinity_from_number, is_primitive,
+    to_bigint_primitive, to_boolean, to_number_primitive, to_string_primitive,
 };
 pub(in crate::runtime) use equality::{
     abstract_equality, number_same_value_zero, number_strict_equality, same_value, same_value_zero,

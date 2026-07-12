@@ -73,6 +73,7 @@ impl Object {
     fn enumerable_key_count_hint(&self) -> usize {
         self.enumerable_property_count
             .saturating_add(self.virtual_string_key_count())
+            .saturating_add(self.typed_array.as_ref().map_or(0, |view| view.length()))
     }
 
     fn extend_enumerable_keys(
@@ -85,6 +86,7 @@ impl Object {
             return Ok(());
         }
         self.extend_virtual_string_keys(keys)?;
+        self.extend_typed_array_index_names(keys);
         if self.array_length.is_none() {
             self.extend_named_array_index_keys(atoms, keys)?;
             self.extend_named_keys(atoms, keys, true)?;
@@ -98,6 +100,7 @@ impl Object {
 
     fn extend_own_property_names(&self, atoms: &AtomTable, keys: &mut Vec<String>) -> Result<()> {
         self.extend_virtual_string_keys(keys)?;
+        self.extend_typed_array_index_names(keys);
         if self.array_length.is_some() {
             self.extend_array_element_names(keys);
             self.extend_sparse_array_element_names(atoms, keys)?;
@@ -107,6 +110,15 @@ impl Object {
         }
         self.extend_named_property_names(atoms, keys, true)?;
         Ok(())
+    }
+
+    fn extend_typed_array_index_names(&self, keys: &mut Vec<String>) {
+        let Some(view) = self.typed_array.as_ref() else {
+            return;
+        };
+        for index in 0..view.length() {
+            push_unique_key(keys, index.to_string());
+        }
     }
 
     fn extend_own_property_symbols(

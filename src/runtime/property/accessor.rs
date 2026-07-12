@@ -61,6 +61,21 @@ impl Context {
             AccessorWriteDisposition::NoSetter => return Ok(()),
             AccessorWriteDisposition::None => {}
         }
+        if let Some(index) = self
+            .objects
+            .typed_array_property_index(object, property_name)?
+        {
+            let crate::runtime::object::TypedArrayPropertyIndex::Valid(index) = index else {
+                return Ok(());
+            };
+            let Some(view) = self.objects.typed_array(object)? else {
+                return Err(Error::runtime("typed array view is not available"));
+            };
+            let element = self.to_typed_array_element_value(view.element_kind(), &value)?;
+            self.objects
+                .set_typed_array_value(object, index, &element)?;
+            return Ok(());
+        }
         if property_name == ARRAY_LENGTH_PROPERTY
             && self.objects.array_len_if_array(object)?.is_some()
         {

@@ -9,8 +9,10 @@ use super::{
     registry_error::error_constructor_slot_index as error_slot,
 };
 
+mod data_view_slot;
 mod object_slot;
 
+use data_view_slot::data_view_slot;
 use object_slot::object_slot;
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
@@ -273,7 +275,13 @@ const BIGINT_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::
 const BIGINT_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(295);
 const ARRAY_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(296);
 const ASYNC_DISPOSABLE_STACK_SLOT_BASE: usize = 297;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 304;
+const BIGINT64_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(304);
+const BIGUINT64_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(305);
+const DATA_VIEW_GET_BIGINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(306);
+const DATA_VIEW_GET_BIGUINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(307);
+const DATA_VIEW_SET_BIGINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(308);
+const DATA_VIEW_SET_BIGUINT64_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(309);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 310;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -487,36 +495,6 @@ const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlo
     Some(NativeFunctionSlot::new(index))
 }
 
-const fn data_view_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
-    match kind {
-        NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) => {
-            Some(DATA_VIEW_CONSTRUCTOR_SLOT)
-        }
-        NativeFunctionKind::DataView(DataViewFunctionKind::BufferGetter) => {
-            Some(DATA_VIEW_BUFFER_GETTER_SLOT)
-        }
-        NativeFunctionKind::DataView(DataViewFunctionKind::ByteLengthGetter) => {
-            Some(DATA_VIEW_BYTE_LENGTH_GETTER_SLOT)
-        }
-        NativeFunctionKind::DataView(DataViewFunctionKind::ByteOffsetGetter) => {
-            Some(DATA_VIEW_BYTE_OFFSET_GETTER_SLOT)
-        }
-        NativeFunctionKind::DataView(DataViewFunctionKind::Get(element_kind)) => {
-            let Some(index) = DATA_VIEW_GET_SLOT_BASE.checked_add(element_kind.index()) else {
-                return None;
-            };
-            Some(NativeFunctionSlot::new(index))
-        }
-        NativeFunctionKind::DataView(DataViewFunctionKind::Set(element_kind)) => {
-            let Some(index) = DATA_VIEW_SET_SLOT_BASE.checked_add(element_kind.index()) else {
-                return None;
-            };
-            Some(NativeFunctionSlot::new(index))
-        }
-        _ => None,
-    }
-}
-
 const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Int8) => Some(INT8_ARRAY_SLOT),
@@ -530,6 +508,12 @@ const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint32) => Some(UINT32_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float32) => Some(FLOAT32_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float64) => Some(FLOAT64_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::BigInt64) => {
+            Some(BIGINT64_ARRAY_SLOT)
+        }
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::BigUint64) => {
+            Some(BIGUINT64_ARRAY_SLOT)
+        }
         _ => None,
     }
 }
