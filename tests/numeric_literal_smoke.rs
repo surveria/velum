@@ -1,4 +1,4 @@
-use rs_quickjs::{Error, Runtime, Value};
+use rs_quickjs::{Error, JsBigInt, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -37,10 +37,11 @@ fn rejects_invalid_numeric_literal_separators() -> TestResult {
 }
 
 #[test]
-fn rejects_bigint_suffix_without_bigint_support() -> TestResult {
-    ensure_error_contains(
-        "1n",
-        "decimal numeric literal cannot use BigInt suffix without BigInt support",
+fn supports_bigint_literal_suffix() -> TestResult {
+    let value = eval("9007199254740993n")?;
+    ensure_value(
+        &value,
+        &Value::BigInt(JsBigInt::from_u64(9_007_199_254_740_993)),
     )
 }
 

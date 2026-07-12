@@ -9,6 +9,10 @@ use super::{
     registry_error::error_constructor_slot_index as error_slot,
 };
 
+mod object_slot;
+
+use object_slot::object_slot;
+
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
 const ARRAY_INCLUDES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(2);
@@ -468,37 +472,6 @@ const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFun
     };
     Some(NativeFunctionSlot::new(index))
 }
-
-const fn object_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
-    match kind {
-        NativeFunctionKind::Object => Some(OBJECT_SLOT),
-        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
-        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
-        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
-        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
-        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
-        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
-        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
-        }
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
-        }
-        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
-        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
-        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
-        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
-        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
-        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
-        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
-        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
-        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
-        _ => None,
-    }
-}
-
 const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     let NativeFunctionKind::ArrayBufferPrototype(method) = kind else {
         return None;
