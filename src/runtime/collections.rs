@@ -565,7 +565,11 @@ impl SnapshotIteratorState {
 }
 
 impl IteratorHelperState {
-    pub(in crate::runtime) fn new(iterator: Value, next: Value, mode: IteratorHelperMode) -> Self {
+    pub(in crate::runtime) const fn new(
+        iterator: Value,
+        next: Value,
+        mode: IteratorHelperMode,
+    ) -> Self {
         Self {
             iterator,
             next,
