@@ -136,7 +136,7 @@ impl Context {
         self.heap_string_value(&text)
     }
 
-    fn plain_date_time_rounding_options(
+    pub(super) fn plain_date_time_rounding_options(
         &mut self,
         value: Option<&Value>,
     ) -> Result<RoundingOptions> {

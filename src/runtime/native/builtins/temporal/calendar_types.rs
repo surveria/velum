@@ -207,9 +207,9 @@ impl Context {
         self.temporal_calendar_constructor(
             TemporalFunctionKind::PlainTimeConstructor,
             "Temporal.PlainTime",
-            &[],
-            &[],
-            &[],
+            super::plain_time::STATIC_METHODS,
+            super::plain_time::ACCESSORS,
+            super::plain_time::METHODS,
         )
     }
 
@@ -617,6 +617,9 @@ impl Context {
         }
         if kind.is_plain_date_time() {
             return self.eval_plain_date_time_kind(kind, args, receiver);
+        }
+        if kind.is_plain_time() {
+            return self.eval_plain_time_kind(kind, args, receiver);
         }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(
