@@ -10,8 +10,8 @@ use crate::{
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
         BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKey,
-        BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode,
-        BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
+        BytecodeClassMemberKind, BytecodeClassStaticElement, BytecodeCompletion,
+        BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
         BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
         BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty, BytecodeTemplateElement,
@@ -94,10 +94,13 @@ impl BytecodeBlock {
             .first()
             .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
         let inner = Self::compile_lexical_statements(statements, StatementValue::Store, layout)?;
+        let var_hoist_plan = BytecodeHoistPlan::compile(statements, layout)?;
         let mut compiler = BytecodeCompiler::new(layout, fallback_span);
         compiler.emit(BytecodeInstruction::ScopedBlock {
             block: inner,
+            var_hoist_plan: Some(Rc::new(var_hoist_plan)),
             preserve_last: !statements_have_value_completion(statements),
+            push_result: false,
         });
         compiler.finish()
     }
@@ -388,7 +391,38 @@ impl<'a> BytecodeCompiler<'a> {
         class: &crate::ast::ClassLiteral,
         inferred_name: Option<&StaticName>,
     ) -> Result<()> {
+        if class.inner_name_binding.is_some() {
+            let mut compiler = Self::new(self.layout, self.current_span);
+            compiler.compile_class_literal_body(class, inferred_name)?;
+            compiler.emit(BytecodeInstruction::StoreLast);
+            self.emit(BytecodeInstruction::ScopedBlock {
+                block: compiler.finish()?,
+                var_hoist_plan: None,
+                preserve_last: false,
+                push_result: true,
+            });
+            return Ok(());
+        }
+        self.compile_class_literal_body(class, inferred_name)
+    }
+
+    fn compile_class_literal_body(
+        &mut self,
+        class: &crate::ast::ClassLiteral,
+        inferred_name: Option<&StaticName>,
+    ) -> Result<()> {
         let private_names = Self::class_private_names(class);
+        let inner_name_binding = class
+            .inner_name_binding
+            .as_ref()
+            .map(|binding| self.compile_binding(binding))
+            .transpose()?;
+        if let Some(binding) = &inner_name_binding {
+            self.emit(BytecodeInstruction::HoistLexicalBinding {
+                name: binding.clone(),
+                kind: DeclKind::Const,
+            });
+        }
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
@@ -402,11 +436,14 @@ impl<'a> BytecodeCompiler<'a> {
             .iter()
             .map(|block| BytecodeBlock::compile_scoped_statements(&block.body, self.layout))
             .collect::<Result<Vec<_>>>()?;
+        let static_element_order = Self::compile_class_static_element_order(class);
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone().or_else(|| inferred_name.cloned()),
+                inner_name_binding,
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
+                default_derived_constructor: class.constructor.default_derived,
                 constructor: BytecodeFunction::compile(
                     None,
                     class.constructor.arguments_binding.clone(),
@@ -418,10 +455,33 @@ impl<'a> BytecodeCompiler<'a> {
                 members: members.into(),
                 fields: fields.into(),
                 static_blocks: static_blocks.into(),
+                static_element_order: static_element_order.into(),
                 private_names,
             }),
         });
         Ok(())
+    }
+
+    fn compile_class_static_element_order(
+        class: &crate::ast::ClassLiteral,
+    ) -> Vec<BytecodeClassStaticElement> {
+        let mut ordered = Vec::new();
+        let mut static_field_index = 0usize;
+        for field in &class.fields {
+            if !field.is_static {
+                continue;
+            }
+            ordered.push((
+                field.source_order,
+                BytecodeClassStaticElement::Field(static_field_index),
+            ));
+            static_field_index = static_field_index.saturating_add(1);
+        }
+        for (index, block) in class.static_blocks.iter().enumerate() {
+            ordered.push((block.source_order, BytecodeClassStaticElement::Block(index)));
+        }
+        ordered.sort_by_key(|(source_order, _)| *source_order);
+        ordered.into_iter().map(|(_, element)| element).collect()
     }
 
     /// Lowers class methods and accessors, pushing computed keys onto the
@@ -549,7 +609,9 @@ impl<'a> BytecodeCompiler<'a> {
             let block = BytecodeBlock::compile_lexical_statements(statements, value, self.layout)?;
             self.emit(BytecodeInstruction::ScopedBlock {
                 block,
+                var_hoist_plan: None,
                 preserve_last: !statements_have_value_completion(statements),
+                push_result: false,
             });
             return Ok(());
         }

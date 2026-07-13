@@ -152,9 +152,19 @@ impl Context {
         Ok(Some(scope))
     }
 
-    pub(super) fn push_temporary_this(&mut self, value: Value) -> Result<()> {
-        let private_environment = self.current_private_environment();
-        let frame = ActivationFrame::temporary_this(value, private_environment);
+    pub(super) fn push_class_evaluation(
+        &mut self,
+        value: Value,
+        super_binding: std::rc::Rc<FunctionSuperBinding>,
+        private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
+        class_field_initializer: bool,
+    ) -> Result<()> {
+        let frame = ActivationFrame::temporary_this(
+            value,
+            super_binding,
+            private_environment,
+            class_field_initializer,
+        );
         self.activate_frame_storage(frame.storage_footprint()?)?;
         self.activation_frames.push(frame);
         Ok(())
@@ -246,7 +256,7 @@ impl Context {
             if frame.is_eval_boundary() {
                 return None;
             }
-            if frame.is_call() {
+            if frame.is_call() || frame.is_temporary_this() {
                 return frame.super_binding().cloned();
             }
         }

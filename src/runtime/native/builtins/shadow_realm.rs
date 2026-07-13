@@ -162,9 +162,17 @@ impl Context {
             .string_text()
             .map(str::to_owned)
             .ok_or_else(|| Error::type_error(SOURCE_ERROR))?;
-        let script =
-            CompiledScript::compile_eval(&source, self.limits.clone(), false, false, false)
-                .map_err(dynamic_compilation_error)?;
+        let script = CompiledScript::compile_eval(
+            &source,
+            self.limits.clone(),
+            crate::compiled_script::EvalCompileContext::new(
+                false,
+                crate::compiled_script::EvalSuperContext::None,
+                crate::compiled_script::EvalClassFieldContext::None,
+                std::rc::Rc::from([]),
+            ),
+        )
+        .map_err(dynamic_compilation_error)?;
         let result = self.with_realm(realm, |context| {
             let boundary = context.push_eval_activation_boundary()?;
             let result = context.eval_compiled_eval_completion(&script, script.strict());

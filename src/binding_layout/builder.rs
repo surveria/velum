@@ -437,15 +437,22 @@ impl LayoutBuilder {
         scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
+        let class_scope = if let Some(binding) = &class.inner_name_binding {
+            let class_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
+            self.declare(class_scope, binding)?;
+            class_scope
+        } else {
+            scope
+        };
         if let Some(heritage) = &class.heritage {
-            self.analyze_expr(heritage, scope, function)?;
+            self.analyze_expr(heritage, class_scope, function)?;
         }
         self.analyze_function(
             class.constructor.id,
             FunctionBindings::new(None, class.constructor.arguments_binding.as_ref()),
             &class.constructor.params,
             &class.constructor.body,
-            scope,
+            class_scope,
             function,
         )?;
         for member in &class.members {
@@ -453,14 +460,14 @@ impl LayoutBuilder {
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &member.key
             {
-                self.analyze_expr(key, scope, function)?;
+                self.analyze_expr(key, class_scope, function)?;
             }
             self.analyze_function(
                 member.id,
                 FunctionBindings::new(None, member.arguments_binding.as_ref()),
                 &member.params,
                 &member.body,
-                scope,
+                class_scope,
                 function,
             )?;
         }
@@ -469,14 +476,14 @@ impl LayoutBuilder {
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &field.key
             {
-                self.analyze_expr(key, scope, function)?;
+                self.analyze_expr(key, class_scope, function)?;
             }
             if let Some(initializer) = &field.initializer {
-                self.analyze_expr(initializer, scope, function)?;
+                self.analyze_expr(initializer, class_scope, function)?;
             }
         }
         for block in &class.static_blocks {
-            let block_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
+            let block_scope = self.add_scope(Some(class_scope), function, ScopeKind::Local);
             self.analyze_statements(&block.body, block_scope, block_scope, function)?;
         }
         Ok(())

@@ -145,10 +145,9 @@ impl Context {
             BytecodeInstruction::Label { label, body } => {
                 self.eval_bytecode_label(state, label, body, next)
             }
-            BytecodeInstruction::ScopedBlock {
-                block,
-                preserve_last,
-            } => self.eval_bytecode_scoped_block_instruction(state, block, *preserve_last, next),
+            instruction @ BytecodeInstruction::ScopedBlock { .. } => {
+                self.eval_bytecode_scoped_block_dispatch(state, instruction, next)
+            }
             BytecodeInstruction::Jump(target) => {
                 state.pc = *target;
                 Ok(None)
@@ -175,6 +174,31 @@ impl Context {
         }
     }
 
+    fn eval_bytecode_scoped_block_dispatch(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let BytecodeInstruction::ScopedBlock {
+            block,
+            var_hoist_plan,
+            preserve_last,
+            push_result,
+        } = instruction
+        else {
+            return Err(Error::runtime("bytecode scoped block instruction mismatch"));
+        };
+        self.eval_bytecode_scoped_block_instruction(
+            state,
+            block,
+            var_hoist_plan.as_deref(),
+            *preserve_last,
+            *push_result,
+            next,
+        )
+    }
+
     fn eval_bytecode_for_of_instruction(
         &mut self,
         state: &mut BytecodeState,
@@ -199,13 +223,23 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         block: &BytecodeBlock,
+        var_hoist_plan: Option<&crate::bytecode::BytecodeHoistPlan>,
         preserve_last: bool,
+        push_result: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let completion = if let Some(completion) = self.take_resumed_bytecode_child(block)? {
             completion
         } else {
             self.push_lexical_scope()?;
+            if let Some(plan) = var_hoist_plan
+                && let Err(error) = self.hoist_bytecode_var_declarations(plan)
+            {
+                if self.pop_lexical_scope()?.is_none() {
+                    return Err(Error::runtime("bytecode lexical scope disappeared"));
+                }
+                return Err(error);
+            }
             let result = self.eval_bytecode_block(block);
             if result.as_ref().is_ok_and(Completion::suspends_execution) {
                 return result.map(Some);
@@ -225,6 +259,11 @@ impl Context {
         };
         match self.begin_dispose_binding_scope(removed, completion.clone())? {
             ScopeDisposal::Complete(completion) => {
+                if push_result && let Completion::Normal(value) = completion {
+                    state.stack.push(value);
+                    state.pc = next;
+                    return Ok(None);
+                }
                 if preserve_last && matches!(completion, Completion::Normal(_)) {
                     state.pc = next;
                     return Ok(None);
@@ -235,7 +274,10 @@ impl Context {
                 state.pc = next;
                 state.store_scope_disposal(
                     completion,
-                    ScopeDisposalResumeBehavior::Continue { preserve_last },
+                    ScopeDisposalResumeBehavior::Continue {
+                        preserve_last,
+                        push_result,
+                    },
                 )?;
                 state.mark_await_suspended();
                 Ok(Some(Completion::Suspend(Suspension::Await(awaited))))
@@ -421,6 +463,7 @@ impl Context {
                                 original,
                                 ScopeDisposalResumeBehavior::Continue {
                                     preserve_last: false,
+                                    push_result: false,
                                 },
                             )?;
                             state.mark_await_suspended();

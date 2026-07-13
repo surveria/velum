@@ -312,7 +312,7 @@ fn supports_private_logical_assignments_and_derived_instances() -> TestResult {
 }
 
 #[test]
-fn private_access_is_proxy_transparent() -> TestResult {
+fn private_access_keeps_proxy_identity_opaque() -> TestResult {
     ensure_string(
         r#"
         class Box {
@@ -322,8 +322,56 @@ fn private_access_is_proxy_transparent() -> TestResult {
         }
         const box = new Box();
         const proxy = new Proxy(box, {});
-        proxy.read() + ":" + box.has(proxy)
+        let rejected = false;
+        try { proxy.read(); } catch (error) { rejected = error.constructor === TypeError; }
+        rejected + ":" + box.has(proxy)
         "#,
-        "8:true",
+        "true:false",
+    )
+}
+
+#[test]
+fn private_elements_reject_non_extensible_receivers() -> TestResult {
+    ensure_string(
+        r#"
+        class Base {
+            constructor(value) { return value; }
+        }
+        class Derived extends Base {
+            #value;
+        }
+        let rejected = false;
+        try {
+            new Derived(Object.preventExtensions({}));
+        } catch (error) {
+            rejected = error.constructor === TypeError;
+        }
+        "" + rejected
+        "#,
+        "true",
+    )
+}
+
+#[test]
+fn direct_eval_in_class_fields_preserves_initializer_context() -> TestResult {
+    ensure_string(
+        r#"
+        class Box {
+            #value = 44;
+            captured = eval("this.#value");
+            target = eval("new.target");
+            rejected = () => eval("arguments");
+            read() { return eval("this.#value"); }
+        }
+        const box = new Box();
+        let rejected = false;
+        try {
+            box.rejected();
+        } catch (error) {
+            rejected = error.constructor === SyntaxError;
+        }
+        box.captured + ":" + (box.target === undefined) + ":" + box.read() + ":" + rejected
+        "#,
+        "44:true:44:true",
     )
 }

@@ -14,6 +14,7 @@ mod binary;
 mod class;
 mod class_private;
 mod early_errors;
+mod eval_context;
 mod expression;
 mod function;
 mod function_expression;
@@ -37,6 +38,9 @@ use static_tables::{StaticBindingTable, StaticFunctionTable, StaticNameTable, St
 use super_context::SuperContext;
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 
+pub use eval_context::{
+    EvalClassFieldContext, EvalParseContext, EvalSuperContext, parse_eval_with_usage_in_context,
+};
 pub use module::{ModuleExportEntry, ModuleImportName, ModuleSyntax};
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
@@ -69,18 +73,6 @@ pub fn parse_module_with_usage(
     limits: RuntimeLimits,
 ) -> Result<ParsedProgram> {
     Parser::new_module(tokens, limits).parse()
-}
-
-pub fn parse_eval_with_usage_in_context(
-    tokens: TokenStream,
-    limits: RuntimeLimits,
-    strict_mode: bool,
-    allow_super_property: bool,
-    allow_super_call: bool,
-) -> Result<ParsedProgram> {
-    let mut parser = Parser::new(tokens, limits, strict_mode);
-    parser.super_context = SuperContext::new(allow_super_property, allow_super_call);
-    parser.parse()
 }
 
 pub struct ParsedProgram {
@@ -128,6 +120,7 @@ struct Parser {
     yield_expression_context: YieldExpressionContext,
     yield_identifier_context: YieldIdentifierContext,
     class_arguments: ClassArgumentsContext,
+    reject_all_arguments: bool,
     /// Private-name scopes for the class bodies currently being parsed.
     /// Unlike other contexts this stack must stay visible across nested
     /// function boundaries, so function entry never resets it.
@@ -187,6 +180,7 @@ impl Parser {
             yield_expression_context: YieldExpressionContext::Forbidden,
             yield_identifier_context: YieldIdentifierContext::Allowed,
             class_arguments: ClassArgumentsContext::Allowed,
+            reject_all_arguments: false,
             class_private_scopes: Vec::new(),
             source_goal: SourceGoal::Script,
         }
@@ -230,6 +224,8 @@ impl Parser {
         if let Some(module) = module.as_ref() {
             self.validate_module_declarations(&statements)?;
             Self::validate_module_syntax(module, &statements)?;
+        } else {
+            self.validate_script_declarations(&statements)?;
         }
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),

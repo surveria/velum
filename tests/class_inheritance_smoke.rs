@@ -64,6 +64,42 @@ fn default_derived_constructor_forwards_arguments() -> TestResult {
 }
 
 #[test]
+fn default_derived_constructor_does_not_iterate_arguments() -> TestResult {
+    ensure_string(
+        r#"
+        Array.prototype[Symbol.iterator] = function () {
+            throw new Error("iterator must not run");
+        };
+        class Base {
+            constructor(value) { this.value = value; }
+        }
+        class Derived extends Base {}
+        "" + new Derived(42).value
+        "#,
+        "42",
+    )
+}
+
+#[test]
+fn default_derived_constructor_resolves_the_current_superclass() -> TestResult {
+    ensure_string(
+        r#"
+        class First {
+            constructor() { this.value = "first"; }
+        }
+        class Second {
+            constructor() { this.value = "second"; }
+        }
+        class Derived extends First {}
+        const before = new Derived().value;
+        Object.setPrototypeOf(Derived, Second);
+        before + ":" + new Derived().value
+        "#,
+        "first:second",
+    )
+}
+
+#[test]
 fn super_method_calls_resolve_through_the_chain() -> TestResult {
     ensure_string(
         r#"
@@ -221,6 +257,25 @@ fn non_constructor_heritage_throws_type_error() -> TestResult {
             + ":" + kind(function () { class AlsoBad extends "text" {} })
         "#,
         "TypeError:TypeError",
+    )
+}
+
+#[test]
+fn null_and_symbol_heritage_preserve_constructor_semantics() -> TestResult {
+    ensure_string(
+        r#"
+        class NullBase extends null {}
+        class SymbolBase extends Symbol {}
+        let rejected = false;
+        try {
+            new SymbolBase();
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        "" + (Object.getPrototypeOf(NullBase.prototype) === null) + ":"
+            + (Object.getPrototypeOf(NullBase) === Function.prototype) + ":" + rejected
+        "#,
+        "true:true:true",
     )
 }
 

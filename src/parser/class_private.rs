@@ -45,6 +45,20 @@ pub(super) struct ClassPrivateScope {
 }
 
 impl ClassPrivateScope {
+    pub(super) fn external(names: &[StaticName]) -> Self {
+        Self {
+            declared: names
+                .iter()
+                .map(|name| PrivateDeclaration {
+                    name: name.clone(),
+                    kind: PrivateElementKind::Field,
+                    is_static: false,
+                })
+                .collect(),
+            used: Vec::new(),
+        }
+    }
+
     fn declares(&self, name: &str) -> bool {
         self.declared
             .iter()

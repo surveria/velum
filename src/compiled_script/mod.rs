@@ -12,8 +12,12 @@ use crate::{
     parser::{self, ModuleSyntax},
     runtime::limits::RuntimeLimits,
     source::SourceId,
+    syntax::StaticName,
 };
 use std::collections::BTreeMap;
+use std::rc::Rc;
+
+pub use crate::parser::{EvalClassFieldContext, EvalSuperContext};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
@@ -26,21 +30,23 @@ pub struct CompiledScript {
     top_level_await: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum CompileMode {
     Script,
     Module,
     Eval {
         strict: bool,
         super_context: EvalSuperContext,
+        class_field_context: EvalClassFieldContext,
+        private_names: Rc<[StaticName]>,
     },
 }
 
-#[derive(Clone, Copy)]
-enum EvalSuperContext {
-    None,
-    Property,
-    PropertyAndCall,
+pub struct EvalCompileContext {
+    strict: bool,
+    super_context: EvalSuperContext,
+    class_field_context: EvalClassFieldContext,
+    private_names: Rc<[StaticName]>,
 }
 
 type CompiledModuleParts = (
@@ -53,37 +59,60 @@ type CompiledModuleParts = (
 impl CompileMode {
     const SCRIPT: Self = Self::Script;
 
-    const fn eval(strict: bool, allow_super_property: bool, allow_super_call: bool) -> Self {
-        let super_context = match (allow_super_property, allow_super_call) {
-            (_, true) => EvalSuperContext::PropertyAndCall,
-            (true, false) => EvalSuperContext::Property,
-            (false, false) => EvalSuperContext::None,
-        };
+    fn eval(context: EvalCompileContext) -> Self {
         Self::Eval {
-            strict,
-            super_context,
+            strict: context.strict,
+            super_context: context.super_context,
+            class_field_context: context.class_field_context,
+            private_names: context.private_names,
         }
     }
 
-    const fn strict(self) -> bool {
+    const fn strict(&self) -> bool {
         match self {
             Self::Script => false,
             Self::Module => true,
-            Self::Eval { strict, .. } => strict,
+            Self::Eval { strict, .. } => *strict,
         }
     }
 
-    const fn eval_super_context(self) -> Option<EvalSuperContext> {
+    fn eval_context(&self) -> Option<parser::EvalParseContext<'_>> {
         match self {
             Self::Script | Self::Module => None,
-            Self::Eval { super_context, .. } => Some(super_context),
+            Self::Eval {
+                strict,
+                super_context,
+                class_field_context,
+                private_names,
+            } => Some(parser::EvalParseContext::new(
+                *strict,
+                *super_context,
+                *class_field_context,
+                private_names,
+            )),
+        }
+    }
+}
+
+impl EvalCompileContext {
+    pub(crate) const fn new(
+        strict: bool,
+        super_context: EvalSuperContext,
+        class_field_context: EvalClassFieldContext,
+        private_names: Rc<[StaticName]>,
+    ) -> Self {
+        Self {
+            strict,
+            super_context,
+            class_field_context,
+            private_names,
         }
     }
 }
 
 impl CompiledScript {
     pub(crate) fn compile(source: &str, limits: RuntimeLimits) -> Result<Self> {
-        Self::compile_with_name_and_mode(None, source, limits, CompileMode::SCRIPT)
+        Self::compile_with_name_and_mode(None, source, limits, &CompileMode::SCRIPT)
     }
 
     pub(crate) fn compile_named(
@@ -91,22 +120,16 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(Some(source_name), source, limits, CompileMode::SCRIPT)
+        Self::compile_with_name_and_mode(Some(source_name), source, limits, &CompileMode::SCRIPT)
     }
 
     pub(crate) fn compile_eval(
         source: &str,
         limits: RuntimeLimits,
-        strict_mode: bool,
-        allow_super_property: bool,
-        allow_super_call: bool,
+        context: EvalCompileContext,
     ) -> Result<Self> {
-        Self::compile_with_name_and_mode(
-            None,
-            source,
-            limits,
-            CompileMode::eval(strict_mode, allow_super_property, allow_super_call),
-        )
+        let mode = CompileMode::eval(context);
+        Self::compile_with_name_and_mode(None, source, limits, &mode)
     }
 
     pub(crate) fn compile_module_named(
@@ -118,7 +141,7 @@ impl CompiledScript {
             Some(source_name),
             source,
             limits,
-            CompileMode::Module,
+            &CompileMode::Module,
         )?;
         let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
         let imported_exports = module
@@ -199,7 +222,7 @@ impl CompiledScript {
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
-        mode: CompileMode,
+        mode: &CompileMode,
     ) -> Result<Self> {
         Self::compile_with_name_and_mode_parts(source_name, source, limits, mode)
             .map(|(script, _)| script)
@@ -209,7 +232,7 @@ impl CompiledScript {
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
-        mode: CompileMode,
+        mode: &CompileMode,
     ) -> Result<(Self, Option<ModuleSyntax>)> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
@@ -218,19 +241,8 @@ impl CompiledScript {
         let tokens = lexer::TokenStream::new(source, source_id, allow_html_comments);
         let parsed = if matches!(mode, CompileMode::Module) {
             parser::parse_module_with_usage(tokens, limits)
-        } else if let Some(super_context) = mode.eval_super_context() {
-            let allow_super_property = matches!(
-                super_context,
-                EvalSuperContext::Property | EvalSuperContext::PropertyAndCall
-            );
-            let allow_super_call = matches!(super_context, EvalSuperContext::PropertyAndCall);
-            parser::parse_eval_with_usage_in_context(
-                tokens,
-                limits,
-                mode.strict(),
-                allow_super_property,
-                allow_super_call,
-            )
+        } else if let Some(context) = mode.eval_context() {
+            parser::parse_eval_with_usage_in_context(tokens, limits, context)
         } else if mode.strict() {
             parser::parse_with_usage_in_mode(tokens, limits, true)
         } else {

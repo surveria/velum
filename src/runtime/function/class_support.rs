@@ -8,6 +8,8 @@ use crate::{
     value::{FunctionId, Value},
 };
 
+use super::FunctionClassConstructor;
+
 /// Super references available to a class constructor or method body.
 #[derive(Debug)]
 pub(in crate::runtime) struct FunctionSuperBinding {
@@ -79,6 +81,45 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(in crate::runtime) fn set_function_default_derived_constructor(
+        &mut self,
+        id: FunctionId,
+        default_derived: bool,
+    ) -> Result<()> {
+        if default_derived {
+            let function = self.function_mut(id)?;
+            if !function.class_constructor.is_class() {
+                return Err(Error::runtime(
+                    "default derived constructor is not a class constructor",
+                ));
+            }
+            function.class_constructor = FunctionClassConstructor::DefaultDerived;
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn default_derived_constructor_super(
+        &mut self,
+        id: FunctionId,
+    ) -> Result<Option<Value>> {
+        if self.function(id)?.class_constructor != FunctionClassConstructor::DefaultDerived {
+            return Ok(None);
+        }
+        self.function_inheritance_prototype_value(id).map(Some)
+    }
+
+    pub(in crate::runtime) fn current_class_field_initializer_context(&self) -> Result<bool> {
+        for frame in self.activation_frames.iter().rev() {
+            if let Some(context) = frame.class_field_initializer_context() {
+                return Ok(context);
+            }
+            if let Some(id) = frame.function_id() {
+                return Ok(self.function(id)?.class_field_initializer_context);
+            }
+        }
+        Ok(false)
+    }
+
     pub(super) fn normalize_derived_constructor_completion(
         &self,
         completion: Completion,
@@ -284,6 +325,7 @@ impl Context {
     ) -> Result<()> {
         let private_slots = self.function(id)?.class_private_slots.clone();
         let fields = self.function(id)?.class_fields.clone();
+        let private_environment = self.function(id)?.private_environment.clone();
         if let Some(private_slots) = private_slots {
             for slot in private_slots.iter() {
                 self.add_private_slot_to_value(instance, slot.id.clone(), slot.value.clone())?;
@@ -292,8 +334,25 @@ impl Context {
         let Some(fields) = fields else {
             return Ok(());
         };
+        let constructor_super_binding = self
+            .function(id)?
+            .super_binding
+            .clone()
+            .ok_or_else(|| Error::runtime("class field super binding disappeared"))?;
+        let super_binding = Rc::new(FunctionSuperBinding {
+            constructor: None,
+            home_object: constructor_super_binding.home_object.clone(),
+            own_constructor: None,
+            this_value: std::cell::RefCell::new(None),
+            allow_direct_eval_super_call: std::cell::Cell::new(false),
+        });
         for field in fields.iter() {
-            self.push_temporary_this(instance.clone())?;
+            self.push_class_evaluation(
+                instance.clone(),
+                super_binding.clone(),
+                private_environment.clone(),
+                true,
+            )?;
             let super_binding = self.current_super_frame();
             let previous_super_call_permission = super_binding
                 .as_ref()
@@ -316,24 +375,33 @@ impl Context {
             let value = value?.into_result()?;
             match field {
                 ResolvedClassField::Public { key, name, .. } => {
-                    let Value::Object(object_id) = instance else {
-                        return Err(Error::type_error("class field receiver is not an object"));
-                    };
                     let update = crate::runtime::object::PropertyUpdate::Data(
                         crate::runtime::object::DataPropertyUpdate::new(
-                            Some(value),
+                            Some(value.clone()),
                             Some(crate::runtime::object::PropertyWritable::Yes),
                             Some(crate::runtime::object::PropertyEnumerable::Yes),
                             Some(crate::runtime::object::PropertyConfigurable::Yes),
                         ),
                     );
-                    self.objects.define_property(
-                        *object_id,
-                        *key,
-                        name,
-                        update,
-                        self.limits.max_object_properties,
+                    let descriptor = crate::runtime::object::DataPropertyDescriptor::new(
+                        value,
+                        crate::runtime::object::PropertyWritable::Yes,
+                        crate::runtime::object::PropertyEnumerable::Yes,
+                        crate::runtime::object::PropertyConfigurable::Yes,
+                    );
+                    let descriptor_value = self.create_property_descriptor_object(
+                        &crate::runtime::object::OwnPropertyDescriptor::Data(descriptor),
                     )?;
+                    let mut property =
+                        crate::runtime::property::DynamicPropertyKey::new(name.clone(), Some(*key));
+                    if !self.semantic_define_own_property_update_with_descriptor(
+                        instance,
+                        &mut property,
+                        update,
+                        &descriptor_value,
+                    )? {
+                        return Err(Error::type_error("class field definition was rejected"));
+                    }
                 }
                 ResolvedClassField::Private { name, .. } => {
                     self.add_private_slot_to_value(

@@ -81,6 +81,10 @@ impl Parser {
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
         let previous_strict = self.is_strict_mode();
         self.set_strict_mode(true);
+        let inner_name_binding = name
+            .clone()
+            .map(|name| self.static_binding(name))
+            .transpose()?;
         let heritage = if self.match_kind(&TokenKind::Extends) {
             Some(self.call()?)
         } else {
@@ -88,7 +92,7 @@ impl Parser {
         };
         self.push_class_private_scope();
         let result = self
-            .class_body_literal(name, heritage)
+            .class_body_literal(name, inner_name_binding, heritage)
             .and_then(|class| self.pop_class_private_scope().map(|()| class));
         self.set_strict_mode(previous_strict);
         result
@@ -97,6 +101,7 @@ impl Parser {
     fn class_body_literal(
         &mut self,
         name: Option<StaticName>,
+        inner_name_binding: Option<crate::syntax::StaticBinding>,
         heritage: Option<Expression>,
     ) -> Result<ClassLiteral> {
         self.consume(&TokenKind::LBrace, "expected '{' before class body")?;
@@ -128,6 +133,7 @@ impl Parser {
         };
         Ok(ClassLiteral {
             name,
+            inner_name_binding,
             heritage,
             constructor,
             members,
@@ -139,6 +145,7 @@ impl Parser {
     fn default_class_constructor(&mut self) -> Result<ClassConstructor> {
         Ok(ClassConstructor {
             id: self.static_function()?,
+            default_derived: false,
             arguments_binding: None,
             params: Vec::new().into(),
             body: Vec::new().into(),
@@ -155,6 +162,7 @@ impl Parser {
         let forward = Expression::new(Expr::SuperCall { args: vec![spread] }, span);
         Ok(ClassConstructor {
             id: self.static_function()?,
+            default_derived: true,
             arguments_binding: None,
             params: vec![crate::ast::FunctionParam::rest(rest)].into(),
             body: vec![Statement::new(Stmt::Expr(forward), span)].into(),
@@ -171,7 +179,7 @@ impl Parser {
     ) -> Result<()> {
         let member_offset = self.offset();
         if self.class_static_block_start() {
-            return self.class_static_block(static_blocks);
+            return self.class_static_block(member_offset, static_blocks);
         }
         let is_static = self.match_class_static_prefix();
         let function_kind = self.match_class_method_prefix();
@@ -265,14 +273,20 @@ impl Parser {
             && self.peek_kind_is(1, &TokenKind::LBrace)
     }
 
-    fn class_static_block(&mut self, static_blocks: &mut Vec<ClassStaticBlock>) -> Result<()> {
+    fn class_static_block(
+        &mut self,
+        source_order: usize,
+        static_blocks: &mut Vec<ClassStaticBlock>,
+    ) -> Result<()> {
         let static_token = self.advance_token("expected 'static' before class static block")?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
-        let mut body = self.with_restricted_class_arguments(|parser| {
-            parser.with_isolated_control_context(|parser| {
-                parser.with_super_context(true, false, |parser| {
-                    parser.with_await_context(false, true, |parser| {
-                        parser.with_yield_expression(false, Self::block_statements)
+        let mut body = self.with_new_target_scope(|parser| {
+            parser.with_restricted_class_arguments(|parser| {
+                parser.with_isolated_control_context(|parser| {
+                    parser.with_super_context(true, false, |parser| {
+                        parser.with_await_context(false, true, |parser| {
+                            parser.with_yield_expression(false, Self::block_statements)
+                        })
                     })
                 })
             })
@@ -293,7 +307,10 @@ impl Parser {
             ));
         }
         self.validate_static_block_declarations(&body)?;
-        static_blocks.push(ClassStaticBlock { body: body.into() });
+        static_blocks.push(ClassStaticBlock {
+            source_order,
+            body: body.into(),
+        });
         Ok(())
     }
 
@@ -326,12 +343,17 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.with_restricted_class_arguments(Self::assignment_expression)?)
+            Some(self.with_new_target_scope(|parser| {
+                parser.with_restricted_class_arguments(|parser| {
+                    parser.with_super_context(true, false, Self::assignment_expression)
+                })
+            })?)
         } else {
             None
         };
         self.consume_statement_terminator("expected statement terminator after class field")?;
         fields.push(crate::ast::ClassField {
+            source_order: member_offset,
             key: Self::class_element_name(key),
             is_static,
             name: key_name,
@@ -374,6 +396,7 @@ impl Parser {
         )?;
         *constructor = Some(ClassConstructor {
             id: function.id,
+            default_derived: false,
             arguments_binding: function.arguments_binding,
             params: function.params,
             body: function.body,
@@ -394,25 +417,29 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
-                let parameters =
-                    parser.with_await_context(false, function_kind.is_async(), |parser| {
-                        parser.with_yield_expression(false, |parser| {
-                            parser.with_yield_identifier_reserved(
-                                function_kind.is_generator(),
-                                Self::function_parameters,
-                            )
-                        })
-                    })?;
-                parser.reject_duplicate_parameters(&parameters.bound_names)?;
-                parser.consume(
-                    &TokenKind::RParen,
-                    "expected ')' after class member parameters",
-                )?;
-                Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
-                parser.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
-                let body = parser.with_new_target_scope(|parser| {
+                parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, allow_super_call, |parser| {
-                        parser.with_await_context(
+                        let parameters = parser.with_await_context(
+                            false,
+                            function_kind.is_async(),
+                            |parser| {
+                                parser.with_yield_expression(false, |parser| {
+                                    parser.with_yield_identifier_reserved(
+                                        function_kind.is_generator(),
+                                        Self::function_parameters,
+                                    )
+                                })
+                            },
+                        )?;
+                        parser.reject_duplicate_parameters(&parameters.bound_names)?;
+                        parser.consume(
+                            &TokenKind::RParen,
+                            "expected ')' after class member parameters",
+                        )?;
+                        Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
+                        parser
+                            .consume(&TokenKind::LBrace, "expected '{' before class member body")?;
+                        let body = parser.with_await_context(
                             function_kind.is_async(),
                             function_kind.is_async(),
                             |parser| {
@@ -421,10 +448,10 @@ impl Parser {
                                         parser.function_body(true)
                                     })
                             },
-                        )
+                        )?;
+                        Ok((parameters, body))
                     })
-                })?;
-                Ok((parameters, body))
+                })
             })?;
         self.validate_function_parameters(
             &parameters.bound_names,
@@ -504,6 +531,7 @@ impl Parser {
             || self.peek_kind_is(1, &TokenKind::Equal)
             || self.peek_kind_is(1, &TokenKind::Semicolon)
             || self.peek_kind_is(1, &TokenKind::RBrace)
+            || (self.peek_kind_is(1, &TokenKind::Star) && self.peek_has_line_terminator_before(1))
         {
             return None;
         }

@@ -29,6 +29,27 @@ mod property_dispatch;
 mod storage;
 mod suspended;
 mod upvalues;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum FunctionClassConstructor {
+    None,
+    Explicit,
+    DefaultDerived,
+}
+
+impl FunctionClassConstructor {
+    const fn from_flag(class_constructor: bool) -> Self {
+        if class_constructor {
+            Self::Explicit
+        } else {
+            Self::None
+        }
+    }
+
+    const fn is_class(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
@@ -164,7 +185,11 @@ impl Context {
         let prototype_default = (init.constructable || init.kind.is_generator()).then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
-                PropertyWritable::Yes,
+                if init.class_constructor {
+                    PropertyWritable::No
+                } else {
+                    PropertyWritable::Yes
+                },
                 PropertyEnumerable::No,
                 PropertyConfigurable::No,
             )
@@ -195,6 +220,7 @@ impl Context {
         let script_or_module_name = self.active_script_or_module_name();
         let new_target =
             FunctionNewTarget::from_mode(init.new_target_mode, self.current_new_target()?);
+        let class_field_initializer_context = self.current_class_field_initializer_context()?;
         let mut function_record = super::Function {
             realm: self.active_realm_index(),
             script_or_module_name,
@@ -214,12 +240,13 @@ impl Context {
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
             constructable: init.constructable,
             kind: init.kind,
-            class_constructor: init.class_constructor,
+            class_constructor: FunctionClassConstructor::from_flag(init.class_constructor),
             super_binding,
             static_parent: None,
             class_fields: None,
             class_private_slots: None,
             private_environment: self.current_private_environment(),
+            class_field_initializer_context,
             private_slots: Vec::new(),
             params_remembered: std::cell::Cell::new(false),
             scope_template,
@@ -502,7 +529,7 @@ impl Context {
 
     /// Class constructors are constructor-only callables.
     fn reject_class_constructor_call(&self, id: FunctionId) -> Result<()> {
-        if self.function(id)?.class_constructor {
+        if self.function(id)?.class_constructor.is_class() {
             return Err(Error::type_error(
                 "Class constructor cannot be invoked without 'new'",
             ));

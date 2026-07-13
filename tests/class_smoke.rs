@@ -253,6 +253,27 @@ fn class_expressions_carry_optional_names() -> TestResult {
 }
 
 #[test]
+fn class_names_use_an_immutable_inner_binding() -> TestResult {
+    ensure_string(
+        r#"
+        let Decl = class Inner {
+            static captured = Inner;
+            read() { return Inner; }
+        };
+        const instance = new Decl();
+        let rejected = false;
+        try {
+            const LockedValue = class Locked extends Locked {};
+        } catch (error) {
+            rejected = error instanceof ReferenceError;
+        }
+        "" + (Decl.captured === Decl) + ":" + (instance.read() === Decl) + ":" + rejected
+        "#,
+        "true:true:true",
+    )
+}
+
+#[test]
 fn constructor_parameters_support_patterns_and_rest() -> TestResult {
     ensure_string(
         r#"
@@ -334,6 +355,12 @@ fn rejects_class_early_errors() -> TestResult {
     ensure_error_contains(
         "class GA { get constructor() {} }",
         "class constructor cannot be an accessor",
+    )?;
+    ensure_error_contains("class static {}", "strict binding name")?;
+    ensure_error_contains("class yield {}", "valid binding identifier")?;
+    ensure_error_contains(
+        "class Duplicate {} class Duplicate {}",
+        "duplicate lexical declaration",
     )
 }
 

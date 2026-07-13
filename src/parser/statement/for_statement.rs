@@ -226,7 +226,11 @@ impl Parser {
         self.peek().is_some_and(|token| {
             matches!(
                 &token.kind,
-                TokenKind::Identifier(_) | TokenKind::Async | TokenKind::LParen
+                TokenKind::Identifier(_)
+                    | TokenKind::Async
+                    | TokenKind::This
+                    | TokenKind::Super
+                    | TokenKind::LParen
             )
         })
     }
