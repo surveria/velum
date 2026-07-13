@@ -5,7 +5,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::binding::scope::BindingScope,
-    runtime::control::Completion,
+    runtime::control::{Completion, Suspension},
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
     runtime::{
         Context,
@@ -586,10 +586,7 @@ impl Context {
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue { .. }
-            | Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::DelegatedYield(_)) => Ok(PatternStep::Abrupt(completion)),
+            | Completion::Suspend(_)) => Ok(PatternStep::Abrupt(completion)),
         }
     }
 
@@ -617,7 +614,7 @@ impl Context {
                     }
                     super::for_of::ForOfNext::Await(awaited) => {
                         self.park_bytecode_control(handle, control)?;
-                        return Ok(Completion::Suspended(awaited));
+                        return Ok(Completion::Suspend(Suspension::Await(awaited)));
                     }
                 };
                 if matches!(

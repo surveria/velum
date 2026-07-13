@@ -8,7 +8,7 @@ use crate::{
         Context, VmStorageKind,
         async_trace::VmAsyncEdgeKind,
         call::RuntimeCallArgs,
-        control::Completion,
+        control::{Completion, Suspension},
         function::DetachedFunctionExecution,
         native::NativeFunctionKind,
         object::{
@@ -538,12 +538,12 @@ impl Context {
         completion: Completion,
     ) -> Result<(GeneratorState, Value)> {
         match completion {
-            Completion::Yielded(value) => {
+            Completion::Suspend(Suspension::Yield(value)) => {
                 let execution = self.detach_function_execution(function)?;
                 let result = self.create_generator_result(value, false)?;
                 Ok((GeneratorState::Suspended(execution), result))
             }
-            Completion::DelegatedYield(delegated) => {
+            Completion::Suspend(Suspension::DelegatedYield(delegated)) => {
                 let result = delegated.into_iterator_result()?;
                 if self.semantic_object_ref(&result)?.is_none() {
                     return Err(Error::runtime(
@@ -566,10 +566,10 @@ impl Context {
             Completion::Break { .. } | Completion::Continue { .. } => {
                 Err(Error::runtime("invalid generator completion"))
             }
-            Completion::Suspended(_) => Err(Error::runtime(
+            Completion::Suspend(Suspension::Await(_)) => Err(Error::runtime(
                 "generator execution suspended on an async Promise",
             )),
-            Completion::GeneratorStart => Err(Error::runtime(
+            Completion::Suspend(Suspension::GeneratorStart) => Err(Error::runtime(
                 "generator restarted from its initial suspension",
             )),
         }

@@ -34,10 +34,7 @@ impl Context {
                 Completion::Normal(value) => value,
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => return Ok(Some(completion)),
+                | Completion::Suspend(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }

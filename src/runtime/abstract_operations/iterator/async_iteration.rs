@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        control::{Completion, runtime_exception_value},
+        control::{Completion, Suspension, runtime_exception_value},
         promise::{PromiseId, PromiseReaction},
         roots::VmRootKind,
     },
@@ -175,7 +175,9 @@ impl Context {
         result: &Value,
     ) -> Result<AsyncIteratorStep> {
         continuation.pending = Some(AsyncIteratorPending::IteratorResult);
-        let Completion::Suspended(awaited) = self.eval_bytecode_await(result.clone())? else {
+        let Completion::Suspend(Suspension::Await(awaited)) =
+            self.eval_bytecode_await(result.clone())?
+        else {
             return Err(Error::runtime(
                 "async iterator result did not await a Promise",
             ));
@@ -228,7 +230,8 @@ impl Context {
     ) -> Result<AsyncIteratorStep> {
         let wrapper = self.create_async_from_sync_value_wrapper(value)?;
         continuation.pending = Some(AsyncIteratorPending::SyncIteratorResult { done });
-        let Completion::Suspended(awaited) = self.eval_bytecode_await(wrapper)? else {
+        let Completion::Suspend(Suspension::Await(awaited)) = self.eval_bytecode_await(wrapper)?
+        else {
             return Err(Error::runtime(
                 "async-from-sync iterator result did not await a Promise",
             ));
@@ -315,7 +318,8 @@ impl Context {
             (result, AsyncIteratorClosePending::AsyncResult)
         };
         continuation.close_pending = Some(pending);
-        let Completion::Suspended(awaited) = self.eval_bytecode_await(awaited)? else {
+        let Completion::Suspend(Suspension::Await(awaited)) = self.eval_bytecode_await(awaited)?
+        else {
             return Err(Error::runtime(
                 "async iterator close did not await a Promise",
             ));
@@ -409,10 +413,8 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
-        | Completion::Continue { value, .. }
-        | Completion::Yielded(value) => Some(value),
-        Completion::DelegatedYield(delegated) => Some(delegated.root_value()),
+        | Completion::Continue { value, .. } => Some(value),
         Completion::TailCall(request) => Some(request.callee()),
-        Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspend(suspension) => suspension.root_value(),
     }
 }

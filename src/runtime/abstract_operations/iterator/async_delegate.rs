@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        control::{Completion, DelegatedYield},
+        control::{Completion, DelegatedYield, Suspension},
         roots::VmRootKind,
     },
     value::Value,
@@ -36,7 +36,9 @@ impl Context {
                 YieldDelegateDone::Normal,
             ),
             Some(Completion::Return(value)) => {
-                let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                let Completion::Suspend(Suspension::Await(awaited)) =
+                    self.eval_bytecode_await(value)?
+                else {
                     return Err(Error::runtime(
                         "async yield delegation return did not await its resumption value",
                     ));
@@ -67,7 +69,8 @@ impl Context {
                                 return completion.into_result().map(YieldDelegateStep::Complete);
                             }
                         };
-                        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)?
+                        let Completion::Suspend(Suspension::Await(awaited)) =
+                            self.eval_bytecode_await(result)?
                         else {
                             return Err(Error::runtime(
                                 "async iterator close did not await its result",
@@ -97,7 +100,8 @@ impl Context {
             }
             completion => return completion.into_result().map(YieldDelegateStep::Complete),
         };
-        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)? else {
+        let Completion::Suspend(Suspension::Await(awaited)) = self.eval_bytecode_await(result)?
+        else {
             return Err(Error::runtime(
                 "async yield delegation did not await an iterator result",
             ));
@@ -186,7 +190,8 @@ impl Context {
             }
             completion => return completion.into_result().map(YieldDelegateStep::Complete),
         };
-        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)? else {
+        let Completion::Suspend(Suspension::Await(awaited)) = self.eval_bytecode_await(result)?
+        else {
             return Err(Error::runtime(
                 "async yield delegation did not await an iterator return result",
             ));

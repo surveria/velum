@@ -4,7 +4,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        control::{Completion, DelegatedYield, runtime_exception_value},
+        control::{Completion, Suspension, runtime_exception_value},
         resource_scope::ScopeDisposal,
         roots::VmRootKind,
     },
@@ -19,18 +19,7 @@ pub(in crate::runtime) enum BytecodeOutcome {
         span: Option<SourceSpan>,
     },
     Suspended {
-        awaited: crate::runtime::promise::PromiseId,
-        span: Option<SourceSpan>,
-    },
-    Yielded {
-        value: Value,
-        span: Option<SourceSpan>,
-    },
-    DelegatedYield {
-        delegated: DelegatedYield,
-        span: Option<SourceSpan>,
-    },
-    GeneratorStart {
+        suspension: Suspension,
         span: Option<SourceSpan>,
     },
 }
@@ -39,20 +28,13 @@ impl BytecodeOutcome {
     pub(in crate::runtime) fn completion(self) -> Completion {
         match self {
             Self::Completed { completion, .. } => completion,
-            Self::Suspended { awaited, .. } => Completion::Suspended(awaited),
-            Self::Yielded { value, .. } => Completion::Yielded(value),
-            Self::DelegatedYield { delegated, .. } => Completion::DelegatedYield(delegated),
-            Self::GeneratorStart { .. } => Completion::GeneratorStart,
+            Self::Suspended { suspension, .. } => Completion::Suspend(suspension),
         }
     }
 
     pub(in crate::runtime) const fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::Completed { span, .. }
-            | Self::Suspended { span, .. }
-            | Self::Yielded { span, .. }
-            | Self::DelegatedYield { span, .. }
-            | Self::GeneratorStart { span } => *span,
+            Self::Completed { span, .. } | Self::Suspended { span, .. } => *span,
         }
     }
 
@@ -67,13 +49,7 @@ impl BytecodeOutcome {
     }
 
     pub(in crate::runtime) const fn is_suspended(&self) -> bool {
-        matches!(
-            self,
-            Self::Suspended { .. }
-                | Self::Yielded { .. }
-                | Self::DelegatedYield { .. }
-                | Self::GeneratorStart { .. }
-        )
+        matches!(self, Self::Suspended { .. })
     }
 }
 
@@ -105,7 +81,11 @@ impl Context {
         let mut outcome =
             self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)?;
         loop {
-            let BytecodeOutcome::Suspended { awaited, .. } = outcome else {
+            let BytecodeOutcome::Suspended {
+                suspension: Suspension::Await(awaited),
+                ..
+            } = outcome
+            else {
                 return Ok(outcome);
             };
             let resume = loop {
@@ -226,7 +206,7 @@ impl Context {
                 state.store_scope_disposal(completion, ScopeDisposalResumeBehavior::Complete)?;
                 state.mark_await_suspended();
                 self.park_bytecode_state_at(activation_index, state)?;
-                Ok(Completion::Suspended(awaited))
+                Ok(Completion::Suspend(Suspension::Await(awaited)))
             }
         }
     }
@@ -282,7 +262,7 @@ impl Context {
                         )?;
                         state.mark_await_suspended();
                         self.park_bytecode_state_at(activation_index, state)?;
-                        Ok(Completion::Suspended(awaited))
+                        Ok(Completion::Suspend(Suspension::Await(awaited)))
                     }
                 };
             }
@@ -375,38 +355,14 @@ impl Context {
                     self.annotate_error_value_span(value, span)?;
                 }
                 return Ok(match completion {
-                    Completion::Suspended(awaited) => {
+                    Completion::Suspend(suspension) => {
                         if !state.is_suspended() {
                             state.mark_child_suspended();
                         }
                         BytecodeOutcome::Suspended {
-                            awaited,
+                            suspension,
                             span: Some(span),
                         }
-                    }
-                    Completion::Yielded(value) => {
-                        if !state.is_suspended() {
-                            state.mark_child_suspended();
-                        }
-                        BytecodeOutcome::Yielded {
-                            value,
-                            span: Some(span),
-                        }
-                    }
-                    Completion::DelegatedYield(delegated) => {
-                        if !state.is_suspended() {
-                            state.mark_child_suspended();
-                        }
-                        BytecodeOutcome::DelegatedYield {
-                            delegated,
-                            span: Some(span),
-                        }
-                    }
-                    Completion::GeneratorStart => {
-                        if !state.is_suspended() {
-                            state.mark_child_suspended();
-                        }
-                        BytecodeOutcome::GeneratorStart { span: Some(span) }
                     }
                     completion => BytecodeOutcome::Completed {
                         completion,

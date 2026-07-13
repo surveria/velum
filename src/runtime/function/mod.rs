@@ -4,7 +4,7 @@ use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::control::Completion,
+    runtime::control::{Completion, Suspension},
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
@@ -299,7 +299,7 @@ impl Context {
                 id, args, this_value, new_target,
             )?;
             return match completion {
-                Completion::GeneratorStart => {
+                Completion::Suspend(Suspension::GeneratorStart) => {
                     let execution = self.detach_function_execution(id)?;
                     self.create_generator_object(id, execution)
                         .map(Completion::Normal)
@@ -319,7 +319,7 @@ impl Context {
                 id, args, this_value, new_target,
             )?;
             return match completion {
-                Completion::GeneratorStart => {
+                Completion::Suspend(Suspension::GeneratorStart) => {
                     let execution = self.detach_function_execution(id)?;
                     self.create_generator_object(id, execution)
                         .map(Completion::Normal)

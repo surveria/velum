@@ -81,10 +81,7 @@ impl Context {
                     | Completion::ReturnDirect(_)) => {
                         return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                     }
-                    completion @ (Completion::Suspended(_)
-                    | Completion::GeneratorStart
-                    | Completion::Yielded(_)
-                    | Completion::DelegatedYield(_)) => {
+                    completion @ Completion::Suspend(_) => {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }

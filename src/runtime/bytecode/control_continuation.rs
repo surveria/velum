@@ -780,10 +780,8 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
-        | Completion::Continue { value, .. }
-        | Completion::Yielded(value) => Some(value),
-        Completion::DelegatedYield(delegated) => Some(delegated.root_value()),
+        | Completion::Continue { value, .. } => Some(value),
         Completion::TailCall(request) => Some(request.callee()),
-        Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspend(suspension) => suspension.root_value(),
     }
 }

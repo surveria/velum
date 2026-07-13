@@ -752,10 +752,9 @@ impl Context {
             Completion::TailCall(_) => Err(Error::runtime("tail call escaped constructor")),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            completion @ (Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::DelegatedYield(_)) => completion.into_function_result().map(|_| object),
+            completion @ Completion::Suspend(_) => {
+                completion.into_function_result().map(|_| object)
+            }
         }
     }
 

@@ -380,10 +380,7 @@ impl Context {
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
                 | Completion::Continue { .. }
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => return Ok((control, completion)),
+                | Completion::Suspend(_)) => return Ok((control, completion)),
             }
         }
         let (_, last) = control.switch_state_mut()?;
