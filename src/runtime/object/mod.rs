@@ -132,11 +132,18 @@ struct Object {
     typed_array: Option<TypedArrayView>,
     is_raw_json: bool,
     arguments_brand: bool,
+    function_prototype_brand: FunctionPrototypeBrand,
     module_namespace: bool,
     shadow_realm: Option<crate::runtime::realm::RealmIndex>,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
     storage_ledger: Option<crate::runtime::storage_ledger::VmStorageLedger>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FunctionPrototypeBrand {
+    Absent,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -171,6 +178,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
             prototype: None,
@@ -244,6 +252,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
             prototype: None,
@@ -273,6 +282,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
             prototype: None,
@@ -302,6 +312,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
             prototype: None,

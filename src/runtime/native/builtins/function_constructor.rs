@@ -24,6 +24,8 @@ const SYMBOL_HAS_INSTANCE_PROPERTY: &str = "hasInstance";
 const SYMBOL_HAS_INSTANCE_DISPLAY: &str = "[Symbol.hasInstance]";
 const FUNCTION_RESTRICTED_ARGUMENTS_PROPERTY: &str = "arguments";
 const FUNCTION_RESTRICTED_CALLER_PROPERTY: &str = "caller";
+const FUNCTION_PROTOTYPE_LENGTH_PROPERTY: &str = "length";
+const FUNCTION_PROTOTYPE_NAME_PROPERTY: &str = "name";
 
 impl Context {
     pub(in crate::runtime) fn function_constructor_value(&mut self) -> Result<Value> {
@@ -188,18 +190,49 @@ impl Context {
 
     fn function_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype_property(
+        let prototype = self.objects.create_with_prototype_id(
             None,
-            ObjectPropertyInit::new(
-                constructor_key,
-                OBJECT_CONSTRUCTOR_PROPERTY,
-                constructor,
-                PropertyEnumerable::No,
-            ),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
-        )
+        )?;
+        self.objects.mark_function_prototype(prototype)?;
+        for (name, value, writable) in [
+            (
+                FUNCTION_PROTOTYPE_LENGTH_PROPERTY,
+                Value::Number(0.0),
+                PropertyWritable::No,
+            ),
+            (
+                FUNCTION_PROTOTYPE_NAME_PROPERTY,
+                self.heap_string_value("")?,
+                PropertyWritable::No,
+            ),
+            (
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor,
+                PropertyWritable::Yes,
+            ),
+        ] {
+            let key = if name == OBJECT_CONSTRUCTOR_PROPERTY {
+                constructor_key
+            } else {
+                self.intern_property_key(name)?
+            };
+            self.objects.define_property(
+                prototype,
+                key,
+                name,
+                PropertyUpdate::Data(DataPropertyUpdate::new(
+                    Some(value),
+                    Some(writable),
+                    Some(PropertyEnumerable::No),
+                    Some(PropertyConfigurable::Yes),
+                )),
+                self.limits.max_object_properties,
+            )?;
+        }
+        Ok(prototype)
     }
 
     fn install_function_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
@@ -259,7 +292,7 @@ impl Context {
                     Some(thrower.clone()),
                     Some(thrower.clone()),
                     Some(PropertyEnumerable::No),
-                    Some(PropertyConfigurable::No),
+                    Some(PropertyConfigurable::Yes),
                 )),
                 self.limits.max_object_properties,
             )?;
@@ -407,8 +440,16 @@ fn function_source(params: &str, body: &str, kind: FunctionKind, name: Option<&s
     let generator_marker = if kind.is_generator() { "*" } else { "" };
     let name = name.map_or("", |name| name);
     let name_separator = if name.is_empty() { "" } else { " " };
-    let parameter_line_terminator = if params.contains("//") { "\n" } else { "" };
+    let parameter_line_terminator = if dynamic_parameters_need_line_terminator(params) {
+        "\n"
+    } else {
+        ""
+    };
     format!(
         "{async_prefix}function{generator_marker}{name_separator}{name}({params}{parameter_line_terminator}) {{\n{body}\n}}"
     )
+}
+
+fn dynamic_parameters_need_line_terminator(params: &str) -> bool {
+    params.contains("//") || params.contains("<!--") || params.contains("-->")
 }

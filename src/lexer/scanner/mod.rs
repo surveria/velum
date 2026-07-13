@@ -24,6 +24,7 @@ mod template;
 pub(super) struct LexerCheckpoint {
     cursor: usize,
     line_terminator_before: bool,
+    line_start: bool,
     template_substitutions: Vec<TemplateSubstitutionState>,
 }
 
@@ -33,6 +34,7 @@ pub(super) struct Lexer {
     cursor: usize,
     pending: Option<Token>,
     line_terminator_before: bool,
+    line_start: bool,
     template_substitutions: Vec<TemplateSubstitutionState>,
 }
 
@@ -44,6 +46,7 @@ impl Lexer {
             cursor: 0,
             pending: None,
             line_terminator_before: false,
+            line_start: true,
             template_substitutions: Vec::new(),
         }
     }
@@ -52,6 +55,7 @@ impl Lexer {
         LexerCheckpoint {
             cursor: self.cursor,
             line_terminator_before: self.line_terminator_before,
+            line_start: self.line_start,
             template_substitutions: self.template_substitutions.clone(),
         }
     }
@@ -59,6 +63,7 @@ impl Lexer {
     pub(super) fn restore(&mut self, checkpoint: &LexerCheckpoint) {
         self.cursor = checkpoint.cursor;
         self.line_terminator_before = checkpoint.line_terminator_before;
+        self.line_start = checkpoint.line_start;
         self.template_substitutions
             .clone_from(&checkpoint.template_substitutions);
         self.pending = None;
@@ -90,6 +95,7 @@ impl Lexer {
                 ch if ch.is_whitespace() => {
                     if is_line_terminator(ch) {
                         self.line_terminator_before = true;
+                        self.line_start = true;
                     }
                     self.advance();
                 }
@@ -99,6 +105,10 @@ impl Lexer {
                 '#' => self.private_name(offset)?,
                 '/' if self.peek_next_char() == Some('/') => self.line_comment(),
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
+                '<' if self.remaining_source_starts_with("<!--") => self.line_comment(),
+                '-' if self.line_start && self.remaining_source_starts_with("-->") => {
+                    self.line_comment();
+                }
                 '0'..='9' => self.number(offset)?,
                 '"' | '\'' => self.string(offset, ch)?,
                 '`' => self.template_literal(offset)?,
@@ -662,6 +672,7 @@ impl Lexer {
             self.advance();
             if is_line_terminator(ch) {
                 self.line_terminator_before = true;
+                self.line_start = true;
                 break;
             }
         }
@@ -679,6 +690,7 @@ impl Lexer {
             }
             if self.peek_char().is_some_and(is_line_terminator) {
                 self.line_terminator_before = true;
+                self.line_start = true;
             }
             self.advance();
         }
@@ -704,6 +716,7 @@ impl Lexer {
             identifier_escaped,
         });
         self.line_terminator_before = false;
+        self.line_start = false;
     }
 
     fn advance(&mut self) -> Option<(usize, char)> {
@@ -737,6 +750,12 @@ impl Lexer {
         let current = self.peek_char()?;
         let next_cursor = self.cursor.checked_add(current.len_utf8())?;
         self.source.get(next_cursor..)?.chars().next()
+    }
+
+    fn remaining_source_starts_with(&self, prefix: &str) -> bool {
+        self.source
+            .get(self.cursor..)
+            .is_some_and(|source| source.starts_with(prefix))
     }
 
     const fn current_offset(&self) -> usize {
