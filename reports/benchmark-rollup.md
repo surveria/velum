@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T220116Z.md`
-- Task: PR #616: runtime: complete eval environment Test262 residual tranche
-- Performance: 5.28x (4/5 >1.00x) (from `rsqjs-test-report-20260713T220116Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T220116Z.md`)
+- `rsqjs-test-report-20260713T231857Z.md`
+- Task: PR #617: runtime: complete control-flow and small Test262 residual tranche
+- Performance: 5.33x (4/5 >1.00x) (from `rsqjs-test-report-20260713T231857Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T231857Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 101295 passed / 1283 failed (98.75%) (from `rsqjs-test-report-20260713T220116Z.md`)
+- Full Test262: 101499 passed / 1079 failed (98.95%) (from `rsqjs-test-report-20260713T231857Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -557,3 +557,4 @@ Latest report:
 | `20260713T194506Z` `6346c00` PR #613: runtime: close 201 expression and switch Test262 variants | 5.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 100797 passed / 1781 failed (98.26%) |
 | `20260713T205850Z` `a6ace88` PR #615: runtime: complete class statement Test262 residual tranche | 5.63x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101094 passed / 1484 failed (98.55%) |
 | `20260713T220116Z` `bede652` PR #616: runtime: complete eval environment Test262 residual tranche | 5.28x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101295 passed / 1283 failed (98.75%) |
+| `20260713T231857Z` `0a69f1f` PR #617: runtime: complete control-flow and small Test262 residual tranche | 5.33x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101499 passed / 1079 failed (98.95%) |
