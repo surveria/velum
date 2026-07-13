@@ -16,6 +16,8 @@ use crate::{
     value::Value,
 };
 
+mod iteration;
+
 /// Immutable atom-to-slot index shared by every call frame of one
 /// function, so per-call scope construction allocates only the value slots.
 #[derive(Debug)]
@@ -209,20 +211,6 @@ impl BindingScope {
 
     pub(crate) fn cells(&self) -> impl Iterator<Item = &BindingCell> {
         self.slots.iter()
-    }
-
-    pub(in crate::runtime) fn fresh_iteration_copy(&self) -> Result<Self> {
-        let mut slots = Vec::with_capacity(self.slots.len());
-        for cell in &self.slots {
-            slots.push(cell.detached_copy()?);
-        }
-        Ok(Self {
-            slots,
-            index: self.index.clone(),
-            compiled_scope: self.compiled_scope,
-            storage_ledger: None,
-            resource_stacks: Vec::new(),
-        })
     }
 
     pub(crate) fn from_compiled_slots(
@@ -647,14 +635,6 @@ impl BindingCell {
             }),
             kind,
         }))
-    }
-
-    fn detached_copy(&self) -> Result<Self> {
-        let binding = self.borrow()?.clone();
-        Ok(Self(Rc::new(BindingCellInner {
-            binding: RefCell::new(binding),
-            kind: self.kind(),
-        })))
     }
 
     pub fn value(&self, name: &str) -> Result<Value> {

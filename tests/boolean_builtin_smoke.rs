@@ -114,6 +114,16 @@ fn exposes_boolean_constructor_and_preserves_shadowing() -> TestResult {
 }
 
 #[test]
+fn exposes_false_as_the_boolean_prototype_value() -> TestResult {
+    ensure_value(
+        &Runtime::new().context().eval(
+            "Boolean.prototype.valueOf() === false && Boolean.prototype.toString() === 'false'",
+        )?,
+        &Value::Bool(true),
+    )
+}
+
+#[test]
 fn rejects_boolean_prototype_value_methods_for_wrong_receivers() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

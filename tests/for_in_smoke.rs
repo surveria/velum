@@ -161,12 +161,12 @@ fn skips_for_in_over_nullish_values() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(
-        r#"
+        r"
         let count = 0;
         for (let key in null) { count = count + 1; }
         for (let key in undefined) { count = count + 1; }
         count === 0 ? 42 : 0
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Number(42.0))
 }

@@ -534,7 +534,7 @@ impl Context {
                 }
             }
         }
-        let plans = self.run_bytecode_control_action(handle, &control, |context| {
+        let mut plans = self.run_bytecode_control_action(handle, &control, |context| {
             context.compile_structured_for_plans(parts)
         })?;
         loop {
@@ -561,7 +561,7 @@ impl Context {
                 }
             }
             if let StructuredForAction::Completion(completion) =
-                self.eval_structured_for_update(handle, &mut control, parts, &plans)?
+                self.eval_structured_for_update(handle, &mut control, parts, &mut plans)?
             {
                 self.park_bytecode_control(handle, control)?;
                 return Ok(Some(completion));
@@ -637,16 +637,19 @@ impl Context {
         Ok(StructuredForAction::Completion(completion))
     }
 
-    fn eval_structured_for_update(
+    fn eval_structured_for_update<'a>(
         &mut self,
         handle: super::control_continuation::BytecodeControlHandle,
         control: &mut BytecodeControlRecord,
-        parts: BytecodeForParts<'_>,
-        plans: &BytecodeForPlans<'_>,
+        parts: BytecodeForParts<'a>,
+        plans: &mut BytecodeForPlans<'a>,
     ) -> Result<StructuredForAction> {
         let phase = *control.loop_state_mut(BytecodeLoopKind::For)?.0;
         if parts.per_iteration && phase != BytecodeLoopPhase::Update {
             self.run_bytecode_control_action(handle, control, Self::freshen_lexical_scope)?;
+            *plans = self.run_bytecode_control_action(handle, control, |context| {
+                context.compile_structured_for_plans(parts)
+            })?;
         }
         if let Some(update) = parts.update {
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Update;
@@ -673,13 +676,6 @@ impl Context {
         &mut self,
         parts: BytecodeForParts<'a>,
     ) -> Result<BytecodeForPlans<'a>> {
-        if parts.per_iteration {
-            return Ok(BytecodeForPlans {
-                condition: None,
-                body: None,
-                update: None,
-            });
-        }
         let condition = if let Some(condition) = parts.condition {
             self.bind_bytecode_linear_plan(condition)?
         } else {

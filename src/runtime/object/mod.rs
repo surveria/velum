@@ -1,4 +1,5 @@
 use crate::error::{Error, JavaScriptErrorMetadata, Result};
+use crate::runtime::binding::scope::BindingCell;
 use crate::storage::symbol::JsSymbol;
 use crate::value::{ObjectId, Value};
 
@@ -132,6 +133,7 @@ struct Object {
     typed_array: Option<TypedArrayView>,
     is_raw_json: bool,
     arguments_brand: bool,
+    argument_parameter_map: Vec<Option<BindingCell>>,
     function_prototype_brand: FunctionPrototypeBrand,
     module_namespace: bool,
     shadow_realm: Option<crate::runtime::realm::RealmIndex>,
@@ -178,6 +180,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            argument_parameter_map: Vec::new(),
             function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
@@ -252,6 +255,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            argument_parameter_map: Vec::new(),
             function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
@@ -282,6 +286,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            argument_parameter_map: Vec::new(),
             function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,
@@ -312,6 +317,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            argument_parameter_map: Vec::new(),
             function_prototype_brand: FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,

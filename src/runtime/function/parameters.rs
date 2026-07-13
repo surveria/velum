@@ -190,6 +190,7 @@ impl Context {
         function: FunctionId,
         binding: FunctionArgumentsBinding,
         original_args: &[Value],
+        parameter_scope: &BindingScope,
     ) -> Result<BindingScope> {
         let frame = binding.frame();
         let scope = frame
@@ -202,7 +203,12 @@ impl Context {
         }
         self.ensure_extra_binding_capacity(1)?;
         let cell = BindingCell::new(
-            self.create_arguments_object(function, binding.unmapped(), original_args)?,
+            self.create_arguments_object(
+                function,
+                binding.unmapped(),
+                original_args,
+                parameter_scope,
+            )?,
             true,
             DeclKind::Var,
         );

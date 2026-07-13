@@ -9,6 +9,8 @@ use crate::{
 
 use super::state::BytecodeState;
 
+mod for_in;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BytecodeControlStateSlot {
     Condition,
@@ -204,16 +206,6 @@ impl BytecodeControlRecord {
         }
     }
 
-    pub(super) fn for_in(keys: Vec<String>, source: Option<Value>) -> Self {
-        Self::ForIn {
-            phase: BytecodeLoopPhase::Initialize,
-            keys: keys.into_iter(),
-            source,
-            body_state: BytecodeState::new(),
-            last: Value::Undefined,
-        }
-    }
-
     pub(super) const fn for_of(iterator: Option<ForOfIterator>) -> Self {
         Self::ForOf {
             phase: BytecodeLoopPhase::Initialize,
@@ -391,29 +383,6 @@ impl BytecodeControlRecord {
             return Err(Error::runtime("structured switch record mismatch"));
         };
         Ok((phase, next_case, default_case, discriminant))
-    }
-
-    pub(super) fn for_in_state_mut(
-        &mut self,
-    ) -> Result<(
-        &mut BytecodeLoopPhase,
-        &mut std::vec::IntoIter<String>,
-        &mut Value,
-    )> {
-        let Self::ForIn {
-            phase, keys, last, ..
-        } = self
-        else {
-            return Err(Error::runtime("structured for-in record mismatch"));
-        };
-        Ok((phase, keys, last))
-    }
-
-    pub(super) fn for_in_source(&self) -> Result<Option<&Value>> {
-        let Self::ForIn { source, .. } = self else {
-            return Err(Error::runtime("structured for-in record mismatch"));
-        };
-        Ok(source.as_ref())
     }
 
     pub(super) fn for_of_state_mut(&mut self) -> Result<(&mut BytecodeLoopPhase, &mut Value)> {

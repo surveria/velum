@@ -6,10 +6,10 @@ use crate::{
 };
 
 use super::{
-    AccessorPropertyUpdate, ArrayLength, OBJECT_CONSTRUCTOR_PROPERTY, Object, ObjectHeap,
-    ObjectPrimitiveValue, ObjectPropertyInit, ObjectPropertyValue, ObjectStructureSnapshot,
-    PROTOTYPE_PROPERTY, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
-    PropertyUpdate, RegExpValue, ShapeTable,
+    AccessorPropertyUpdate, ArrayIndex, ArrayLength, OBJECT_CONSTRUCTOR_PROPERTY, Object,
+    ObjectHeap, ObjectPrimitiveValue, ObjectPropertyInit, ObjectPropertyValue,
+    ObjectStructureSnapshot, PROTOTYPE_PROPERTY, PropertyConfigurable, PropertyEnumerable,
+    PropertyKey, PropertyLookup, PropertyUpdate, RegExpValue, ShapeTable,
 };
 
 impl ObjectHeap {
@@ -197,8 +197,14 @@ impl ObjectHeap {
         Ok(self.object(id)?.is_raw_json)
     }
 
-    pub(crate) fn mark_arguments_object(&mut self, id: ObjectId) -> Result<()> {
-        self.object_mut(id)?.arguments_brand = true;
+    pub(crate) fn mark_arguments_object(
+        &mut self,
+        id: ObjectId,
+        parameter_map: Vec<Option<crate::runtime::binding::scope::BindingCell>>,
+    ) -> Result<()> {
+        let object = self.object_mut(id)?;
+        object.arguments_brand = true;
+        object.argument_parameter_map = parameter_map;
         Ok(())
     }
 
@@ -373,6 +379,9 @@ impl ObjectHeap {
     }
 
     pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<ObjectPropertyValue> {
+        if let Some(cell) = self.argument_parameter_cell(id, property.name())? {
+            return cell.value(property.name()).map(ObjectPropertyValue::value);
+        }
         self.get_in_chain(id, property)
     }
 
@@ -430,8 +439,18 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<()> {
         let before = self.object(id)?.structure_snapshot();
+        let mapped = self.argument_parameter_cell(id, property_name)?;
         let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.set(property, property_name, value, shapes, max_properties)?;
+        object.set(
+            property,
+            property_name,
+            value.clone(),
+            shapes,
+            max_properties,
+        )?;
+        if let Some(cell) = mapped {
+            cell.assign(property_name, value)?;
+        }
         self.bump_if_structure_changed(id, before)
     }
 
@@ -439,6 +458,9 @@ impl ObjectHeap {
         let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         let deleted = object.delete(property, shapes)?;
+        if deleted {
+            self.remove_argument_parameter_mapping(id, property.name())?;
+        }
         self.bump_if_structure_changed(id, before)?;
         Ok(deleted)
     }
@@ -453,6 +475,41 @@ impl ObjectHeap {
 
     fn has_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         self.prototype_has_in_chain(id, property)
+    }
+
+    pub(in crate::runtime) fn argument_parameter_cell(
+        &self,
+        id: ObjectId,
+        property_name: &str,
+    ) -> Result<Option<crate::runtime::binding::scope::BindingCell>> {
+        let Some(index) = ArrayIndex::parse(property_name) else {
+            return Ok(None);
+        };
+        let position = index.position()?;
+        Ok(self
+            .object(id)?
+            .argument_parameter_map
+            .get(position)
+            .and_then(Clone::clone))
+    }
+
+    pub(in crate::runtime) fn remove_argument_parameter_mapping(
+        &mut self,
+        id: ObjectId,
+        property_name: &str,
+    ) -> Result<()> {
+        let Some(index) = ArrayIndex::parse(property_name) else {
+            return Ok(());
+        };
+        let position = index.position()?;
+        if let Some(mapped) = self
+            .object_mut(id)?
+            .argument_parameter_map
+            .get_mut(position)
+        {
+            *mapped = None;
+        }
+        Ok(())
     }
 
     pub(super) fn object(&self, id: ObjectId) -> Result<&Object> {

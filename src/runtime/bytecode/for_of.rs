@@ -152,7 +152,7 @@ impl Context {
         result
     }
 
-    fn for_in_of_target_is_lexical(target: &BytecodeForInTarget) -> bool {
+    const fn for_in_of_target_is_lexical(target: &BytecodeForInTarget) -> bool {
         matches!(
             target,
             BytecodeForInTarget::Binding {

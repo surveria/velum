@@ -1,9 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::object::{
-        ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable, PropertyLookup,
-    },
+    runtime::object::{ObjectPrimitiveValue, PropertyLookup},
     runtime::{Context, abstract_operations::to_boolean},
     value::{ObjectId, Value},
 };
@@ -126,18 +124,25 @@ impl Context {
 
     fn boolean_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype_property(
-            None,
-            ObjectPropertyInit::new(
-                constructor_key,
-                OBJECT_CONSTRUCTOR_PROPERTY,
-                constructor,
-                PropertyEnumerable::No,
-            ),
+        let object_prototype = self.objects.object_prototype_id(
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
-        )
+        )?;
+        let Value::Object(prototype) = self.objects.create_boxed_primitive(
+            ObjectPrimitiveValue::Bool(false),
+            object_prototype,
+            self.limits.max_objects,
+        )?
+        else {
+            return Err(Error::runtime("Boolean prototype is not an object"));
+        };
+        self.define_non_enumerable_object_property(
+            prototype,
+            OBJECT_CONSTRUCTOR_PROPERTY,
+            constructor,
+        )?;
+        Ok(prototype)
     }
 
     fn boolean_constructor_prototype(&mut self) -> Result<ObjectId> {
