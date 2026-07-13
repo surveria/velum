@@ -509,11 +509,10 @@ impl Context {
         value: Value,
     ) -> Result<bool> {
         if let Some(view) = self.objects.typed_array(id)? {
-            if index >= view.length() {
-                return Ok(true);
-            }
             let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
-            self.objects.set_typed_array_value(id, index, &element)?;
+            if index < view.length() {
+                self.objects.set_typed_array_value(id, index, &element)?;
+            }
             return Ok(true);
         }
         self.objects

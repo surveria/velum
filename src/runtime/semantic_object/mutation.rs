@@ -1,11 +1,11 @@
 use crate::{
-    error::Result,
+    error::{Error, Result},
     runtime::{
         Context,
         object::{
             DataPropertyDescriptor, DataPropertyUpdate, OwnPropertyDescriptor,
             PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
-            PropertyWritable,
+            PropertyWritable, TypedArrayPropertyIndex,
         },
         property::{DynamicPropertyKey, delete_property},
     },
@@ -38,6 +38,16 @@ impl Context {
                         property,
                         value,
                         object.clone(),
+                    )?)
+                } else if self
+                    .objects
+                    .typed_array_property_index(*id, property.name())?
+                    .is_some()
+                {
+                    SemanticPropertyWrite::Resolved(self.semantic_set_typed_array_property(
+                        *id,
+                        property.name(),
+                        &value,
                     )?)
                 } else {
                     self.ensure_object_prototype_intrinsic_for_ordinary_lookup(
@@ -289,11 +299,18 @@ impl Context {
             return Ok(Some(false));
         }
         if let Value::Object(id) = object_ref.value
-            && self
+            && let Some(index) = self
                 .objects
-                .typed_array_rejects_numeric_property(*id, property.name())?
+                .typed_array_property_index(*id, property.name())?
         {
-            return Ok(Some(true));
+            if object_ref.value == receiver {
+                return self
+                    .semantic_set_typed_array_property(*id, property.name(), &value)
+                    .map(Some);
+            }
+            if matches!(index, TypedArrayPropertyIndex::Invalid) {
+                return Ok(Some(true));
+            }
         }
         if let Value::Object(id) = object_ref.value
             && self.objects.is_proxy(*id)
@@ -324,6 +341,26 @@ impl Context {
         }
         self.reflect_define_receiver_property(property, value, receiver)
             .map(Some)
+    }
+
+    fn semantic_set_typed_array_property(
+        &mut self,
+        id: crate::value::ObjectId,
+        property_name: &str,
+        value: &Value,
+    ) -> Result<bool> {
+        let Some(view) = self.objects.typed_array(id)? else {
+            return Err(Error::runtime("typed array view is not available"));
+        };
+        let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
+        if let Some(TypedArrayPropertyIndex::Valid(index)) =
+            self.objects.typed_array_property_index(id, property_name)?
+        {
+            self.objects
+                .set_typed_array_value(id, index, &element)
+                .map(drop)?;
+        }
+        Ok(true)
     }
 
     fn reflect_write_with_descriptor(

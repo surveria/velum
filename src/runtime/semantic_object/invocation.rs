@@ -5,7 +5,9 @@ use crate::{
         abstract_operations::same_value,
         call::RuntimeCallArgs,
         control::Completion,
-        native::{IntlFunctionKind, IteratorFunctionKind, NativeFunctionKind},
+        native::{
+            DataViewFunctionKind, IntlFunctionKind, IteratorFunctionKind, NativeFunctionKind,
+        },
         roots::VmRootKind,
     },
     value::Value,
@@ -224,6 +226,9 @@ impl Context {
             )
         {
             return self.construct_async_disposable_stack_with_new_target(&new_target);
+        }
+        if kind == NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) {
+            return self.construct_data_view_with_new_target(args, &new_target);
         }
         self.construct_native_with_new_target(kind, args, constructor, &new_target)
     }

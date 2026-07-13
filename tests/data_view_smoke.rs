@@ -132,6 +132,41 @@ fn validates_constructor_ranges_receivers_and_method_offsets() -> TestResult {
     )
 }
 
+#[test]
+fn tracks_resizable_buffer_length_and_revalidates_after_prototype_lookup() -> TestResult {
+    ensure_eval(
+        r#"
+        let buffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let view = new DataView(buffer, 1);
+        let lengths = [view.byteLength];
+        buffer.resize(6);
+        lengths.push(view.byteLength);
+        buffer.resize(1);
+        lengths.push(view.byteLength);
+        buffer.resize(0);
+        let outOfBounds = false;
+        try { view.byteLength; } catch (error) {
+            outOfBounds = error instanceof TypeError;
+        }
+
+        let customBuffer = new ArrayBuffer(3, { maxByteLength: 3 });
+        let newTarget = function () {}.bind(null);
+        Object.defineProperty(newTarget, "prototype", {
+            get: function () {
+                customBuffer.resize(2);
+                return undefined;
+            }
+        });
+        let custom = Reflect.construct(DataView, [customBuffer, 2], newTarget);
+
+        lengths.join("|") === "3|5|0" && outOfBounds &&
+            custom.byteOffset === 2 && custom.byteLength === 0 &&
+            Object.getPrototypeOf(custom) === DataView.prototype ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

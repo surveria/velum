@@ -174,7 +174,12 @@ impl Context {
                 }
                 Err(error) => Err(error),
             },
-            TypedArrayFunctionKind::ToLocaleString => self.eval_direct_array_join(&[], this_value),
+            TypedArrayFunctionKind::ToLocaleString => match self.typed_array_receiver(this_value) {
+                Ok((_, view)) => {
+                    self.eval_array_to_locale_string_with_length(this_value, view.length())
+                }
+                Err(error) => Err(error),
+            },
             _ => {
                 return Some(Err(Error::runtime(
                     "typed array array method was routed incorrectly",

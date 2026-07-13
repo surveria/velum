@@ -313,6 +313,86 @@ fn supports_typed_array_callbacks_search_and_copy_methods() -> TestResult {
 }
 
 #[test]
+fn typed_array_to_locale_string_dispatches_each_element() -> TestResult {
+    ensure_eval(
+        r#"
+        let calls = [];
+        Number.prototype.toLocaleString = function () {
+            calls.push(Number(this));
+            return "value-" + this;
+        };
+        let sample = new Uint8Array([3, 1, 2]);
+        Object.defineProperty(sample, "length", {
+            get: function () { throw new Error("length property must not be read"); }
+        });
+        sample.toLocaleString() === "value-3,value-1,value-2" &&
+            calls.join("|") === "3|1|2" ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn typed_array_numeric_writes_preserve_conversion_and_reflect_results() -> TestResult {
+    ensure_eval(
+        r#"
+        let sample = new Uint8Array([1]);
+        let conversions = 0;
+        let value = {
+            valueOf: function () {
+                conversions += 1;
+                return 7;
+            }
+        };
+        let setInvalid = Reflect.set(sample, "2", value);
+        let setNegativeZero = Reflect.set(sample, "-0", value);
+        let assignmentThrew = false;
+        try {
+            sample["3"] = {
+                valueOf: function () { throw new Error("converted"); }
+            };
+        } catch (error) {
+            assignmentThrew = error.message === "converted";
+        }
+        Object.preventExtensions(sample);
+        let defineOrdinary = Reflect.defineProperty(sample, "1.0", { value: 9 });
+
+        setInvalid && setNegativeZero && assignmentThrew && conversions === 2 &&
+            sample[2] === undefined && sample["-0"] === undefined &&
+            defineOrdinary === false ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn typed_array_intrinsic_is_abstract_but_constructable() -> TestResult {
+    ensure_eval(
+        r#"
+        let TypedArray = Object.getPrototypeOf(Uint8Array);
+        let propagated = false;
+        let source = {};
+        Object.defineProperty(source, "length", {
+            get: function () { throw new Error("source length"); }
+        });
+        try {
+            TypedArray.from(source);
+        } catch (error) {
+            propagated = error.message === "source length";
+        }
+        let abstract = false;
+        try {
+            new TypedArray();
+        } catch (error) {
+            abstract = error instanceof TypeError;
+        }
+        propagated && abstract ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn typed_array_iteration_uses_internal_length_and_live_view_values() -> TestResult {
     ensure_eval(
         r#"

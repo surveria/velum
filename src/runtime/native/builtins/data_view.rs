@@ -47,7 +47,22 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.as_slice();
+        self.construct_data_view_with_optional_new_target(args.as_slice(), None)
+    }
+
+    pub(in crate::runtime) fn construct_data_view_with_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        self.construct_data_view_with_optional_new_target(args, Some(new_target))
+    }
+
+    fn construct_data_view_with_optional_new_target(
+        &mut self,
+        values: &[Value],
+        new_target: Option<&Value>,
+    ) -> Result<Value> {
         let Some(Value::Object(buffer_object)) = values.first() else {
             return Err(Error::type_error(DATA_VIEW_BUFFER_TYPE_ERROR));
         };
@@ -74,11 +89,36 @@ impl Context {
                     DATA_VIEW_RANGE_ERROR,
                 ));
             }
-            requested
+            Some(requested)
+        } else if buffer.is_resizable() {
+            None
         } else {
-            available
+            Some(available)
         };
-        let prototype = self.data_view_constructor_prototype()?;
+        let prototype = if let Some(new_target) = new_target {
+            self.constructor_instance_prototype_with_default(
+                new_target,
+                NativeFunctionKind::DataView(DataViewFunctionKind::Constructor),
+            )?
+        } else {
+            self.data_view_constructor_prototype()?
+        };
+        if buffer.is_detached() {
+            return Err(Error::type_error("DataView buffer is detached"));
+        }
+        let current_length = buffer.byte_length();
+        if byte_offset > current_length
+            || byte_length.is_some_and(|length| {
+                byte_offset
+                    .checked_add(length)
+                    .is_none_or(|end| end > current_length)
+            })
+        {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                DATA_VIEW_RANGE_ERROR,
+            ));
+        }
         let view = DataViewView::new(buffer, *buffer_object, byte_offset, byte_length);
         self.objects
             .create_data_view(view, prototype, self.limits.max_objects)

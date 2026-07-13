@@ -613,23 +613,6 @@ impl ObjectHeap {
         Ok(typed_array_property_index(property, view.length()))
     }
 
-    pub(crate) fn typed_array_rejects_numeric_property(
-        &self,
-        id: ObjectId,
-        property: &str,
-    ) -> Result<bool> {
-        if typed_array_property_index(property, usize::MAX).is_none() {
-            return Ok(false);
-        }
-        let Some(view) = self.object(id)?.typed_array.as_ref() else {
-            return Ok(false);
-        };
-        Ok(matches!(
-            typed_array_property_index(property, view.length()),
-            Some(TypedArrayPropertyIndex::Invalid)
-        ))
-    }
-
     pub(crate) fn typed_array_value(&self, id: ObjectId, index: usize) -> Result<Option<Value>> {
         let Some(view) = self.object(id)?.typed_array.as_ref() else {
             return Ok(None);

@@ -328,7 +328,7 @@ pub(in crate::runtime) struct DataViewView {
     buffer: ByteBuffer,
     buffer_object: ObjectId,
     byte_offset: usize,
-    byte_length: usize,
+    byte_length: Option<usize>,
 }
 
 impl DataViewView {
@@ -336,7 +336,7 @@ impl DataViewView {
         buffer: ByteBuffer,
         buffer_object: ObjectId,
         byte_offset: usize,
-        byte_length: usize,
+        byte_length: Option<usize>,
     ) -> Self {
         Self {
             buffer,
@@ -357,7 +357,10 @@ impl DataViewView {
 
     pub(in crate::runtime) fn byte_length(&self) -> Result<usize> {
         self.ensure_in_bounds()?;
-        Ok(self.byte_length)
+        if let Some(byte_length) = self.byte_length {
+            return Ok(byte_length);
+        }
+        Ok(self.buffer.byte_length().saturating_sub(self.byte_offset))
     }
 
     pub(in crate::runtime) fn read(
@@ -390,7 +393,7 @@ impl DataViewView {
         let relative_end = offset
             .checked_add(width)
             .ok_or_else(|| Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR))?;
-        if relative_end > self.byte_length {
+        if relative_end > self.byte_length()? {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 DATA_VIEW_RANGE_ERROR,
@@ -405,10 +408,14 @@ impl DataViewView {
         if self.buffer.is_detached() {
             return Err(Error::type_error("DataView buffer is detached"));
         }
-        let Some(end) = self.byte_offset.checked_add(self.byte_length) else {
-            return Err(Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR));
-        };
-        if end > self.buffer.byte_length() {
+        if let Some(byte_length) = self.byte_length {
+            let Some(end) = self.byte_offset.checked_add(byte_length) else {
+                return Err(Error::limit(DATA_VIEW_OFFSET_LIMIT_ERROR));
+            };
+            if end > self.buffer.byte_length() {
+                return Err(Error::type_error("DataView is out of bounds"));
+            }
+        } else if self.byte_offset > self.buffer.byte_length() {
             return Err(Error::type_error("DataView is out of bounds"));
         }
         Ok(())

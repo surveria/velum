@@ -205,4 +205,18 @@ impl ObjectHeap {
         let object = self.object(id)?;
         Ok(object.prototype.map_or(Value::Null, Value::Object))
     }
+
+    pub(crate) fn prototype_chain_has_typed_array(&self, id: ObjectId) -> Result<bool> {
+        let mut current = self.object(id)?.prototype;
+        let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
+        while let Some(current_id) = current {
+            budget.enter_next()?;
+            let object = self.object(current_id)?;
+            if object.typed_array.is_some() {
+                return Ok(true);
+            }
+            current = object.prototype;
+        }
+        Ok(false)
+    }
 }
