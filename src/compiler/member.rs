@@ -94,6 +94,22 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
+    pub(super) fn compile_optional_static_member_expr(&mut self, expr: &Expr) -> Result<()> {
+        let Expr::OptionalMember {
+            object,
+            property,
+            access,
+        } = expr
+        else {
+            return Err(Error::runtime("expression is not an optional member"));
+        };
+        self.compile_expr(object)?;
+        self.emit(BytecodeInstruction::OptionalStaticMember {
+            property: Self::compile_property(property, *access),
+        });
+        Ok(())
+    }
+
     pub(super) fn compile_computed_member_expr(
         &mut self,
         object: &Expression,

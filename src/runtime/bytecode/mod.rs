@@ -120,6 +120,7 @@ impl Context {
             | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::WebCompatCallAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::OptionalStaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
@@ -211,6 +212,7 @@ impl Context {
             | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::WebCompatCallAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::OptionalStaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
@@ -475,6 +477,17 @@ impl Context {
             }
             BytecodeInstruction::StaticMember { property } => {
                 self.eval_bytecode_static_member_instruction(state, property, next)
+            }
+            BytecodeInstruction::OptionalStaticMember { property } => {
+                let object = state.stack.pop()?;
+                let value = if matches!(object, Value::Undefined | Value::Null) {
+                    Value::Undefined
+                } else {
+                    self.get_static_property_value(&object, property.name(), property.access())?
+                };
+                state.stack.push(value);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::ArrayLength { property } => {
                 let object = state.stack.pop()?;

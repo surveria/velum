@@ -155,6 +155,10 @@ impl Parser {
                 expr = self.member_dot_suffix(expr)?;
                 continue;
             }
+            if self.match_kind(&TokenKind::QuestionDot) {
+                expr = self.optional_member_dot_suffix(expr)?;
+                continue;
+            }
             if self.match_kind(&TokenKind::LBracket) {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;

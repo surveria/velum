@@ -87,6 +87,7 @@ impl LayoutBuilder {
                 self.analyze_expr(expr, scope, function)
             }
             Expr::Member { object, .. }
+            | Expr::OptionalMember { object, .. }
             | Expr::PrivateMember { object, .. }
             | Expr::PrivateIn { object, .. } => self.analyze_expr(object, scope, function),
             Expr::ComputedMember {

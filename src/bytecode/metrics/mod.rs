@@ -182,6 +182,7 @@ impl BytecodeInstruction {
             | Self::CompoundArrayIndexProperty { .. }
             | Self::CompoundComputedProperty { .. }
             | Self::StaticMember { .. }
+            | Self::OptionalStaticMember { .. }
             | Self::ArrayLength { .. }
             | Self::ArrayIndexMember { .. }
             | Self::ComputedMember { .. }

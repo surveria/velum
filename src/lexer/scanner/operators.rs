@@ -129,6 +129,11 @@ impl Lexer {
             } else {
                 self.push(TokenKind::QuestionQuestion, offset);
             }
+        } else if self.peek_char() == Some('.')
+            && !self.peek_next_char().is_some_and(|ch| ch.is_ascii_digit())
+        {
+            self.advance();
+            self.push(TokenKind::QuestionDot, offset);
         } else {
             self.push(TokenKind::Question, offset);
         }

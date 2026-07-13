@@ -33,6 +33,21 @@ impl Parser {
         ))
     }
 
+    /// Parses a static optional member suffix after its consumed `?.` token.
+    pub(super) fn optional_member_dot_suffix(&mut self, expr: Expression) -> Result<Expression> {
+        let start = expr.span();
+        let property = self.consume_property_name("expected property name after '?.'")?;
+        let access = self.static_property_access()?;
+        Ok(self.expression_node(
+            start,
+            Expr::OptionalMember {
+                object: Box::new(expr),
+                property,
+                access,
+            },
+        ))
+    }
+
     /// Parses one `[expression]` member suffix after its consumed bracket,
     /// folding literal keys into static member accesses.
     pub(super) fn member_bracket_suffix(&mut self, expr: Expression) -> Result<Expression> {

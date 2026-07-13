@@ -666,6 +666,7 @@ impl CaptureBindingCollector {
                 self.collect_expr(expr);
             }
             Expr::Member { object, .. }
+            | Expr::OptionalMember { object, .. }
             | Expr::PrivateMember { object, .. }
             | Expr::PrivateIn { object, .. } => self.collect_expr(object),
             Expr::ComputedMember {

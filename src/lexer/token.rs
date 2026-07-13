@@ -135,6 +135,7 @@ pub enum TokenKind {
     OrOrEqual,
     QuestionQuestion,
     QuestionQuestionEqual,
+    QuestionDot,
     Question,
     Colon,
     Dot,

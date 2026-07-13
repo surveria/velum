@@ -252,6 +252,7 @@ impl Parser {
             | Expr::SuperComputedPropertyAssignment { .. }
             | Expr::PrivateAssignment { .. }
             | Expr::PrivateIn { .. }
+            | Expr::OptionalMember { .. }
             | Expr::Call { .. }
             | Expr::DynamicImport { .. }
             | Expr::Function { .. }
