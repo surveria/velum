@@ -18,6 +18,7 @@ mod plain_date_time;
 mod plain_date_time_options;
 mod plain_month_day;
 mod plain_time;
+mod plain_year_month;
 
 use crate::runtime::call::RuntimeCallArgs;
 use crate::runtime::native::{TEMPORAL_NAME, TemporalFunctionKind};
