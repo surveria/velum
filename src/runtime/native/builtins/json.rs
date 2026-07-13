@@ -1,16 +1,15 @@
-use serde_json::{Map as JsonMap, Value as JsonValue};
-
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
-    value::{ErrorName, ObjectId, Value, format_ecmascript_number},
+    runtime::{Context, roots::VmRootKind},
+    value::{ObjectId, Value, format_ecmascript_number},
 };
 
 use super::{
     JSON_IS_RAW_JSON_NAME, JSON_NAME, JSON_PARSE_NAME, JSON_RAW_JSON_NAME, JSON_STRINGIFY_NAME,
-    NativeFunctionKind,
+    NativeFunctionKind, json_parse::ParsedJson, json_parse::parse_json_text,
+    json_quote::quote_json_string,
 };
 
 const JSON_ARRAY_CLOSE: &str = "]";
@@ -27,7 +26,6 @@ const JSON_OBJECT_OPEN: &str = "{";
 const JSON_SPACE: &str = " ";
 const JSON_TO_JSON_NAME: &str = "toJSON";
 const JSON_TRUE: &str = "true";
-const JSON_UNSUPPORTED_NUMBER: &str = "JSON number cannot be represented as f64";
 
 #[derive(Debug, Clone)]
 enum JsonReplacer {
@@ -114,9 +112,8 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let text = self.json_parse_text(args.first())?;
-        self.check_string_len(&text)?;
-        let value = serde_json::from_str(&text)
-            .map_err(|error| Error::exception(ErrorName::SyntaxError, error.to_string()))?;
+        self.check_utf16_string_len(&text)?;
+        let value = parse_json_text(&text, self.limits.max_expression_depth)?;
         let value = self.value_from_json(value)?;
         let Some(reviver) = args.get(1) else {
             return Ok(value);
@@ -124,6 +121,8 @@ impl Context {
         if !self.semantic_is_callable(reviver)? {
             return Ok(value);
         }
+        let _value_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&value))?;
         let holder = self.create_json_wrapper(value)?;
         self.internalize_json_property(&holder, JSON_EMPTY_KEY, reviver)
     }
@@ -163,36 +162,41 @@ impl Context {
         self.define_non_enumerable_object_property(object, name, function)
     }
 
-    fn value_from_json(&mut self, value: JsonValue) -> Result<Value> {
+    fn value_from_json(&mut self, value: ParsedJson) -> Result<Value> {
         match value {
-            JsonValue::Null => Ok(Value::Null),
-            JsonValue::Bool(value) => Ok(Value::Bool(value)),
-            JsonValue::Number(value) => value
-                .as_f64()
-                .map(Value::Number)
-                .ok_or_else(|| Error::runtime(JSON_UNSUPPORTED_NUMBER)),
-            JsonValue::String(value) => self.heap_string_value(&value),
-            JsonValue::Array(values) => self.array_from_json(values),
-            JsonValue::Object(object) => self.object_from_json(object),
+            ParsedJson::Null => Ok(Value::Null),
+            ParsedJson::Bool(value) => Ok(Value::Bool(value)),
+            ParsedJson::Number(value) => Ok(Value::Number(value)),
+            ParsedJson::String(value) => self.heap_utf16_string_value(&value),
+            ParsedJson::Array(values) => self.array_from_json(values),
+            ParsedJson::Object(object) => self.object_from_json(object),
         }
     }
 
-    fn array_from_json(&mut self, values: Vec<JsonValue>) -> Result<Value> {
+    fn array_from_json(&mut self, values: Vec<ParsedJson>) -> Result<Value> {
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
-            elements.push(self.value_from_json(value)?);
+            let value = self.value_from_json(value)?;
+            roots.add_values(std::iter::once(&value))?;
+            elements.push(value);
         }
         self.create_array_from_elements(elements)
     }
 
-    fn object_from_json(&mut self, object: JsonMap<String, JsonValue>) -> Result<Value> {
+    fn object_from_json(&mut self, object: Vec<(Vec<u16>, ParsedJson)>) -> Result<Value> {
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         let mut names = Vec::with_capacity(object.len());
         let mut values = Vec::with_capacity(object.len());
         for (key, value) in object {
+            self.check_utf16_string_len(&key)?;
+            let key = String::from_utf16_lossy(&key);
             self.check_string_len(&key)?;
             let property = self.intern_property_key(&key)?;
             names.push(key);
-            values.push((property, self.value_from_json(value)?));
+            let value = self.value_from_json(value)?;
+            roots.add_values(std::iter::once(&value))?;
+            values.push((property, value));
         }
         let properties = names
             .iter()
@@ -443,7 +447,7 @@ impl Context {
             Value::Bool(value) => Ok(Some(Self::stringify_json_bool(*value))),
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
             Value::BigInt(_) => Err(Error::type_error("Do not know how to serialize a BigInt")),
-            Value::String(value) => self.stringify_json_string(value.as_str()).map(Some),
+            Value::String(value) => self.stringify_json_string(value.as_utf16()).map(Some),
             Value::Object(id) => {
                 if let Some(text) = self.raw_json_text(*id)? {
                     return Ok(Some(text));
@@ -511,7 +515,7 @@ impl Context {
             let Some(value) = self.stringify_json_property(&holder, &key, state)? else {
                 continue;
             };
-            let key = self.stringify_json_string(&key)?;
+            let key = self.stringify_json_string(&key.encode_utf16().collect::<Vec<_>>())?;
             members.push(JsonObjectMember::new(key, value));
         }
         let result = self.format_json_object(&members, state, &stepback);
@@ -639,11 +643,8 @@ impl Context {
         self.push_json_fragment(output, &member.value)
     }
 
-    fn stringify_json_string(&self, value: &str) -> Result<String> {
-        let text = serde_json::to_string(value)
-            .map_err(|error| Error::runtime(format!("JSON.stringify string failed: {error}")))?;
-        self.check_string_len(&text)?;
-        Ok(text)
+    fn stringify_json_string(&self, value: &[u16]) -> Result<String> {
+        quote_json_string(value, self.limits.max_string_len)
     }
 
     fn push_json_fragment(&self, output: &mut String, fragment: &str) -> Result<()> {
@@ -709,9 +710,8 @@ impl Context {
             return self.json_object_to_number(value).map(Value::Number);
         }
         if self.objects.string_object_value(*id)?.is_some() {
-            return self
-                .json_object_to_string(value)
-                .and_then(|text| self.heap_string_value(&text));
+            let units = self.to_utf16_string(value)?;
+            return self.heap_utf16_string_value(&units);
         }
         Ok(value.clone())
     }

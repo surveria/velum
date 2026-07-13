@@ -347,3 +347,69 @@ fn stringify_cycles_throw_type_error() -> TestResult {
         "TypeError",
     )
 }
+
+#[test]
+fn json_uses_ecmascript_numbers_and_utf16_strings() -> TestResult {
+    ensure_string(
+        r#"
+        const escapedHigh = JSON.parse('"\\ud800"');
+        const escapedLow = JSON.parse('"\\udc00"');
+        const directHigh = JSON.parse(String.fromCharCode(0x22, 0xd800, 0x22));
+        const boxedHigh = new String("\ud800");
+        [
+            JSON.parse("1e999") === Infinity,
+            JSON.parse("-1e999") === -Infinity,
+            Object.is(JSON.parse("-0"), -0),
+            escapedHigh.charCodeAt(0) === 0xd800,
+            escapedLow.charCodeAt(0) === 0xdc00,
+            directHigh.charCodeAt(0) === 0xd800,
+            JSON.stringify("\ud800") === '"\\ud800"',
+            JSON.stringify("\udc00") === '"\\udc00"',
+            JSON.stringify(boxedHigh) === '"\\ud800"',
+            JSON.stringify(JSON.rawJSON('"\\ud800"')) === '"\\ud800"',
+            JSON.stringify(JSON.rawJSON("1e999")) === "1e999"
+        ].join(":")
+        "#,
+        "true:true:true:true:true:true:true:true:true:true:true",
+    )
+}
+
+#[test]
+fn json_parse_accepts_engine_bounded_deep_input() -> TestResult {
+    let depth = 160_usize;
+    let json = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
+    let source = format!(
+        r"
+        let value = JSON.parse('{json}');
+        for (let index = 0; index < {depth}; index = index + 1) {{
+            value = value[0];
+        }}
+        value === 0 ? 42 : 0
+        "
+    );
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(&source)?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn json_parse_rejects_non_json_number_and_container_grammar() -> TestResult {
+    ensure_string(
+        r#"
+        const invalid = ["01", "+1", "1.", "1e", "[1,]", '{"a":1,}', '"\\x41"'];
+        let syntaxErrors = 0;
+        for (let index = 0; index < invalid.length; index = index + 1) {
+            try {
+                JSON.parse(invalid[index]);
+            } catch (error) {
+                if (error instanceof SyntaxError) {
+                    syntaxErrors = syntaxErrors + 1;
+                }
+            }
+        }
+        String(syntaxErrors) + ":" + String(invalid.length)
+        "#,
+        "7:7",
+    )
+}

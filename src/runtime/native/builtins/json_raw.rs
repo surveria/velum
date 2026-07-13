@@ -1,5 +1,3 @@
-use serde_json::Value as JsonValue;
-
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -7,6 +5,8 @@ use crate::{
     runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
     value::{ErrorName, ObjectId, Value},
 };
+
+use super::json_parse::parse_json_text;
 
 const JSON_RAW_JSON_PROPERTY: &str = "rawJSON";
 const RAW_JSON_EMPTY_ERROR: &str = "JSON.rawJSON text must not be empty";
@@ -26,8 +26,8 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let text = self.raw_json_to_string(args.first())?;
-        Self::validate_raw_json_text(&text)?;
-        let property_value = self.heap_string_value(&text)?;
+        self.validate_raw_json_text(&text)?;
+        let property_value = self.heap_utf16_string_value(&text)?;
         let Value::Object(id) = self
             .objects
             .create_with_exact_prototype(None, self.limits.max_objects)?
@@ -79,11 +79,11 @@ impl Context {
         Self::raw_json_stored_text(&value).map(Some)
     }
 
-    fn raw_json_to_string(&mut self, value: Option<&Value>) -> Result<String> {
+    fn raw_json_to_string(&mut self, value: Option<&Value>) -> Result<Vec<u16>> {
         let Some(value) = value else {
-            return self.to_string(&Value::Undefined);
+            return self.to_utf16_string(&Value::Undefined);
         };
-        self.to_string(value).map_err(|error| {
+        self.to_utf16_string(value).map_err(|error| {
             if matches!(value, Value::Symbol(_)) {
                 return Error::type_error(RAW_JSON_SYMBOL_ERROR);
             }
@@ -98,34 +98,31 @@ impl Context {
             .ok_or_else(|| Error::runtime("RawJSON text property is not a string"))
     }
 
-    fn validate_raw_json_text(text: &str) -> Result<()> {
+    fn validate_raw_json_text(&self, text: &[u16]) -> Result<()> {
         if text.is_empty() {
             return Err(Self::raw_json_syntax_error(RAW_JSON_EMPTY_ERROR));
         }
         if text
-            .as_bytes()
             .first()
-            .zip(text.as_bytes().last())
+            .zip(text.last())
             .is_none_or(|(first, last)| Self::is_forbidden_raw_json_edge(*first, *last))
         {
             return Err(Self::raw_json_syntax_error(RAW_JSON_INVALID_ERROR));
         }
-        match serde_json::from_str::<JsonValue>(text) {
-            Ok(JsonValue::Array(_) | JsonValue::Object(_)) | Err(_) => {
-                Err(Self::raw_json_syntax_error(RAW_JSON_INVALID_ERROR))
-            }
-            Ok(
-                JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_),
-            ) => Ok(()),
+        let value = parse_json_text(text, self.limits.max_expression_depth)
+            .map_err(|_| Self::raw_json_syntax_error(RAW_JSON_INVALID_ERROR))?;
+        if value.is_scalar() {
+            return Ok(());
         }
+        Err(Self::raw_json_syntax_error(RAW_JSON_INVALID_ERROR))
     }
 
-    const fn is_forbidden_raw_json_edge(first: u8, last: u8) -> bool {
+    const fn is_forbidden_raw_json_edge(first: u16, last: u16) -> bool {
         Self::is_json_whitespace(first) || Self::is_json_whitespace(last)
     }
 
-    const fn is_json_whitespace(value: u8) -> bool {
-        matches!(value, b'\t' | b'\n' | b'\r' | b' ')
+    const fn is_json_whitespace(value: u16) -> bool {
+        matches!(value, 0x0009 | 0x000a | 0x000d | 0x0020)
     }
 
     fn raw_json_syntax_error(message: &str) -> Error {

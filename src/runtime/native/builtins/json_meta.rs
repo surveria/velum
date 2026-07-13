@@ -38,11 +38,11 @@ impl Context {
     pub(in crate::runtime::native) fn json_parse_text(
         &mut self,
         value: Option<&Value>,
-    ) -> Result<String> {
+    ) -> Result<Vec<u16>> {
         let Some(value) = value else {
-            return self.to_string(&Value::Undefined);
+            return self.to_utf16_string(&Value::Undefined);
         };
-        self.to_string(value)
+        self.to_utf16_string(value)
     }
 
     fn json_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {

@@ -873,7 +873,6 @@ dependencies = [
  "num-traits",
  "parking_lot",
  "regress",
- "serde_json",
  "temporal_rs",
  "thiserror",
  "unicode-ident",
