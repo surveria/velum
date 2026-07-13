@@ -202,10 +202,8 @@ impl Context {
             let tag = self.locale_source_tag(value)?;
             return Ok(vec![super::locale::canonicalize_locale_tag(&tag)?]);
         }
-        if matches!(value, Value::Null) {
-            return Err(Error::type_error("Intl locale list is invalid"));
-        }
-        let length_value = self.get_named(value, "length")?;
+        let object = self.object_to_object(value)?;
+        let length_value = self.get_named(&object, "length")?;
         let length = Self::length_to_usize(
             self.to_length(&length_value)?,
             "Intl locale list length exceeded supported range",
@@ -215,10 +213,10 @@ impl Context {
             self.step()?;
             let name = index.to_string();
             let lookup = self.property_lookup(&name);
-            if !self.has_property_value_with_lookup(value, lookup)? {
+            if !self.has_property_value_with_lookup(&object, lookup)? {
                 continue;
             }
-            let item = self.get_named(value, &name)?;
+            let item = self.get_named(&object, &name)?;
             if item.string_text().is_none() && !is_object_value(&item) {
                 return Err(Error::type_error("Intl locale entry is invalid"));
             }
