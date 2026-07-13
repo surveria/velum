@@ -235,17 +235,21 @@ impl Context {
                 Some(self.eval_date_prototype_to_iso_string(this_value))
             }
             DateFunctionKind::PrototypeToJson => Some(self.eval_date_prototype_to_json(this_value)),
-            DateFunctionKind::PrototypeToLocaleDateString => {
-                Some(self.eval_date_prototype_to_locale_date_string(this_value))
-            }
-            DateFunctionKind::PrototypeToLocaleString => Some(if args.as_slice().is_empty() {
-                self.eval_date_prototype_to_string(this_value)
-            } else {
-                self.format_temporal_locale_string(this_value, args)
-            }),
-            DateFunctionKind::PrototypeToLocaleTimeString => {
-                Some(self.eval_date_prototype_to_locale_time_string(this_value))
-            }
+            DateFunctionKind::PrototypeToLocaleDateString => Some(self.format_date_locale_string(
+                this_value,
+                args,
+                super::intl::DateLocaleDefaults::Date,
+            )),
+            DateFunctionKind::PrototypeToLocaleString => Some(self.format_date_locale_string(
+                this_value,
+                args,
+                super::intl::DateLocaleDefaults::All,
+            )),
+            DateFunctionKind::PrototypeToLocaleTimeString => Some(self.format_date_locale_string(
+                this_value,
+                args,
+                super::intl::DateLocaleDefaults::Time,
+            )),
             DateFunctionKind::PrototypeToString => {
                 Some(self.eval_date_prototype_to_string(this_value))
             }
@@ -495,20 +499,6 @@ impl Context {
             return Ok(Value::Null);
         }
         self.eval_date_prototype_to_iso_string(this_value)
-    }
-
-    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_date_string(
-        &mut self,
-        this_value: &Value,
-    ) -> Result<Value> {
-        self.eval_date_prototype_to_date_string(this_value)
-    }
-
-    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_time_string(
-        &mut self,
-        this_value: &Value,
-    ) -> Result<Value> {
-        self.eval_date_prototype_to_time_string(this_value)
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_to_string(

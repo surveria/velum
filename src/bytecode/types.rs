@@ -505,6 +505,9 @@ pub enum BytecodeInstruction {
     StaticMember {
         property: BytecodeProperty,
     },
+    OptionalStaticMember {
+        property: BytecodeProperty,
+    },
     /// Reads a private slot with brand and accessor semantics.
     PrivateMember {
         property: BytecodePrivateName,

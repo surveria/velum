@@ -100,6 +100,7 @@ impl BytecodeCompiler<'_> {
                 property,
                 access,
             } => return self.compile_static_member_expr(object, property, *access),
+            Expr::OptionalMember { .. } => return self.compile_optional_static_member_expr(expr),
             Expr::ComputedMember {
                 object,
                 property,

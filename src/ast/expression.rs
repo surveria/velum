@@ -161,6 +161,11 @@ pub enum Expr {
         property: StaticName,
         access: StaticPropertyAccessId,
     },
+    OptionalMember {
+        object: Box<Expression>,
+        property: StaticName,
+        access: StaticPropertyAccessId,
+    },
     ComputedMember {
         object: Box<Expression>,
         property: Box<Expression>,

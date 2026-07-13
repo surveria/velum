@@ -9,6 +9,17 @@ use crate::{
 use super::{Parser, property_name::keyword_property_name};
 
 impl Parser {
+    pub(super) fn is_optional_chain(expr: &Expression) -> bool {
+        match expr.kind() {
+            Expr::OptionalMember { .. } => true,
+            Expr::Member { object, .. }
+            | Expr::ComputedMember { object, .. }
+            | Expr::PrivateMember { object, .. } => Self::is_optional_chain(object),
+            Expr::Call { callee, .. } => Self::is_optional_chain(callee),
+            _ => false,
+        }
+    }
+
     /// Parses one `.name` or `.#name` member suffix after its consumed dot.
     pub(super) fn member_dot_suffix(&mut self, expr: Expression) -> Result<Expression> {
         let start = expr.span();
@@ -26,6 +37,21 @@ impl Parser {
         Ok(self.expression_node(
             start,
             Expr::Member {
+                object: Box::new(expr),
+                property,
+                access,
+            },
+        ))
+    }
+
+    /// Parses a static optional member suffix after its consumed `?.` token.
+    pub(super) fn optional_member_dot_suffix(&mut self, expr: Expression) -> Result<Expression> {
+        let start = expr.span();
+        let property = self.consume_property_name("expected property name after '?.'")?;
+        let access = self.static_property_access()?;
+        Ok(self.expression_node(
+            start,
+            Expr::OptionalMember {
                 object: Box::new(expr),
                 property,
                 access,

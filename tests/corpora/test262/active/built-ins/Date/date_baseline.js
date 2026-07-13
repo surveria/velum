@@ -146,14 +146,14 @@ if (setYearInvalidResult === setYearInvalidResult || setYearInvalid.getTime() ==
 if (Date.prototype.toGMTString !== Date.prototype.toUTCString) {
   throw new Test262Error("Date.prototype.toGMTString alias mismatch");
 }
-if (setYearDate.toLocaleString() !== setYearDate.toString()) {
-  throw new Test262Error("Date.prototype.toLocaleString UTC-local mismatch");
+if (setYearDate.toLocaleString() !== "1/1/1999, 12:00:00 AM") {
+  throw new Test262Error("Date.prototype.toLocaleString Intl mismatch");
 }
-if (setYearDate.toLocaleDateString() !== setYearDate.toDateString()) {
-  throw new Test262Error("Date.prototype.toLocaleDateString UTC-local mismatch");
+if (setYearDate.toLocaleDateString() !== "1/1/1999") {
+  throw new Test262Error("Date.prototype.toLocaleDateString Intl mismatch");
 }
-if (setYearDate.toLocaleTimeString() !== setYearDate.toTimeString()) {
-  throw new Test262Error("Date.prototype.toLocaleTimeString UTC-local mismatch");
+if (setYearDate.toLocaleTimeString() !== "12:00:00 AM") {
+  throw new Test262Error("Date.prototype.toLocaleTimeString Intl mismatch");
 }
 if (Date.prototype.toLocaleString.length !== 0 || Date.prototype.toLocaleDateString.length !== 0 || Date.prototype.toLocaleTimeString.length !== 0) {
   throw new Test262Error("Date.prototype.toLocale* length mismatch");

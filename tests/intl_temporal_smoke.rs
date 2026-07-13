@@ -41,14 +41,42 @@ fn formats_temporal_values_and_parts() -> TestResult {
     let value = eval(
         r#"
         const instant = new Temporal.Instant(1735213600_321_000_000n);
-        const formatter = new Intl.DateTimeFormat("en", { timeZone: "UTC" });
+        const options = {
+            timeZone: "UTC",
+            year: "numeric",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            second: "numeric"
+        };
+        const formatter = new Intl.DateTimeFormat("en", options);
         const formatted = formatter.format(instant);
         const parts = formatter.formatToParts(instant);
-        formatted === instant.toLocaleString("en", { timeZone: "UTC" }) &&
+        formatted === instant.toLocaleString("en", options) &&
             formatted.includes("2024") &&
             formatted.includes("11:46:40") &&
             parts.some((part) => part.type === "year" && part.value === "2024") &&
             parts.some((part) => part.type === "second" && part.value === "40")
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn exposes_date_time_format_methods() -> TestResult {
+    let value = eval(
+        r#"
+        const formatter = new Intl.DateTimeFormat("en-US", { timeZone: "UTC" });
+        const first = formatter.format;
+        const second = formatter.format;
+        const parts = formatter.formatRangeToParts(0, 0);
+        first === second &&
+            first(0) === formatter.format(0) &&
+            formatter.formatRange(0, 0) === formatter.format(0) &&
+            parts.length > 0 &&
+            parts.every((part) => part.source === "shared") &&
+            Intl.DateTimeFormat.supportedLocalesOf(["en-US"])[0] === "en-US"
         "#,
     )?;
     ensure_value(&value, &Value::Bool(true))
@@ -62,6 +90,55 @@ fn formats_duration_like_values_consistently() -> TestResult {
         const duration = Temporal.Duration.from(durationLike);
         const formatter = new Intl.DurationFormat("en", { style: "long" });
         formatter.format(durationLike) === duration.toLocaleString("en", { style: "long" })
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn validates_temporal_receivers_styles_and_numbering_systems() -> TestResult {
+    let value = eval(
+        r#"
+        const localeMethods = [
+            Temporal.Instant.prototype.toLocaleString,
+            Temporal.PlainDate.prototype.toLocaleString,
+            Temporal.PlainDateTime.prototype.toLocaleString,
+            Temporal.PlainMonthDay.prototype.toLocaleString,
+            Temporal.PlainTime.prototype.toLocaleString,
+            Temporal.PlainYearMonth.prototype.toLocaleString,
+            Temporal.ZonedDateTime.prototype.toLocaleString,
+        ];
+        let rejected = 0;
+        for (const method of localeMethods) {
+            try {
+                method.call({});
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        for (const action of [
+            () => new Temporal.PlainDate(2026, 1, 20).toLocaleString(
+                "en",
+                { dateStyle: "full", timeStyle: "full" },
+            ),
+            () => new Temporal.PlainTime(12).toLocaleString(
+                "en",
+                { dateStyle: "full", timeStyle: "full" },
+            ),
+        ]) {
+            try {
+                action();
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        const systems = Intl.supportedValuesOf("numberingSystem");
+        rejected === 9 && ["arab", "deva", "hanidec", "latn", "thai"].every(
+            (numberingSystem) =>
+                systems.includes(numberingSystem) &&
+                new Intl.DateTimeFormat("en", { numberingSystem })
+                    .resolvedOptions().numberingSystem === numberingSystem,
+        )
         "#,
     )?;
     ensure_value(&value, &Value::Bool(true))

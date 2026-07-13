@@ -155,6 +155,10 @@ impl Parser {
                 expr = self.member_dot_suffix(expr)?;
                 continue;
             }
+            if self.match_kind(&TokenKind::QuestionDot) {
+                expr = self.optional_member_dot_suffix(expr)?;
+                continue;
+            }
             if self.match_kind(&TokenKind::LBracket) {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;
@@ -163,6 +167,12 @@ impl Parser {
                 self.peek_kind(0),
                 Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
             ) {
+                if Self::is_optional_chain(&expr) {
+                    return Err(Error::parse_at(
+                        "optional chains cannot be tagged templates",
+                        expr.span(),
+                    ));
+                }
                 expr = self.tagged_template_suffix(expr)?;
                 continue;
             }

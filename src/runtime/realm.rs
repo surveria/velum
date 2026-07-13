@@ -328,6 +328,9 @@ impl Context {
             NativeFunctionKind::Intl(IntlFunctionKind::NumberFormatConstructor) => {
                 self.intl_number_format_constructor_value()?
             }
+            NativeFunctionKind::Intl(IntlFunctionKind::DateTimeFormatConstructor) => {
+                self.intl_date_time_format_constructor_value()?
+            }
             _ => self
                 .builtin_value(kind.name())?
                 .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,

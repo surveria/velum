@@ -93,6 +93,7 @@ impl Context {
                 self.eval_plain_time_to_string(args, receiver)
             }
             TemporalFunctionKind::PlainTimePrototypeToLocaleString => {
+                self.plain_time_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::PlainTimePrototypeToJson => {

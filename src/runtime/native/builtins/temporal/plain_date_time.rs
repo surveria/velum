@@ -234,6 +234,7 @@ impl Context {
                 self.eval_plain_date_time_to_string(args, receiver)
             }
             TemporalFunctionKind::PlainDateTimePrototypeToLocaleString => {
+                self.plain_date_time_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::PlainDateTimePrototypeToJson => {
