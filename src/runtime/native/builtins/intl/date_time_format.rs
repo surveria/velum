@@ -33,7 +33,7 @@ impl Context {
         };
         match self.objects.intl_value(*id)? {
             Some(IntlValue::DateTimeFormat(value)) => Ok(value.as_ref().clone()),
-            Some(IntlValue::DurationFormat) | None => {
+            Some(IntlValue::DurationFormat | IntlValue::NumberFormat(_)) | None => {
                 Err(Error::type_error("Intl.DateTimeFormat receiver is invalid"))
             }
         }

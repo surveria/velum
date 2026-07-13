@@ -94,6 +94,9 @@ impl Object {
                 StrongEdgeReference::String(string),
             )?;
         }
+        if let Some(intl_value) = &self.intl_value {
+            intl_value.visit_strong_edges(visitor)?;
+        }
         if let Some(ObjectPrimitiveValue::Symbol(symbol)) = &self.primitive_value {
             visitor.visit(
                 VmObjectEdgeKind::InternalSlot,

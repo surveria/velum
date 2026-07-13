@@ -27,7 +27,9 @@ use base::LiteralPrototype;
 pub use base::ObjectHeap;
 pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
-pub(in crate::runtime) use intl::{DateTimeFormatOptions, DateTimeFormatValue, IntlValue};
+pub(in crate::runtime) use intl::{
+    DateTimeFormatOptions, DateTimeFormatValue, IntlValue, NumberFormatValue,
+};
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;
 pub use property::ObjectPropertyInit;

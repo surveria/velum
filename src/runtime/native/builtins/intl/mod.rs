@@ -1,6 +1,9 @@
 mod date_time_format;
 mod duration_format;
 mod formatting;
+mod number_format;
+mod number_formatting;
+mod number_options;
 mod options;
 
 use crate::{
@@ -38,16 +41,13 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "DateTimeFormat", date_time_format)?;
         let duration_format = self.intl_duration_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "DurationFormat", duration_format)?;
+        let number_format = self.intl_number_format_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "NumberFormat", number_format)?;
         for (name, kind, tag) in [
             (
                 "Collator",
                 IntlFunctionKind::CollatorConstructor,
                 "Intl.Collator",
-            ),
-            (
-                "NumberFormat",
-                IntlFunctionKind::NumberFormatConstructor,
-                "Intl.NumberFormat",
             ),
             (
                 "PluralRules",
@@ -84,8 +84,8 @@ impl Context {
                 self.construct_intl_date_time_format(args)
             }
             IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
             IntlFunctionKind::CollatorConstructor
-            | IntlFunctionKind::NumberFormatConstructor
             | IntlFunctionKind::PluralRulesConstructor
             | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
             _ => Err(Error::type_error("Intl method is not a constructor")),
@@ -116,8 +116,29 @@ impl Context {
                 self.eval_intl_duration_format(args, this_value)
             }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
+            IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
+            IntlFunctionKind::NumberFormatFormatGetter => {
+                self.eval_intl_number_format_getter(this_value)
+            }
+            IntlFunctionKind::NumberFormatBoundFormat(formatter) => {
+                self.eval_intl_number_format(args, formatter, false)
+            }
+            IntlFunctionKind::NumberFormatFormatToParts => {
+                self.eval_intl_number_format_method(args, this_value, true)
+            }
+            IntlFunctionKind::NumberFormatResolvedOptions => {
+                self.eval_intl_number_format_resolved_options(this_value)
+            }
+            IntlFunctionKind::NumberFormatFormatRange => {
+                self.eval_intl_number_format_range(args, this_value, false)
+            }
+            IntlFunctionKind::NumberFormatFormatRangeToParts => {
+                self.eval_intl_number_format_range(args, this_value, true)
+            }
+            IntlFunctionKind::NumberFormatSupportedLocalesOf => {
+                self.eval_intl_number_format_supported_locales(args)
+            }
             IntlFunctionKind::CollatorConstructor
-            | IntlFunctionKind::NumberFormatConstructor
             | IntlFunctionKind::PluralRulesConstructor
             | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
         }
@@ -202,7 +223,7 @@ impl Context {
                 self.intl_constructor_value(kind, "Intl.Collator", &[])?
             }
             IntlFunctionKind::NumberFormatConstructor => {
-                self.intl_constructor_value(kind, "Intl.NumberFormat", &[])?
+                self.intl_number_format_constructor_value()?
             }
             IntlFunctionKind::PluralRulesConstructor => {
                 self.intl_constructor_value(kind, "Intl.PluralRules", &[])?
