@@ -209,10 +209,12 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_ENDS_WITH_NAME: &str = "en
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INCLUDES_NAME: &str = "includes";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INDEX_OF_NAME: &str = "indexOf";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_LOCALE_COMPARE_NAME: &str = "localeCompare";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_ITERATOR_NAME: &str = "[Symbol.iterator]";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_MATCH_NAME: &str = "match";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_MATCH_ALL_NAME: &str = "matchAll";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_IS_WELL_FORMED_NAME: &str = "isWellFormed";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_NORMALIZE_NAME: &str = "normalize";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPEAT_NAME: &str = "repeat";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPLACE_NAME: &str = "replace";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPLACE_ALL_NAME: &str = "replaceAll";
@@ -526,9 +528,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
     StringPrototypeLastIndexOf,
+    StringPrototypeLocaleCompare,
     StringPrototypeIterator,
     StringPrototypeMatch,
     StringPrototypeMatchAll,
+    StringPrototypeNormalize,
     StringPrototypeIsWellFormed,
     StringPrototypePadEnd,
     StringPrototypePadStart,

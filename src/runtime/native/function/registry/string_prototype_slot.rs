@@ -4,6 +4,7 @@ use super::{
     STRING_PROTOTYPE_CODE_POINT_AT_SLOT, STRING_PROTOTYPE_CONCAT_SLOT,
     STRING_PROTOTYPE_ENDS_WITH_SLOT, STRING_PROTOTYPE_INCLUDES_SLOT,
     STRING_PROTOTYPE_INDEX_OF_SLOT, STRING_PROTOTYPE_LAST_INDEX_OF_SLOT,
+    STRING_PROTOTYPE_LOCALE_COMPARE_SLOT, STRING_PROTOTYPE_NORMALIZE_SLOT,
     STRING_PROTOTYPE_PAD_END_SLOT, STRING_PROTOTYPE_PAD_START_SLOT, STRING_PROTOTYPE_REPEAT_SLOT,
     STRING_PROTOTYPE_SLICE_SLOT, STRING_PROTOTYPE_STARTS_WITH_SLOT,
     STRING_PROTOTYPE_SUBSTRING_SLOT, STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_SLOT,
@@ -24,6 +25,10 @@ pub(super) const fn string_prototype_slot(kind: NativeFunctionKind) -> Option<Na
         NativeFunctionKind::StringPrototypeIncludes => Some(STRING_PROTOTYPE_INCLUDES_SLOT),
         NativeFunctionKind::StringPrototypeIndexOf => Some(STRING_PROTOTYPE_INDEX_OF_SLOT),
         NativeFunctionKind::StringPrototypeLastIndexOf => Some(STRING_PROTOTYPE_LAST_INDEX_OF_SLOT),
+        NativeFunctionKind::StringPrototypeLocaleCompare => {
+            Some(STRING_PROTOTYPE_LOCALE_COMPARE_SLOT)
+        }
+        NativeFunctionKind::StringPrototypeNormalize => Some(STRING_PROTOTYPE_NORMALIZE_SLOT),
         NativeFunctionKind::StringPrototypePadEnd => Some(STRING_PROTOTYPE_PAD_END_SLOT),
         NativeFunctionKind::StringPrototypePadStart => Some(STRING_PROTOTYPE_PAD_START_SLOT),
         NativeFunctionKind::StringPrototypeRepeat => Some(STRING_PROTOTYPE_REPEAT_SLOT),

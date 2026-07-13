@@ -296,7 +296,9 @@ const FINALIZATION_REGISTRY_UNREGISTER_SLOT: NativeFunctionSlot = NativeFunction
 const WEAK_REF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(614);
 const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
 const ARRAY_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(628);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 629;
+const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(629);
+const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 631;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {

@@ -150,8 +150,14 @@ impl Context {
             NativeFunctionKind::StringPrototypeLastIndexOf => {
                 Some(self.eval_string_prototype_last_index_of(args, this_value))
             }
+            NativeFunctionKind::StringPrototypeLocaleCompare => {
+                Some(self.eval_string_prototype_locale_compare(args, this_value))
+            }
             NativeFunctionKind::StringPrototypeMatch => {
                 Some(self.eval_string_prototype_match(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeNormalize => {
+                Some(self.eval_string_prototype_normalize(args, this_value))
             }
             NativeFunctionKind::StringPrototypePadEnd => {
                 Some(self.eval_string_prototype_pad_end(args, this_value))
