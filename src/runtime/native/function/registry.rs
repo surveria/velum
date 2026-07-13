@@ -9,10 +9,12 @@ use super::{
     registry_error::error_constructor_slot_index as error_slot,
 };
 
+mod array_buffer_slot;
 mod data_view_slot;
 mod object_slot;
 mod string_prototype_slot;
 
+use array_buffer_slot::array_buffer_slot;
 use data_view_slot::data_view_slot;
 use object_slot::object_slot;
 use string_prototype_slot::{string_prototype_slot, string_static_slot};
@@ -300,7 +302,7 @@ const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionS
 const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
 const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
 const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 644;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 647;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -532,16 +534,6 @@ const fn buffer_or_disposable_slot(kind: NativeFunctionKind) -> Option<NativeFun
     };
     Some(NativeFunctionSlot::new(index))
 }
-const fn array_buffer_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
-    let NativeFunctionKind::ArrayBufferPrototype(method) = kind else {
-        return None;
-    };
-    let Some(index) = ARRAY_BUFFER_METHOD_SLOT_BASE.checked_add(method.index()) else {
-        return None;
-    };
-    Some(NativeFunctionSlot::new(index))
-}
-
 const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Int8) => Some(INT8_ARRAY_SLOT),

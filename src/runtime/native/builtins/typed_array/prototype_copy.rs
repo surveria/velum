@@ -143,7 +143,12 @@ impl Context {
             self.typed_array_relative_index(args.get(1), record.length, record.length)?;
         let count = end_index.saturating_sub(start_index);
         let (result, result_id, result_view) =
-            self.typed_array_species_create_with_length(this_value, count)?;
+            self.typed_array_species_create_with_length(this_value, count, false)?;
+        if result_view.buffer().is_immutable()
+            && !record.view.buffer().shares_storage(result_view.buffer())
+        {
+            return Err(Error::type_error("ArrayBuffer is immutable"));
+        }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         if count == 0 {
@@ -201,7 +206,7 @@ impl Context {
                 .checked_add(relative_start)
                 .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
             let target_start = target.byte_offset();
-            return source.buffer().with_exclusive_bytes_mut(|bytes| {
+            return source.buffer().with_slice_alias_bytes_mut(|bytes| {
                 for byte_offset in 0..count_bytes {
                     self.step()?;
                     let source_index = source_start
@@ -248,6 +253,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let record = self.typed_array_view_record(this_value)?;
+        record.view.ensure_mutable()?;
         let target = self.typed_array_relative_index(args.first(), record.length, 0)?;
         let start = self.typed_array_relative_index(args.get(1), record.length, 0)?;
         let end = self.typed_array_relative_index(args.get(2), record.length, record.length)?;

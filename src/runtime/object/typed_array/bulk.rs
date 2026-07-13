@@ -54,7 +54,10 @@ impl ByteBuffer {
         }
     }
 
-    fn with_bytes<T>(&self, operation: impl FnOnce(&[u8]) -> Result<T>) -> Result<T> {
+    pub(in crate::runtime) fn with_bytes<T>(
+        &self,
+        operation: impl FnOnce(&[u8]) -> Result<T>,
+    ) -> Result<T> {
         self.with_state(|state| {
             let Some(bytes) = state.bytes.as_ref() else {
                 return Err(Error::type_error(DETACHED_BUFFER_ERROR));
@@ -81,6 +84,21 @@ impl ByteBuffer {
     }
 
     pub(in crate::runtime) fn with_exclusive_bytes_mut<T>(
+        &self,
+        operation: impl FnOnce(&mut [u8]) -> Result<T>,
+    ) -> Result<T> {
+        self.with_state_mut(|state| {
+            if state.immutable {
+                return Err(Error::type_error(super::IMMUTABLE_BUFFER_ERROR));
+            }
+            let Some(bytes) = state.bytes.as_mut() else {
+                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+            };
+            operation(bytes)
+        })
+    }
+
+    pub(in crate::runtime) fn with_slice_alias_bytes_mut<T>(
         &self,
         operation: impl FnOnce(&mut [u8]) -> Result<T>,
     ) -> Result<T> {

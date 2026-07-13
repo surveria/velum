@@ -262,6 +262,7 @@ impl Context {
 
     fn eval_typed_array_set(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (target_id, target) = self.typed_array_receiver(this_value)?;
+        target.ensure_mutable()?;
         let target_length = target.length();
         let source = args.first().cloned().unwrap_or(Value::Undefined);
         let offset_value = args.get(1).unwrap_or(&Value::Undefined);
@@ -381,6 +382,7 @@ impl Context {
 
     fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (_, view) = self.typed_array_receiver(this_value)?;
+        view.ensure_mutable()?;
         let length = view.length();
         let value = args.first().unwrap_or(&Value::Undefined);
         let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
@@ -436,6 +438,7 @@ impl Context {
 
     fn eval_typed_array_sort(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (_, view) = self.typed_array_receiver(this_value)?;
+        view.ensure_mutable()?;
         if args
             .first()
             .is_some_and(|value| !matches!(value, Value::Undefined))
@@ -479,16 +482,24 @@ impl Context {
                 "TypedArray.from map function is not callable",
             ));
         }
-        let values = if let Some(values) = self.typed_array_iterable_values(&source)? {
-            values
-        } else {
-            self.typed_array_collect_array_like(&source)?
-        };
         let callback_this = args.get(2).cloned().unwrap_or(Value::Undefined);
-        self.typed_array_create_from_values_with_constructor_mapped(
+        if let Some(values) = self.typed_array_iterable_values(&source)? {
+            return self.typed_array_create_from_values_with_constructor_mapped(
+                this_value,
+                values,
+                None,
+                mapping,
+                &callback_this,
+            );
+        }
+        let source = self.object_to_object(&source)?;
+        let length_value = self.get_named(&source, "length")?;
+        let length =
+            Self::length_to_usize(self.to_length(&length_value)?, TYPED_ARRAY_LENGTH_ERROR)?;
+        self.typed_array_create_from_array_like_mapped(
             this_value,
-            values,
-            None,
+            &source,
+            length,
             mapping,
             &callback_this,
         )
@@ -524,6 +535,7 @@ impl Context {
         &mut self,
         source: &Value,
         length: usize,
+        require_mutable: bool,
     ) -> Result<(Value, ObjectId, TypedArrayView)> {
         let (_, source_view) = self.typed_array_branded_receiver(source)?;
         let constructor =
@@ -532,6 +544,7 @@ impl Context {
             &constructor,
             length,
             Some(source_view.element_kind().content_type()),
+            require_mutable,
         )
     }
 
@@ -611,6 +624,7 @@ impl Context {
             constructor,
             values.len(),
             expected_content_type,
+            true,
         )?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
@@ -632,6 +646,7 @@ impl Context {
         constructor: &Value,
         length: usize,
         expected_content_type: Option<TypedArrayContentType>,
+        require_mutable: bool,
     ) -> Result<(Value, ObjectId, TypedArrayView)> {
         let length_value = Self::typed_array_usize_value(length)?;
         let result = self.semantic_construct(
@@ -650,22 +665,37 @@ impl Context {
         {
             return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
+        if require_mutable {
+            view.ensure_mutable()?;
+        }
         Ok((result, id, view))
     }
 
-    fn typed_array_collect_array_like(&mut self, source: &Value) -> Result<Vec<Value>> {
-        if self.semantic_object_ref(source)?.is_none() {
-            return Err(Error::type_error("TypedArray source is not array-like"));
-        }
-        let length_value = self.get_named(source, "length")?;
-        let length =
-            Self::length_to_usize(self.to_length(&length_value)?, TYPED_ARRAY_LENGTH_ERROR)?;
-        let mut values = Vec::with_capacity(length);
+    fn typed_array_create_from_array_like_mapped(
+        &mut self,
+        constructor: &Value,
+        source: &Value,
+        length: usize,
+        mapping: Option<&Value>,
+        callback_this: &Value,
+    ) -> Result<Value> {
+        let (result, id, view) =
+            self.typed_array_create_with_constructor_length(constructor, length, None, true)?;
+        let _scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, [source, &result])?;
         for index in 0..length {
             self.step()?;
-            values.push(self.get_named(source, &index.to_string())?);
+            let value = self.get_named(source, &index.to_string())?;
+            let value = if let Some(callback) = mapping {
+                let call_args = [value, Self::typed_array_usize_value(index)?];
+                self.call_value(callback, &call_args, callback_this.clone())?
+            } else {
+                value
+            };
+            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
+            self.objects.set_typed_array_value(id, index, &element)?;
         }
-        Ok(values)
+        Ok(result)
     }
 
     fn write_typed_array_values(&mut self, target: &Value, values: &[Value]) -> Result<()> {

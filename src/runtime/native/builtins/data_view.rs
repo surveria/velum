@@ -136,6 +136,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let view = self.data_view_receiver(this_value)?;
+        view.ensure_mutable()?;
         let values = args.as_slice();
         let byte_offset =
             Self::length_to_usize(self.to_index(values.first())?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;

@@ -381,6 +381,10 @@ impl DataViewView {
         kind.write(&self.buffer, absolute, value, little_endian)
     }
 
+    pub(in crate::runtime) fn ensure_mutable(&self) -> Result<()> {
+        self.buffer.ensure_mutable()
+    }
+
     fn element_offset(&self, offset: usize, width: usize) -> Result<usize> {
         self.ensure_in_bounds()?;
         let relative_end = offset

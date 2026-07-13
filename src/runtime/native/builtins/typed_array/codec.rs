@@ -99,6 +99,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let view = self.uint8_array_receiver(this_value)?;
+        view.ensure_mutable()?;
         let input = codec_string_units(args.first().unwrap_or(&Value::Undefined))?;
         let (alphabet, handling) = self.base64_decode_options(args.get(1))?;
         if view.is_out_of_bounds() {
@@ -124,6 +125,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let view = self.uint8_array_receiver(this_value)?;
+        view.ensure_mutable()?;
         let input = codec_string_units(args.first().unwrap_or(&Value::Undefined))?;
         let decoded = decode_hex(&input, Some(view.length()), view.length());
         write_decoded_bytes(&view, &decoded.bytes)?;
