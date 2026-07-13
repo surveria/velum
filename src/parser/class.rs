@@ -43,7 +43,7 @@ const DERIVED_CONSTRUCTOR_REST_NAME: &str = "%superargs%";
 impl Parser {
     /// Parses a class declaration after its consumed `class` keyword.
     pub(super) fn class_declaration(&mut self) -> Result<Stmt> {
-        let name = self.consume_binding_identifier("expected class declaration name")?;
+        let name = self.consume_class_binding_identifier("expected class declaration name")?;
         let class = self.class_literal_tail(Some(name.name().clone()))?;
         Ok(Stmt::ClassDecl {
             name,
@@ -55,16 +55,27 @@ impl Parser {
     pub(super) fn class_expression(&mut self) -> Result<Expression> {
         let start = self.previous_span();
         let name = if self.next_is_identifier() {
-            let previous_strict = self.is_strict_mode();
-            self.set_strict_mode(true);
-            let result = self.consume_identifier("expected class name");
-            self.set_strict_mode(previous_strict);
-            Some(result?)
+            Some(
+                self.consume_class_binding_identifier("expected class name")?
+                    .name()
+                    .clone(),
+            )
         } else {
             None
         };
         let class = self.class_literal_tail(name)?;
         Ok(self.expression_node(start, Expr::Class(Box::new(class))))
+    }
+
+    fn consume_class_binding_identifier(
+        &mut self,
+        message: &str,
+    ) -> Result<crate::syntax::StaticBinding> {
+        let previous_strict = self.is_strict_mode();
+        self.set_strict_mode(true);
+        let result = self.consume_binding_identifier(message);
+        self.set_strict_mode(previous_strict);
+        result
     }
 
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {

@@ -370,16 +370,32 @@ impl Context {
             }
             let (_, last) = control.switch_state_mut()?;
             match completion {
-                Completion::Normal(value) => *last = value,
+                Completion::Normal(value) => {
+                    if case.body_updates_value {
+                        *last = value;
+                    }
+                }
                 Completion::Break { label: None, value } => {
+                    let value = if case.body_updates_value {
+                        value
+                    } else {
+                        last.clone()
+                    };
                     return Ok((control, Completion::Normal(value)));
+                }
+                Completion::Continue { label, value } => {
+                    let value = if case.body_updates_value {
+                        value
+                    } else {
+                        last.clone()
+                    };
+                    return Ok((control, Completion::Continue { label, value }));
                 }
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
-                | Completion::Continue { .. }
                 | Completion::Suspend(_)) => return Ok((control, completion)),
             }
         }

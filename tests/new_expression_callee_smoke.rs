@@ -62,6 +62,25 @@ fn supports_call_suffix_after_new_expression() -> TestResult {
 }
 
 #[test]
+fn captures_nested_new_constructor_before_arguments() -> TestResult {
+    let value = eval(
+        r"
+        let Constructor = function() { this.value = 42; };
+        let instance = new Constructor(Constructor = 1);
+        let nestedThrows = false;
+        try {
+            new new Boolean(true);
+        } catch (error) {
+            nestedThrows = error instanceof TypeError;
+        }
+        Constructor === 1 && instance.value === 42 && nestedThrows
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn rejects_import_call_constructor_forms() -> TestResult {
     for source in [
         "new import('./empty_FIXTURE.js');",

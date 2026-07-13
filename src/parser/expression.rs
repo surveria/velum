@@ -218,8 +218,12 @@ impl Parser {
                 new_span,
             ));
         }
-        let constructor = self.primary()?;
-        let constructor = self.member_suffix(constructor)?;
+        let constructor = if self.match_kind(&TokenKind::New) {
+            self.new_expr()?
+        } else {
+            let constructor = self.primary()?;
+            self.member_suffix(constructor)?
+        };
         let args = if self.match_kind(&TokenKind::LParen) {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()

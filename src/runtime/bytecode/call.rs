@@ -306,10 +306,10 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::ConstructValue { arg_count } => {
+            BytecodeInstruction::ConstructValue { native, arg_count } => {
                 let args = state.stack.tail(*arg_count)?;
                 let constructor = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let value = self.eval_new_value(&constructor, args)?;
+                let value = self.eval_new_value_with_native(&constructor, *native, args)?;
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);

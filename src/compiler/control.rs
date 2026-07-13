@@ -267,6 +267,7 @@ impl BytecodeCompiler<'_> {
                     StatementValue::Store,
                     self.layout,
                 )?,
+                body_updates_value: switch_statements_update_value(&case.statements),
             });
         }
         let scoped = switch_needs_lexical_scope(cases);
@@ -486,4 +487,45 @@ fn switch_needs_lexical_scope(cases: &[SwitchCase]) -> bool {
     cases
         .iter()
         .any(|case| statements_need_lexical_scope(&case.statements))
+}
+
+fn switch_statements_update_value(statements: &[Statement]) -> bool {
+    statements.iter().any(|statement| match statement.kind() {
+        Stmt::Expr(_) | Stmt::Switch { .. } | Stmt::Try { .. } => true,
+        Stmt::DeclList(statements) | Stmt::Block(statements) => {
+            switch_statements_update_value(statements)
+        }
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            switch_statement_updates_value(consequent)
+                || alternate
+                    .as_deref()
+                    .is_some_and(switch_statement_updates_value)
+        }
+        Stmt::While { body, .. }
+        | Stmt::DoWhile { body, .. }
+        | Stmt::With { body, .. }
+        | Stmt::Label { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForIn { body, .. }
+        | Stmt::ForOf { body, .. } => switch_statement_updates_value(body),
+        Stmt::Empty
+        | Stmt::Debugger
+        | Stmt::Break(_)
+        | Stmt::Continue(_)
+        | Stmt::Throw(_)
+        | Stmt::Return(_)
+        | Stmt::FunctionDecl { .. }
+        | Stmt::ImportBinding { .. }
+        | Stmt::VarDecl { .. }
+        | Stmt::PatternDecl { .. }
+        | Stmt::ClassDecl { .. } => false,
+    })
+}
+
+fn switch_statement_updates_value(statement: &Statement) -> bool {
+    switch_statements_update_value(std::slice::from_ref(statement))
 }

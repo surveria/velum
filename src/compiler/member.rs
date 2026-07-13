@@ -291,7 +291,8 @@ impl BytecodeCompiler<'_> {
         if matches!(
             op,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
-        ) {
+        ) || !matches!(expr.kind(), Expr::Literal(_) | Expr::StringLiteral { .. })
+        {
             let target = self.compile_assignment_target_with_strict(target, strict)?;
             self.emit(BytecodeInstruction::LogicalAssignment {
                 op,

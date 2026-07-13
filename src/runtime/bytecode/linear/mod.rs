@@ -753,6 +753,7 @@ impl Context {
             BytecodeLinearOp::ComputedMember(property) => {
                 let property_value = state.stack.pop()?;
                 let object = state.stack.pop()?;
+                Self::require_bytecode_property_base(&object)?;
                 if let Some(value) =
                     self.eval_dynamic_array_index_member(&object, &property_value)?
                 {

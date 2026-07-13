@@ -92,6 +92,7 @@ impl Parser {
             shorthand_name: Some(binding),
         } = name
         {
+            self.validate_strict_identifier_reference(binding.as_str())?;
             self.note_arguments_reference(binding.as_str());
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
@@ -360,6 +361,13 @@ impl Parser {
             }
             TokenKind::Await if !self.await_identifier_is_reserved() => {
                 let name = self.borrowed_static_name("await")?;
+                Ok(ObjectPropertyName::Static {
+                    key: name.clone(),
+                    shorthand_name: Some(name),
+                })
+            }
+            TokenKind::Let if !self.is_strict_mode() => {
+                let name = self.borrowed_static_name("let")?;
                 Ok(ObjectPropertyName::Static {
                     key: name.clone(),
                     shorthand_name: Some(name),

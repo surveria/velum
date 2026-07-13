@@ -505,12 +505,21 @@ impl Context {
     ) -> Result<Value> {
         let reference = self.eval_bytecode_assignment_reference(target)?;
         let current = reference.get(self)?;
-        if !logical_assignment_should_store(op, &current)? {
-            return self.runtime_value(current);
+        if matches!(
+            op,
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+        ) {
+            if !logical_assignment_should_store(op, &current)? {
+                return self.runtime_value(current);
+            }
+            let value = self.eval_bytecode_expression(value)?;
+            reference.set(self, value.clone())?;
+            return self.runtime_value(value);
         }
-        let value = self.eval_bytecode_expression(value)?;
-        reference.set(self, value.clone())?;
-        self.runtime_value(value)
+        let right = self.eval_bytecode_expression(value)?;
+        let result = self.eval_bytecode_compound_value(op, &current, &right)?;
+        reference.set(self, result.clone())?;
+        self.runtime_value(result)
     }
 
     pub(in crate::runtime::bytecode) fn eval_bytecode_assignment_reference(
@@ -563,6 +572,7 @@ impl Context {
             } => {
                 let object = self.eval_bytecode_expression(object)?;
                 let property_value = self.eval_bytecode_expression(property)?;
+                Self::require_bytecode_property_base(&object)?;
                 let property = self.dynamic_property_key(&property_value)?;
                 Ok(BytecodeAssignmentReference::ComputedProperty {
                     object,
