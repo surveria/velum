@@ -340,7 +340,7 @@ impl Parser {
                 })
             }
             TokenKind::String(name) => {
-                let name = String::from_utf16(&name).map_err(|_| {
+                let name = String::from_utf16(&name.cooked).map_err(|_| {
                     Error::parse_at(
                         "object property names containing lone surrogates are not supported yet",
                         token_span,

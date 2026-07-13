@@ -591,7 +591,7 @@ impl CaptureBindingCollector {
     fn collect_expr(&mut self, expr: &Expression) {
         match expr.kind() {
             Expr::Literal(_)
-            | Expr::StringLiteral(_)
+            | Expr::StringLiteral { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::SuperMember { .. }

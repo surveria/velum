@@ -129,7 +129,9 @@ impl Parser {
         property: &Expression,
     ) -> Result<Option<StaticName>> {
         match property.kind() {
-            Expr::StringLiteral(value) => self.borrowed_static_name(value.as_str()).map(Some),
+            Expr::StringLiteral { value, .. } => {
+                self.borrowed_static_name(value.as_str()).map(Some)
+            }
             Expr::Literal(
                 value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
             ) => self.static_name(value.to_string()).map(Some),

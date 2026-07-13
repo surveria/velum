@@ -1,9 +1,9 @@
 use crate::{Error, SourceId, SourceSpan};
 
 use super::{
-    Token, TokenKind,
+    LexicalGoal, Token, TokenKind,
     classification::token_kind_can_precede_regexp,
-    scanner::{Lexer, LexerCheckpoint, LexicalGoal},
+    scanner::{Lexer, LexerCheckpoint},
 };
 
 struct BufferedToken {

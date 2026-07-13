@@ -188,7 +188,7 @@ impl BytecodeCompiler<'_> {
 
 fn computed_property_native_target(property: &Expression) -> Option<NativeCallTarget> {
     match property.kind() {
-        Expr::StringLiteral(value) => NativeCallTarget::from_property_name(value.as_str()),
+        Expr::StringLiteral { value, .. } => NativeCallTarget::from_property_name(value.as_str()),
         Expr::Literal(
             value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
         ) => NativeCallTarget::from_property_name(&value.to_string()),
