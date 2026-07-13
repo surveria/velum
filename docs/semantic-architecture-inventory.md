@@ -556,6 +556,13 @@ Context activation stack; frame variants, fields, helper names, and source-file
 layout may be redesigned together with equivalent behavioral and mutation
 evidence.
 
+Shared function-parameter `ScopeIndex` templates use explicit copy-on-write
+before runtime mutation. The ownership transition completes before binding and
+cache reservations or slot commits, and an inconsistent retained shared state
+returns a contextual engine error rather than leaking disconnected vectors.
+Sloppy direct-eval coverage extends the shared template independently across
+repeated calls and reconciles the resulting storage ledger.
+
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
 and checked category/total record sums. AS-05b2b adds an independent per-kind

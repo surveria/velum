@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -23,6 +23,27 @@ fn sloppy_eval_vars_update_the_outer_environment() -> TestResult {
         value === 42 && created === 7
         "#,
     )
+}
+
+#[test]
+fn sloppy_eval_extends_shared_parameter_indexes_per_call() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let value = vm.eval(
+        r#"
+        function readCamera(lens) {
+            eval("var observed = lens + 1");
+            return observed;
+        }
+        readCamera(40) === 41 && readCamera(1) === 2 &&
+        typeof observed === "undefined"
+        "#,
+    )?;
+    if value != Value::Bool(true) {
+        return Err(format!("expected shared-index copy-on-write result, got {value:?}").into());
+    }
+    vm.storage_snapshot()?;
+    Ok(())
 }
 
 #[test]

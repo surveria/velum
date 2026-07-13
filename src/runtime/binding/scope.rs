@@ -71,7 +71,7 @@ impl ScopeIndex {
     }
 
     /// Escalates a shared index to an owned copy before mutation.
-    fn make_owned(&mut self) -> (&mut Vec<AtomId>, &mut Vec<BindingEntry>) {
+    fn make_owned(&mut self) -> Result<(&mut Vec<AtomId>, &mut Vec<BindingEntry>)> {
         if let Self::Shared(data) = self {
             *self = Self::Owned {
                 slot_atoms: data.slot_atoms.to_vec(),
@@ -82,21 +82,12 @@ impl ScopeIndex {
             Self::Owned {
                 slot_atoms,
                 bindings,
-            } => (slot_atoms, bindings),
-            Self::Shared(_) => unreachable_owned(),
+            } => Ok((slot_atoms, bindings)),
+            Self::Shared(_) => Err(Error::runtime(
+                "scope index remained shared after copy-on-write",
+            )),
         }
     }
-}
-
-/// The shared arm is replaced before this is reachable; kept as a typed
-/// stand-in so the match above stays exhaustive without panicking paths.
-fn unreachable_owned() -> (&'static mut Vec<AtomId>, &'static mut Vec<BindingEntry>) {
-    // This branch cannot execute: make_owned rewrites Shared to Owned first.
-    // Leak two empty vectors to satisfy the signature without panicking.
-    (
-        Box::leak(Box::new(Vec::new())),
-        Box::leak(Box::new(Vec::new())),
-    )
 }
 
 #[derive(Debug, Default)]
@@ -279,13 +270,8 @@ impl BindingScope {
                 Ok(slot)
             }
             Err(position) => {
-                let reservations = self.reserve_new_binding()?;
                 let slot = BindingSlot::from_index(self.slots.len());
-                Self::commit_new_binding(reservations)?;
-                self.slots.push(binding);
-                let (slot_atoms, bindings) = self.index.make_owned();
-                slot_atoms.push(atom);
-                bindings.insert(position, BindingEntry::new(atom, slot));
+                self.insert_new_binding(position, atom, binding, slot)?;
                 Ok(slot)
             }
         }
@@ -352,12 +338,7 @@ impl BindingScope {
         if slot_index > self.slots.len() {
             return Err(Error::runtime("binding frame slot gap is not supported"));
         }
-        let reservations = self.reserve_new_binding()?;
-        Self::commit_new_binding(reservations)?;
-        self.slots.push(binding);
-        let (slot_atoms, bindings) = self.index.make_owned();
-        slot_atoms.push(atom);
-        bindings.insert(position, BindingEntry::new(atom, slot));
+        self.insert_new_binding(position, atom, binding, slot)?;
         Ok(slot)
     }
 
@@ -395,13 +376,38 @@ impl BindingScope {
         if slot.index() != self.slots.len() {
             return Ok(None);
         }
-        let reservations = self.reserve_new_binding()?;
+        self.insert_new_binding(position, atom, binding, slot)?;
+        Ok(Some(slot))
+    }
+
+    fn insert_new_binding(
+        &mut self,
+        position: usize,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: BindingSlot,
+    ) -> Result<()> {
+        let Self {
+            slots,
+            index,
+            storage_ledger,
+            ..
+        } = self;
+        let (slot_atoms, bindings) = index.make_owned()?;
+        if slot.index() != slots.len() {
+            return Err(Error::runtime("binding frame slot changed before commit"));
+        }
+        if position > bindings.len() {
+            return Err(Error::runtime(
+                "binding index position changed before commit",
+            ));
+        }
+        let reservations = Self::reserve_new_binding(storage_ledger.as_ref())?;
         Self::commit_new_binding(reservations)?;
-        self.slots.push(binding);
-        let (slot_atoms, bindings) = self.index.make_owned();
+        slots.push(binding);
         slot_atoms.push(atom);
         bindings.insert(position, BindingEntry::new(atom, slot));
-        Ok(Some(slot))
+        Ok(())
     }
 
     pub(in crate::runtime) fn activate_storage(
@@ -430,9 +436,9 @@ impl BindingScope {
     }
 
     fn reserve_new_binding(
-        &self,
+        storage_ledger: Option<&VmStorageLedger>,
     ) -> Result<(Option<VmStorageReservation>, Option<VmStorageReservation>)> {
-        let Some(storage_ledger) = &self.storage_ledger else {
+        let Some(storage_ledger) = storage_ledger else {
             return Ok((None, None));
         };
         let binding = storage_ledger.reserve_count(VmStorageKind::Binding, 1)?;
