@@ -31,7 +31,7 @@ impl Parser {
         let static_binding_count = self.static_bindings.len();
         let static_function_count = self.static_functions.len();
         let arguments_reference = self.arguments_reference;
-        if let Some((target, object, head)) = self.for_in_header()? {
+        if let Some((target, object, head)) = self.for_in_header(asynchronous)? {
             if asynchronous && head == ForHeadKind::In {
                 return Err(self.parse_error("for-await statement requires an 'of' head"));
             }
@@ -96,7 +96,10 @@ impl Parser {
         })
     }
 
-    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
+    fn for_in_header(
+        &mut self,
+        asynchronous: bool,
+    ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
         if self.async_of_arrow_starts_classic_for() {
             return Ok(None);
         }
@@ -152,7 +155,7 @@ impl Parser {
         let Some(target) = self.assignment_target(target) else {
             return Err(self.parse_error("invalid for-in assignment target"));
         };
-        if head == ForHeadKind::Of && bare_async_target {
+        if !asynchronous && head == ForHeadKind::Of && bare_async_target {
             return Err(self.parse_error("async is not a valid for-of assignment target"));
         }
         let object = self.for_head_rhs(head)?;
