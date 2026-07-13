@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T145914Z.md`
-- Task: PR #597: runtime: complete Intl.ListFormat semantics
-- Performance: 5.41x (4/5 >1.00x) (from `rsqjs-test-report-20260713T145914Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T145914Z.md`)
+- `rsqjs-test-report-20260713T151119Z.md`
+- Task: PR #598: runtime: complete modern Error semantics
+- Performance: 5.33x (4/5 >1.00x) (from `rsqjs-test-report-20260713T151119Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T151119Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 98688 passed / 3890 failed (96.21%) (from `rsqjs-test-report-20260713T145914Z.md`)
+- Full Test262: 98784 passed / 3794 failed (96.30%) (from `rsqjs-test-report-20260713T151119Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -544,3 +544,4 @@ Latest report:
 | `20260713T142905Z` `f0cf7ae` PR #595: runtime: complete Intl.Locale semantics | 5.51x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98364 passed / 4214 failed (95.89%) |
 | `20260713T144246Z` `a0a47a8` PR #596: runtime: implement FinalizationRegistry and WeakRef semantics | 5.43x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98528 passed / 4050 failed (96.05%) |
 | `20260713T145914Z` `f1bbb59` PR #597: runtime: complete Intl.ListFormat semantics | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98688 passed / 3890 failed (96.21%) |
+| `20260713T151119Z` `7c2914d` PR #598: runtime: complete modern Error semantics | 5.33x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98784 passed / 3794 failed (96.30%) |
