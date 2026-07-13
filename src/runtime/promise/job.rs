@@ -7,7 +7,7 @@ use crate::{
         async_operation::ArrayFromAsyncContinuation,
         async_trace::VmAsyncEdgeKind,
         dynamic_import::DynamicImportJob,
-        function::SuspendedAsyncFunction,
+        function::{SuspendedAsyncFunction, SuspendedExecutionStorageFootprint},
         generator::GeneratorId,
         object::AtomicWaitRegistration,
         resource_scope::ResourceScopeContinuation,
@@ -163,36 +163,16 @@ impl PromiseReaction {
         Ok(())
     }
 
-    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
+    pub(in crate::runtime) fn suspended_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
         match self {
-            Self::Await { continuation } => continuation.execution_frame_count(),
+            Self::Await { continuation } => continuation.storage_footprint(),
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
-            | Self::ResourceScope { .. } => Ok(0),
-        }
-    }
-
-    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
-        match self {
-            Self::Await { continuation } => continuation.binding_count(),
-            Self::Then { .. }
-            | Self::AsyncGeneratorAwait { .. }
-            | Self::ArrayFromAsync { .. }
-            | Self::AsyncDisposableStack { .. }
-            | Self::ResourceScope { .. } => Ok(0),
-        }
-    }
-
-    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
-        match self {
-            Self::Await { continuation } => continuation.cache_entry_count(),
-            Self::Then { .. }
-            | Self::AsyncGeneratorAwait { .. }
-            | Self::ArrayFromAsync { .. }
-            | Self::AsyncDisposableStack { .. }
-            | Self::ResourceScope { .. } => Ok(0),
+            | Self::ResourceScope { .. } => Ok(SuspendedExecutionStorageFootprint::default()),
         }
     }
 
@@ -306,29 +286,13 @@ impl PromiseJob {
         }
     }
 
-    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
+    pub(in crate::runtime) fn suspended_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
         match self {
-            Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
+            Self::Reaction { reaction, .. } => reaction.suspended_execution_storage_footprint(),
             Self::ResolveThenable { .. } | Self::DynamicImport(_) | Self::AtomicsWait { .. } => {
-                Ok(0)
-            }
-        }
-    }
-
-    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
-        match self {
-            Self::Reaction { reaction, .. } => reaction.binding_count(),
-            Self::ResolveThenable { .. } | Self::DynamicImport(_) | Self::AtomicsWait { .. } => {
-                Ok(0)
-            }
-        }
-    }
-
-    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
-        match self {
-            Self::Reaction { reaction, .. } => reaction.cache_entry_count(),
-            Self::ResolveThenable { .. } | Self::DynamicImport(_) | Self::AtomicsWait { .. } => {
-                Ok(0)
+                Ok(SuspendedExecutionStorageFootprint::default())
             }
         }
     }

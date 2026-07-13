@@ -234,6 +234,90 @@ fn reconciles_suspended_with_environment_activation_footprints() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn reconciles_one_footprint_across_async_and_generator_owners() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var resolveCameraGate;
+        var cameraGate = new Promise(function(resolve) {
+            resolveCameraGate = resolve;
+        });
+        var asyncCameraResult = 0;
+        async function readAsyncCamera(environment) {
+            with (environment) {
+                const offset = 2;
+                asyncCameraResult = lens + offset + await cameraGate;
+            }
+        }
+        var asyncCameraTask = readAsyncCamera({ lens: 18 });
+
+        var generatorCameraResult = 0;
+        function* readGeneratorCamera(environment) {
+            with (environment) {
+                const offset = 2;
+                yield lens + offset;
+                generatorCameraResult = body + offset;
+            }
+        }
+        var cameraIterator = readGeneratorCamera({ lens: 18, body: 40 });
+        cameraIterator.next();
+
+        var asyncGeneratorCameraResult = 0;
+        async function* readAsyncGeneratorCamera(environment) {
+            with (environment) {
+                const offset = 2;
+                asyncGeneratorCameraResult = lens + offset + await cameraGate;
+                yield asyncGeneratorCameraResult;
+            }
+        }
+        var asyncCameraIterator = readAsyncGeneratorCamera({ lens: 18 });
+        var asyncCameraNext = asyncCameraIterator.next();
+        ",
+    )?;
+
+    let suspended = vm.storage_snapshot()?;
+    ensure(
+        suspended.count(VmStorageKind::ExecutionFrame) >= 3,
+        "async and generator owners should retain their execution frames",
+    )?;
+    ensure(
+        suspended.count(VmStorageKind::PromiseReaction) >= 2,
+        "pending await owners should retain their Promise reactions",
+    )?;
+
+    vm.collect_garbage()?;
+    vm.storage_snapshot()?;
+    vm.eval("resolveCameraGate(2); 0;")?;
+    ensure(
+        vm.eval("asyncCameraResult + asyncGeneratorCameraResult;")?
+            .to_string()
+            == "44",
+        "async owners should resume through the shared suspended footprint",
+    )?;
+
+    vm.eval("cameraIterator.next(); asyncCameraIterator.next(); 0;")?;
+    ensure(
+        vm.eval("generatorCameraResult;")?.to_string() == "42",
+        "generator owner should resume through the shared suspended footprint",
+    )?;
+    let completed = vm.storage_snapshot()?;
+    ensure_usize(
+        completed.count(VmStorageKind::ExecutionFrame),
+        0,
+        "completed suspended execution frames",
+    )?;
+    ensure(
+        completed.count(VmStorageKind::Binding) < suspended.count(VmStorageKind::Binding),
+        "completed owners should release suspended bindings",
+    )?;
+    ensure(
+        completed.count(VmStorageKind::CacheEntry) < suspended.count(VmStorageKind::CacheEntry),
+        "completed owners should release suspended cache entries",
+    )
+}
+
 fn ensure_materialized_payload_bytes(snapshot: &VmStorageSnapshot) -> TestResult {
     for (kind, label) in [
         (VmStorageKind::Atom, "atom text bytes"),

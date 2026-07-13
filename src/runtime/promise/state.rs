@@ -2,6 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         async_trace::VmAsyncEdgeKind,
+        function::SuspendedExecutionStorageFootprint,
         trace::{StrongEdgeReference, StrongEdgeVisitor},
     },
     value::Value,
@@ -60,37 +61,18 @@ impl Promise {
         Ok(())
     }
 
-    pub(in crate::runtime) fn suspended_execution_frame_count(&self) -> Result<usize> {
+    pub(in crate::runtime) fn suspended_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
         let PromiseState::Pending { reactions } = &self.state else {
-            return Ok(0);
+            return Ok(SuspendedExecutionStorageFootprint::default());
         };
-        reactions.iter().try_fold(0_usize, |count, reaction| {
-            count
-                .checked_add(reaction.execution_frame_count()?)
-                .ok_or_else(|| crate::Error::limit("suspended execution frame count overflowed"))
-        })
-    }
-
-    pub(in crate::runtime) fn suspended_binding_count(&self) -> Result<usize> {
-        let PromiseState::Pending { reactions } = &self.state else {
-            return Ok(0);
-        };
-        reactions.iter().try_fold(0_usize, |count, reaction| {
-            count
-                .checked_add(reaction.binding_count()?)
-                .ok_or_else(|| crate::Error::limit("suspended binding count overflowed"))
-        })
-    }
-
-    pub(in crate::runtime) fn suspended_cache_entry_count(&self) -> Result<usize> {
-        let PromiseState::Pending { reactions } = &self.state else {
-            return Ok(0);
-        };
-        reactions.iter().try_fold(0_usize, |count, reaction| {
-            count
-                .checked_add(reaction.cache_entry_count()?)
-                .ok_or_else(|| crate::Error::limit("suspended cache entry count overflowed"))
-        })
+        reactions.iter().try_fold(
+            SuspendedExecutionStorageFootprint::default(),
+            |footprint, reaction| {
+                footprint.checked_add(reaction.suspended_execution_storage_footprint()?)
+            },
+        )
     }
 }
 

@@ -100,6 +100,41 @@ pub struct BindingScope {
     resource_stacks: Vec<BindingResourceStack>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::runtime) struct BindingScopeStorageFootprint {
+    binding_count: usize,
+    cache_entry_count: usize,
+}
+
+impl BindingScopeStorageFootprint {
+    pub(in crate::runtime) const fn binding_count(self) -> usize {
+        self.binding_count
+    }
+
+    pub(in crate::runtime) const fn cache_entry_count(self) -> usize {
+        self.cache_entry_count
+    }
+
+    pub(in crate::runtime) fn checked_add(self, other: Self) -> Result<Self> {
+        let binding_count = self
+            .binding_count
+            .checked_add(other.binding_count)
+            .ok_or_else(binding_scope_storage_overflow)?;
+        let cache_entry_count = self
+            .cache_entry_count
+            .checked_add(other.cache_entry_count)
+            .ok_or_else(binding_scope_storage_overflow)?;
+        Ok(Self {
+            binding_count,
+            cache_entry_count,
+        })
+    }
+}
+
+fn binding_scope_storage_overflow() -> Error {
+    Error::limit("binding scope storage footprint overflowed")
+}
+
 #[derive(Debug)]
 pub(in crate::runtime) enum BindingResourceStack {
     Sync(Value),
@@ -163,6 +198,13 @@ impl BindingScope {
 
     pub(crate) fn index_entry_count(&self) -> Result<usize> {
         self.index.storage_entry_count()
+    }
+
+    pub(in crate::runtime) fn storage_footprint(&self) -> Result<BindingScopeStorageFootprint> {
+        Ok(BindingScopeStorageFootprint {
+            binding_count: self.len(),
+            cache_entry_count: self.index_entry_count()?,
+        })
     }
 
     pub(crate) fn cells(&self) -> impl Iterator<Item = &BindingCell> {
@@ -418,10 +460,12 @@ impl BindingScope {
         if self.storage_ledger.is_some() {
             return Err(Error::runtime("binding scope storage is already active"));
         }
-        storage_ledger.grow_count(VmStorageKind::Binding, self.len())?;
-        let cache_entries = self.index_entry_count()?;
-        if let Err(error) = storage_ledger.grow_count(VmStorageKind::CacheEntry, cache_entries) {
-            storage_ledger.release_count(VmStorageKind::Binding, self.len())?;
+        let footprint = self.storage_footprint()?;
+        storage_ledger.grow_count(VmStorageKind::Binding, footprint.binding_count())?;
+        if let Err(error) =
+            storage_ledger.grow_count(VmStorageKind::CacheEntry, footprint.cache_entry_count())
+        {
+            storage_ledger.release_count(VmStorageKind::Binding, footprint.binding_count())?;
             return Err(error);
         }
         self.storage_ledger = Some(storage_ledger);
@@ -432,8 +476,9 @@ impl BindingScope {
         let Some(storage_ledger) = self.storage_ledger.take() else {
             return Ok(());
         };
-        storage_ledger.release_count(VmStorageKind::Binding, self.len())?;
-        storage_ledger.release_count(VmStorageKind::CacheEntry, self.index_entry_count()?)
+        let footprint = self.storage_footprint()?;
+        storage_ledger.release_count(VmStorageKind::Binding, footprint.binding_count())?;
+        storage_ledger.release_count(VmStorageKind::CacheEntry, footprint.cache_entry_count())
     }
 
     fn reserve_new_binding(
