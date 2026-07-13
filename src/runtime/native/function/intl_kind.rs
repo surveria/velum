@@ -229,13 +229,13 @@ impl IntlFunctionKind {
             Self::RelativeTimeFormatFormatToParts => 77,
             Self::RelativeTimeFormatResolvedOptions => 78,
             Self::RelativeTimeFormatSupportedLocalesOf => 79,
-            Self::CollatorCompareGetter => 80,
-            Self::CollatorBoundCompare(_) => 81,
-            Self::CollatorResolvedOptions => 82,
-            Self::CollatorSupportedLocalesOf => 83,
-            Self::DurationFormatFormatToParts => 84,
-            Self::DurationFormatResolvedOptions => 85,
-            Self::DurationFormatSupportedLocalesOf => 86,
+            Self::CollatorCompareGetter => 85,
+            Self::CollatorBoundCompare(_) => 86,
+            Self::CollatorResolvedOptions => 87,
+            Self::CollatorSupportedLocalesOf => 88,
+            Self::DurationFormatFormatToParts => 89,
+            Self::DurationFormatResolvedOptions => 90,
+            Self::DurationFormatSupportedLocalesOf => 91,
         }
     }
 
