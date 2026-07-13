@@ -218,6 +218,45 @@ fn transient_scopes_clear_after_host_errors() -> TestResult {
     ensure_transient_roots_cleared(vm.root_snapshot()?)
 }
 
+#[test]
+fn nested_call_scopes_keep_outer_operands_rooted_and_release_them() -> TestResult {
+    const NESTED_DEPTH: usize = 8;
+
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let captured = Rc::new(Mutex::new(None));
+    let callback_capture = Rc::clone(&captured);
+    vm.register_host_function_typed("captureNestedRoots", move |call| {
+        *callback_capture.lock() = Some(call.root_snapshot());
+        Ok(0.0)
+    })?;
+
+    let value = vm.eval(
+        r"
+        function descendWithRoot(depth) {
+            if (depth === 0) {
+                captureNestedRoots();
+                return 0;
+            }
+            return ({ depth: depth }) === descendWithRoot(depth - 1);
+        }
+        descendWithRoot(8);
+        ",
+    )?;
+    ensure_value(&value, &Value::Bool(false))?;
+
+    let snapshot = copied_snapshot(&captured, "nested root snapshot")?;
+    ensure_at_least(
+        snapshot.count(VmRootKind::TransientOperand),
+        NESTED_DEPTH,
+        "nested operand roots",
+    )?;
+    ensure_snapshot_sum(snapshot)?;
+    ensure_transient_roots_cleared(vm.root_snapshot()?)?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
 fn ensure_transient_roots_cleared(snapshot: VmRootSnapshot) -> TestResult {
     ensure_usize(
         snapshot.count(VmRootKind::TransientOperand),
