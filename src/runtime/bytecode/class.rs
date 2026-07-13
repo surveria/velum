@@ -74,17 +74,26 @@ impl Context {
         }
         if let Some(heritage) = &heritage {
             self.set_function_static_parent(*constructor_id, heritage.constructor.clone())?;
-            self.set_function_super_binding(
-                *constructor_id,
-                Rc::new(FunctionSuperBinding {
-                    constructor: Some(heritage.constructor.clone()),
-                    home_object: Value::Object(prototype_id),
-                    own_constructor: Some(*constructor_id),
-                    this_value: std::cell::RefCell::new(None),
-                    allow_direct_eval_super_call: std::cell::Cell::new(true),
-                }),
-            )?;
         }
+        self.set_function_super_binding(
+            *constructor_id,
+            Rc::new(FunctionSuperBinding {
+                constructor: heritage
+                    .as_ref()
+                    .map(|heritage| heritage.constructor.clone()),
+                home_object: Value::Object(prototype_id),
+                own_constructor: Some(*constructor_id),
+                this_value: std::cell::RefCell::new(None),
+                allow_direct_eval_super_call: std::cell::Cell::new(heritage.is_some()),
+            }),
+        )?;
+        let static_super_binding = Rc::new(FunctionSuperBinding {
+            constructor: None,
+            home_object: constructor.clone(),
+            own_constructor: None,
+            this_value: std::cell::RefCell::new(None),
+            allow_direct_eval_super_call: std::cell::Cell::new(false),
+        });
         let targets = ClassInstallationTargets {
             constructor: constructor.clone(),
             constructor_id: *constructor_id,
@@ -92,8 +101,14 @@ impl Context {
         };
         self.install_class_members(class, computed_keys, &targets)?;
 
-        self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
-        self.evaluate_class_static_blocks(class, &constructor)?;
+        self.install_class_fields(
+            class,
+            &constructor,
+            *constructor_id,
+            &field_computed_keys,
+            &static_super_binding,
+        )?;
+        self.evaluate_class_static_blocks(class, &constructor, &static_super_binding)?;
 
         state.stack.push(constructor);
         state.pc = next;
@@ -169,9 +184,14 @@ impl Context {
         &mut self,
         class: &BytecodeClass,
         constructor: &Value,
+        super_binding: &Rc<FunctionSuperBinding>,
     ) -> Result<()> {
         for block in class.static_blocks.iter() {
-            self.push_temporary_this(constructor.clone())?;
+            self.push_class_evaluation(
+                constructor.clone(),
+                super_binding.clone(),
+                self.current_private_environment(),
+            )?;
             let completion = self.eval_bytecode_block(block);
             self.pop_temporary_this()?;
             completion?.into_result()?;
@@ -189,6 +209,7 @@ impl Context {
         constructor: &Value,
         constructor_id: FunctionId,
         field_computed_keys: &[Value],
+        static_super_binding: &Rc<FunctionSuperBinding>,
     ) -> Result<()> {
         let mut computed = field_computed_keys.iter();
         let mut instance_fields = Vec::new();
@@ -227,7 +248,11 @@ impl Context {
             self.set_function_class_fields(constructor_id, instance_fields.into())?;
         }
         for field in static_fields {
-            self.push_temporary_this(constructor.clone())?;
+            self.push_class_evaluation(
+                constructor.clone(),
+                static_super_binding.clone(),
+                self.current_private_environment(),
+            )?;
             let initializer = match &field {
                 ResolvedClassField::Public { initializer, .. }
                 | ResolvedClassField::Private { initializer, .. } => initializer,
@@ -389,33 +414,31 @@ impl Context {
     }
 
     fn resolve_class_heritage(&mut self, value: Value) -> Result<ClassHeritage> {
-        match &value {
-            Value::Null => Ok(ClassHeritage {
+        if matches!(value, Value::Null) {
+            return Ok(ClassHeritage {
                 constructor: Value::Undefined,
                 prototype_id: None,
-            }),
-            Value::Function(id) => {
-                let prototype_id = self.function_constructor_prototype(*id)?;
-                Ok(ClassHeritage {
-                    constructor: value,
-                    prototype_id,
-                })
-            }
-            Value::NativeFunction(_) => {
-                let prototype = self.get_named(&value, CLASS_PROTOTYPE_PROPERTY)?;
-                let prototype_id = match &prototype {
-                    Value::Object(id) => Some(*id),
-                    _ => None,
-                };
-                Ok(ClassHeritage {
-                    constructor: value,
-                    prototype_id,
-                })
-            }
-            _ => Err(Error::type_error(format!(
-                "class heritage '{value}' is not a constructor"
-            ))),
+            });
         }
+        if !self.semantic_is_constructor(&value)? {
+            return Err(Error::type_error(format!(
+                "class heritage '{value}' is not a constructor"
+            )));
+        }
+        let prototype = self.get_named(&value, CLASS_PROTOTYPE_PROPERTY)?;
+        let prototype_id = match prototype {
+            Value::Object(id) => Some(id),
+            Value::Null => None,
+            other => {
+                return Err(Error::type_error(format!(
+                    "class heritage prototype '{other}' is not an object or null"
+                )));
+            }
+        };
+        Ok(ClassHeritage {
+            constructor: value,
+            prototype_id,
+        })
     }
 }
 

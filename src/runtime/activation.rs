@@ -30,6 +30,8 @@ pub(in crate::runtime) enum ActivationFrame {
     },
     TemporaryThis {
         this_value: Value,
+        new_target: Value,
+        super_binding: Rc<FunctionSuperBinding>,
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
@@ -122,10 +124,13 @@ impl ActivationFrame {
 
     pub(in crate::runtime) const fn temporary_this(
         this_value: Value,
+        super_binding: Rc<FunctionSuperBinding>,
         private_environment: Option<Rc<PrivateEnvironment>>,
     ) -> Self {
         Self::TemporaryThis {
             this_value,
+            new_target: Value::Undefined,
+            super_binding,
             private_environment,
             continuation: None,
         }
@@ -280,15 +285,18 @@ impl ActivationFrame {
 
     pub(in crate::runtime) const fn new_target(&self) -> Option<&Value> {
         match self {
-            Self::Call { new_target, .. } => Some(new_target),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+            Self::Call { new_target, .. } | Self::TemporaryThis { new_target, .. } => {
+                Some(new_target)
+            }
+            Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 
     pub(in crate::runtime) const fn super_binding(&self) -> Option<&Rc<FunctionSuperBinding>> {
         match self {
             Self::Call { super_binding, .. } => super_binding.as_ref(),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+            Self::TemporaryThis { super_binding, .. } => Some(super_binding),
+            Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 

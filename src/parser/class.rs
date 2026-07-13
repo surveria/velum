@@ -268,11 +268,13 @@ impl Parser {
     fn class_static_block(&mut self, static_blocks: &mut Vec<ClassStaticBlock>) -> Result<()> {
         let static_token = self.advance_token("expected 'static' before class static block")?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
-        let mut body = self.with_restricted_class_arguments(|parser| {
-            parser.with_isolated_control_context(|parser| {
-                parser.with_super_context(true, false, |parser| {
-                    parser.with_await_context(false, true, |parser| {
-                        parser.with_yield_expression(false, Self::block_statements)
+        let mut body = self.with_new_target_scope(|parser| {
+            parser.with_restricted_class_arguments(|parser| {
+                parser.with_isolated_control_context(|parser| {
+                    parser.with_super_context(true, false, |parser| {
+                        parser.with_await_context(false, true, |parser| {
+                            parser.with_yield_expression(false, Self::block_statements)
+                        })
                     })
                 })
             })
@@ -326,7 +328,11 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.with_restricted_class_arguments(Self::assignment_expression)?)
+            Some(self.with_new_target_scope(|parser| {
+                parser.with_restricted_class_arguments(|parser| {
+                    parser.with_super_context(true, false, Self::assignment_expression)
+                })
+            })?)
         } else {
             None
         };
@@ -394,25 +400,29 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
-                let parameters =
-                    parser.with_await_context(false, function_kind.is_async(), |parser| {
-                        parser.with_yield_expression(false, |parser| {
-                            parser.with_yield_identifier_reserved(
-                                function_kind.is_generator(),
-                                Self::function_parameters,
-                            )
-                        })
-                    })?;
-                parser.reject_duplicate_parameters(&parameters.bound_names)?;
-                parser.consume(
-                    &TokenKind::RParen,
-                    "expected ')' after class member parameters",
-                )?;
-                Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
-                parser.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
-                let body = parser.with_new_target_scope(|parser| {
+                parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, allow_super_call, |parser| {
-                        parser.with_await_context(
+                        let parameters = parser.with_await_context(
+                            false,
+                            function_kind.is_async(),
+                            |parser| {
+                                parser.with_yield_expression(false, |parser| {
+                                    parser.with_yield_identifier_reserved(
+                                        function_kind.is_generator(),
+                                        Self::function_parameters,
+                                    )
+                                })
+                            },
+                        )?;
+                        parser.reject_duplicate_parameters(&parameters.bound_names)?;
+                        parser.consume(
+                            &TokenKind::RParen,
+                            "expected ')' after class member parameters",
+                        )?;
+                        Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
+                        parser
+                            .consume(&TokenKind::LBrace, "expected '{' before class member body")?;
+                        let body = parser.with_await_context(
                             function_kind.is_async(),
                             function_kind.is_async(),
                             |parser| {
@@ -421,10 +431,10 @@ impl Parser {
                                         parser.function_body(true)
                                     })
                             },
-                        )
+                        )?;
+                        Ok((parameters, body))
                     })
-                })?;
-                Ok((parameters, body))
+                })
             })?;
         self.validate_function_parameters(
             &parameters.bound_names,
@@ -504,6 +514,7 @@ impl Parser {
             || self.peek_kind_is(1, &TokenKind::Equal)
             || self.peek_kind_is(1, &TokenKind::Semicolon)
             || self.peek_kind_is(1, &TokenKind::RBrace)
+            || (self.peek_kind_is(1, &TokenKind::Star) && self.peek_has_line_terminator_before(1))
         {
             return None;
         }

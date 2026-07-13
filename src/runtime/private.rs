@@ -174,32 +174,14 @@ impl Context {
         self.set_current_private_environment(parent)
     }
 
-    fn private_target(&self, value: &Value) -> Result<Value> {
-        let mut target = value.clone();
-        loop {
-            let Value::Object(id) = target else {
-                return Ok(target);
-            };
-            let Some(proxy) = self.objects.proxy_value(id)? else {
-                return Ok(Value::Object(id));
-            };
-            let Some(next) = proxy.target() else {
-                return Err(Error::type_error(
-                    "Cannot access private member through revoked Proxy",
-                ));
-            };
-            target = next.clone();
-        }
-    }
-
     fn private_slot_for_value(
         &self,
         value: &Value,
         name: &PrivateNameId,
     ) -> Result<Option<PrivateSlotValue>> {
-        match self.private_target(value)? {
-            Value::Object(id) => self.objects.private_slot(id, name),
-            Value::Function(id) => self.function_private_slot(id, name),
+        match value {
+            Value::Object(id) => self.objects.private_slot(*id, name),
+            Value::Function(id) => self.function_private_slot(*id, name),
             _ => Ok(None),
         }
     }
@@ -209,10 +191,7 @@ impl Context {
         value: &Value,
         name: &PrivateNameId,
     ) -> Result<bool> {
-        if !matches!(
-            self.private_target(value)?,
-            Value::Object(_) | Value::Function(_)
-        ) {
+        if !matches!(value, Value::Object(_) | Value::Function(_)) {
             return Err(Error::type_error(
                 "right-hand side of private 'in' is not an object",
             ));
@@ -254,9 +233,9 @@ impl Context {
             ));
         };
         match slot {
-            PrivateSlotValue::Field(_) => match self.private_target(receiver)? {
+            PrivateSlotValue::Field(_) => match receiver {
                 Value::Object(id) => {
-                    if self.objects.set_private_field(id, name, value)? {
+                    if self.objects.set_private_field(*id, name, value)? {
                         Ok(())
                     } else {
                         Err(Error::runtime(
@@ -265,7 +244,7 @@ impl Context {
                     }
                 }
                 Value::Function(id) => {
-                    if self.set_function_private_field(id, name, value)? {
+                    if self.set_function_private_field(*id, name, value)? {
                         Ok(())
                     } else {
                         Err(Error::runtime(
@@ -294,12 +273,12 @@ impl Context {
         name: PrivateNameId,
         value: PrivateSlotValue,
     ) -> Result<()> {
-        match self.private_target(receiver)? {
+        match receiver {
             Value::Object(id) => {
                 self.objects
-                    .add_private_slot(id, name, value, self.limits.max_object_properties)
+                    .add_private_slot(*id, name, value, self.limits.max_object_properties)
             }
-            Value::Function(id) => self.add_function_private_slot(id, name, value),
+            Value::Function(id) => self.add_function_private_slot(*id, name, value),
             _ => Err(Error::type_error(
                 "private element receiver is not an object",
             )),
@@ -314,9 +293,9 @@ impl Context {
     ) -> Result<()> {
         if let Some(mut existing) = self.private_slot_for_value(receiver, &name)? {
             existing.merge_accessor(value)?;
-            match self.private_target(receiver)? {
-                Value::Object(id) => self.objects.replace_private_slot(id, &name, existing),
-                Value::Function(id) => self.replace_function_private_slot(id, &name, existing),
+            match receiver {
+                Value::Object(id) => self.objects.replace_private_slot(*id, &name, existing),
+                Value::Function(id) => self.replace_function_private_slot(*id, &name, existing),
                 _ => Err(Error::type_error(
                     "private element receiver is not an object",
                 )),

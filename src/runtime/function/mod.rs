@@ -164,7 +164,11 @@ impl Context {
         let prototype_default = (init.constructable || init.kind.is_generator()).then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
-                PropertyWritable::Yes,
+                if init.class_constructor {
+                    PropertyWritable::No
+                } else {
+                    PropertyWritable::Yes
+                },
                 PropertyEnumerable::No,
                 PropertyConfigurable::No,
             )

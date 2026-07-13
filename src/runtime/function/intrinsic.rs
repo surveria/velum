@@ -12,6 +12,7 @@ use crate::{
 pub(super) struct FunctionIntrinsicProperty {
     descriptor: Option<DataPropertyDescriptor>,
     deleted: bool,
+    replaced: bool,
 }
 
 impl FunctionIntrinsicProperty {
@@ -19,6 +20,7 @@ impl FunctionIntrinsicProperty {
         Self {
             descriptor: None,
             deleted: false,
+            replaced: false,
         }
     }
 
@@ -80,7 +82,27 @@ impl FunctionIntrinsicProperty {
         }
         self.descriptor = None;
         self.deleted = true;
+        self.replaced = false;
         Some(true)
+    }
+
+    pub(super) fn replace_with_custom(&mut self, default: DataPropertyDescriptor) -> Option<bool> {
+        let descriptor = self.descriptor(default)?;
+        if !descriptor.configurable().is_yes() {
+            return Some(false);
+        }
+        self.descriptor = None;
+        self.deleted = true;
+        self.replaced = true;
+        Some(true)
+    }
+
+    pub(super) const fn was_replaced(&self) -> bool {
+        self.replaced
+    }
+
+    pub(super) const fn clear_replaced(&mut self) {
+        self.replaced = false;
     }
 }
 

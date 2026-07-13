@@ -40,13 +40,13 @@ fn intrinsic_function_property_kind_paths_preserve_metadata() -> TestResult {
             descriptor.enumerable === true &&
             Object.keys(sample)[0] === 'name';
         let deletedName = delete sample.name && !('name' in sample);
-        let protectedPrototypes =
+        let prototypeDeletion =
             delete sample.prototype === false &&
-            delete native.prototype === false;
+            delete native.prototype === true;
         let nativeMetadata =
             native.name === 'max' &&
             native.length === 2;
-        customNameVisible && deletedName && protectedPrototypes && nativeMetadata
+        customNameVisible && deletedName && prototypeDeletion && nativeMetadata
         ",
     )?;
     ensure_value(&value, &Value::Bool(true))

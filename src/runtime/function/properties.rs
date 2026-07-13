@@ -346,14 +346,14 @@ impl FunctionProperties {
     ) -> Result<bool> {
         let previous_property_count = self.storage_property_count()?;
         let previous_cache_count = self.storage_cache_entry_count();
-        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
-            && let Some(deleted) = self.delete_intrinsic(property_kind, default)
-        {
-            self.release_removed_storage(previous_property_count, previous_cache_count)?;
-            return Ok(deleted);
-        }
-        if property_kind.is_prototype() {
-            return Ok(false);
+        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind) {
+            if let Some(deleted) = self.delete_intrinsic(property_kind, default) {
+                self.release_removed_storage(previous_property_count, previous_cache_count)?;
+                return Ok(deleted);
+            }
+            if property_kind.is_prototype() {
+                return Ok(false);
+            }
         }
         let Some(key) = property.key() else {
             return Ok(true);
@@ -368,6 +368,9 @@ impl FunctionProperties {
             return Ok(true);
         };
         self.property_order.retain(|stored_key| *stored_key != key);
+        if let Some(intrinsic) = self.intrinsic_mut(property_kind) {
+            intrinsic.clear_replaced();
+        }
         self.release_removed_storage(previous_property_count, previous_cache_count)?;
         Ok(true)
     }
@@ -377,15 +380,19 @@ impl FunctionProperties {
         atoms: &AtomTable,
     ) -> Result<(Vec<String>, Vec<SymbolId>)> {
         let mut names = Vec::new();
+        let length_replaced = self.intrinsic_was_replaced(FunctionPropertyKind::Length);
+        let name_replaced = self.intrinsic_was_replaced(FunctionPropertyKind::Name);
         if self
             .intrinsic_descriptor(FunctionPropertyKind::Length)
             .is_some()
+            || (length_replaced && self.has_ordered_name(atoms, FUNCTION_LENGTH_PROPERTY)?)
         {
             names.push(FUNCTION_LENGTH_PROPERTY.to_owned());
         }
         if self
             .intrinsic_descriptor(FunctionPropertyKind::Name)
             .is_some()
+            || (name_replaced && self.has_ordered_name(atoms, FUNCTION_NAME_PROPERTY)?)
         {
             names.push(FUNCTION_NAME_PROPERTY.to_owned());
         }
@@ -397,7 +404,13 @@ impl FunctionProperties {
         }
         for key in &self.property_order {
             if let Some(atom) = key.atom() {
-                names.push(atoms.name(atom)?.to_owned());
+                let name = atoms.name(atom)?;
+                if (length_replaced && name == FUNCTION_LENGTH_PROPERTY)
+                    || (name_replaced && name == FUNCTION_NAME_PROPERTY)
+                {
+                    continue;
+                }
+                names.push(name.to_owned());
             }
         }
         let symbols = self
@@ -468,7 +481,7 @@ impl FunctionProperties {
                         )));
                     }
                     if self
-                        .delete_intrinsic(property_kind, default)
+                        .replace_intrinsic_with_custom(property_kind, default)
                         .is_some_and(|deleted| deleted)
                     {
                         self.push_function_property(
@@ -627,6 +640,32 @@ impl FunctionProperties {
     ) -> Option<bool> {
         self.intrinsic_mut(property)
             .and_then(|intrinsic| intrinsic.delete(default))
+    }
+
+    fn replace_intrinsic_with_custom(
+        &mut self,
+        property: FunctionPropertyKind,
+        default: DataPropertyDescriptor,
+    ) -> Option<bool> {
+        self.intrinsic_mut(property)
+            .and_then(|intrinsic| intrinsic.replace_with_custom(default))
+    }
+
+    fn intrinsic_was_replaced(&self, property: FunctionPropertyKind) -> bool {
+        self.intrinsic(property)
+            .is_some_and(FunctionIntrinsicProperty::was_replaced)
+    }
+
+    fn has_ordered_name(&self, atoms: &AtomTable, expected: &str) -> Result<bool> {
+        for key in &self.property_order {
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            if atoms.name(atom)? == expected {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn contains_function_property(&self, property: PropertyKey) -> bool {

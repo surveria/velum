@@ -28,26 +28,34 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
-                let parameters = parser.with_await_context(false, kind.is_async(), |parser| {
-                    parser.with_yield_expression(false, |parser| {
-                        parser.with_yield_identifier_reserved(
-                            kind.is_generator(),
-                            Self::function_parameters,
-                        )
-                    })
-                })?;
-                parser.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
-                parser.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-                let body = parser.with_new_target_scope(|parser| {
+                parser.with_new_target_scope(|parser| {
                     parser.with_super_context(false, false, |parser| {
-                        parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
-                            parser.with_yield_expression(kind.is_generator(), |parser| {
-                                parser.function_body(inherited_strict)
-                            })
-                        })
+                        let parameters =
+                            parser.with_await_context(false, kind.is_async(), |parser| {
+                                parser.with_yield_expression(false, |parser| {
+                                    parser.with_yield_identifier_reserved(
+                                        kind.is_generator(),
+                                        Self::function_parameters,
+                                    )
+                                })
+                            })?;
+                        parser.consume(
+                            &TokenKind::RParen,
+                            "expected ')' after function parameters",
+                        )?;
+                        parser.consume(&TokenKind::LBrace, "expected '{' before function body")?;
+                        let body = parser.with_await_context(
+                            kind.is_async(),
+                            kind.is_async(),
+                            |parser| {
+                                parser.with_yield_expression(kind.is_generator(), |parser| {
+                                    parser.function_body(inherited_strict)
+                                })
+                            },
+                        )?;
+                        Ok((parameters, body))
                     })
-                })?;
-                Ok((parameters, body))
+                })
             })?;
         self.validate_function_parameters(
             &parameters.bound_names,
