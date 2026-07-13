@@ -106,7 +106,7 @@ impl Context {
         )
     }
 
-    fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
+    pub(super) fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
         if u64::try_from(length).map_or(true, |length| length > u64::from(u32::MAX)) {
             return Err(Error::exception(
                 ErrorName::RangeError,
@@ -279,16 +279,6 @@ impl Context {
         Ok(result)
     }
 
-    pub(super) fn generic_array_join(
-        &mut self,
-        separator: &str,
-        this_value: &Value,
-    ) -> Result<Value> {
-        Self::ensure_array_like_object(this_value)?;
-        let length = self.array_like_length(this_value)?;
-        self.generic_array_join_with_length(separator, this_value, length)
-    }
-
     pub(super) fn generic_array_join_with_length(
         &mut self,
         separator: &str,
@@ -410,14 +400,12 @@ impl Context {
         lower: usize,
         upper: usize,
     ) -> Result<()> {
-        let lower_present = self.has_array_like_index(object, lower)?;
-        let upper_present = self.has_array_like_index(object, upper)?;
-        let lower_value = if lower_present {
+        let lower_value = if self.has_array_like_index(object, lower)? {
             Some(self.get_array_like_index(object, lower)?)
         } else {
             None
         };
-        let upper_value = if upper_present {
+        let upper_value = if self.has_array_like_index(object, upper)? {
             Some(self.get_array_like_index(object, upper)?)
         } else {
             None
@@ -488,6 +476,11 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = self.intern_property_key(property)?;
+        if let Value::Object(id) = object
+            && self.objects.typed_array(*id)?.is_some()
+        {
+            return self.set_property_value_with_accessors(object, key, property, value);
+        }
         let lookup = PropertyLookup::from_key(property, key);
         self.set(object, lookup, value, object, SetFailureBehavior::Throw)
             .map(|_| ())
@@ -534,10 +527,10 @@ impl Context {
     fn checked_array_like_length(length: usize, additional: usize) -> Result<usize> {
         let length = length
             .checked_add(additional)
-            .ok_or_else(|| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
+            .ok_or_else(|| Error::type_error(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
         let max = Self::max_array_like_length()?;
         if length > max {
-            return Err(Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR));
+            return Err(Error::type_error(ARRAY_LIKE_LENGTH_LIMIT_ERROR));
         }
         Ok(length)
     }

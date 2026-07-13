@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::Context,
+    runtime::numeric::number_to_uint32,
     runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
     value::{ErrorName, ObjectId, Value},
 };
@@ -93,24 +94,18 @@ impl Context {
     }
 
     pub(in crate::runtime) fn array_length_from_value(&mut self, value: &Value) -> Result<usize> {
-        let number = self.to_number(value)?;
-        if !number.is_finite()
-            || number < 0.0
-            || number.fract() != 0.0
-            || number > f64::from(u32::MAX)
-        {
+        let uint32_length = number_to_uint32(self.to_number(value)?, "array length")?;
+        let number_length = self.to_number(value)?;
+        if !matches!(
+            number_length.partial_cmp(&f64::from(uint32_length)),
+            Some(std::cmp::Ordering::Equal)
+        ) {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 ARRAY_LENGTH_RANGE_ERROR,
             ));
         }
-        if number == 0.0 {
-            return Ok(0);
-        }
-        let length = format!("{number:.0}")
-            .parse::<u32>()
-            .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))?;
-        usize::try_from(length)
+        usize::try_from(uint32_length)
             .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, roots::VmRootKind},
     value::{ErrorName, Value},
 };
 
@@ -27,16 +27,19 @@ impl Context {
             return Ok(value);
         }
         let length = self.array_like_length(this_value)?;
-        let mut elements = Vec::new();
+        let result = self.create_intrinsic_array_with_length(length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         for offset in 0..length {
             self.step()?;
             let from = length
                 .checked_sub(offset)
                 .and_then(|value| value.checked_sub(1))
                 .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
-            elements.push(self.get_array_like_index(this_value, from)?);
+            let value = self.get_array_like_index(this_value, from)?;
+            self.array_from_create_data_property(&result, offset, value)?;
         }
-        self.create_array_from_elements(elements)
+        Ok(result)
     }
 
     pub(in crate::runtime::native) fn eval_array_to_spliced(
@@ -62,23 +65,39 @@ impl Context {
         {
             return Ok(value);
         }
-        let mut elements = Vec::new();
+        let result = self.create_intrinsic_array_with_length(new_length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+        let mut write = 0_usize;
         for index in 0..start {
             self.step()?;
-            elements.push(self.get_array_like_index(this_value, index)?);
-        }
-        elements.extend(items);
-        let mut read = start
-            .checked_add(skip_count)
-            .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
-        while elements.len() < new_length {
-            self.step()?;
-            elements.push(self.get_array_like_index(this_value, read)?);
-            read = read
+            let value = self.get_array_like_index(this_value, index)?;
+            self.array_from_create_data_property(&result, write, value)?;
+            write = write
                 .checked_add(1)
                 .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
         }
-        self.create_array_from_elements(elements)
+        for value in items {
+            self.array_from_create_data_property(&result, write, value)?;
+            write = write
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+        }
+        let mut read = start
+            .checked_add(skip_count)
+            .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+        while write < new_length {
+            self.step()?;
+            let value = self.get_array_like_index(this_value, read)?;
+            self.array_from_create_data_property(&result, write, value)?;
+            read = read
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+            write = write
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+        }
+        Ok(result)
     }
 
     fn eval_packed_array_to_reversed(&mut self, this_value: &Value) -> Result<Option<Value>> {
@@ -155,15 +174,18 @@ impl Context {
         }
         let actual = Self::array_clamp_index(target, length)?;
         let value = args.get(1).cloned().unwrap_or(Value::Undefined);
-        let mut elements = Vec::new();
+        let result = self.create_intrinsic_array_with_length(length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         for index in 0..length {
             self.step()?;
-            if index == actual {
-                elements.push(value.clone());
+            let copied = if index == actual {
+                value.clone()
             } else {
-                elements.push(self.get_array_like_index(this_value, index)?);
-            }
+                self.get_array_like_index(this_value, index)?
+            };
+            self.array_from_create_data_property(&result, index, copied)?;
         }
-        self.create_array_from_elements(elements)
+        Ok(result)
     }
 }
