@@ -151,6 +151,7 @@ impl Context {
             Some(IntlValue::DateTime(value)) => Ok(value.as_ref().clone()),
             Some(
                 IntlValue::Duration
+                | IntlValue::DisplayNames(_)
                 | IntlValue::List(_)
                 | IntlValue::Locale(_)
                 | IntlValue::Number(_)

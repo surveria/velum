@@ -157,6 +157,17 @@ pub(in crate::runtime) enum IntlFunctionKind {
     SegmentsIterator,
     SegmentsContaining,
     SegmentIteratorNext,
+    DisplayNamesConstructor,
+    DisplayNamesOf,
+    DisplayNamesResolvedOptions,
+    PluralRulesSelect,
+    PluralRulesSelectRange,
+    PluralRulesResolvedOptions,
+    PluralRulesSupportedLocalesOf,
+    RelativeTimeFormatFormat,
+    RelativeTimeFormatFormatToParts,
+    RelativeTimeFormatResolvedOptions,
+    RelativeTimeFormatSupportedLocalesOf,
 }
 
 impl IntlFunctionKind {
@@ -200,6 +211,17 @@ impl IntlFunctionKind {
             Self::SegmentsIterator => 61,
             Self::SegmentsContaining => 62,
             Self::SegmentIteratorNext => 63,
+            Self::DisplayNamesConstructor => 69,
+            Self::DisplayNamesOf => 70,
+            Self::DisplayNamesResolvedOptions => 71,
+            Self::PluralRulesSelect => 72,
+            Self::PluralRulesSelectRange => 73,
+            Self::PluralRulesResolvedOptions => 74,
+            Self::PluralRulesSupportedLocalesOf => 75,
+            Self::RelativeTimeFormatFormat => 76,
+            Self::RelativeTimeFormatFormatToParts => 77,
+            Self::RelativeTimeFormatResolvedOptions => 78,
+            Self::RelativeTimeFormatSupportedLocalesOf => 79,
         }
     }
 
@@ -220,6 +242,9 @@ impl IntlFunctionKind {
             | Self::SegmenterResolvedOptions
             | Self::SegmentsIterator
             | Self::SegmentIteratorNext
+            | Self::DisplayNamesResolvedOptions
+            | Self::PluralRulesResolvedOptions
+            | Self::RelativeTimeFormatResolvedOptions
             | Self::DateTimeFormatFormatGetter
             | Self::LocaleAccessor(_)
             | Self::LocaleMethod(_) => 0.0,
@@ -239,10 +264,18 @@ impl IntlFunctionKind {
             | Self::SegmenterSegment
             | Self::SegmenterSupportedLocalesOf
             | Self::SegmentsContaining => 1.0,
+            Self::DisplayNamesOf
+            | Self::PluralRulesSelect
+            | Self::PluralRulesSupportedLocalesOf
+            | Self::RelativeTimeFormatSupportedLocalesOf => 1.0,
             Self::NumberFormatFormatRange
             | Self::NumberFormatFormatRangeToParts
             | Self::DateTimeFormatFormatRange
-            | Self::DateTimeFormatFormatRangeToParts => 2.0,
+            | Self::DateTimeFormatFormatRangeToParts
+            | Self::DisplayNamesConstructor
+            | Self::PluralRulesSelectRange
+            | Self::RelativeTimeFormatFormat
+            | Self::RelativeTimeFormatFormatToParts => 2.0,
         }
     }
 
@@ -253,10 +286,14 @@ impl IntlFunctionKind {
             Self::DateTimeFormatFormatToParts
             | Self::NumberFormatFormatToParts
             | Self::ListFormatFormatToParts => "formatToParts",
+            Self::RelativeTimeFormatFormatToParts => "formatToParts",
             Self::DateTimeFormatResolvedOptions
             | Self::NumberFormatResolvedOptions
             | Self::ListFormatResolvedOptions
             | Self::SegmenterResolvedOptions => "resolvedOptions",
+            Self::DisplayNamesResolvedOptions
+            | Self::PluralRulesResolvedOptions
+            | Self::RelativeTimeFormatResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
@@ -271,6 +308,9 @@ impl IntlFunctionKind {
             | Self::DateTimeFormatSupportedLocalesOf
             | Self::ListFormatSupportedLocalesOf
             | Self::SegmenterSupportedLocalesOf => "supportedLocalesOf",
+            Self::PluralRulesSupportedLocalesOf | Self::RelativeTimeFormatSupportedLocalesOf => {
+                "supportedLocalesOf"
+            }
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
             Self::LocaleConstructor => "Locale",
@@ -283,6 +323,11 @@ impl IntlFunctionKind {
             Self::SegmentsIterator => "[Symbol.iterator]",
             Self::SegmentsContaining => "containing",
             Self::SegmentIteratorNext => "next",
+            Self::DisplayNamesConstructor => "DisplayNames",
+            Self::DisplayNamesOf => "of",
+            Self::PluralRulesSelect => "select",
+            Self::PluralRulesSelectRange => "selectRange",
+            Self::RelativeTimeFormatFormat => "format",
         }
     }
 }

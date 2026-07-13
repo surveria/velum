@@ -3,6 +3,7 @@ mod date_time_locale;
 mod date_time_range;
 mod date_time_text;
 mod date_time_types;
+mod display_names;
 mod duration_format;
 mod formatting;
 mod list_format;
@@ -52,6 +53,8 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "DateTimeFormat", date_time_format)?;
         let duration_format = self.intl_duration_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "DurationFormat", duration_format)?;
+        let display_names = self.intl_display_names_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "DisplayNames", display_names)?;
         let locale = self.intl_locale_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Locale", locale)?;
         let list_format = self.intl_list_format_constructor_value()?;
@@ -114,6 +117,7 @@ impl Context {
             IntlFunctionKind::ListFormatConstructor => self.construct_intl_list_format(args),
             IntlFunctionKind::SegmenterConstructor => self.construct_intl_segmenter(args),
             IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
+            IntlFunctionKind::DisplayNamesConstructor => self.construct_intl_display_names(args),
             IntlFunctionKind::CollatorConstructor
             | IntlFunctionKind::PluralRulesConstructor
             | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
@@ -196,6 +200,13 @@ impl Context {
             }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
             IntlFunctionKind::GetCanonicalLocales => self.eval_intl_get_canonical_locales(args),
+            IntlFunctionKind::DisplayNamesConstructor => {
+                Err(Error::type_error("Intl.DisplayNames requires new"))
+            }
+            IntlFunctionKind::DisplayNamesOf => self.eval_intl_display_names_of(args, this_value),
+            IntlFunctionKind::DisplayNamesResolvedOptions => {
+                self.eval_intl_display_names_resolved_options(this_value)
+            }
             IntlFunctionKind::NumberFormatConstructor => {
                 self.call_intl_number_format(args, this_value)
             }
@@ -224,6 +235,16 @@ impl Context {
             IntlFunctionKind::CollatorConstructor
             | IntlFunctionKind::PluralRulesConstructor
             | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
+            IntlFunctionKind::PluralRulesSelect
+            | IntlFunctionKind::PluralRulesSelectRange
+            | IntlFunctionKind::PluralRulesResolvedOptions
+            | IntlFunctionKind::PluralRulesSupportedLocalesOf
+            | IntlFunctionKind::RelativeTimeFormatFormat
+            | IntlFunctionKind::RelativeTimeFormatFormatToParts
+            | IntlFunctionKind::RelativeTimeFormatResolvedOptions
+            | IntlFunctionKind::RelativeTimeFormatSupportedLocalesOf => {
+                Err(Error::runtime("Intl formatter method is not initialized"))
+            }
         }
     }
 
@@ -287,6 +308,9 @@ impl Context {
             IntlFunctionKind::LocaleConstructor => self.intl_locale_constructor_value()?,
             IntlFunctionKind::ListFormatConstructor => self.intl_list_format_constructor_value()?,
             IntlFunctionKind::SegmenterConstructor => self.intl_segmenter_constructor_value()?,
+            IntlFunctionKind::DisplayNamesConstructor => {
+                self.intl_display_names_constructor_value()?
+            }
             IntlFunctionKind::CollatorConstructor => {
                 self.intl_constructor_value(kind, "Intl.Collator", &[])?
             }

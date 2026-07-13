@@ -5,7 +5,7 @@ use crate::{
         abstract_operations::same_value,
         call::RuntimeCallArgs,
         control::Completion,
-        native::{IteratorFunctionKind, NativeFunctionKind},
+        native::{IntlFunctionKind, IteratorFunctionKind, NativeFunctionKind},
         roots::VmRootKind,
     },
     value::Value,
@@ -249,11 +249,24 @@ impl Context {
             );
         }
 
+        let eager_prototype = if matches!(
+            kind,
+            NativeFunctionKind::Intl(IntlFunctionKind::DisplayNamesConstructor)
+        ) && !same_value(constructor, new_target)
+        {
+            Some(self.constructor_instance_prototype_with_default(new_target, kind)?)
+        } else {
+            None
+        };
         let value = self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))?;
         if same_value(constructor, new_target) || kind == NativeFunctionKind::Proxy {
             return Ok(value);
         }
-        let prototype = self.constructor_instance_prototype_with_default(new_target, kind)?;
+        let prototype = if let Some(prototype) = eager_prototype {
+            prototype
+        } else {
+            self.constructor_instance_prototype_with_default(new_target, kind)?
+        };
         match self.semantic_try_set_prototype(&value, Value::Object(prototype))? {
             Some(true) => Ok(value),
             Some(false) | None => Err(Error::runtime(

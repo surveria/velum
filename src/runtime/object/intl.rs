@@ -117,6 +117,15 @@ pub(in crate::runtime) struct ListFormatValue {
 }
 
 #[derive(Debug, Clone)]
+pub(in crate::runtime) struct DisplayNamesValue {
+    pub locale: String,
+    pub style: String,
+    pub display_type: String,
+    pub fallback: String,
+    pub language_display: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct SegmenterValue {
     pub locale: String,
     pub granularity: String,
@@ -172,6 +181,7 @@ impl NumberFormatValue {
 pub(in crate::runtime) enum IntlValue {
     DateTime(Box<DateTimeFormatValue>),
     Duration,
+    DisplayNames(Box<DisplayNamesValue>),
     List(Box<ListFormatValue>),
     Locale(Box<LocaleValue>),
     Number(Box<NumberFormatValue>),
@@ -191,6 +201,17 @@ impl IntlValue {
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
             Self::Duration | Self::SegmentIterator(_) => 0,
+            Self::DisplayNames(value) => [
+                Some(&value.locale),
+                Some(&value.style),
+                Some(&value.display_type),
+                Some(&value.fallback),
+                value.language_display.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            .map(String::len)
+            .sum(),
             Self::List(value) => value
                 .locale
                 .len()
@@ -228,6 +249,7 @@ impl IntlValue {
                 None
             }
             Self::Duration
+            | Self::DisplayNames(_)
             | Self::List(_)
             | Self::Locale(_)
             | Self::Segmenter(_)

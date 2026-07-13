@@ -300,7 +300,7 @@ const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionS
 const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
 const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
 const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 633;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 644;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {

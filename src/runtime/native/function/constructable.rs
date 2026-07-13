@@ -31,6 +31,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::SegmenterConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor
+                        | IntlFunctionKind::DisplayNamesConstructor
                 )
                 | Self::Number
                 | Self::Object
@@ -92,6 +93,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::SegmenterConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor
+                        | IntlFunctionKind::DisplayNamesConstructor
                 )
                 | Self::Number
                 | Self::Object
