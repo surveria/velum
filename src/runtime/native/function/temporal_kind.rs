@@ -229,6 +229,12 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     ZonedDateTimePrototypeToPlainTime,
     ZonedDateTimePrototypeToPlainDateTime,
     ZonedDateTimePrototypeToLocaleString,
+    NowInstant,
+    NowTimeZoneId,
+    NowZonedDateTimeIso,
+    NowPlainDateTimeIso,
+    NowPlainDateIso,
+    NowPlainTimeIso,
 }
 
 impl TemporalFunctionKind {

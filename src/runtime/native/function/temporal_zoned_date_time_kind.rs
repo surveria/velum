@@ -46,7 +46,7 @@ impl TemporalFunctionKind {
             Self::ZonedDateTimePrototypeToPlainTime => 223,
             Self::ZonedDateTimePrototypeToPlainDateTime => 224,
             Self::ZonedDateTimePrototypeToLocaleString => 225,
-            _ => 46,
+            _ => self.temporal_now_index(),
         }
     }
 
@@ -95,7 +95,7 @@ impl TemporalFunctionKind {
             Self::ZonedDateTimePrototypeToPlainTime => "toPlainTime",
             Self::ZonedDateTimePrototypeToPlainDateTime => "toPlainDateTime",
             Self::ZonedDateTimePrototypeToLocaleString => "toLocaleString",
-            _ => "Instant",
+            _ => self.temporal_now_name(),
         }
     }
 
