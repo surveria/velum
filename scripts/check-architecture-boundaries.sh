@@ -671,8 +671,8 @@ src/runtime/native/builtins/shadow_realm.rs'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,retained_values:&'valueRetainedValueRegistry,value:&'valueValue," ]]; then
-    fail "host local-value boundary changed; LocalValue requires borrowed owner, retained registry, and Value"
+  if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,objects:&'valueObjectHeap,retained_values:&'valueRetainedValueRegistry,value:&'valueValue," ]]; then
+    fail "host local-value boundary changed; LocalValue requires borrowed owner, object heap, retained registry, and Value"
   fi
   host_call_fields="$({
     awk '
@@ -681,8 +681,8 @@ src/runtime/native/builtins/shadow_realm.rs'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,retained_values:&'callRetainedValueRegistry,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
-    fail "host local-value boundary changed; HostCall requires the active VM identity and retained registry"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM identity, object heap, and retained registry"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
       "${repo_root}/src/api/host.rs" \
