@@ -19,11 +19,13 @@ use crate::{
 
 use super::{
     OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_CATCH_NAME, PROMISE_FINALLY_NAME, PROMISE_NAME,
-    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, PROMISE_TRY_NAME,
+    PROMISE_WITH_RESOLVERS_NAME,
 };
 
 mod combinators;
 mod finally_method;
+mod modern;
 
 const PROMISE_CAPABILITY_REJECT_PROPERTY: &str = "[[PromiseCapabilityReject]]";
 const PROMISE_CAPABILITY_RESOLVE_PROPERTY: &str = "[[PromiseCapabilityResolve]]";
@@ -308,6 +310,10 @@ impl Context {
             }
             NativeFunctionKind::PromiseResolve => Some(self.eval_promise_resolve(args, this_value)),
             NativeFunctionKind::PromiseReject => Some(self.eval_promise_reject(args, this_value)),
+            NativeFunctionKind::PromiseTry => Some(self.eval_promise_try(args, this_value)),
+            NativeFunctionKind::PromiseWithResolvers => {
+                Some(self.eval_promise_with_resolvers(this_value))
+            }
             NativeFunctionKind::PromiseThen => Some(self.eval_promise_then(args, this_value)),
             NativeFunctionKind::PromiseCatch => Some(self.eval_promise_catch(args, this_value)),
             NativeFunctionKind::PromiseFinally => Some(self.eval_promise_finally(args, this_value)),
@@ -353,6 +359,16 @@ impl Context {
             constructor,
             PROMISE_REJECT_NAME,
             NativeFunctionKind::PromiseReject,
+        )?;
+        self.define_promise_static_method(
+            constructor,
+            PROMISE_TRY_NAME,
+            NativeFunctionKind::PromiseTry,
+        )?;
+        self.define_promise_static_method(
+            constructor,
+            PROMISE_WITH_RESOLVERS_NAME,
+            NativeFunctionKind::PromiseWithResolvers,
         )
     }
 

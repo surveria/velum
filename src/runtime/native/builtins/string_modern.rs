@@ -408,7 +408,7 @@ impl Context {
         Ok(())
     }
 
-    fn string_is_regexp(&mut self, value: &Value) -> Result<bool> {
+    pub(super) fn string_is_regexp(&mut self, value: &Value) -> Result<bool> {
         if self.semantic_object_ref(value)?.is_none() {
             return Ok(false);
         }

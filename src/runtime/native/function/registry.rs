@@ -298,7 +298,9 @@ const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
 const ARRAY_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(628);
 const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(629);
 const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 631;
+const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
+const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 633;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -490,6 +492,8 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         }
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
+        NativeFunctionKind::PromiseTry => Some(PROMISE_TRY_SLOT),
+        NativeFunctionKind::PromiseWithResolvers => Some(PROMISE_WITH_RESOLVERS_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
         NativeFunctionKind::PromiseFinally => Some(PROMISE_FINALLY_SLOT),
