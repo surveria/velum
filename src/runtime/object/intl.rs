@@ -121,7 +121,7 @@ pub(in crate::runtime) struct DisplayNamesValue {
     pub locale: String,
     pub style: String,
     pub display_type: String,
-    pub fallback: String,
+    pub missing_code_behavior: String,
     pub language_display: Option<String>,
 }
 
@@ -232,7 +232,7 @@ impl IntlValue {
                 Some(&value.locale),
                 Some(&value.style),
                 Some(&value.display_type),
-                Some(&value.fallback),
+                Some(&value.missing_code_behavior),
                 value.language_display.as_ref(),
             ]
             .into_iter()

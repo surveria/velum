@@ -83,6 +83,9 @@ shape, or dense-array specialization may take that slow path when its guard
 cannot prove the optimization is valid. Runtime code must not call that an AST
 fallback, and it must never fall back to a parser-AST interpreter, retain AST
 statement bodies in function objects, or reparse from runtime code.
+Standardized ECMAScript and ECMA-402 API property names keep their specified
+spelling; for example, the `Intl.DisplayNames` `fallback` option is API data,
+not execution-path terminology.
 
 `runtime/optimizer.rs` is the single owner of the VM-local optional-optimization
 policy and stable profiling counters. `OptimizationMode::Enabled` is the

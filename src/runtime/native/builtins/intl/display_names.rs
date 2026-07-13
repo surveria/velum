@@ -82,9 +82,9 @@ impl Context {
                 None,
             )?
             .ok_or_else(|| Error::type_error("Intl.DisplayNames type is required"))?;
-        let fallback = self
+        let missing_code_behavior = self
             .display_names_option(&options, "fallback", &["code", "none"], Some("code"))?
-            .ok_or_else(|| Error::runtime("DisplayNames fallback default is missing"))?;
+            .ok_or_else(|| Error::runtime("DisplayNames missing-code default is absent"))?;
         let language_display = if display_type == "language" {
             Some(
                 self.display_names_option(
@@ -109,7 +109,7 @@ impl Context {
                 locale,
                 style,
                 display_type,
-                fallback,
+                missing_code_behavior,
                 language_display,
             })),
             prototype,
@@ -136,12 +136,12 @@ impl Context {
         let locale = self.heap_string_value(&formatter.locale)?;
         let style = self.heap_string_value(&formatter.style)?;
         let display_type = self.heap_string_value(&formatter.display_type)?;
-        let fallback = self.heap_string_value(&formatter.fallback)?;
+        let missing_code_behavior = self.heap_string_value(&formatter.missing_code_behavior)?;
         let mut fields = vec![
             ("locale", locale),
             ("style", style),
             ("type", display_type),
-            ("fallback", fallback),
+            ("fallback", missing_code_behavior),
         ];
         if let Some(language_display) = formatter.language_display {
             fields.push((

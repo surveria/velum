@@ -63,6 +63,20 @@ fn only_frontend_and_compiler_layers_import_parser_ast() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn standardized_api_names_do_not_weaken_the_execution_fallback_guard() -> TestResult {
+    if line_contains_fallback_terminology("let option = get_option(\"fallback\");") {
+        return Err("the standardized fallback property must remain usable".into());
+    }
+    if !line_contains_fallback_terminology("let fallback = execute_ast();") {
+        return Err("execution fallback terminology must remain rejected".into());
+    }
+    if !line_contains_fallback_terminology("let astFallback = execute();") {
+        return Err("camel-case execution fallback terminology must remain rejected".into());
+    }
+    Ok(())
+}
+
 fn check_source_dir(repo: &Path, dir: &Path) -> TestResult {
     let entries = fs::read_dir(dir)
         .map_err(|error| format!("failed to read source dir {}: {error}", dir.display()))?;
@@ -211,5 +225,6 @@ fn line_contains_obsolete_ast_execution_marker(line: &str) -> bool {
 }
 
 fn line_contains_fallback_terminology(line: &str) -> bool {
-    line.contains("fallback") || line.contains("Fallback")
+    let execution_text = line.replace("\"fallback\"", "");
+    execution_text.contains("fallback") || execution_text.contains("Fallback")
 }
