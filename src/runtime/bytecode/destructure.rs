@@ -29,8 +29,7 @@ mod assignment_reference;
 /// Result of walking one destructuring pattern against a source value.
 pub(in crate::runtime) enum DestructureOutcome {
     Completed,
-    /// An abrupt completion raised by user code (defaults, computed keys, or
-    /// iterator protocol calls) that must propagate out of the statement.
+    /// An abrupt completion raised by user code that must propagate outward.
     Abrupt(Completion),
 }
 
@@ -174,19 +173,9 @@ impl Context {
     ) -> Result<Option<Completion>> {
         self.step()?;
         match pattern {
-            BytecodePattern::Binding(name) => match continuation.mode {
-                BytecodeDestructureMode::Declaration(kind) => {
-                    self.eval_bytecode_declaration(&name, kind, Some(value))?;
-                }
-                BytecodeDestructureMode::Parameter => {
-                    self.initialize_bytecode_parameter(&name, value)?;
-                }
-                BytecodeDestructureMode::Assignment => {
-                    return Err(Error::runtime(
-                        "binding pattern leaf used by assignment destructuring",
-                    ));
-                }
-            },
+            BytecodePattern::Binding(name) => {
+                self.initialize_bytecode_pattern_binding(&name, continuation.mode, value)?;
+            }
             BytecodePattern::Assignment(target) => {
                 if continuation.mode != BytecodeDestructureMode::Assignment {
                     return Err(Error::runtime(

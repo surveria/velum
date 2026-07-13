@@ -5,7 +5,7 @@ pub(super) use assignment::{BytecodeAssignmentReference, web_compat_call_assignm
 
 use crate::{
     bytecode::{
-        BytecodeBinding, BytecodeDynamicProperty, BytecodeNumericBinaryOp,
+        BytecodeBinding, BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeNumericBinaryOp,
         BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
     },
     error::{Error, Result},
@@ -37,6 +37,23 @@ const INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR: &str =
     "right-hand side of 'instanceof' has non-object prototype";
 
 impl Context {
+    pub(super) fn initialize_bytecode_pattern_binding(
+        &mut self,
+        name: &BytecodeBinding,
+        mode: BytecodeDestructureMode,
+        value: Value,
+    ) -> Result<()> {
+        match mode {
+            BytecodeDestructureMode::Declaration(kind) => {
+                self.eval_bytecode_declaration(name, kind, Some(value))
+            }
+            BytecodeDestructureMode::Parameter => self.initialize_bytecode_parameter(name, value),
+            BytecodeDestructureMode::Assignment => Err(Error::runtime(
+                "binding pattern leaf used by assignment destructuring",
+            )),
+        }
+    }
+
     pub(super) fn eval_bytecode_declaration(
         &mut self,
         name: &BytecodeBinding,

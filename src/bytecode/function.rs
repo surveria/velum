@@ -74,6 +74,24 @@ impl BytecodeFunction {
         self.params.last().is_some_and(BytecodeFunctionParam::rest)
     }
 
+    pub(crate) fn has_unique_parameter_names(&self) -> bool {
+        for (index, parameter) in self.params.iter().enumerate() {
+            let Some(binding) = parameter.binding() else {
+                return false;
+            };
+            if self
+                .params
+                .iter()
+                .skip(index.saturating_add(1))
+                .filter_map(BytecodeFunctionParam::binding)
+                .any(|other| other.name().name() == binding.name().name())
+            {
+                return false;
+            }
+        }
+        true
+    }
+
     pub const fn body(&self) -> &BytecodeBlock {
         &self.body
     }
@@ -109,6 +127,13 @@ impl BytecodeFunctionParam {
 
     pub const fn target(&self) -> &BytecodeFunctionParamTarget {
         &self.target
+    }
+
+    pub const fn binding(&self) -> Option<&BytecodeBinding> {
+        match &self.target {
+            BytecodeFunctionParamTarget::Binding(binding) => Some(binding),
+            BytecodeFunctionParamTarget::Pattern(_) => None,
+        }
     }
 
     pub const fn default(&self) -> Option<&BytecodeBlock> {
