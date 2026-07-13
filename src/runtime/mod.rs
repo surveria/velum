@@ -684,6 +684,24 @@ impl Context {
         self.semantic_construct(constructor, args, constructor.clone())
     }
 
+    pub(crate) fn eval_new_value_with_native(
+        &mut self,
+        constructor: &Value,
+        native: Option<NativeCallTarget>,
+        args: &[Value],
+    ) -> Result<Value> {
+        if let Value::NativeFunction(id) = constructor
+            && let Some(target) = native
+            && let Some(kind) = self.direct_native_call_kind(*id, target)
+        {
+            if kind == NativeFunctionKind::Function {
+                return self.eval_direct_function_constructor(args);
+            }
+            return self.construct_native_function_kind(kind, RuntimeCallArgs::values(args));
+        }
+        self.eval_new_value(constructor, args)
+    }
+
     fn eval_bytecode_function_constructor(
         &mut self,
         constructor: &BytecodeBinding,

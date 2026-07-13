@@ -172,6 +172,7 @@ impl BytecodeInstruction {
                 ..
             } => BytecodeMetrics::binding_operands(constructor.direct_operand_count())
                 .combine(BytecodeMetrics::native_call(*native)),
+            Self::ConstructValue { native, .. } => BytecodeMetrics::native_call(*native),
             Self::DeleteStaticProperty { .. }
             | Self::DeleteComputedProperty { .. }
             | Self::UpdateStaticProperty { .. }
@@ -336,7 +337,6 @@ impl BytecodeInstruction {
             | Self::CallPrivateMemberSpread { .. }
             | Self::PrivateIn { .. }
             | Self::CallValue { .. }
-            | Self::ConstructValue { .. }
             | Self::ArrayLiteral { .. }
             | Self::ObjectLiteral { .. }
             | Self::CallSuper { .. }

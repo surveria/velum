@@ -388,13 +388,21 @@ impl BytecodeCompiler<'_> {
             self.emit(BytecodeInstruction::ConstructValueSpread);
             return Ok(());
         }
-        if let Some(binding) = constructor_binding_expr(constructor)
-            && new_constructor_args_are_side_effect_free(args)
-        {
+        if let Some(binding) = constructor_binding_expr(constructor) {
+            let native = NativeCallTarget::from_binding_name(binding.as_str());
+            if new_constructor_args_are_side_effect_free(args) {
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::Construct {
+                    constructor: self.compile_binding(binding)?,
+                    native,
+                    arg_count: args.len(),
+                });
+                return Ok(());
+            }
+            self.compile_expr(constructor)?;
             self.compile_args(args)?;
-            self.emit(BytecodeInstruction::Construct {
-                constructor: self.compile_binding(binding)?,
-                native: NativeCallTarget::from_binding_name(binding.as_str()),
+            self.emit(BytecodeInstruction::ConstructValue {
+                native,
                 arg_count: args.len(),
             });
             return Ok(());
@@ -402,6 +410,7 @@ impl BytecodeCompiler<'_> {
         self.compile_expr(constructor)?;
         self.compile_args(args)?;
         self.emit(BytecodeInstruction::ConstructValue {
+            native: None,
             arg_count: args.len(),
         });
         Ok(())

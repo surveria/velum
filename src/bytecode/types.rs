@@ -599,6 +599,7 @@ pub enum BytecodeInstruction {
         arg_count: usize,
     },
     ConstructValue {
+        native: Option<NativeCallTarget>,
         arg_count: usize,
     },
     CreateFunction {
