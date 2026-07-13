@@ -256,16 +256,7 @@ impl CompiledScript {
                 parsed.usage.static_function_count,
             )?,
         };
-        let bytecode = if let Some(module) = module.as_ref() {
-            let import_local_names = module
-                .imports
-                .iter()
-                .map(|entry| entry.local_name.as_str())
-                .collect();
-            compiler::compile_module_program(&program, &binding_layout, &import_local_names)?
-        } else {
-            compiler::compile_program(&program, &binding_layout)?
-        };
+        let bytecode = compiler::compile_program(&program, &binding_layout)?;
         let bytecode_metrics = bytecode.metrics();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();

@@ -148,6 +148,7 @@ impl BytecodeCompiler<'_> {
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::FunctionDecl { .. }
+            | Stmt::ImportBinding { .. }
             | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }

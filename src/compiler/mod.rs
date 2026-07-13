@@ -52,32 +52,6 @@ pub fn compile_program(program: &Program, layout: &BindingLayout) -> Result<Byte
     ))
 }
 
-pub fn compile_module_program(
-    program: &Program,
-    layout: &BindingLayout,
-    import_local_names: &std::collections::BTreeSet<&str>,
-) -> Result<BytecodeProgram> {
-    let executable = program
-        .statements
-        .iter()
-        .filter(|statement| {
-            !matches!(
-                statement.kind(),
-                Stmt::VarDecl {
-                    name,
-                    kind: DeclKind::Const,
-                    init: None,
-                } if import_local_names.contains(name.name().as_str())
-            )
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    Ok(BytecodeProgram::new(
-        BytecodeBlock::compile_statements(&executable, StatementValue::Store, layout)?,
-        BytecodeHoistPlan::compile(&program.statements, layout)?,
-    ))
-}
-
 impl BytecodeBlock {
     fn compile_statements(
         statements: &[Statement],
@@ -304,7 +278,10 @@ impl<'a> BytecodeCompiler<'a> {
                 block_scoped: true,
                 ..
             } => self.compile_annex_b_function_update(name, variable),
-            Stmt::Empty | Stmt::Debugger | Stmt::FunctionDecl { .. } => Ok(()),
+            Stmt::Empty
+            | Stmt::Debugger
+            | Stmt::FunctionDecl { .. }
+            | Stmt::ImportBinding { .. } => Ok(()),
             Stmt::VarDecl { name, kind, init } => {
                 self.compile_declaration(name, *kind, init.as_ref())
             }
@@ -606,6 +583,7 @@ fn statements_have_value_completion(statements: &[Statement]) -> bool {
     statements.iter().any(|statement| match statement.kind() {
         Stmt::Empty
         | Stmt::Debugger
+        | Stmt::ImportBinding { .. }
         | Stmt::VarDecl { .. }
         | Stmt::PatternDecl { .. }
         | Stmt::ClassDecl { .. }
@@ -642,6 +620,7 @@ fn statement_needs_lexical_scope(statement: &Statement) -> bool {
             kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
         }
+        | Stmt::ImportBinding { .. }
         | Stmt::ClassDecl { .. }
         | Stmt::FunctionDecl { .. } => true,
         Stmt::Block(_)

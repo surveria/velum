@@ -152,6 +152,9 @@ impl BytecodeCompiler<'_> {
                         | crate::syntax::DeclKind::AwaitUsing),
                     ..
                 } => self.emit_lexical_hoist(name, *kind)?,
+                Stmt::ImportBinding { name } => {
+                    self.emit_lexical_hoist(name, crate::syntax::DeclKind::Const)?;
+                }
                 Stmt::PatternDecl {
                     pattern,
                     kind:
@@ -495,23 +498,22 @@ impl CaptureBindingCollector {
                 }
             }
             Stmt::Throw(expr) | Stmt::Expr(expr) => self.collect_expr(expr),
-            Stmt::Return(expr) => {
+            Stmt::Return(expr) | Stmt::VarDecl { init: expr, .. } => {
                 if let Some(expr) = expr {
                     self.collect_expr(expr);
                 }
             }
             Stmt::FunctionDecl { params, body, .. } => self.collect_function_body(params, body),
-            Stmt::VarDecl { init, .. } => {
-                if let Some(init) = init {
-                    self.collect_expr(init);
-                }
-            }
             Stmt::PatternDecl { pattern, init, .. } => {
                 self.collect_expr(init);
                 self.collect_pattern(pattern);
             }
             Stmt::ClassDecl { class, .. } => self.collect_class(class),
-            Stmt::Empty | Stmt::Debugger | Stmt::Break(_) | Stmt::Continue(_) => {}
+            Stmt::Empty
+            | Stmt::Debugger
+            | Stmt::ImportBinding { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_) => {}
         }
     }
 

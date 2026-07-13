@@ -53,6 +53,9 @@ impl<'a> HoistCollector<'a> {
                         @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
                     ..
                 } => self.lexical_declarations.push((name.clone(), *kind)),
+                Stmt::ImportBinding { name } => self
+                    .lexical_declarations
+                    .push((name.clone(), DeclKind::Const)),
                 Stmt::PatternDecl {
                     pattern,
                     kind:
@@ -245,6 +248,7 @@ impl<'a> HoistCollector<'a> {
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::ImportBinding { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::VarDecl { .. }

@@ -111,13 +111,21 @@ impl LayoutBuilder {
         Ok(())
     }
 
+    fn collect_hoisted_statement_list(
+        &mut self,
+        statements: &[Statement],
+        var_scope: ScopeId,
+    ) -> Result<()> {
+        for statement in statements {
+            self.collect_hoisted_vars(statement, var_scope)?;
+        }
+        Ok(())
+    }
+
     fn collect_hoisted_vars(&mut self, statement: &Statement, var_scope: ScopeId) -> Result<()> {
         match statement.kind() {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
-                for statement in statements {
-                    self.collect_hoisted_vars(statement, var_scope)?;
-                }
-                Ok(())
+                self.collect_hoisted_statement_list(statements, var_scope)
             }
             Stmt::If {
                 consequent,
@@ -170,18 +178,12 @@ impl LayoutBuilder {
                 catch,
                 finally_body,
             } => {
-                for statement in body {
-                    self.collect_hoisted_vars(statement, var_scope)?;
-                }
+                self.collect_hoisted_statement_list(body, var_scope)?;
                 if let Some(catch) = catch {
-                    for statement in &catch.body {
-                        self.collect_hoisted_vars(statement, var_scope)?;
-                    }
+                    self.collect_hoisted_statement_list(&catch.body, var_scope)?;
                 }
                 if let Some(finally_body) = finally_body {
-                    for statement in finally_body {
-                        self.collect_hoisted_vars(statement, var_scope)?;
-                    }
+                    self.collect_hoisted_statement_list(finally_body, var_scope)?;
                 }
                 Ok(())
             }
@@ -201,6 +203,7 @@ impl LayoutBuilder {
                 ..
             } => self.declare_pattern(pattern, var_scope),
             Stmt::FunctionDecl { .. }
+            | Stmt::ImportBinding { .. }
             | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
@@ -304,6 +307,9 @@ impl LayoutBuilder {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
                 }
+                self.resolve_declaration_if_with_sensitive(name, scope, function)
+            }
+            Stmt::ImportBinding { name } => {
                 self.resolve_declaration_if_with_sensitive(name, scope, function)
             }
             Stmt::PatternDecl { pattern, init, .. } => {

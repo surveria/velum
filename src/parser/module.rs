@@ -107,14 +107,9 @@ impl Parser {
                 },
                 local_name,
             });
-            statements.push(self.statement_node(
-                self.previous_span(),
-                Stmt::VarDecl {
-                    name: binding,
-                    kind: DeclKind::Const,
-                    init: None,
-                },
-            ));
+            statements.push(
+                self.statement_node(self.previous_span(), Stmt::ImportBinding { name: binding }),
+            );
         }
         self.consume_statement_terminator("expected terminator after import declaration")
     }
@@ -380,6 +375,7 @@ impl Parser {
                 }
             }
             Stmt::VarDecl { name, .. }
+            | Stmt::ImportBinding { name }
             | Stmt::FunctionDecl { name, .. }
             | Stmt::ClassDecl { name, .. } => names.push(name.name().as_str().to_owned()),
             Stmt::PatternDecl { pattern, .. } => Self::collect_pattern_names(pattern, names)?,
@@ -530,6 +526,7 @@ impl Parser {
                 | Stmt::Continue(_)
                 | Stmt::Throw(_)
                 | Stmt::FunctionDecl { .. }
+                | Stmt::ImportBinding { .. }
                 | Stmt::VarDecl { .. }
                 | Stmt::PatternDecl { .. }
                 | Stmt::ClassDecl { .. }

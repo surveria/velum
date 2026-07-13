@@ -343,6 +343,7 @@ impl Parser {
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::ImportBinding { .. }
             | Stmt::VarDecl {
                 kind: DeclKind::Var,
                 ..
@@ -380,6 +381,7 @@ impl Parser {
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::ImportBinding { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::VarDecl {
