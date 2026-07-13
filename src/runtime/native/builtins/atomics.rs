@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -6,8 +8,9 @@ use crate::{
         native::{ATOMICS_NAME, AtomicsFunctionKind, NativeFunctionKind},
         numeric::number_to_uint32,
         object::{
-            ByteBuffer, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
-            PropertyUpdate, PropertyWritable, TypedArrayContentType, TypedArrayElementKind,
+            AtomicWaitOutcome, ByteBuffer, DataPropertyUpdate, PropertyConfigurable,
+            PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
+            TypedArrayContentType, TypedArrayElementKind,
         },
     },
     value::{ErrorName, JsBigInt, ObjectId, Value},
@@ -15,6 +18,7 @@ use crate::{
 
 const RECEIVER_ERROR: &str = "Atomics requires an integer shared typed array";
 const INDEX_ERROR: &str = "Atomics index is out of range";
+const MILLISECONDS_PER_SECOND: f64 = 1_000.0;
 
 #[derive(Debug, Clone, Copy)]
 enum AtomicUpdate {
@@ -160,10 +164,9 @@ impl Context {
         if !location.buffer.is_shared() {
             return Ok(Value::Number(0.0));
         }
-        if let Some(count) = args.as_slice().get(2) {
-            self.to_integer_or_infinity(count)?;
-        }
-        Ok(Value::Number(0.0))
+        let count = self.atomic_notify_count(args.as_slice().get(2))?;
+        let notified = location.buffer.notify_at(location.offset, count)?;
+        Self::atomic_count_value(notified)
     }
 
     fn eval_atomic_wait(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
@@ -181,10 +184,12 @@ impl Context {
         if current != expected.raw {
             return self.heap_string_value("not-equal");
         }
-        if let Some(timeout) = args.as_slice().get(3) {
-            self.to_number(timeout)?;
-        }
-        Err(Error::type_error("the current agent cannot suspend"))
+        let timeout = self.atomic_wait_timeout(args.as_slice().get(3))?;
+        let outcome = location.buffer.wait_at(location.offset, timeout)?;
+        self.heap_string_value(match outcome {
+            AtomicWaitOutcome::Notified => "ok",
+            AtomicWaitOutcome::TimedOut => "timed-out",
+        })
     }
 
     fn eval_atomic_wait_async(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
@@ -288,6 +293,39 @@ impl Context {
             raw,
             returned: Value::Number(integer),
         })
+    }
+
+    fn atomic_notify_count(&mut self, value: Option<&Value>) -> Result<usize> {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
+            return Ok(usize::MAX);
+        };
+        let count = self.to_integer_or_infinity(value)?;
+        if count <= 0.0 {
+            return Ok(0);
+        }
+        if !count.is_finite() || count >= f64::from(u32::MAX) {
+            return Ok(usize::MAX);
+        }
+        Self::finite_nonnegative_integer_to_usize(count, "Atomics notify count is invalid")
+    }
+
+    fn atomic_wait_timeout(&mut self, value: Option<&Value>) -> Result<Option<Duration>> {
+        let timeout = if let Some(value) = value {
+            self.to_number(value)?
+        } else {
+            f64::INFINITY
+        };
+        if timeout.is_nan() || timeout == f64::INFINITY {
+            return Ok(None);
+        }
+        let milliseconds = timeout.max(0.0);
+        Ok(Duration::try_from_secs_f64(milliseconds / MILLISECONDS_PER_SECOND).ok())
+    }
+
+    fn atomic_count_value(value: usize) -> Result<Value> {
+        let count = u32::try_from(value)
+            .map_err(|_| Error::limit("Atomics notified waiter count exceeded supported range"))?;
+        Ok(Value::Number(f64::from(count)))
     }
 
     fn atomic_word_value(&self, kind: TypedArrayElementKind, raw: u64) -> Result<Value> {

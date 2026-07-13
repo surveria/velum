@@ -1,6 +1,12 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, VecDeque},
+    rc::Rc,
+    sync::Arc,
+    time::Duration,
+};
 
-use parking_lot::RwLock;
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::{
     error::{Error, Result},
@@ -33,7 +39,7 @@ pub struct ByteBuffer {
 #[derive(Debug, Clone)]
 enum ByteBufferStorage {
     Local(Rc<RefCell<ByteBufferState>>),
-    Shared(Arc<RwLock<ByteBufferState>>),
+    Shared(Arc<SharedByteBuffer>),
 }
 
 #[derive(Debug)]
@@ -42,18 +48,36 @@ struct ByteBufferState {
     max_byte_length: Option<usize>,
 }
 
+#[derive(Debug)]
+struct SharedByteBuffer {
+    state: RwLock<ByteBufferState>,
+    waiters: Mutex<BTreeMap<usize, VecDeque<Arc<AtomicWaiter>>>>,
+}
+
+#[derive(Debug)]
+struct AtomicWaiter {
+    notified: Mutex<bool>,
+    signal: Condvar,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum AtomicWaitOutcome {
+    Notified,
+    TimedOut,
+}
+
 impl ByteBuffer {
     fn with_state<T>(&self, operation: impl FnOnce(&ByteBufferState) -> T) -> T {
         match &self.storage {
             ByteBufferStorage::Local(state) => operation(&state.borrow()),
-            ByteBufferStorage::Shared(state) => operation(&state.read()),
+            ByteBufferStorage::Shared(shared) => operation(&shared.state.read()),
         }
     }
 
     fn with_state_mut<T>(&self, operation: impl FnOnce(&mut ByteBufferState) -> T) -> T {
         match &self.storage {
             ByteBufferStorage::Local(state) => operation(&mut state.borrow_mut()),
-            ByteBufferStorage::Shared(state) => operation(&mut state.write()),
+            ByteBufferStorage::Shared(shared) => operation(&mut shared.state.write()),
         }
     }
 
@@ -99,12 +123,84 @@ impl ByteBuffer {
 
     pub(in crate::runtime) fn new_shared(length: usize, max_byte_length: Option<usize>) -> Self {
         Self {
-            storage: ByteBufferStorage::Shared(Arc::new(RwLock::new(ByteBufferState {
-                bytes: Some(vec![0; length]),
-                max_byte_length,
-            }))),
+            storage: ByteBufferStorage::Shared(Arc::new(SharedByteBuffer {
+                state: RwLock::new(ByteBufferState {
+                    bytes: Some(vec![0; length]),
+                    max_byte_length,
+                }),
+                waiters: Mutex::new(BTreeMap::new()),
+            })),
             origin: ByteBufferOrigin::EngineOwned,
         }
+    }
+
+    pub(in crate::runtime) fn wait_at(
+        &self,
+        byte_offset: usize,
+        timeout: Option<Duration>,
+    ) -> Result<AtomicWaitOutcome> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Err(Error::type_error("Atomics.wait requires shared storage"));
+        };
+        let waiter = Arc::new(AtomicWaiter {
+            notified: Mutex::new(false),
+            signal: Condvar::new(),
+        });
+        shared
+            .waiters
+            .lock()
+            .entry(byte_offset)
+            .or_default()
+            .push_back(waiter.clone());
+
+        let mut notified = waiter.notified.lock();
+        if let Some(duration) = timeout {
+            waiter.signal.wait_for(&mut notified, duration);
+        } else {
+            while !*notified {
+                waiter.signal.wait(&mut notified);
+            }
+        }
+        if *notified {
+            return Ok(AtomicWaitOutcome::Notified);
+        }
+        drop(notified);
+        let mut waiters = shared.waiters.lock();
+        if *waiter.notified.lock() {
+            return Ok(AtomicWaitOutcome::Notified);
+        }
+        let Some(queue) = waiters.get_mut(&byte_offset) else {
+            return Ok(AtomicWaitOutcome::TimedOut);
+        };
+        queue.retain(|candidate| !Arc::ptr_eq(candidate, &waiter));
+        if queue.is_empty() {
+            waiters.remove(&byte_offset);
+        }
+        drop(waiters);
+        Ok(AtomicWaitOutcome::TimedOut)
+    }
+
+    pub(in crate::runtime) fn notify_at(&self, byte_offset: usize, count: usize) -> Result<usize> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Ok(0);
+        };
+        let mut waiters = shared.waiters.lock();
+        let Some(queue) = waiters.get_mut(&byte_offset) else {
+            return Ok(0);
+        };
+        let notify_count = count.min(queue.len());
+        for _ in 0..notify_count {
+            let Some(waiter) = queue.pop_front() else {
+                return Err(Error::runtime("Atomics waiter queue changed unexpectedly"));
+            };
+            *waiter.notified.lock() = true;
+            waiter.signal.notify_one();
+        }
+        if queue.is_empty() {
+            waiters.remove(&byte_offset);
+        }
+        drop(waiters);
+        Ok(notify_count)
     }
 
     pub fn byte_length(&self) -> usize {
