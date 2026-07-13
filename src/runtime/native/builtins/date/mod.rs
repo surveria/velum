@@ -16,11 +16,11 @@ use super::OBJECT_CONSTRUCTOR_PROPERTY;
 use support::{
     DateComponent, DateParts, component_value, current_time_value, date_value_to_number,
     format_date_only_string, format_date_time_string, format_iso_string, format_time_only_string,
-    format_utc_string, integer_component, integer_component_with_default, make_date_value,
-    normalize_component_year, parse_date_string, time_clip,
+    format_utc_string, make_date_value_from_numbers, parse_date_string, time_clip,
 };
 
 const DATE_RECEIVER_ERROR: &str = "Date method requires a Date receiver";
+const DATE_TO_ISO_STRING_PROPERTY: &str = "toISOString";
 const DATE_TO_PRIMITIVE_HINT_DEFAULT: &str = "default";
 const DATE_TO_PRIMITIVE_HINT_NUMBER: &str = "number";
 const DATE_TO_PRIMITIVE_HINT_STRING: &str = "string";
@@ -235,6 +235,9 @@ impl Context {
                 Some(self.eval_date_prototype_to_iso_string(this_value))
             }
             DateFunctionKind::PrototypeToJson => Some(self.eval_date_prototype_to_json(this_value)),
+            DateFunctionKind::PrototypeToTemporalInstant => {
+                Some(self.eval_date_prototype_to_temporal_instant(this_value))
+            }
             DateFunctionKind::PrototypeToLocaleDateString => Some(self.format_date_locale_string(
                 this_value,
                 args,
@@ -494,11 +497,27 @@ impl Context {
         &mut self,
         this_value: &Value,
     ) -> Result<Value> {
-        let value = self.date_this_value(this_value)?;
-        if value.millis().is_none() {
+        let object = self.object_to_object(this_value)?;
+        let primitive = self.to_primitive(&object, PreferredType::Number)?;
+        if matches!(primitive, Value::Number(number) if !number.is_finite()) {
             return Ok(Value::Null);
         }
-        self.eval_date_prototype_to_iso_string(this_value)
+        let method = self.get_named(&object, DATE_TO_ISO_STRING_PROPERTY)?;
+        self.call_value(&method, &[], object)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_to_temporal_instant(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let value = self.date_this_value(this_value)?;
+        let milliseconds = value.millis().ok_or_else(|| {
+            Error::exception(
+                ErrorName::RangeError,
+                "invalid Date cannot become a Temporal.Instant",
+            )
+        })?;
+        self.create_instant_from_epoch_milliseconds_value(milliseconds)
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_to_string(
@@ -544,11 +563,9 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        let Value::Object(prototype) = self.objects.create_date_object(
-            DateValue::Invalid,
-            object_prototype,
-            self.limits.max_objects,
-        )?
+        let Value::Object(prototype) = self
+            .objects
+            .create_with_exact_prototype(Some(object_prototype), self.limits.max_objects)?
         else {
             return Err(Error::runtime("Date prototype is not an object"));
         };
@@ -608,36 +625,18 @@ impl Context {
     }
 
     fn date_value_from_components(&mut self, args: &[Value]) -> Result<DateValue> {
-        let Some(year) = integer_component(self, args.first())? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(month) = integer_component(self, args.get(1))? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(date) = integer_component_with_default(self, args.get(2), 1)? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(hour) = integer_component_with_default(self, args.get(3), 0)? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(minute) = integer_component_with_default(self, args.get(4), 0)? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(second) = integer_component_with_default(self, args.get(5), 0)? else {
-            return Ok(DateValue::Invalid);
-        };
-        let Some(millisecond) = integer_component_with_default(self, args.get(6), 0)? else {
-            return Ok(DateValue::Invalid);
-        };
-        Ok(make_date_value(
-            normalize_component_year(year),
-            month,
-            date,
-            hour,
-            minute,
-            second,
-            millisecond,
-        ))
+        let year = self.date_component_argument(args.first(), f64::NAN)?;
+        let month = self.date_component_argument(args.get(1), 0.0)?;
+        let date = self.date_component_argument(args.get(2), 1.0)?;
+        let hour = self.date_component_argument(args.get(3), 0.0)?;
+        let minute = self.date_component_argument(args.get(4), 0.0)?;
+        let second = self.date_component_argument(args.get(5), 0.0)?;
+        let millisecond = self.date_component_argument(args.get(6), 0.0)?;
+        make_date_value_from_numbers(year, month, date, hour, minute, second, millisecond)
+    }
+
+    fn date_component_argument(&mut self, value: Option<&Value>, default: f64) -> Result<f64> {
+        value.map_or(Ok(default), |value| self.to_number(value))
     }
 
     fn date_this_value(&self, this_value: &Value) -> Result<DateValue> {

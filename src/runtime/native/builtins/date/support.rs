@@ -11,7 +11,7 @@ const ISO_DATE_TIME_SEPARATOR: char = 'T';
 const ISO_UTC_SUFFIX: char = 'Z';
 const MAX_TIME_MS: i64 = 8_640_000_000_000_000;
 const MAX_TIME_MS_NUMBER: f64 = 8_640_000_000_000_000.0;
-const MAX_COMPONENT_ABS: i64 = 1_000_000;
+const MAX_COMPONENT_ABS: i64 = 1_000_000_000;
 const MS_PER_DAY: i64 = 86_400_000;
 const MS_PER_HOUR: i64 = 3_600_000;
 const MS_PER_MINUTE: i64 = 60_000;
@@ -196,6 +196,45 @@ pub(super) fn make_date_value(
     DateValue::from_millis(value)
 }
 
+// ECMAScript requires separate IEEE 754 operations in the specified order.
+#[allow(clippy::suboptimal_flops)]
+pub(super) fn make_date_value_from_numbers(
+    year: f64,
+    month: f64,
+    date: f64,
+    hour: f64,
+    minute: f64,
+    second: f64,
+    millisecond: f64,
+) -> Result<DateValue> {
+    if ![year, month, date, hour, minute, second, millisecond]
+        .iter()
+        .all(|component| component.is_finite())
+    {
+        return Ok(DateValue::Invalid);
+    }
+    let year = year.trunc();
+    let normalized_year = if (0.0..=99.0).contains(&year) {
+        year + 1_900.0
+    } else {
+        year
+    };
+    let Ok(year) = date_integer_from_number(normalized_year) else {
+        return Ok(DateValue::Invalid);
+    };
+    let Ok(month) = date_integer_from_number(month.trunc()) else {
+        return Ok(DateValue::Invalid);
+    };
+    let Some(first_day) = make_day(year, month, 1) else {
+        return Ok(DateValue::Invalid);
+    };
+    let day = integer_to_number(first_day)? + (date.trunc() - 1.0);
+    let time = ((hour.trunc() * 3_600_000.0 + minute.trunc() * 60_000.0)
+        + second.trunc() * 1_000.0)
+        + millisecond.trunc();
+    time_clip(day * 86_400_000.0 + time)
+}
+
 fn make_day(year: i64, month: i64, date: i64) -> Option<i64> {
     let year = year.checked_add(month.div_euclid(MONTHS_PER_YEAR))?;
     let month = month.rem_euclid(MONTHS_PER_YEAR).checked_add(1)?;
@@ -212,6 +251,9 @@ fn make_time(hour: i64, minute: i64, second: i64, millisecond: i64) -> Option<i6
 
 pub(super) fn parse_date_string(text: &str) -> Result<DateValue> {
     let text = text.trim();
+    if let Some(value) = parse_legacy_date_string(text) {
+        return Ok(value);
+    }
     let (date, time) = match text.split_once(ISO_DATE_TIME_SEPARATOR) {
         Some((date, time)) => (date, Some(time)),
         None => (text, None),
@@ -235,15 +277,72 @@ pub(super) fn parse_date_string(text: &str) -> Result<DateValue> {
     ))
 }
 
+fn parse_legacy_date_string(text: &str) -> Option<DateValue> {
+    let parts = text.split_whitespace().collect::<Vec<_>>();
+    let (month, day, year, time) = match parts.as_slice() {
+        [weekday, month, day, year, time, "GMT+0000", "(UTC)"]
+            if SHORT_WEEKDAY_NAMES.contains(weekday) =>
+        {
+            (*month, *day, *year, *time)
+        }
+        [weekday, day, month, year, time, "GMT"]
+            if weekday
+                .strip_suffix(',')
+                .is_some_and(|name| SHORT_WEEKDAY_NAMES.contains(&name)) =>
+        {
+            (*month, *day, *year, *time)
+        }
+        _ => return None,
+    };
+    let month = SHORT_MONTH_NAMES
+        .iter()
+        .position(|name| *name == month)
+        .and_then(|index| i64::try_from(index).ok())?;
+    let day = parse_fixed_digits(day, 2)?;
+    let year = year.parse::<i64>().ok()?;
+    let (hour, minute, second) = parse_legacy_time(time)?;
+    Some(make_date_value(year, month, day, hour, minute, second, 0))
+}
+
+fn parse_legacy_time(text: &str) -> Option<(i64, i64, i64)> {
+    let mut parts = text.split(':');
+    let hour = parse_fixed_digits(parts.next()?, 2)?;
+    let minute = parse_fixed_digits(parts.next()?, 2)?;
+    let second = parse_fixed_digits(parts.next()?, 2)?;
+    if parts.next().is_some() || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    Some((hour, minute, second))
+}
+
 fn parse_date_part(text: &str) -> Option<(i64, i64, i64)> {
-    let mut parts = text.split('-');
-    let year = parse_fixed_digits(parts.next()?, 4)?;
-    let month = parse_fixed_digits(parts.next()?, 2)?;
+    if let Some(year) = parse_date_year(text)
+        && !text.contains('-')
+    {
+        return Some((year, 1, 1));
+    }
+    let mut parts = text.rsplitn(3, '-');
     let day = parse_fixed_digits(parts.next()?, 2)?;
-    if parts.next().is_some() || !is_valid_month_day(year, month, day) {
+    let month = parse_fixed_digits(parts.next()?, 2)?;
+    let year = parse_date_year(parts.next()?)?;
+    if !is_valid_month_day(year, month, day) {
         return None;
     }
     Some((year, month, day))
+}
+
+fn parse_date_year(text: &str) -> Option<i64> {
+    if let Some(digits) = text.strip_prefix('+') {
+        return parse_fixed_digits(digits, 6);
+    }
+    if let Some(digits) = text.strip_prefix('-') {
+        let year = parse_fixed_digits(digits, 6)?;
+        if year == 0 {
+            return None;
+        }
+        return year.checked_neg();
+    }
+    parse_fixed_digits(text, 4)
 }
 
 fn parse_time_part(text: Option<&str>) -> Result<Option<(i64, i64, i64, i64)>> {
@@ -410,10 +509,10 @@ pub(super) fn format_date_only_string(value: DateValue) -> Result<String> {
     let parts = DateParts::from_millis(ms)?;
     let weekday = name_from_table(&SHORT_WEEKDAY_NAMES, parts.day)?;
     let month = name_from_table(&SHORT_MONTH_NAMES, parts.month)?;
+    let year = format_legacy_year(parts.year);
     Ok(format!(
-        "{weekday} {month} {date:02} {year:04}",
+        "{weekday} {month} {date:02} {year}",
         date = parts.date,
-        year = parts.year
     ))
 }
 
@@ -437,14 +536,21 @@ pub(super) fn format_utc_string(value: DateValue) -> Result<String> {
     let parts = DateParts::from_millis(ms)?;
     let weekday = name_from_table(&SHORT_WEEKDAY_NAMES, parts.day)?;
     let month = name_from_table(&SHORT_MONTH_NAMES, parts.month)?;
+    let year = format_legacy_year(parts.year);
     Ok(format!(
-        "{weekday}, {date:02} {month} {year:04} {hour:02}:{minute:02}:{second:02} GMT",
+        "{weekday}, {date:02} {month} {year} {hour:02}:{minute:02}:{second:02} GMT",
         date = parts.date,
-        year = parts.year,
         hour = parts.hour,
         minute = parts.minute,
         second = parts.second
     ))
+}
+
+fn format_legacy_year(year: i64) -> String {
+    if year >= 0 {
+        return format!("{year:04}");
+    }
+    format!("-{:04}", year.saturating_abs())
 }
 
 fn name_from_table(table: &[&'static str], index: i64) -> Result<&'static str> {
