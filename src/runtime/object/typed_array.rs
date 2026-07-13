@@ -4,15 +4,13 @@ use parking_lot::RwLock;
 
 use crate::{
     error::{Error, Result},
-    runtime::{
-        Context,
-        abstract_operations::{to_bigint_primitive, to_number_primitive},
-        numeric::number_to_uint32,
-    },
-    value::{JsBigInt, ObjectId, Value, format_ecmascript_number},
+    runtime::{Context, numeric::number_to_uint32},
+    value::{ObjectId, Value, format_ecmascript_number},
 };
 
 use super::{Object, ObjectHeap};
+
+mod bulk;
 
 const TYPED_ARRAY_INDEX_ERROR: &str = "typed array byte index is out of bounds";
 const TYPED_ARRAY_RANGE_ERROR: &str = "typed array byte range exceeded supported range";
@@ -134,18 +132,6 @@ impl ByteBuffer {
         matches!(&self.storage, ByteBufferStorage::Shared(_))
     }
 
-    pub(in crate::runtime) fn copy_bytes(&self, start: usize, end: usize) -> Result<Vec<u8>> {
-        self.with_state(|state| {
-            let Some(bytes) = state.bytes.as_ref() else {
-                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
-            };
-            bytes
-                .get(start..end)
-                .map(<[u8]>::to_vec)
-                .ok_or_else(|| Error::runtime(TYPED_ARRAY_INDEX_ERROR))
-        })
-    }
-
     pub(in crate::runtime) fn resize(&self, new_length: usize) -> Result<()> {
         self.with_state_mut(|state| {
             let Some(max_byte_length) = state.max_byte_length else {
@@ -174,51 +160,6 @@ impl ByteBuffer {
                 .bytes
                 .take()
                 .ok_or_else(|| Error::type_error(DETACHED_BUFFER_ERROR))
-        })
-    }
-
-    pub(in crate::runtime) fn read<const N: usize>(&self, offset: usize) -> Result<[u8; N]> {
-        let end = offset
-            .checked_add(N)
-            .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
-        self.with_state(|state| {
-            let Some(bytes) = state.bytes.as_ref() else {
-                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
-            };
-            let Some(source) = bytes.get(offset..end) else {
-                return Err(Error::runtime(TYPED_ARRAY_INDEX_ERROR));
-            };
-            let mut result = [0_u8; N];
-            result.copy_from_slice(source);
-            Ok(result)
-        })
-    }
-
-    pub(in crate::runtime) fn write(&self, offset: usize, value: &[u8]) -> Result<()> {
-        let end = offset
-            .checked_add(value.len())
-            .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
-        self.with_state_mut(|state| {
-            let Some(bytes) = state.bytes.as_mut() else {
-                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
-            };
-            let Some(target) = bytes.get_mut(offset..end) else {
-                return Err(Error::runtime(TYPED_ARRAY_INDEX_ERROR));
-            };
-            target.copy_from_slice(value);
-            Ok(())
-        })
-    }
-
-    pub(in crate::runtime) fn with_exclusive_bytes_mut<T>(
-        &self,
-        operation: impl FnOnce(&mut [u8]) -> Result<T>,
-    ) -> Result<T> {
-        self.with_state_mut(|state| {
-            let Some(bytes) = state.bytes.as_mut() else {
-                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
-            };
-            operation(bytes)
         })
     }
 
@@ -306,84 +247,6 @@ impl TypedArrayElementKind {
             | Self::Uint32
             | Self::Float32
             | Self::Float64 => TypedArrayContentType::Number,
-        }
-    }
-
-    pub(in crate::runtime) fn read(self, buffer: &ByteBuffer, offset: usize) -> Result<Value> {
-        let value = match self {
-            Self::Int8 => Value::Number(f64::from(i8::from_ne_bytes(buffer.read::<1>(offset)?))),
-            Self::Uint8 | Self::Uint8Clamped => {
-                Value::Number(f64::from(u8::from_ne_bytes(buffer.read::<1>(offset)?)))
-            }
-            Self::Int16 => Value::Number(f64::from(i16::from_ne_bytes(buffer.read::<2>(offset)?))),
-            Self::Uint16 => Value::Number(f64::from(u16::from_ne_bytes(buffer.read::<2>(offset)?))),
-            Self::Int32 => Value::Number(f64::from(i32::from_ne_bytes(buffer.read::<4>(offset)?))),
-            Self::Uint32 => Value::Number(f64::from(u32::from_ne_bytes(buffer.read::<4>(offset)?))),
-            Self::Float32 => {
-                Value::Number(f64::from(f32::from_ne_bytes(buffer.read::<4>(offset)?)))
-            }
-            Self::Float64 => Value::Number(f64::from_ne_bytes(buffer.read::<8>(offset)?)),
-            Self::BigInt64 => Value::BigInt(JsBigInt::from_i64(i64::from_ne_bytes(
-                buffer.read::<8>(offset)?,
-            ))),
-            Self::BigUint64 => Value::BigInt(JsBigInt::from_u64(u64::from_ne_bytes(
-                buffer.read::<8>(offset)?,
-            ))),
-        };
-        Ok(value)
-    }
-
-    pub(in crate::runtime) fn write(
-        self,
-        buffer: &ByteBuffer,
-        offset: usize,
-        value: &Value,
-    ) -> Result<()> {
-        if self.content_type() == TypedArrayContentType::BigInt {
-            let bigint = to_bigint_primitive(value)?;
-            return match self {
-                Self::BigInt64 => {
-                    let Some(value) = bigint.as_int_n(64).to_i64() else {
-                        return Err(Error::runtime("BigInt64 conversion overflowed"));
-                    };
-                    buffer.write(offset, &value.to_ne_bytes())
-                }
-                Self::BigUint64 => {
-                    let Some(value) = bigint.as_uint_n(64).to_u64() else {
-                        return Err(Error::runtime("BigUint64 conversion overflowed"));
-                    };
-                    buffer.write(offset, &value.to_ne_bytes())
-                }
-                Self::Int8
-                | Self::Uint8
-                | Self::Uint8Clamped
-                | Self::Int16
-                | Self::Uint16
-                | Self::Int32
-                | Self::Uint32
-                | Self::Float32
-                | Self::Float64 => Err(Error::runtime(
-                    "BigInt typed array content type did not match its element kind",
-                )),
-            };
-        }
-        let number = to_number_primitive(value)?;
-        match self {
-            Self::Int8 => buffer.write(offset, &to_int8(number)?.to_ne_bytes()),
-            Self::Uint8 => buffer.write(offset, &to_uint8(number)?.to_ne_bytes()),
-            Self::Uint8Clamped => buffer.write(offset, &to_uint8_clamp(number).to_ne_bytes()),
-            Self::Int16 => buffer.write(offset, &to_int16(number)?.to_ne_bytes()),
-            Self::Uint16 => buffer.write(offset, &to_uint16(number)?.to_ne_bytes()),
-            Self::Int32 => buffer.write(offset, &to_int32(number)?.to_ne_bytes()),
-            Self::Uint32 => buffer.write(
-                offset,
-                &number_to_uint32(number, self.name())?.to_ne_bytes(),
-            ),
-            Self::Float32 => buffer.write(offset, &to_float32(number).to_ne_bytes()),
-            Self::Float64 => buffer.write(offset, &number.to_ne_bytes()),
-            Self::BigInt64 | Self::BigUint64 => Err(Error::runtime(
-                "Number typed array content type did not match its element kind",
-            )),
         }
     }
 }
@@ -726,6 +589,20 @@ pub(in crate::runtime::object) fn typed_array_property_index(
 ) -> Option<TypedArrayPropertyIndex> {
     if property == "-0" {
         return Some(TypedArrayPropertyIndex::Invalid);
+    }
+    let bytes = property.as_bytes();
+    if !bytes.is_empty() && bytes.iter().all(u8::is_ascii_digit) {
+        if bytes.len() > 1 && bytes.first().is_some_and(|digit| *digit == b'0') {
+            return None;
+        }
+        let Ok(index) = property.parse::<usize>() else {
+            return Some(TypedArrayPropertyIndex::Invalid);
+        };
+        return Some(if index < length {
+            TypedArrayPropertyIndex::Valid(index)
+        } else {
+            TypedArrayPropertyIndex::Invalid
+        });
     }
     let number = match property {
         "NaN" => f64::NAN,
