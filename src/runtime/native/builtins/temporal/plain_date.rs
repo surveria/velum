@@ -231,6 +231,9 @@ impl Context {
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.temporal_calendar(Some(&calendar_value))?;
         let day = self.plain_date_required_i64(value, "day")?;
+        if !matches!(calendar.identifier(), "iso8601" | "chinese" | "dangi") {
+            self.validate_plain_date_era_pair(value)?;
+        }
         let month = self.plain_date_optional_i64(value, "month")?;
         let month_code_value = self.get_named(value, "monthCode")?;
         let month_code = if matches!(month_code_value, Value::Undefined) {
@@ -539,6 +542,26 @@ impl Context {
                 Error::type_error("PlainDate monthCode must convert to a valid string")
             }
         })
+    }
+
+    fn validate_plain_date_era_pair(&mut self, value: &Value) -> Result<()> {
+        let era = self.get_named(value, "era")?;
+        let era_year = self.get_named(value, "eraYear")?;
+        let has_era = !matches!(era, Value::Undefined);
+        let has_era_year = !matches!(era_year, Value::Undefined);
+        if has_era != has_era_year {
+            return Err(Error::type_error(
+                "PlainDate era and eraYear must be provided together",
+            ));
+        }
+        if has_era {
+            self.to_string(&era)?;
+            let number = self.to_number(&era_year)?;
+            if !number.is_finite() {
+                return Err(Self::plain_date_range("eraYear"));
+            }
+        }
+        Ok(())
     }
 
     fn plain_date_overflow_option(&mut self, value: Option<&Value>) -> Result<Overflow> {
