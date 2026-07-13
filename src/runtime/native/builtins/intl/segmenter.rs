@@ -460,21 +460,31 @@ fn segment_boundaries(input: &[u16], granularity: &str) -> Result<Vec<SegmentBou
         _ => return Err(Error::runtime("Intl.Segmenter granularity is invalid")),
     };
     let mut boundaries = Vec::with_capacity(segments.len());
+    let mut byte_cursor = 0_usize;
+    let mut utf16_cursor = 0_usize;
     for (byte_start, segment, is_word_like) in segments {
-        let Some(prefix) = text.get(..byte_start) else {
+        if byte_start != byte_cursor {
             return Err(Error::runtime(
-                "Intl.Segmenter produced an invalid byte boundary",
+                "Intl.Segmenter produced a non-contiguous boundary",
             ));
-        };
-        let start = prefix.encode_utf16().count();
-        let end = start
+        }
+        let end = utf16_cursor
             .checked_add(segment.encode_utf16().count())
             .ok_or_else(|| Error::limit("Intl.Segmenter boundary overflowed"))?;
         boundaries.push(SegmentBoundary {
-            start,
+            start: utf16_cursor,
             end,
             is_word_like,
         });
+        byte_cursor = byte_cursor
+            .checked_add(segment.len())
+            .ok_or_else(|| Error::limit("Intl.Segmenter byte boundary overflowed"))?;
+        utf16_cursor = end;
+    }
+    if byte_cursor != text.len() || utf16_cursor != input.len() {
+        return Err(Error::runtime(
+            "Intl.Segmenter boundaries did not cover the input",
+        ));
     }
     Ok(boundaries)
 }
