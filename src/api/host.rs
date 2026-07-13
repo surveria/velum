@@ -1,10 +1,12 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
+    SharedArrayBufferHandle,
     api::owned_value::OwnedValue,
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::call::RuntimeCallArgs,
+    runtime::object::ObjectHeap,
     runtime::retained_values::RetainedValueRegistry,
     runtime::{
         Context, RealmId, RetainedValue, VmRootSnapshot,
@@ -203,6 +205,7 @@ impl HostFunction {
     fn call(
         &self,
         identity: &VmIdentity,
+        objects: &ObjectHeap,
         retained_values: &RetainedValueRegistry,
         roots: VmRootSnapshot,
         args: &[Value],
@@ -210,6 +213,7 @@ impl HostFunction {
         let call = HostCall {
             function_name: self.name.as_str(),
             identity,
+            objects,
             retained_values,
             roots,
             args,
@@ -276,6 +280,7 @@ impl fmt::Debug for HostFunction {
 #[derive(Clone, Copy, Debug)]
 pub struct LocalValue<'value> {
     identity: &'value VmIdentity,
+    objects: &'value ObjectHeap,
     retained_values: &'value RetainedValueRegistry,
     value: &'value Value,
 }
@@ -302,6 +307,20 @@ impl<'value> LocalValue<'value> {
         OwnedValue::try_from(self.value)
     }
 
+    /// Clones an opaque handle to this value's shared backing store.
+    ///
+    /// # Errors
+    /// Fails when the value is not a `SharedArrayBuffer`.
+    pub fn to_shared_array_buffer(self) -> Result<SharedArrayBufferHandle> {
+        let Value::Object(id) = self.value else {
+            return Err(Error::type_error("value is not a SharedArrayBuffer"));
+        };
+        let Some(buffer) = self.objects.array_buffer(*id)? else {
+            return Err(Error::type_error("value is not a SharedArrayBuffer"));
+        };
+        SharedArrayBufferHandle::from_buffer(&buffer)
+    }
+
     /// Retains this callback-local value beyond the active host call.
     ///
     /// # Errors
@@ -322,6 +341,7 @@ impl<'value> LocalValue<'value> {
 pub struct HostCall<'call> {
     function_name: &'call str,
     identity: &'call VmIdentity,
+    objects: &'call ObjectHeap,
     retained_values: &'call RetainedValueRegistry,
     roots: VmRootSnapshot,
     args: &'call [Value],
@@ -354,6 +374,7 @@ impl<'call> HostCall<'call> {
     pub fn value(self, index: usize) -> Option<LocalValue<'call>> {
         self.args.get(index).map(|value| LocalValue {
             identity: self.identity,
+            objects: self.objects,
             retained_values: self.retained_values,
             value,
         })
@@ -592,6 +613,7 @@ impl Context {
         let roots = self.root_snapshot()?;
         let value = function.call(
             self.identity(),
+            &self.objects,
             self.retained_value_registry(),
             roots,
             &values,

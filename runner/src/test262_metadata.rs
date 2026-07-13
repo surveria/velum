@@ -4,7 +4,10 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
 
-use super::{test262_compat_harness, test262_module_loader::Test262ModuleLoader, timing};
+use super::{
+    test262_agent::Test262AgentCoordinator, test262_compat_harness,
+    test262_module_loader::Test262ModuleLoader, timing,
+};
 
 const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
@@ -21,6 +24,7 @@ const DEFAULT_HARNESS_FILES: [&str; 2] = [HARNESS_STA, HARNESS_ASSERT];
 const ASYNC_COMPLETE_OUTPUT: &str = "Test262:AsyncTestComplete";
 const ASYNC_FAILURE_PREFIX: &str = "Test262:AsyncTestFailure:";
 const FLAG_ASYNC: &str = "async";
+const FLAG_CAN_BLOCK_IS_TRUE: &str = "CanBlockIsTrue";
 const FLAG_MODULE: &str = "module";
 const FLAG_NO_STRICT: &str = "noStrict";
 const FLAG_ONLY_STRICT: &str = "onlyStrict";
@@ -218,6 +222,9 @@ fn execute_variant_result(
 ) -> anyhow::Result<()> {
     let runtime = Runtime::with_limits(test262_limits());
     let mut context = runtime.context();
+    context.set_agent_can_block(metadata.has_flag(FLAG_CAN_BLOCK_IS_TRUE));
+    let agents = Test262AgentCoordinator::install(&mut context)
+        .map_err(|error| anyhow::anyhow!("failed to install Test262 agents: {error}"))?;
     test262_compat_harness::install_host(&mut context)
         .map_err(|error| anyhow::anyhow!("failed to install Test262 host capabilities: {error}"))?;
     if !metadata.has_flag(FLAG_RAW) {
@@ -245,6 +252,9 @@ fn execute_variant_result(
     })?;
     context.run_jobs().map_err(|error| {
         anyhow::anyhow!("upstream Test262 case '{relative_path}' Promise jobs failed: {error}")
+    })?;
+    agents.finish().with_context(|| {
+        format!("upstream Test262 case '{relative_path}' agent execution failed")
     })?;
     if metadata.has_flag(FLAG_ASYNC) {
         return ensure_async_completion(relative_path, context.output());
@@ -433,7 +443,7 @@ fn variant_id(relative_path: &str, variant: &str) -> String {
     format!("{relative_path}#{variant}")
 }
 
-fn test262_limits() -> RuntimeLimits {
+pub fn test262_limits() -> RuntimeLimits {
     RuntimeLimits {
         max_source_len: TEST262_MAX_SOURCE_LEN,
         max_statements: TEST262_MAX_STATEMENTS,

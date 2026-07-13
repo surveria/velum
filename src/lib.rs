@@ -26,6 +26,7 @@ pub use crate::api::embedding::{
 };
 pub use crate::api::host::{FromJsValue, HostCall, HostOperation, IntoJsValue, LocalValue};
 pub use crate::api::owned_value::OwnedValue;
+pub use crate::api::shared_array_buffer::SharedArrayBufferHandle;
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_module::{
     CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImport, ModuleImportName,

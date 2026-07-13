@@ -206,7 +206,7 @@ impl Context {
         )
     }
 
-    fn create_shared_array_buffer_value(&mut self, buffer: ByteBuffer) -> Result<Value> {
+    pub(crate) fn create_shared_array_buffer_value(&mut self, buffer: ByteBuffer) -> Result<Value> {
         let prototype = self.shared_array_buffer_constructor_prototype()?;
         self.objects
             .create_array_buffer(buffer, prototype, self.limits.max_objects)
