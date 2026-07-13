@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use crate::{
     bytecode::BytecodeBlock,
     error::{Error, Result},
-    runtime::{Context, VmStorageKind, activation::ActivationFrame, control::Completion},
+    runtime::{Context, activation::ActivationFrame, control::Completion},
     value::{FunctionId, Value},
 };
 
@@ -310,10 +310,6 @@ impl Context {
             .activation_frames
             .last()
             .is_some_and(|activation| activation.continuation().is_none());
-        if !attaches_to_current {
-            self.storage_ledger
-                .grow_count(VmStorageKind::ExecutionFrame, 1)?;
-        }
         let continuation = BytecodeContinuationFrame::block(block.clone());
         if attaches_to_current {
             let index = self
@@ -334,8 +330,9 @@ impl Context {
         let index = self.activation_frames.len();
         let private_environment = self.current_private_environment();
         let with_environments = self.current_with_environments().to_vec();
-        self.activation_frames
-            .push(ActivationFrame::bytecode(continuation, with_environments));
+        let frame = ActivationFrame::bytecode(continuation, with_environments);
+        self.activate_frame_storage(frame.storage_footprint()?)?;
+        self.activation_frames.push(frame);
         self.set_current_private_environment(private_environment)?;
         Ok(BytecodeContinuationHandle {
             activation_index: index,
@@ -382,8 +379,7 @@ impl Context {
                 .activation_frames
                 .pop()
                 .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?;
-            self.storage_ledger
-                .release_count(VmStorageKind::ExecutionFrame, 1)?;
+            self.release_frame_storage(activation.storage_footprint()?)?;
             let _continuation = activation
                 .continuation_mut()
                 .take()

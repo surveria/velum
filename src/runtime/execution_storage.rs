@@ -5,11 +5,47 @@ use crate::{
 
 use super::{
     Context, FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
-    activation::ActivationFrame, binding::scope::BindingScope, function::FunctionSuperBinding,
+    activation::{ActivationFrame, ActivationFrameStorageFootprint},
+    binding::scope::BindingScope,
+    function::FunctionSuperBinding,
     private::PrivateEnvironment,
 };
 
 impl Context {
+    pub(in crate::runtime) fn activate_frame_storage(
+        &self,
+        footprint: ActivationFrameStorageFootprint,
+    ) -> Result<()> {
+        self.storage_ledger
+            .grow_count(VmStorageKind::Binding, footprint.binding_count())?;
+        if let Err(error) = self.storage_ledger.grow_count(
+            VmStorageKind::ExecutionFrame,
+            footprint.execution_frame_count(),
+        ) {
+            self.storage_ledger
+                .release_count(VmStorageKind::Binding, footprint.binding_count())?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn release_frame_storage(
+        &self,
+        footprint: ActivationFrameStorageFootprint,
+    ) -> Result<()> {
+        self.storage_ledger
+            .release_count(VmStorageKind::Binding, footprint.binding_count())?;
+        if let Err(error) = self.storage_ledger.release_count(
+            VmStorageKind::ExecutionFrame,
+            footprint.execution_frame_count(),
+        ) {
+            self.storage_ledger
+                .grow_count(VmStorageKind::Binding, footprint.binding_count())?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     pub(super) fn discard_execution_suffix(
         &mut self,
         local_base: usize,
@@ -21,26 +57,11 @@ impl Context {
             }
         }
         let frames = self.activation_frames.split_off(activation_base);
-        let upvalue_count = frames.iter().try_fold(0_usize, |count, frame| {
-            count
-                .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
-                .and_then(|count| {
-                    count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
-                })
-                .ok_or_else(|| Error::limit("discarded upvalue count overflowed"))
-        })?;
-        let execution_frame_count = frames.iter().try_fold(frames.len(), |count, frame| {
-            count
-                .checked_add(frame.continuation().map_or(
-                    0,
-                    crate::runtime::bytecode::BytecodeContinuationFrame::control_count,
-                ))
-                .ok_or_else(|| Error::limit("discarded execution frame count overflowed"))
-        })?;
-        self.storage_ledger
-            .release_count(VmStorageKind::Binding, upvalue_count)?;
-        self.storage_ledger
-            .release_count(VmStorageKind::ExecutionFrame, execution_frame_count)
+        let footprint = frames.iter().try_fold(
+            ActivationFrameStorageFootprint::default(),
+            |footprint, frame| footprint.checked_add(frame.storage_footprint()?),
+        )?;
+        self.release_frame_storage(footprint)
     }
 
     pub(super) fn push_call_activation(
@@ -52,31 +73,18 @@ impl Context {
         super_binding: Option<std::rc::Rc<FunctionSuperBinding>>,
         private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
     ) -> Result<usize> {
-        let (upvalues, with_environments) = environment;
-        let binding_count = upvalues
-            .len()
-            .checked_add(with_environments.len())
-            .ok_or_else(|| Error::limit("call captured binding count overflowed"))?;
-        self.storage_ledger
-            .grow_count(VmStorageKind::Binding, binding_count)?;
-        if let Err(error) = self
-            .storage_ledger
-            .grow_count(VmStorageKind::ExecutionFrame, 1)
-        {
-            self.storage_ledger
-                .release_count(VmStorageKind::Binding, binding_count)?;
-            return Err(error);
-        }
         let base = self.locals.len();
-        self.activation_frames.push(ActivationFrame::call(
+        let frame = ActivationFrame::call(
             function,
             base,
-            (upvalues, with_environments),
+            environment,
             this_value,
             new_target,
             super_binding,
             private_environment,
-        ));
+        );
+        self.activate_frame_storage(frame.storage_footprint()?)?;
+        self.activation_frames.push(frame);
         Ok(base)
     }
 
@@ -105,15 +113,7 @@ impl Context {
         let Some(frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("function activation frame disappeared"));
         };
-        let upvalue_count = frame
-            .upvalues()
-            .map_or(0, |upvalues| upvalues.len())
-            .checked_add(frame.with_environments().map_or(0, <[Value]>::len))
-            .ok_or_else(|| Error::limit("call captured binding count overflowed"))?;
-        self.storage_ledger
-            .release_count(VmStorageKind::Binding, upvalue_count)?;
-        self.storage_ledger
-            .release_count(VmStorageKind::ExecutionFrame, 1)
+        self.release_frame_storage(frame.storage_footprint()?)
     }
 
     pub(super) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {
@@ -153,11 +153,10 @@ impl Context {
     }
 
     pub(super) fn push_temporary_this(&mut self, value: Value) -> Result<()> {
-        self.storage_ledger
-            .grow_count(VmStorageKind::ExecutionFrame, 1)?;
         let private_environment = self.current_private_environment();
-        self.activation_frames
-            .push(ActivationFrame::temporary_this(value, private_environment));
+        let frame = ActivationFrame::temporary_this(value, private_environment);
+        self.activate_frame_storage(frame.storage_footprint()?)?;
+        self.activation_frames.push(frame);
         Ok(())
     }
 
@@ -176,19 +175,17 @@ impl Context {
                 "temporary-this structured control stack did not unwind",
             ));
         }
-        let Some(_frame) = self.activation_frames.pop() else {
+        let Some(frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("class field this binding disappeared"));
         };
-        self.storage_ledger
-            .release_count(VmStorageKind::ExecutionFrame, 1)
+        self.release_frame_storage(frame.storage_footprint()?)
     }
 
     pub(in crate::runtime) fn push_eval_activation_boundary(&mut self) -> Result<usize> {
-        self.storage_ledger
-            .grow_count(VmStorageKind::ExecutionFrame, 1)?;
         let base = self.locals.len();
-        self.activation_frames
-            .push(ActivationFrame::eval_boundary(base));
+        let frame = ActivationFrame::eval_boundary(base);
+        self.activate_frame_storage(frame.storage_footprint()?)?;
+        self.activation_frames.push(frame);
         Ok(base)
     }
 
@@ -212,11 +209,10 @@ impl Context {
                 "evaluation structured control stack did not unwind",
             ));
         }
-        let Some(_frame) = self.activation_frames.pop() else {
+        let Some(frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("evaluation activation boundary disappeared"));
         };
-        self.storage_ledger
-            .release_count(VmStorageKind::ExecutionFrame, 1)
+        self.release_frame_storage(frame.storage_footprint()?)
     }
 
     pub(in crate::runtime) fn current_activation_this(&self) -> Option<&Value> {

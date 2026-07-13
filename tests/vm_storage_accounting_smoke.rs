@@ -190,6 +190,50 @@ fn reconciles_heterogeneous_function_owner_footprints() -> TestResult {
     )
 }
 
+#[test]
+fn reconciles_suspended_with_environment_activation_footprints() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var resolveCamera;
+        var observedCamera = 0;
+        var cameraGate = new Promise(function(resolve) {
+            resolveCamera = resolve;
+        });
+        async function readCamera(environment) {
+            with (environment) {
+                observedCamera = lens + await cameraGate;
+            }
+        }
+        readCamera({ lens: 40 });
+        ",
+    )?;
+
+    vm.storage_snapshot().map_err(|error| {
+        Error::runtime(format!(
+            "suspended-with storage mismatch before collection: {error}"
+        ))
+    })?;
+    vm.collect_garbage()?;
+    vm.storage_snapshot().map_err(|error| {
+        Error::runtime(format!(
+            "suspended-with storage mismatch after collection: {error}"
+        ))
+    })?;
+    vm.eval("resolveCamera(2); 0;")?;
+    ensure(
+        vm.eval("observedCamera;")?.to_string() == "42",
+        "suspended with environment should survive activation transfer",
+    )?;
+    vm.storage_snapshot().map_err(|error| {
+        Error::runtime(format!(
+            "suspended-with storage mismatch after resume: {error}"
+        ))
+    })?;
+    Ok(())
+}
+
 fn ensure_materialized_payload_bytes(snapshot: &VmStorageSnapshot) -> TestResult {
     for (kind, label) in [
         (VmStorageKind::Atom, "atom text bytes"),

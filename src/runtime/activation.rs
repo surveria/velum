@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::value::{FunctionId, Value};
+use crate::{
+    error::Error,
+    value::{FunctionId, Value},
+};
 
 use super::{
     FunctionActivationEnvironment, FunctionUpvalues, bytecode::BytecodeContinuationFrame,
@@ -43,7 +46,58 @@ pub(in crate::runtime) enum ActivationFrame {
     },
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::runtime) struct ActivationFrameStorageFootprint {
+    binding_count: usize,
+    execution_frame_count: usize,
+}
+
+impl ActivationFrameStorageFootprint {
+    pub(in crate::runtime) const fn binding_count(self) -> usize {
+        self.binding_count
+    }
+
+    pub(in crate::runtime) const fn execution_frame_count(self) -> usize {
+        self.execution_frame_count
+    }
+
+    pub(in crate::runtime) fn checked_add(self, other: Self) -> crate::error::Result<Self> {
+        let binding_count = self
+            .binding_count
+            .checked_add(other.binding_count)
+            .ok_or_else(activation_storage_overflow)?;
+        let execution_frame_count = self
+            .execution_frame_count
+            .checked_add(other.execution_frame_count)
+            .ok_or_else(activation_storage_overflow)?;
+        Ok(Self {
+            binding_count,
+            execution_frame_count,
+        })
+    }
+}
+
 impl ActivationFrame {
+    pub(in crate::runtime) fn storage_footprint(
+        &self,
+    ) -> crate::error::Result<ActivationFrameStorageFootprint> {
+        let binding_count = self
+            .upvalues()
+            .map_or(0, |upvalues| upvalues.len())
+            .checked_add(self.with_environments().map_or(0, <[Value]>::len))
+            .ok_or_else(activation_storage_overflow)?;
+        let control_count = self
+            .continuation()
+            .map_or(0, super::bytecode::BytecodeContinuationFrame::control_count);
+        let execution_frame_count = 1_usize
+            .checked_add(control_count)
+            .ok_or_else(activation_storage_overflow)?;
+        Ok(ActivationFrameStorageFootprint {
+            binding_count,
+            execution_frame_count,
+        })
+    }
+
     pub(in crate::runtime) fn call(
         function: FunctionId,
         local_base: usize,
@@ -273,4 +327,8 @@ impl ActivationFrame {
             | Self::Bytecode { continuation, .. } => continuation,
         }
     }
+}
+
+fn activation_storage_overflow() -> Error {
+    Error::limit("activation frame storage footprint overflowed")
 }

@@ -51,6 +51,21 @@ impl Context {
             })
     }
 
+    pub(in crate::runtime) fn suspended_async_binding_count(&self) -> Result<usize> {
+        let promise_bindings = self.promises.iter().try_fold(0_usize, |count, promise| {
+            count
+                .checked_add(promise.suspended_binding_count()?)
+                .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+        })?;
+        self.promise_jobs
+            .iter()
+            .try_fold(promise_bindings, |count, job| {
+                count
+                    .checked_add(job.binding_count()?)
+                    .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn suspended_async_cache_entry_count(&self) -> Result<usize> {
         let promise_entries = self.promises.iter().try_fold(0_usize, |count, promise| {
             count

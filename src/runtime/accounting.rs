@@ -1,7 +1,4 @@
-use crate::{
-    error::{Error, Result},
-    value::Value,
-};
+use crate::error::{Error, Result};
 
 use super::Context;
 
@@ -402,12 +399,13 @@ impl Context {
         for frame in &self.activation_frames {
             counter.record(
                 VmStorageKind::Binding,
-                frame.with_environments().map_or(0, <[Value]>::len),
+                frame.storage_footprint()?.binding_count(),
             )?;
-            if let Some(upvalues) = frame.upvalues() {
-                counter.record(VmStorageKind::Binding, upvalues.len())?;
-            }
         }
+        counter.record(
+            VmStorageKind::Binding,
+            self.suspended_async_binding_count()?,
+        )?;
         counter.record(
             VmStorageKind::Binding,
             self.suspended_generator_binding_count()?,
@@ -498,7 +496,6 @@ impl Context {
 
     fn record_active_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         counter.record(VmStorageKind::ExecutionFrame, self.locals.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.activation_frames.len())?;
         counter.record(
             VmStorageKind::ExecutionFrame,
             self.suspended_async_execution_frame_count()?,
@@ -508,9 +505,10 @@ impl Context {
             self.suspended_generator_execution_frame_count()?,
         )?;
         for frame in &self.activation_frames {
-            if let Some(continuation) = frame.continuation() {
-                counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;
-            }
+            counter.record(
+                VmStorageKind::ExecutionFrame,
+                frame.storage_footprint()?.execution_frame_count(),
+            )?;
         }
         counter.record(VmStorageKind::OutputEntry, self.output.len())
     }

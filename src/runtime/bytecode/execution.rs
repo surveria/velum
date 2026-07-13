@@ -305,8 +305,7 @@ impl Context {
             self.activation_frames.push(frame);
             return Err(Error::runtime("resumed bytecode child owner mismatch"));
         }
-        self.storage_ledger
-            .release_count(crate::runtime::VmStorageKind::ExecutionFrame, 1)?;
+        self.release_frame_storage(frame.storage_footprint()?)?;
         self.activation_frames
             .last_mut()
             .map(crate::runtime::activation::ActivationFrame::continuation_mut)

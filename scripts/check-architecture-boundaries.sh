@@ -138,7 +138,8 @@ check_retained_value_boundary() {
 }
 
 check_storage_accounting_boundary() {
-  local footprint_owners
+  local activation_binding_recount
+  local activation_frame_recount
   local function_activation
   local function_recount
 
@@ -161,14 +162,6 @@ check_storage_accounting_boundary() {
     fail "storage accounting boundary changed; typed accounting, reconciliation, and public snapshots are required"
   fi
 
-  footprint_owners="$(
-    function_owners 'fn[[:space:]]+storage_footprint[[:space:]]*\(' \
-      | sed -E 's/[[:space:]]*\($//'
-  )"
-  compare_set "function storage footprint owner allowlist" \
-    "${footprint_owners}" \
-    'src/runtime/function/storage.rs:storage_footprint'
-
   function_activation="$(
     sed -n '/fn activate_function_storage(/,/^    }/p' \
       "${repo_root}/src/runtime/function/storage.rs"
@@ -185,6 +178,29 @@ check_storage_accounting_boundary() {
       'function\.(param_binding_ids|param_atoms|param_frames|self_binding|arguments_binding|class_fields|class_private_slots|fast_path|scope_template|upvalues|with_environments|private_slots)' \
       <<<"${function_recount}"; then
     fail "function storage accounting boundary changed; recount duplicated Function field formulas"
+  fi
+
+  activation_binding_recount="$(
+    sed -n '/fn record_binding_storage(/,/^    }/p' \
+      "${repo_root}/src/runtime/accounting.rs"
+  )"
+  activation_frame_recount="$(
+    sed -n '/fn record_active_storage(/,/^    }/p' \
+      "${repo_root}/src/runtime/accounting.rs"
+  )"
+  if ! grep -E -q 'fn[[:space:]]+storage_footprint[[:space:]]*\(' \
+      "${repo_root}/src/runtime/function/storage.rs" \
+    || ! grep -E -q 'fn[[:space:]]+storage_footprint[[:space:]]*\(' \
+      "${repo_root}/src/runtime/activation.rs" \
+    || ! grep -F -q 'frame.storage_footprint()?' <<<"${activation_binding_recount}" \
+    || ! grep -F -q 'frame.storage_footprint()?' <<<"${activation_frame_recount}" \
+    || ! grep -F -q 'activate_frame_storage(' \
+      "${repo_root}/src/runtime/execution_storage.rs" \
+    || ! grep -F -q 'release_frame_storage(' \
+      "${repo_root}/src/runtime/execution_storage.rs" \
+    || ! grep -F -q 'footprint.checked_add(frame.storage_footprint()?)' \
+      "${repo_root}/src/runtime/function/suspended.rs"; then
+    fail "activation storage accounting boundary changed; live and suspended paths must share the frame footprint"
   fi
 }
 
@@ -951,21 +967,10 @@ check_direct_root_boundary() {
 
 check_activation_frame_boundary() {
   local legacy_fields
-  for source in \
-    'pub(in crate::runtime) enum ActivationFrame {' \
-    'Call {' \
-    'local_base: usize,' \
-    'upvalues: FunctionUpvalues,' \
-    'this_value: Value,' \
-    'new_target: Value,' \
-    'super_binding: Option<Rc<FunctionSuperBinding>>,' \
-    'continuation: Some(BytecodeContinuationFrame::function(function)),' \
-    'TemporaryThis {' \
-    'EvalBoundary {'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/activation.rs"; then
-      fail "activation frame boundary changed; AS-06a1 call, temporary-this, and evaluation state must stay explicit"
-    fi
-  done
+  if ! grep -F -q 'pub(in crate::runtime) enum ActivationFrame {' \
+      "${repo_root}/src/runtime/activation.rs"; then
+    fail "activation frame boundary changed; synchronous execution state requires one explicit owner"
+  fi
 
   legacy_fields="$({
     grep -E '^[[:space:]]+(local_frame_bases|upvalue_frames|this_values|new_target_values|super_frames):' \
@@ -998,16 +1003,14 @@ check_activation_frame_boundary() {
 check_bytecode_continuation_boundary() {
   for source in \
     'pub(in crate::runtime) struct BytecodeContinuationFrame {' \
-    'program: BytecodeContinuationProgram,' \
-    'parked_state: Option<Box<BytecodeState>>,' \
-    'enum BytecodeContinuationProgram {' \
-    'Function(FunctionId),' \
-    'Block { block: BytecodeBlock },' \
     'pub(in crate::runtime) const fn function(function: FunctionId) -> Self {' \
     'pub(in crate::runtime) const fn block(block: BytecodeBlock) -> Self {' \
+    'pub(in crate::runtime) fn root_values(&self)' \
+    'pub(in crate::runtime) const fn is_settled(&self) -> bool {' \
+    'pub(in crate::runtime) fn park_state(&mut self, state: BytecodeState) -> Result<()> {' \
+    'pub(in crate::runtime) fn checkout_state(&mut self) -> Result<BytecodeState> {' \
     'pub(super) fn ensure_running_function_continuation(' \
-    'self.activation_frames' \
-    '.push(ActivationFrame::bytecode(continuation, with_environments));' \
+    'pub(super) fn push_bytecode_continuation(' \
     'pub(super) fn pop_bytecode_continuation('; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/continuation.rs"; then
@@ -1059,9 +1062,14 @@ check_structured_control_boundary() {
     fi
   done
 
-  if ! grep -F -q 'counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;' \
-      "${repo_root}/src/runtime/accounting.rs"; then
-    fail "structured control boundary changed; control records must remain charged as execution frames"
+  local activation_footprint
+  activation_footprint="$(
+    sed -n '/fn storage_footprint(/,/^    }/p' \
+      "${repo_root}/src/runtime/activation.rs"
+  )"
+  if ! grep -F -q 'control_count' <<<"${activation_footprint}" \
+    || ! grep -F -q 'execution_frame_count' <<<"${activation_footprint}"; then
+    fail "structured control boundary changed; the activation footprint must charge control records as execution frames"
   fi
 }
 
@@ -1749,6 +1757,12 @@ mutate_function_storage_footprint_recount() {
     "${fixture_root}/src/runtime/accounting.rs"
 }
 
+mutate_activation_storage_footprint_recount() {
+  local fixture_root="$1"
+  portable_sed '/fn record_binding_storage/,/^    }/ { /frame.storage_footprint()?/d; }' \
+    "${fixture_root}/src/runtime/accounting.rs"
+}
+
 mutate_function_name_inference_owner() {
   local fixture_root="$1"
   printf '\nfn set_function_name() {}\n' \
@@ -1779,15 +1793,17 @@ mutate_javascript_exception_visibility() {
     "${fixture_root}/src/error.rs"
 }
 
-mutate_activation_frame_upvalues() {
+mutate_activation_parallel_stack() {
   local fixture_root="$1"
-  portable_sed '/        upvalues: FunctionUpvalues,/d' \
-    "${fixture_root}/src/runtime/activation.rs"
+  insert_fixture_line before \
+    '    activation_frames: Vec<activation::ActivationFrame>,' \
+    '    upvalue_frames: Vec<FunctionUpvalues>,' \
+    "${fixture_root}/src/runtime/mod.rs"
 }
 
 mutate_bytecode_continuation_state() {
   local fixture_root="$1"
-  portable_sed '/    parked_state: Option<Box<BytecodeState>>,/d' \
+  portable_sed '/    pub(in crate::runtime) fn park_state(/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
@@ -1799,7 +1815,7 @@ mutate_bytecode_continuation_unwind() {
 
 mutate_bytecode_function_program() {
   local fixture_root="$1"
-  portable_sed '/    Function(FunctionId),/d' \
+  portable_sed 's/const fn function(function: FunctionId)/const fn renamed_function(function: FunctionId)/' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
@@ -1974,6 +1990,8 @@ run_self_tests() {
     'OwnedValue boundary admitted' mutate_owned_value_variant
   expect_guard_failure "${temp_dir}" function-storage-footprint \
     'function storage accounting boundary changed' mutate_function_storage_footprint_recount
+  expect_guard_failure "${temp_dir}" activation-storage-footprint \
+    'activation storage accounting boundary changed' mutate_activation_storage_footprint_recount
   expect_guard_failure "${temp_dir}" runtime-frontend \
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
   expect_guard_failure "${temp_dir}" frontend-source-span \
@@ -2028,8 +2046,8 @@ run_self_tests() {
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \
     'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
-  expect_guard_failure "${temp_dir}" activation-frame-upvalues \
-    'activation frame boundary changed' mutate_activation_frame_upvalues
+  expect_guard_failure "${temp_dir}" activation-parallel-stack \
+    'activation frame boundary changed' mutate_activation_parallel_stack
   expect_guard_failure "${temp_dir}" bytecode-continuation-state \
     'bytecode continuation boundary changed' mutate_bytecode_continuation_state
   expect_guard_failure "${temp_dir}" bytecode-continuation-unwind \

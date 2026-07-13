@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, VmStorageKind,
-        activation::ActivationFrame,
+        activation::{ActivationFrame, ActivationFrameStorageFootprint},
         async_trace::VmAsyncEdgeKind,
         binding::scope::BindingScope,
         control::Completion,
@@ -182,6 +182,10 @@ impl SuspendedAsyncFunction {
         self.execution.execution_frame_count()
     }
 
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        self.execution.binding_count()
+    }
+
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         self.execution.cache_entry_count()
     }
@@ -241,20 +245,18 @@ impl DetachedFunctionExecution {
         (self.locals, self.activations)
     }
 
+    fn activation_storage_footprint(&self) -> Result<ActivationFrameStorageFootprint> {
+        self.activations.iter().try_fold(
+            ActivationFrameStorageFootprint::default(),
+            |footprint, frame| footprint.checked_add(frame.storage_footprint()?),
+        )
+    }
+
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
-        let control_count = self.activations.iter().try_fold(0_usize, |count, frame| {
-            let controls = frame.continuation().map_or(
-                0,
-                super::super::bytecode::BytecodeContinuationFrame::control_count,
-            );
-            count
-                .checked_add(controls)
-                .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
-        })?;
+        let activation_count = self.activation_storage_footprint()?.execution_frame_count();
         self.locals
             .len()
-            .checked_add(self.activations.len())
-            .and_then(|count| count.checked_add(control_count))
+            .checked_add(activation_count)
             .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
     }
 
@@ -264,16 +266,9 @@ impl DetachedFunctionExecution {
                 .checked_add(scope.len())
                 .ok_or_else(|| Error::limit("suspended binding count overflowed"))
         })?;
-        self.activations
-            .iter()
-            .try_fold(local_count, |count, frame| {
-                count
-                    .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
-                    .and_then(|count| {
-                        count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
-                    })
-                    .ok_or_else(|| Error::limit("suspended binding count overflowed"))
-            })
+        local_count
+            .checked_add(self.activation_storage_footprint()?.binding_count())
+            .ok_or_else(|| Error::limit("suspended binding count overflowed"))
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
@@ -415,18 +410,11 @@ impl DetachedFunctionExecution {
         storage_ledger: &VmStorageLedger,
     ) -> Result<()> {
         let execution_frames = self.execution_frame_count()?;
-        let upvalue_count = self.activations.iter().try_fold(0_usize, |count, frame| {
-            count
-                .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
-                .and_then(|count| {
-                    count.checked_add(frame.with_environments().map_or(0, <[Value]>::len))
-                })
-                .ok_or_else(|| Error::limit("suspended upvalue count overflowed"))
-        })?;
+        let activation_bindings = self.activation_storage_footprint()?.binding_count();
         for scope in &mut self.locals {
             scope.deactivate_storage()?;
         }
-        storage_ledger.release_count(VmStorageKind::Binding, upvalue_count)?;
+        storage_ledger.release_count(VmStorageKind::Binding, activation_bindings)?;
         storage_ledger.release_count(VmStorageKind::ExecutionFrame, execution_frames)
     }
 }

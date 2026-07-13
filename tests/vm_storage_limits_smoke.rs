@@ -234,7 +234,18 @@ fn enforces_binding_limits_and_releases_finished_scopes() -> TestResult {
         vm.storage_snapshot()?.count(VmStorageKind::Binding),
         0,
         "binding count after lexical scope release",
-    )
+    )?;
+
+    let mut probe = Engine::new().create_vm();
+    probe.eval("var camera = { lens: 42 };")?;
+    let binding_limit = probe.storage_snapshot()?.count(VmStorageKind::Binding);
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Binding, binding_limit);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval("var camera = { lens: 42 };")?;
+    let before = vm.storage_snapshot()?;
+    let error = expect_eval_error(&mut vm, "with (camera) { lens; }")?;
+    ensure_limit(&error, "Binding")?;
+    ensure_snapshot(&vm, &before, "with environment limit failure")
 }
 
 #[test]
