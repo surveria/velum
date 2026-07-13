@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use num_traits::ToPrimitive;
 use temporal_rs::{
     Calendar, Instant, PlainDate, PlainDateTime, PlainMonthDay, PlainTime, PlainYearMonth,
@@ -304,7 +306,7 @@ impl Context {
         let year = self.temporal_i32(values.first(), "PlainDate year")?;
         let month = self.temporal_u8(values.get(1), "PlainDate month")?;
         let day = self.temporal_u8(values.get(2), "PlainDate day")?;
-        let calendar = self.temporal_calendar(values.get(3))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(3))?;
         let date = PlainDate::try_new(year, month, day, calendar).map_err(temporal_error)?;
         self.create_plain_date_value(date)
     }
@@ -329,7 +331,7 @@ impl Context {
         let zone_value = values.get(1).cloned().unwrap_or(Value::Undefined);
         let zone_text = self.to_string(&zone_value)?;
         let time_zone = TimeZone::try_from_str(&zone_text).map_err(temporal_error)?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let zoned = ZonedDateTime::try_new(nanos, time_zone, calendar).map_err(temporal_error)?;
         self.create_zoned_date_time_value(zoned)
     }
@@ -349,7 +351,7 @@ impl Context {
             self.temporal_optional_u16(values.get(6), "PlainDateTime millisecond")?,
             self.temporal_optional_u16(values.get(7), "PlainDateTime microsecond")?,
             self.temporal_optional_u16(values.get(8), "PlainDateTime nanosecond")?,
-            self.temporal_calendar(values.get(9))?,
+            Self::temporal_calendar_identifier(values.get(9))?,
         )
         .map_err(temporal_error)?;
         self.create_temporal_calendar_value(
@@ -365,7 +367,7 @@ impl Context {
         let values = args.as_slice();
         let month = self.temporal_u8(values.first(), "PlainMonthDay month")?;
         let day = self.temporal_u8(values.get(1), "PlainMonthDay day")?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let reference_year = self.temporal_optional_i32(values.get(3), "reference year")?;
         let month_day = PlainMonthDay::new_with_overflow(
             month,
@@ -388,7 +390,7 @@ impl Context {
         let values = args.as_slice();
         let year = self.temporal_i32(values.first(), "PlainYearMonth year")?;
         let month = self.temporal_u8(values.get(1), "PlainYearMonth month")?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let reference_day = self.temporal_optional_u8_value(values.get(3), "reference day")?;
         let year_month = PlainYearMonth::try_new(year, month, reference_day, calendar)
             .map_err(temporal_error)?;
@@ -491,20 +493,50 @@ impl Context {
     fn temporal_integer(&mut self, value: Option<&Value>, name: &str) -> Result<f64> {
         let value = value.cloned().unwrap_or(Value::Undefined);
         let number = self.to_number(&value)?;
-        if number.is_finite() && number.fract() == 0.0 {
-            return Ok(number);
+        if number.is_finite() {
+            return Ok(number.trunc());
         }
         Err(Error::exception(
             ErrorName::RangeError,
-            format!("{name} must be a finite integer"),
+            format!("{name} must be finite"),
         ))
     }
 
-    pub(super) fn temporal_calendar(&mut self, value: Option<&Value>) -> Result<Calendar> {
+    pub(super) fn temporal_calendar(&self, value: Option<&Value>) -> Result<Calendar> {
         let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(Calendar::default());
         };
-        let text = self.to_string(value)?;
+        if let Value::Object(id) = value {
+            let calendar = match self.objects.temporal_value(*id)? {
+                Some(TemporalValue::PlainDate(date)) => Some(date.calendar()),
+                Some(TemporalValue::PlainDateTime(date_time)) => Some(date_time.calendar()),
+                Some(TemporalValue::PlainMonthDay(month_day)) => Some(month_day.calendar()),
+                Some(TemporalValue::PlainYearMonth(year_month)) => Some(year_month.calendar()),
+                Some(TemporalValue::ZonedDateTime(zoned)) => Some(zoned.calendar()),
+                Some(
+                    TemporalValue::Duration(_)
+                    | TemporalValue::Instant(_)
+                    | TemporalValue::PlainTime(_),
+                )
+                | None => None,
+            };
+            if let Some(calendar) = calendar {
+                return Ok(calendar.clone());
+            }
+        }
+        let Some(text) = value.string_text() else {
+            return Err(Error::type_error("Temporal calendar must be a string"));
+        };
+        Calendar::from_str(text).map_err(temporal_error)
+    }
+
+    fn temporal_calendar_identifier(value: Option<&Value>) -> Result<Calendar> {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
+            return Ok(Calendar::default());
+        };
+        let Some(text) = value.string_text() else {
+            return Err(Error::type_error("Temporal calendar must be a string"));
+        };
         Calendar::try_from_utf8(text.as_bytes()).map_err(temporal_error)
     }
 
