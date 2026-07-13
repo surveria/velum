@@ -60,7 +60,14 @@ fn supports_date_constructor_and_utc_methods() -> TestResult {
             setResult === 1000 &&
             mutable.getTime() === 1000 &&
             mutable.toISOString() === "1970-01-01T00:00:01.000Z" &&
-            Date.prototype.getTime() !== Date.prototype.getTime()
+            (() => {
+                try {
+                    Date.prototype.getTime();
+                    return false;
+                } catch (error) {
+                    return error instanceof TypeError;
+                }
+            })()
             ? 42
             : 0
         "#,
@@ -332,5 +339,54 @@ fn locale_date_methods_validate_receivers_and_invalid_dates() -> TestResult {
         ].join("|")
         "#,
         "12|Invalid Date|Invalid Date|Invalid Date",
+    )
+}
+
+#[test]
+fn date_residual_semantics_follow_observable_ordering() -> TestResult {
+    ensure_string(
+        r#"
+        const generic = {
+            valueOf() { return 1; },
+            toISOString() { return this === generic && arguments.length === 0 ? "generic" : "bad"; }
+        };
+        const invalid = new Date(NaN);
+        const argument = {
+            valueOf() {
+                invalid.setTime(0);
+                return 1;
+            }
+        };
+        const setterResult = invalid.setHours(argument, argument, argument, argument);
+        const instant = new Date(1234).toTemporalInstant();
+        [
+            Date.prototype.toJSON.call(generic),
+            Date.prototype.toJSON.length,
+            instant.epochNanoseconds === 1234000000n,
+            setterResult !== setterResult,
+            invalid.getTime() === 0,
+            Date.UTC(1970, 0, 1, 80063993375, 29, 1, -288230376151711740),
+            Date.UTC(1970, 0, 213503982336, 0, 0, 0, -18446744073709552000)
+        ].join("|")
+        "#,
+        "generic|1|true|true|true|29312|34447360",
+    )
+}
+
+#[test]
+fn expanded_years_round_trip_through_date_formats() -> TestResult {
+    ensure_string(
+        r#"
+        const negative = new Date("-000001-07-01T00:00Z");
+        const minimum = new Date("-271821-04-20T00:00:00.000Z");
+        [
+            negative.toISOString(),
+            negative.toDateString().split(" ")[3],
+            minimum.getTime(),
+            Date.parse(new Date(0).toString()),
+            Date.parse(new Date(0).toUTCString())
+        ].join("|")
+        "#,
+        "-000001-07-01T00:00:00.000Z|-0001|-8640000000000000|0|0",
     )
 }

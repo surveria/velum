@@ -20,6 +20,21 @@ enum DateSetterKind {
     Milliseconds,
 }
 
+impl DateSetterKind {
+    const fn maximum_argument_count(self) -> usize {
+        match self {
+            Self::FullYear | Self::Minutes => 3,
+            Self::Month | Self::Seconds => 2,
+            Self::Date | Self::Milliseconds => 1,
+            Self::Hours => 4,
+        }
+    }
+
+    const fn uses_epoch_for_invalid_date(self) -> bool {
+        matches!(self, Self::FullYear)
+    }
+}
+
 impl Context {
     pub(in crate::runtime::native) fn eval_date_prototype_set_full_year(
         &mut self,
@@ -108,9 +123,20 @@ impl Context {
         kind: DateSetterKind,
     ) -> Result<Value> {
         let (id, current) = self.date_this_object_value(this_value)?;
+        if current.millis().is_none() && !kind.uses_epoch_for_invalid_date() {
+            self.coerce_date_setter_arguments(args.as_slice(), kind)?;
+            return Ok(Value::Number(f64::NAN));
+        }
         let date = self.date_value_after_setter(current, args.as_slice(), kind)?;
         self.objects.set_date_value(id, date)?;
         date_value_to_number(date).map(Value::Number)
+    }
+
+    fn coerce_date_setter_arguments(&mut self, args: &[Value], kind: DateSetterKind) -> Result<()> {
+        for argument in args.iter().take(kind.maximum_argument_count()) {
+            let _number = self.to_number(argument)?;
+        }
+        Ok(())
     }
 
     fn date_value_after_setter(

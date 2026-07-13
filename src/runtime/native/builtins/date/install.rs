@@ -2,7 +2,10 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        object::{PropertyEnumerable, PropertyKey},
+        object::{
+            DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+            PropertyUpdate, PropertyWritable,
+        },
     },
     value::{NativeFunctionId, ObjectId, Value},
 };
@@ -84,11 +87,16 @@ impl Context {
         let key = self.date_well_known_symbol_property_key(SYMBOL_TO_PRIMITIVE_PROPERTY)?;
         let kind = NativeFunctionKind::Date(DateFunctionKind::PrototypeSymbolToPrimitive);
         let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
-        self.objects.define_non_enumerable(
+        self.objects.define_property(
             prototype,
             key,
             kind.name(),
-            function,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(function),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
             self.limits.max_object_properties,
         )
     }
@@ -142,6 +150,7 @@ const DATE_PROTOTYPE_METHODS: &[DateFunctionKind] = &[
     DateFunctionKind::PrototypeSetTime,
     DateFunctionKind::PrototypeToIsoString,
     DateFunctionKind::PrototypeToJson,
+    DateFunctionKind::PrototypeToTemporalInstant,
     DateFunctionKind::PrototypeToLocaleString,
     DateFunctionKind::PrototypeToLocaleDateString,
     DateFunctionKind::PrototypeToLocaleTimeString,

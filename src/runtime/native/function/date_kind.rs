@@ -45,6 +45,7 @@ const DATE_PROTOTYPE_SYMBOL_TO_PRIMITIVE_NAME: &str = "[Symbol.toPrimitive]";
 const DATE_PROTOTYPE_TO_DATE_STRING_NAME: &str = "toDateString";
 const DATE_PROTOTYPE_TO_ISO_STRING_NAME: &str = "toISOString";
 const DATE_PROTOTYPE_TO_JSON_NAME: &str = "toJSON";
+const DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_NAME: &str = "toTemporalInstant";
 const DATE_PROTOTYPE_TO_LOCALE_DATE_STRING_NAME: &str = "toLocaleDateString";
 const DATE_PROTOTYPE_TO_LOCALE_STRING_NAME: &str = "toLocaleString";
 const DATE_PROTOTYPE_TO_LOCALE_TIME_STRING_NAME: &str = "toLocaleTimeString";
@@ -102,6 +103,7 @@ pub(in crate::runtime) enum DateFunctionKind {
     PrototypeToDateString,
     PrototypeToIsoString,
     PrototypeToJson,
+    PrototypeToTemporalInstant,
     PrototypeToLocaleDateString,
     PrototypeToLocaleString,
     PrototypeToLocaleTimeString,
@@ -119,6 +121,7 @@ impl DateFunctionKind {
             Self::Utc => DATE_UTC_FUNCTION_LENGTH,
             Self::Now => DATE_NOW_FUNCTION_LENGTH,
             Self::Parse
+            | Self::PrototypeToJson
             | Self::PrototypeSetDate
             | Self::PrototypeSetMilliseconds
             | Self::PrototypeSetTime
@@ -156,7 +159,7 @@ impl DateFunctionKind {
             | Self::PrototypeGetYear
             | Self::PrototypeToDateString
             | Self::PrototypeToIsoString
-            | Self::PrototypeToJson
+            | Self::PrototypeToTemporalInstant
             | Self::PrototypeToLocaleDateString
             | Self::PrototypeToLocaleString
             | Self::PrototypeToLocaleTimeString
@@ -211,6 +214,7 @@ impl DateFunctionKind {
             Self::PrototypeToDateString => DATE_PROTOTYPE_TO_DATE_STRING_NAME,
             Self::PrototypeToIsoString => DATE_PROTOTYPE_TO_ISO_STRING_NAME,
             Self::PrototypeToJson => DATE_PROTOTYPE_TO_JSON_NAME,
+            Self::PrototypeToTemporalInstant => DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_NAME,
             Self::PrototypeToLocaleDateString => DATE_PROTOTYPE_TO_LOCALE_DATE_STRING_NAME,
             Self::PrototypeToLocaleString => DATE_PROTOTYPE_TO_LOCALE_STRING_NAME,
             Self::PrototypeToLocaleTimeString => DATE_PROTOTYPE_TO_LOCALE_TIME_STRING_NAME,

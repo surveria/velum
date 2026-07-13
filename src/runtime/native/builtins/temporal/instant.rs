@@ -140,6 +140,14 @@ impl Context {
         self.create_instant_value(instant)
     }
 
+    pub(in crate::runtime::native) fn create_instant_from_epoch_milliseconds_value(
+        &mut self,
+        milliseconds: i64,
+    ) -> Result<Value> {
+        let instant = Instant::from_epoch_milliseconds(milliseconds).map_err(temporal_error)?;
+        self.create_instant_value(instant)
+    }
+
     fn eval_instant_from_epoch_nanoseconds(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let nanos = self.instant_bigint_argument(args.as_slice().first())?;
         let instant = Instant::try_new(nanos).map_err(temporal_error)?;
