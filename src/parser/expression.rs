@@ -253,9 +253,7 @@ impl Parser {
     }
 
     fn new_target_expr(&mut self, new_span: crate::SourceSpan) -> Result<Expression> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected 'target' after 'new.'"))?;
+        let token = self.advance_token("expected 'target' after 'new.'")?;
         let token_span = token.span;
         let TokenKind::Identifier(name) = token.kind else {
             return Err(Error::parse_at(
@@ -329,9 +327,7 @@ impl Parser {
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.expression()?);
-            let token = self
-                .advance()
-                .ok_or_else(|| self.parse_error("expected template literal continuation"))?;
+            let token = self.advance_token("expected template literal continuation")?;
             let token_span = token.span;
             match token.kind {
                 TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
@@ -431,10 +427,11 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expression> {
         let token = self
-            .advance()
+            .advance_regexp()
             .ok_or_else(|| self.parse_error("expected expression"))?;
         let token_span = token.span;
         let expr = match token.kind {
+            TokenKind::LexicalError(error) => return Err(*error),
             TokenKind::Number(value) => {
                 Expression::new(Expr::Literal(Value::Number(value)), token_span)
             }
@@ -649,52 +646,51 @@ impl Parser {
         })
     }
 
-    fn arrow_signature(&self) -> Option<ArrowSignature> {
-        match self.peek_kind(0)? {
+    fn arrow_signature(&mut self) -> Option<ArrowSignature> {
+        let identifier = matches!(
+            self.peek_kind(0)?,
             TokenKind::Identifier(_) | TokenKind::Async
-                if self.peek_kind_is_no_line_terminator(1, &TokenKind::Arrow) =>
-            {
-                Some(ArrowSignature {
-                    is_async: false,
-                    parameters: ArrowParameters::Single,
-                })
-            }
-            TokenKind::LParen if self.parenthesized_arrow_end(0).is_some() => {
-                Some(ArrowSignature {
-                    is_async: false,
-                    parameters: ArrowParameters::Parenthesized,
-                })
-            }
-            TokenKind::Async => self.async_arrow_signature(),
-            _ => None,
+        );
+        if identifier && self.peek_kind_is_no_line_terminator(1, &TokenKind::Arrow) {
+            return Some(ArrowSignature {
+                is_async: false,
+                parameters: ArrowParameters::Single,
+            });
+        }
+        let parenthesized = matches!(self.peek_kind(0)?, TokenKind::LParen);
+        if parenthesized && self.parenthesized_arrow_end(0).is_some() {
+            return Some(ArrowSignature {
+                is_async: false,
+                parameters: ArrowParameters::Parenthesized,
+            });
+        }
+        if matches!(self.peek_kind(0)?, TokenKind::Async) {
+            self.async_arrow_signature()
+        } else {
+            None
         }
     }
 
-    fn async_arrow_signature(&self) -> Option<ArrowSignature> {
-        match self.peek_kind(1)? {
-            _ if !self.peek_has_line_terminator_before(1)
-                && self.peek_is_identifier_name(1)
-                && self.peek_kind_is_no_line_terminator(2, &TokenKind::Arrow) =>
-            {
-                Some(ArrowSignature {
-                    is_async: true,
-                    parameters: ArrowParameters::Single,
-                })
-            }
-            TokenKind::LParen
-                if !self.peek_has_line_terminator_before(1)
-                    && self.parenthesized_arrow_end(1).is_some() =>
-            {
-                Some(ArrowSignature {
-                    is_async: true,
-                    parameters: ArrowParameters::Parenthesized,
-                })
-            }
-            _ => None,
+    fn async_arrow_signature(&mut self) -> Option<ArrowSignature> {
+        let no_line_terminator = !self.peek_has_line_terminator_before(1);
+        if no_line_terminator
+            && self.peek_is_identifier_name(1)
+            && self.peek_kind_is_no_line_terminator(2, &TokenKind::Arrow)
+        {
+            return Some(ArrowSignature {
+                is_async: true,
+                parameters: ArrowParameters::Single,
+            });
         }
+        let parenthesized = matches!(self.peek_kind(1)?, TokenKind::LParen);
+        (no_line_terminator && parenthesized && self.parenthesized_arrow_end(1).is_some())
+            .then_some(ArrowSignature {
+                is_async: true,
+                parameters: ArrowParameters::Parenthesized,
+            })
     }
 
-    fn parenthesized_arrow_end(&self, lparen_offset: usize) -> Option<usize> {
+    fn parenthesized_arrow_end(&mut self, lparen_offset: usize) -> Option<usize> {
         if !self.peek_kind_is(lparen_offset, &TokenKind::LParen) {
             return None;
         }

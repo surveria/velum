@@ -48,7 +48,13 @@ fn dynamic_function_constructors_share_the_syntax_error_boundary() -> TestResult
         } catch (error) {
             asynchronous = error instanceof SyntaxError;
         }
-        ordinary && asynchronous
+        let lexical;
+        try {
+            Function("@error");
+        } catch (error) {
+            lexical = error instanceof SyntaxError;
+        }
+        ordinary && asynchronous && lexical
         "#,
     )?;
 

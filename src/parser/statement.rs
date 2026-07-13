@@ -129,7 +129,7 @@ impl Parser {
         Ok(Stmt::Expr(expr))
     }
 
-    fn let_starts_expression_statement(&self, lexical_declaration_allowed: bool) -> bool {
+    fn let_starts_expression_statement(&mut self, lexical_declaration_allowed: bool) -> bool {
         if self.is_strict_mode() || !self.check(&TokenKind::Let) {
             return false;
         }
@@ -142,7 +142,7 @@ impl Parser {
         !self.let_declaration_lookahead()
     }
 
-    fn let_declaration_lookahead(&self) -> bool {
+    fn let_declaration_lookahead(&mut self) -> bool {
         self.peek_kind_is(1, &TokenKind::LBrace)
             || self.peek_kind_is(1, &TokenKind::LBracket)
             || self.peek_kind_is(1, &TokenKind::Let)
@@ -154,7 +154,7 @@ impl Parser {
             })
     }
 
-    fn let_starts_disallowed_declaration(&self) -> bool {
+    fn let_starts_disallowed_declaration(&mut self) -> bool {
         self.check(&TokenKind::Let)
             && !self.peek().is_some_and(|token| token.identifier_escaped)
             && (!self.let_starts_expression_statement(false)
@@ -387,7 +387,7 @@ impl Parser {
         }
     }
 
-    fn label_statement_start(&self) -> bool {
+    fn label_statement_start(&mut self) -> bool {
         self.peek_is_identifier_name(0) && self.peek_kind_is(1, &TokenKind::Colon)
     }
 
@@ -423,7 +423,7 @@ impl Parser {
         Ok(labels)
     }
 
-    fn reject_invalid_labeled_item(&self) -> Result<()> {
+    fn reject_invalid_labeled_item(&mut self) -> Result<()> {
         if self.let_starts_disallowed_declaration() || self.check(&TokenKind::Const) {
             return Err(self.parse_error("lexical declaration is not allowed as a label body"));
         }
@@ -437,7 +437,7 @@ impl Parser {
         Ok(())
     }
 
-    fn labeled_item_is_iteration_statement(&self) -> bool {
+    fn labeled_item_is_iteration_statement(&mut self) -> bool {
         self.check(&TokenKind::Do) || self.check(&TokenKind::While) || self.check(&TokenKind::For)
     }
 

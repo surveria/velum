@@ -71,9 +71,7 @@ impl Parser {
             return self.object_method_property(name, FunctionKind::Generator, start);
         }
         if let Some(kind) = self.object_accessor_start() {
-            let keyword = self
-                .advance()
-                .ok_or_else(|| self.parse_error("expected accessor keyword"))?;
+            let keyword = self.advance_token("expected accessor keyword")?;
             let name = self.object_property_key()?;
             return self.object_accessor_property(name, kind, keyword.span);
         }
@@ -109,7 +107,7 @@ impl Parser {
     /// identifier followed by anything that can start a property name is an
     /// accessor; otherwise it is an ordinary key (`{get: 1}`, `{get() {}}`,
     /// `{get}`), which falls through to the regular property paths.
-    fn object_accessor_start(&self) -> Option<ObjectPropertyKind> {
+    fn object_accessor_start(&mut self) -> Option<ObjectPropertyKind> {
         let TokenKind::Identifier(name) = self.peek_kind(0)? else {
             return None;
         };
@@ -202,7 +200,7 @@ impl Parser {
         Ok(ObjectProperty { key, kind, value })
     }
 
-    fn async_object_method_start(&self) -> bool {
+    fn async_object_method_start(&mut self) -> bool {
         self.peek_kind_is(0, &TokenKind::Async)
             && !self.peek_has_line_terminator_before(1)
             && (self.peek_kind(1).is_some_and(is_object_property_name_start)
@@ -331,9 +329,7 @@ impl Parser {
             )?;
             return Ok(ObjectPropertyName::Computed(expr));
         }
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected object property name"))?;
+        let token = self.advance_token("expected object property name")?;
         let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => {

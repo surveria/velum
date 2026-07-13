@@ -9,7 +9,7 @@ use crate::{
 /// Marker character that introduces a `#name` private identifier.
 const PRIVATE_NAME_MARKER: char = '#';
 
-impl Lexer<'_> {
+impl Lexer {
     pub(super) fn identifier(&mut self, offset: usize) -> Result<()> {
         let (text, escaped) = self.identifier_name_text(offset)?;
         let kind = identifier_kind(text, escaped);

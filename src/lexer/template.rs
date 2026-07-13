@@ -1,5 +1,5 @@
 /// Tracks one open `${` substitution while its expression is scanned.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct TemplateSubstitutionState {
     pub(super) open_braces: usize,
     pub(super) substitution_offset: usize,

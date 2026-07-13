@@ -253,7 +253,7 @@ impl Parser {
         Ok(())
     }
 
-    fn validate_default_export_keyword(&self) -> Result<()> {
+    fn validate_default_export_keyword(&mut self) -> Result<()> {
         if self
             .peek()
             .is_some_and(|token| token.kind == TokenKind::Default && token.identifier_escaped)
@@ -358,9 +358,7 @@ impl Parser {
     }
 
     fn module_specifier(&mut self) -> Result<String> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected module specifier"))?;
+        let token = self.advance_token("expected module specifier")?;
         let span = token.span;
         let TokenKind::String(value) = token.kind else {
             return Err(Error::parse_at("expected module specifier string", span));
@@ -370,9 +368,7 @@ impl Parser {
     }
 
     fn module_identifier_name(&mut self, allow_string: bool) -> Result<String> {
-        let token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected module export name"))?;
+        let token = self.advance_token("expected module export name")?;
         let span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),

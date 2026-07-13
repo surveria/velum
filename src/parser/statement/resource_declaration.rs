@@ -9,13 +9,13 @@ use super::super::Parser;
 const USING_IDENTIFIER_NAME: &str = "using";
 
 impl Parser {
-    pub(super) fn using_declaration_start(&self) -> bool {
+    pub(super) fn using_declaration_start(&mut self) -> bool {
         self.contextual_using_at(0)
             && !self.peek_has_line_terminator_before(1)
             && self.resource_binding_starts_at(1)
     }
 
-    pub(super) fn await_using_declaration_start(&self) -> bool {
+    pub(super) fn await_using_declaration_start(&mut self) -> bool {
         self.await_identifier_is_reserved()
             && self.check(&TokenKind::Await)
             && !self.peek_has_line_terminator_before(1)
@@ -24,7 +24,7 @@ impl Parser {
             && self.resource_binding_starts_at(2)
     }
 
-    fn resource_binding_starts_at(&self, offset: usize) -> bool {
+    fn resource_binding_starts_at(&mut self, offset: usize) -> bool {
         self.peek_token(offset).is_some_and(|token| {
             matches!(
                 &token.kind,
@@ -33,7 +33,7 @@ impl Parser {
         })
     }
 
-    fn contextual_using_at(&self, offset: usize) -> bool {
+    fn contextual_using_at(&mut self, offset: usize) -> bool {
         self.peek_token(offset).is_some_and(|token| {
             !token.identifier_escaped
                 && matches!(&token.kind, TokenKind::Identifier(name) if name == USING_IDENTIFIER_NAME)
@@ -44,9 +44,7 @@ impl Parser {
         if !self.contextual_using_at(0) {
             return Err(self.parse_error("expected contextual 'using' keyword"));
         }
-        let _token = self
-            .advance()
-            .ok_or_else(|| self.parse_error("expected contextual 'using' keyword"))?;
+        let _token = self.advance_token("expected contextual 'using' keyword")?;
         Ok(())
     }
 

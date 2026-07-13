@@ -213,8 +213,7 @@ impl CompiledScript {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
-        let tokens =
-            lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
+        let tokens = lexer::TokenStream::new(source, source_id);
         let parsed = if matches!(mode, CompileMode::Module) {
             parser::parse_module_with_usage(tokens, limits)
         } else if let Some(super_context) = mode.eval_super_context() {
