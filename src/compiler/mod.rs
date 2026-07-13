@@ -4,7 +4,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     ast::{
         BinaryOp, DeclKind, Expr, Expression, ObjectPropertyKey, Program, Statement, StaticBinding,
-        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
+        StaticPropertyAccessId, Stmt, TemplateElement, UnaryOp, UpdateOp,
     },
     binding_metadata::BindingLayout,
     bytecode::{

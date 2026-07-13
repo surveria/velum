@@ -214,7 +214,7 @@ impl Parser {
                 }
             }
             Expr::Literal(_)
-            | Expr::StringLiteral(_)
+            | Expr::StringLiteral { .. }
             | Expr::Spread(_)
             | Expr::Class(_)
             | Expr::SuperCall { .. }

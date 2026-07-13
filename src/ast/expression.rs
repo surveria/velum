@@ -19,6 +19,12 @@ pub struct ObjectProperty {
     pub value: Expression,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TemplateElement {
+    pub cooked: StaticString,
+    pub raw: StaticString,
+}
+
 /// How an object literal property definition installs its value: as a plain
 /// data property or as the get/set half of an accessor property.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -39,7 +45,10 @@ pub enum ObjectPropertyKey {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Value),
-    StringLiteral(StaticString),
+    StringLiteral {
+        value: StaticString,
+        escape_free: bool,
+    },
     Spread(Box<Expression>),
     Class(Box<crate::ast::ClassLiteral>),
     SuperCall {
@@ -54,7 +63,7 @@ pub enum Expr {
         access: StaticPropertyAccessId,
     },
     TemplateLiteral {
-        quasis: Vec<StaticString>,
+        quasis: Vec<TemplateElement>,
         expressions: Vec<Expression>,
     },
     RegExpLiteral {

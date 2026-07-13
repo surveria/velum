@@ -75,6 +75,13 @@ fn enforces_module_specific_early_errors() -> TestResult {
         "strict restricted import bindings must fail",
     )?;
 
+    let template_request =
+        runtime.compile_module_named("template-request.js", "import value from `dependency`; ");
+    ensure(
+        template_request.is_err(),
+        "module requests must use StringLiteral grammar",
+    )?;
+
     let duplicate_function =
         runtime.compile_module_named("duplicate-function.js", "function f() {} function f() {}");
     ensure(

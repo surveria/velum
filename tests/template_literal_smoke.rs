@@ -25,6 +25,30 @@ south`;
 }
 
 #[test]
+fn templates_and_escaped_strings_do_not_enable_strict_mode() -> TestResult {
+    let value = eval(
+        r#"
+        function escaped(eval) {
+            "use\x20strict";
+            return eval;
+        }
+        function templated(eval) {
+            `use strict`;
+            return eval;
+        }
+        escaped("escaped") + ":" + templated("template")
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::from("escaped:template"))
+}
+
+#[test]
+fn no_substitution_templates_stay_out_of_string_literal_grammar() -> TestResult {
+    ensure_error_contains("({ `name`: 1 })", "expected object property name")
+}
+
+#[test]
 fn substitutes_expressions_with_to_string_semantics() -> TestResult {
     let value = eval(
         r"

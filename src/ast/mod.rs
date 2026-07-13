@@ -9,7 +9,9 @@ pub use class::{
     ClassConstructor, ClassElementName, ClassField, ClassLiteral, ClassMember, ClassMemberKind,
     ClassStaticBlock,
 };
-pub use expression::{Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
+pub use expression::{
+    Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, TemplateElement,
+};
 pub use function::FunctionParam;
 pub use node::AstNode;
 pub use pattern::{

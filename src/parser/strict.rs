@@ -124,22 +124,23 @@ impl Parser {
         Ok(())
     }
 
-    fn string_directive_value(statement: &Statement) -> Option<&str> {
+    fn string_directive(statement: &Statement) -> Option<(&str, bool)> {
         let Stmt::Expr(expression) = statement.kind() else {
             return None;
         };
-        let Expr::StringLiteral(value) = expression.kind() else {
+        let Expr::StringLiteral { value, escape_free } = expression.kind() else {
             return None;
         };
-        Some(value.as_str())
+        Some((value.as_str(), *escape_free))
     }
 
     fn is_string_directive(statement: &Statement) -> bool {
-        Self::string_directive_value(statement).is_some()
+        Self::string_directive(statement).is_some()
     }
 
     pub(super) fn is_use_strict_directive(statement: &Statement) -> bool {
-        Self::string_directive_value(statement).is_some_and(|value| value == USE_STRICT_DIRECTIVE)
+        Self::string_directive(statement)
+            .is_some_and(|(value, escape_free)| escape_free && value == USE_STRICT_DIRECTIVE)
     }
 
     fn is_restricted_strict_name(name: &str) -> bool {

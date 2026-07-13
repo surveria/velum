@@ -541,7 +541,7 @@ impl LayoutBuilder {
     ) -> Result<()> {
         match expr.kind() {
             Expr::Literal(_)
-            | Expr::StringLiteral(_)
+            | Expr::StringLiteral { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::SuperMember { .. }

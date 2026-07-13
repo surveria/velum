@@ -4,7 +4,7 @@ use super::{
     BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCompiler, BytecodeInstruction,
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp, Error, Expr, Expression, NativeCallTarget, Result, StaticBinding,
-    StaticPropertyAccessId, StaticString, UnaryOp, checked_template_part_count,
+    StaticPropertyAccessId, StaticString, TemplateElement, UnaryOp, checked_template_part_count,
     constructor_binding_expr, has_spread_arg,
 };
 
@@ -34,7 +34,7 @@ impl BytecodeCompiler<'_> {
             Expr::Literal(value) => {
                 self.emit(BytecodeInstruction::PushLiteral(value.clone()));
             }
-            Expr::StringLiteral(value) => {
+            Expr::StringLiteral { value, .. } => {
                 self.emit(BytecodeInstruction::PushString(value.clone()));
             }
             Expr::TemplateLiteral {
@@ -272,13 +272,25 @@ impl BytecodeCompiler<'_> {
 
     fn compile_template_literal(
         &mut self,
-        quasis: &[StaticString],
+        quasis: &[TemplateElement],
         expressions: &[Expression],
     ) -> Result<()> {
+        if expressions.is_empty() {
+            let Some(quasi) = quasis.first() else {
+                return Err(Error::runtime("template literal has no elements"));
+            };
+            if quasis.len() != 1 {
+                return Err(Error::runtime(
+                    "template literal without substitutions has extra elements",
+                ));
+            }
+            self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
+            return Ok(());
+        }
         let mut part_count = 0usize;
         for (index, quasi) in quasis.iter().enumerate() {
-            if !quasi.as_str().is_empty() {
-                self.emit(BytecodeInstruction::PushString(quasi.clone()));
+            if !quasi.cooked.as_str().is_empty() {
+                self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
                 part_count = checked_template_part_count(part_count)?;
             }
             if let Some(expression) = expressions.get(index) {
@@ -504,7 +516,7 @@ impl BytecodeCompiler<'_> {
 
     fn expr_static_string(expr: &Expression) -> Option<&StaticString> {
         match expr.kind() {
-            Expr::StringLiteral(value) => Some(value),
+            Expr::StringLiteral { value, .. } => Some(value),
             Expr::Parenthesized(expr) => Self::expr_static_string(expr),
             _ => None,
         }

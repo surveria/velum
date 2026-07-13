@@ -1,6 +1,6 @@
 use super::{
-    Token, TokenKind,
-    template::{TemplatePartPosition, TemplateSubstitutionState},
+    LexicalGoal, StringToken, TemplatePart, Token, TokenKind,
+    template::{TemplatePartPosition, TemplateSubstitutionState, template_part_value},
 };
 use crate::{
     error::{Error, Result},
@@ -21,12 +21,6 @@ use crate::{
 
 mod names;
 mod operators;
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum LexicalGoal {
-    Div,
-    RegExp,
-}
 
 #[derive(Clone)]
 pub(super) struct LexerCheckpoint {
@@ -387,15 +381,25 @@ impl Lexer {
     fn string(&mut self, offset: usize, quote: char) -> Result<()> {
         self.advance();
         let mut output = Vec::new();
+        let mut escape_free = true;
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
             match ch {
                 ch if ch == quote => {
-                    self.push(TokenKind::String(output), offset);
+                    self.push(
+                        TokenKind::String(StringToken {
+                            cooked: output,
+                            escape_free,
+                        }),
+                        offset,
+                    );
                     return Ok(());
                 }
-                '\\' => self.string_escape(current_offset, &mut output)?,
+                '\\' => {
+                    escape_free = false;
+                    self.string_escape(current_offset, &mut output)?;
+                }
                 '\n' | '\r' => return Err(Error::lex("unterminated string literal", offset)),
                 other => push_utf16_char(&mut output, other),
             }
@@ -415,16 +419,25 @@ impl Lexer {
 
     fn template_part(&mut self, offset: usize, position: TemplatePartPosition) -> Result<()> {
         let mut output = Vec::new();
+        let raw_start = offset
+            .checked_add(1)
+            .ok_or_else(|| Error::lex("template literal raw span overflowed", offset))?;
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
             match ch {
-                '`' => return self.end_template_part(position, output, offset),
+                '`' => {
+                    let part =
+                        template_part_value(&self.source, output, raw_start, current_offset)?;
+                    return self.end_template_part(position, part, offset);
+                }
                 '$' if self.peek_char() == Some(TEMPLATE_SUBSTITUTION_START) => {
                     self.advance();
+                    let part =
+                        template_part_value(&self.source, output, raw_start, current_offset)?;
                     return self.begin_template_substitution(
                         position,
-                        output,
+                        part,
                         offset,
                         current_offset,
                     );
@@ -448,13 +461,12 @@ impl Lexer {
     fn end_template_part(
         &mut self,
         position: TemplatePartPosition,
-        output: Vec<u16>,
+        part: TemplatePart,
         offset: usize,
     ) -> Result<()> {
         match position {
             TemplatePartPosition::Head => {
-                // A template without substitutions stays a plain string token.
-                self.push(TokenKind::String(output), offset);
+                self.push(TokenKind::NoSubstitutionTemplate(part), offset);
             }
             TemplatePartPosition::Continuation => {
                 if self.template_substitutions.pop().is_none() {
@@ -463,7 +475,7 @@ impl Lexer {
                         offset,
                     ));
                 }
-                self.push(TokenKind::TemplateTail(output), offset);
+                self.push(TokenKind::TemplateTail(part), offset);
             }
         }
         Ok(())
@@ -472,13 +484,13 @@ impl Lexer {
     fn begin_template_substitution(
         &mut self,
         position: TemplatePartPosition,
-        output: Vec<u16>,
+        part: TemplatePart,
         offset: usize,
         substitution_offset: usize,
     ) -> Result<()> {
         match position {
             TemplatePartPosition::Head => {
-                self.push(TokenKind::TemplateHead(output), offset);
+                self.push(TokenKind::TemplateHead(part), offset);
                 self.template_substitutions.push(TemplateSubstitutionState {
                     open_braces: 0,
                     substitution_offset,
@@ -493,7 +505,7 @@ impl Lexer {
                 };
                 substitution.open_braces = 0;
                 substitution.substitution_offset = substitution_offset;
-                self.push(TokenKind::TemplateMiddle(output), offset);
+                self.push(TokenKind::TemplateMiddle(part), offset);
             }
         }
         Ok(())
@@ -778,6 +790,6 @@ impl Lexer {
     fn current_offset(&self) -> usize {
         self.chars
             .get(self.cursor)
-            .map_or(self.source.len(), |(offset, _)| *offset)
+            .map_or(self.source.len(), |entry| entry.0)
     }
 }

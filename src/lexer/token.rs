@@ -8,6 +8,18 @@ pub struct Token {
     pub identifier_escaped: bool,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StringToken {
+    pub cooked: Vec<u16>,
+    pub escape_free: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TemplatePart {
+    pub cooked: Vec<u16>,
+    pub raw: Vec<u16>,
+}
+
 impl Token {
     pub const fn offset(&self) -> usize {
         self.span.start()
@@ -20,10 +32,11 @@ pub enum TokenKind {
     LexicalError(Box<Error>),
     Number(f64),
     BigInt(JsBigInt),
-    String(Vec<u16>),
-    TemplateHead(Vec<u16>),
-    TemplateMiddle(Vec<u16>),
-    TemplateTail(Vec<u16>),
+    String(StringToken),
+    NoSubstitutionTemplate(TemplatePart),
+    TemplateHead(TemplatePart),
+    TemplateMiddle(TemplatePart),
+    TemplateTail(TemplatePart),
     RegExp {
         pattern: String,
         flags: String,

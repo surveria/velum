@@ -363,7 +363,7 @@ impl Parser {
         let TokenKind::String(value) = token.kind else {
             return Err(Error::parse_at("expected module specifier string", span));
         };
-        String::from_utf16(&value)
+        String::from_utf16(&value.cooked)
             .map_err(|_| Error::parse_at("module specifier contains a lone surrogate", span))
     }
 
@@ -372,7 +372,7 @@ impl Parser {
         let span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),
-            TokenKind::String(value) if allow_string => String::from_utf16(&value)
+            TokenKind::String(value) if allow_string => String::from_utf16(&value.cooked)
                 .map_err(|_| Error::parse_at("module name contains a lone surrogate", span)),
             kind => keyword_property_name(&kind)
                 .map(str::to_owned)

@@ -308,7 +308,11 @@ impl Parser {
         ))
     }
 
-    fn template_literal(&mut self, head: Vec<u16>, start: crate::SourceSpan) -> Result<Expression> {
+    fn template_literal(
+        &mut self,
+        head: crate::lexer::TemplatePart,
+        start: crate::SourceSpan,
+    ) -> Result<Expression> {
         let (quasis, expressions) = self.template_parts(head)?;
         Ok(self.expression_node(
             start,
@@ -321,18 +325,18 @@ impl Parser {
 
     fn template_parts(
         &mut self,
-        head: Vec<u16>,
-    ) -> Result<(Vec<crate::ast::StaticString>, Vec<Expression>)> {
-        let mut quasis = vec![self.static_string(head)?];
+        head: crate::lexer::TemplatePart,
+    ) -> Result<(Vec<crate::ast::TemplateElement>, Vec<Expression>)> {
+        let mut quasis = vec![self.template_element(head)?];
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.expression()?);
             let token = self.advance_token("expected template literal continuation")?;
             let token_span = token.span;
             match token.kind {
-                TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
-                TokenKind::TemplateTail(cooked) => {
-                    quasis.push(self.static_string(cooked)?);
+                TokenKind::TemplateMiddle(part) => quasis.push(self.template_element(part)?),
+                TokenKind::TemplateTail(part) => {
+                    quasis.push(self.template_element(part)?);
                     break;
                 }
                 _ => {
@@ -344,6 +348,45 @@ impl Parser {
             }
         }
         Ok((quasis, expressions))
+    }
+
+    fn template_element(
+        &mut self,
+        part: crate::lexer::TemplatePart,
+    ) -> Result<crate::ast::TemplateElement> {
+        Ok(crate::ast::TemplateElement {
+            cooked: self.static_string(part.cooked)?,
+            raw: self.static_string(part.raw)?,
+        })
+    }
+
+    fn string_literal(
+        &mut self,
+        value: crate::lexer::StringToken,
+        span: crate::SourceSpan,
+    ) -> Result<Expression> {
+        Ok(Expression::new(
+            Expr::StringLiteral {
+                value: self.static_string(value.cooked)?,
+                escape_free: value.escape_free,
+            },
+            span,
+        ))
+    }
+
+    fn no_substitution_template(
+        &mut self,
+        part: crate::lexer::TemplatePart,
+        span: crate::SourceSpan,
+    ) -> Result<Expression> {
+        let quasi = self.template_element(part)?;
+        Ok(Expression::new(
+            Expr::TemplateLiteral {
+                quasis: vec![quasi],
+                expressions: Vec::new(),
+            },
+            span,
+        ))
     }
 
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
@@ -430,7 +473,7 @@ impl Parser {
             .advance_regexp()
             .ok_or_else(|| self.parse_error("expected expression"))?;
         let token_span = token.span;
-        let expr = match token.kind {
+        Ok(match token.kind {
             TokenKind::LexicalError(error) => return Err(*error),
             TokenKind::Number(value) => {
                 Expression::new(Expr::Literal(Value::Number(value)), token_span)
@@ -438,8 +481,9 @@ impl Parser {
             TokenKind::BigInt(value) => {
                 Expression::new(Expr::Literal(Value::BigInt(value)), token_span)
             }
-            TokenKind::String(value) => {
-                Expression::new(Expr::StringLiteral(self.static_string(value)?), token_span)
+            TokenKind::String(value) => self.string_literal(value, token_span)?,
+            TokenKind::NoSubstitutionTemplate(part) => {
+                self.no_substitution_template(part, token_span)?
             }
             TokenKind::TemplateHead(head) => self.template_literal(head, token_span)?,
             TokenKind::RegExp { pattern, flags } => Expression::new(
@@ -524,8 +568,7 @@ impl Parser {
                 ));
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
-        };
-        Ok(expr)
+        })
     }
 
     fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
