@@ -19,7 +19,7 @@ use crate::{
             static_bindings::StaticBindingCacheHandle,
         },
         bytecode::BytecodeOutcome,
-        control::Completion,
+        control::{Completion, Suspension},
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
             PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
@@ -752,12 +752,12 @@ impl Context {
             Completion::Break { .. } | Completion::Continue { .. } => {
                 Err(Error::runtime("invalid abrupt completion escaped module"))
             }
-            Completion::Suspended(_) => Err(Error::runtime(
+            Completion::Suspend(Suspension::Await(_)) => Err(Error::runtime(
                 "top-level await module evaluation is not settled yet",
             )),
-            Completion::GeneratorStart | Completion::Yielded(_) | Completion::DelegatedYield(_) => {
-                Err(Error::runtime("generator completion escaped module"))
-            }
+            Completion::Suspend(
+                Suspension::GeneratorStart | Suspension::Yield(_) | Suspension::DelegatedYield(_),
+            ) => Err(Error::runtime("generator completion escaped module")),
         }
     }
 }

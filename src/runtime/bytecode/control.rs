@@ -6,7 +6,7 @@ mod try_catch;
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
     error::{Error, Result},
-    runtime::control::Completion,
+    runtime::control::{Completion, Suspension},
     runtime::{Context, abstract_operations::to_boolean, resource_scope::ScopeDisposal},
     syntax::StaticName,
     value::Value,
@@ -238,7 +238,7 @@ impl Context {
                     ScopeDisposalResumeBehavior::Continue { preserve_last },
                 )?;
                 state.mark_await_suspended();
-                Ok(Some(Completion::Suspended(awaited)))
+                Ok(Some(Completion::Suspend(Suspension::Await(awaited))))
             }
         }
     }
@@ -367,10 +367,7 @@ impl Context {
                 | Completion::ReturnDirect(_)) => {
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
-                completion @ (Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => {
+                completion @ Completion::Suspend(_) => {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }
@@ -427,7 +424,7 @@ impl Context {
                                 },
                             )?;
                             state.mark_await_suspended();
-                            Ok(Some(Completion::Suspended(awaited)))
+                            Ok(Some(Completion::Suspend(Suspension::Await(awaited))))
                         }
                     }
                 }
@@ -663,10 +660,7 @@ impl Context {
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
                 | Completion::Continue { .. }
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => BytecodeCondition::Completion(completion),
+                | Completion::Suspend(_)) => BytecodeCondition::Completion(completion),
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
@@ -677,10 +671,7 @@ impl Context {
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue { .. }
-            | Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::DelegatedYield(_)) => Ok(BytecodeCondition::Completion(completion)),
+            | Completion::Suspend(_)) => Ok(BytecodeCondition::Completion(completion)),
         }
     }
 

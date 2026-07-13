@@ -7,7 +7,7 @@ use crate::{
         IteratorStep,
     },
     runtime::binding::scope::{BindingCell, BindingScope},
-    runtime::control::{Completion, runtime_exception_value},
+    runtime::control::{Completion, Suspension, runtime_exception_value},
     runtime::resource_scope::ScopeDisposal,
     syntax::{DeclKind, StaticName},
     value::Value,
@@ -75,10 +75,7 @@ impl Context {
                 Completion::Normal(value) => value,
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => return Ok(Some(completion)),
+                | Completion::Suspend(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
@@ -163,7 +160,7 @@ impl Context {
                     }
                     ForOfNext::Await(awaited) => {
                         self.park_bytecode_control(handle, control)?;
-                        return Ok(Completion::Suspended(awaited));
+                        return Ok(Completion::Suspend(Suspension::Await(awaited)));
                     }
                 };
                 let binding_result = self.run_bytecode_control_action_result(&control, |context| {
@@ -219,7 +216,7 @@ impl Context {
                     ScopeDisposal::Await(awaited) => {
                         Self::prepare_for_of_scope_disposal(&mut control, completion)?;
                         self.park_bytecode_control(handle, control)?;
-                        return Ok(Completion::Suspended(awaited));
+                        return Ok(Completion::Suspend(Suspension::Await(awaited)));
                     }
                 }
             }
@@ -316,7 +313,7 @@ impl Context {
                     }
                     ForOfNext::Await(awaited) => {
                         self.park_bytecode_control(handle, control)?;
-                        return Ok(Completion::Suspended(awaited));
+                        return Ok(Completion::Suspend(Suspension::Await(awaited)));
                     }
                 };
                 let assign_result = self
@@ -437,7 +434,7 @@ impl Context {
                 *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Close;
                 control.mark_for_of_awaiting()?;
                 self.park_bytecode_control(handle, control)?;
-                Ok(Completion::Suspended(awaited))
+                Ok(Completion::Suspend(Suspension::Await(awaited)))
             }
             AsyncIteratorCloseStep::Complete(completion) => {
                 Self::finish_for_of_control(self, handle, completion)

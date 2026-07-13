@@ -384,10 +384,7 @@ impl Context {
                 Completion::TailCall(_)
                 | Completion::Break { .. }
                 | Completion::Continue { .. }
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_),
+                | Completion::Suspend(_),
             ) => Err(Error::runtime("invalid yield delegation resume completion")),
         }
     }
@@ -573,10 +570,7 @@ impl Context {
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue { .. }) => completion.into_result().map(Completion::Normal),
-            completion @ (Completion::Suspended(_)
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::DelegatedYield(_)) => Ok(completion),
+            completion @ Completion::Suspend(_) => Ok(completion),
             Completion::TailCall(_) => {
                 Err(Error::runtime("tail call escaped iterator return method"))
             }
@@ -716,10 +710,8 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
-        | Completion::Continue { value, .. }
-        | Completion::Yielded(value) => Some(value),
-        Completion::DelegatedYield(delegated) => Some(delegated.root_value()),
+        | Completion::Continue { value, .. } => Some(value),
         Completion::TailCall(request) => Some(request.callee()),
-        Completion::Suspended(_) | Completion::GeneratorStart => None,
+        Completion::Suspend(suspension) => suspension.root_value(),
     }
 }

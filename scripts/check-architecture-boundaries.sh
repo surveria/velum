@@ -1075,20 +1075,14 @@ check_structured_control_boundary() {
 
 check_suspended_execution_boundary() {
   for source in \
-    'pub(in crate::runtime) enum BytecodeOutcome {' \
     'pub(in crate::runtime) fn resume_bytecode_activation(' \
     'continuation.resume_suspension(completion)?;' \
     'self.park_bytecode_state_at(activation_index, state)?;'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/execution.rs"; then
-      fail "suspended execution boundary changed; AS-06b requires one explicit park and resume outcome"
+      fail "suspended execution boundary changed; AS-06b requires one explicit park and resume owner"
     fi
   done
-
-  if ! grep -F -x -q '    Suspended {' \
-      "${repo_root}/src/runtime/bytecode/execution.rs"; then
-    fail "suspended execution boundary changed; AS-06b requires a distinct suspended outcome variant"
-  fi
 
   for source in \
     'pub(in crate::runtime) struct SuspendedAsyncFunction {' \
@@ -1111,7 +1105,6 @@ check_suspended_execution_boundary() {
   done
 
   for source in \
-    'Ok(Completion::Suspended(promise))' \
     'pub fn run_jobs(&mut self) -> Result<usize> {' \
     'pub fn cancel_jobs(&mut self) -> Result<usize> {' \
     'continuation.cancel_storage(&self.storage_ledger)?;'; do
@@ -1831,9 +1824,9 @@ mutate_structured_control_in_place() {
     "${fixture_root}/src/runtime/bytecode/control_continuation.rs"
 }
 
-mutate_suspended_outcome() {
+mutate_suspended_park_owner() {
   local fixture_root="$1"
-  portable_sed '/^    Suspended {$/d' \
+  portable_sed '/self\.park_bytecode_state_at(activation_index, state)?;/d' \
     "${fixture_root}/src/runtime/bytecode/execution.rs"
 }
 
@@ -2058,8 +2051,8 @@ run_self_tests() {
     'structured control boundary changed' mutate_structured_control_owner
   expect_guard_failure "${temp_dir}" structured-control-in-place \
     'structured control boundary changed' mutate_structured_control_in_place
-  expect_guard_failure "${temp_dir}" suspended-outcome \
-    'suspended execution boundary changed' mutate_suspended_outcome
+  expect_guard_failure "${temp_dir}" suspended-park-owner \
+    'suspended execution boundary changed' mutate_suspended_park_owner
   expect_guard_failure "${temp_dir}" suspended-cancel-release \
     'suspended execution boundary changed' mutate_suspended_cancel_release
   expect_guard_failure "${temp_dir}" suspended-destructure-owner \

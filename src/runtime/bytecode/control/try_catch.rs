@@ -9,7 +9,7 @@ use crate::{
             },
             state::{BytecodeState, ScopeDisposalResumeBehavior},
         },
-        control::Completion,
+        control::{Completion, Suspension},
         resource_scope::ScopeDisposal,
     },
     syntax::DeclKind,
@@ -298,7 +298,7 @@ impl Context {
                             ScopeDisposalResumeBehavior::Complete,
                         )?;
                         state.mark_await_suspended();
-                        Ok(Completion::Suspended(awaited))
+                        Ok(Completion::Suspend(Suspension::Await(awaited)))
                     }
                 }
             }

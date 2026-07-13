@@ -1,7 +1,10 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeInstruction},
     error::{Error, Result},
-    runtime::{Context, control::Completion},
+    runtime::{
+        Context,
+        control::{Completion, Suspension},
+    },
     syntax::StaticString,
     value::Value,
 };
@@ -169,7 +172,7 @@ impl Context {
     fn eval_generator_start(state: &mut BytecodeState, next: BytecodeAddress) -> Completion {
         state.pc = next;
         state.mark_generator_start_suspended();
-        Completion::GeneratorStart
+        Completion::Suspend(Suspension::GeneratorStart)
     }
 
     fn eval_bytecode_resolved_binding_instruction(
@@ -237,7 +240,7 @@ impl Context {
             }
             Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
             completion @ Completion::TailCall(_) => Ok(Some(completion)),
-            completion @ Completion::Suspended(_) => {
+            completion @ Completion::Suspend(Suspension::Await(_)) => {
                 state.pc = next;
                 state.mark_await_suspended();
                 Ok(Some(completion))
@@ -246,9 +249,7 @@ impl Context {
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue { .. }
-            | Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::DelegatedYield(_)) => completion.into_result().map(|_| None),
+            | Completion::Suspend(_)) => completion.into_result().map(|_| None),
         }
     }
 
@@ -264,7 +265,7 @@ impl Context {
         let value = state.stack.pop()?;
         state.pc = next;
         state.mark_yield_suspended();
-        Ok(Some(Completion::Yielded(value)))
+        Ok(Some(Completion::Suspend(Suspension::Yield(value))))
     }
 
     fn eval_bytecode_yield_delegate_instruction(
@@ -293,17 +294,19 @@ impl Context {
             YieldDelegateStep::Await(awaited) => {
                 state.store_yield_delegate(continuation)?;
                 state.mark_await_suspended();
-                Ok(Some(Completion::Suspended(awaited)))
+                Ok(Some(Completion::Suspend(Suspension::Await(awaited))))
             }
             YieldDelegateStep::Yielded(value) => {
                 state.store_yield_delegate(continuation)?;
                 state.mark_yield_suspended();
-                Ok(Some(Completion::Yielded(value)))
+                Ok(Some(Completion::Suspend(Suspension::Yield(value))))
             }
             YieldDelegateStep::DelegatedYield(delegated) => {
                 state.store_yield_delegate(continuation)?;
                 state.mark_yield_suspended();
-                Ok(Some(Completion::DelegatedYield(delegated)))
+                Ok(Some(Completion::Suspend(Suspension::DelegatedYield(
+                    delegated,
+                ))))
             }
             YieldDelegateStep::Complete(value) => {
                 state.stack.push(value);
@@ -340,10 +343,7 @@ impl Context {
                 }
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
-                | Completion::Suspended(_)
-                | Completion::GeneratorStart
-                | Completion::Yielded(_)
-                | Completion::DelegatedYield(_)) => return Ok(Some(completion)),
+                | Completion::Suspend(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }

@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         Context, VmStorageKind,
         call::RuntimeCallArgs,
-        control::{Completion, runtime_exception_value},
+        control::{Completion, Suspension, runtime_exception_value},
         object::AtomicWaitOutcome,
     },
     value::{ErrorName, FunctionId, ObjectId, Value},
@@ -265,12 +265,12 @@ impl Context {
                 )?;
                 self.reject_promise(result_promise, reason)
             }
-            Completion::Suspended(awaited) => {
+            Completion::Suspend(Suspension::Await(awaited)) => {
                 let continuation =
                     self.detach_suspended_async_function(function, result_promise)?;
                 self.add_async_await_reaction(awaited, continuation)
             }
-            Completion::Yielded(value) => {
+            Completion::Suspend(Suspension::Yield(value)) => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::TypeError,
@@ -280,7 +280,7 @@ impl Context {
                 )?;
                 self.reject_promise(result_promise, reason)
             }
-            Completion::DelegatedYield(delegated) => {
+            Completion::Suspend(Suspension::DelegatedYield(delegated)) => {
                 let value = delegated.root_value();
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
@@ -291,7 +291,7 @@ impl Context {
                 )?;
                 self.reject_promise(result_promise, reason)
             }
-            Completion::GeneratorStart => {
+            Completion::Suspend(Suspension::GeneratorStart) => {
                 Err(Error::runtime("async function entered generator start"))
             }
         }
@@ -299,7 +299,7 @@ impl Context {
 
     pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
         let promise = self.promise_resolve_for_await(value)?;
-        Ok(Completion::Suspended(promise))
+        Ok(Completion::Suspend(Suspension::Await(promise)))
     }
 
     pub(in crate::runtime) fn promise_resolve_for_await(

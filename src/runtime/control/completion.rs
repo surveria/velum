@@ -132,6 +132,25 @@ impl DelegatedYield {
     }
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Suspension {
+    Await(PromiseId),
+    GeneratorStart,
+    Yield(Value),
+    DelegatedYield(DelegatedYield),
+}
+
+impl Suspension {
+    pub(in crate::runtime) const fn root_value(&self) -> Option<&Value> {
+        match self {
+            Self::Yield(value) => Some(value),
+            Self::DelegatedYield(delegated) => Some(delegated.root_value()),
+            Self::Await(_) | Self::GeneratorStart => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Completion {
     Normal(Value),
@@ -148,18 +167,12 @@ pub enum Completion {
         label: Option<StaticName>,
         value: Value,
     },
-    Suspended(PromiseId),
-    GeneratorStart,
-    Yielded(Value),
-    DelegatedYield(DelegatedYield),
+    Suspend(Suspension),
 }
 
 impl Completion {
     pub const fn suspends_execution(&self) -> bool {
-        matches!(
-            self,
-            Self::Suspended(_) | Self::GeneratorStart | Self::Yielded(_) | Self::DelegatedYield(_)
-        )
+        matches!(self, Self::Suspend(_))
     }
 
     pub fn into_result(self) -> Result<Value> {
@@ -172,15 +185,7 @@ impl Completion {
             Self::TailCall(_) => Err(Error::runtime("tail call escaped its function owner")),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            Self::Suspended(_) => Err(Error::runtime(
-                "suspended bytecode escaped its execution owner",
-            )),
-            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
-                "yielded bytecode escaped its generator owner",
-            )),
-            Self::GeneratorStart => Err(Error::runtime(
-                "generator start escaped its generator owner",
-            )),
+            Self::Suspend(_) => Err(Error::runtime("suspension escaped its execution owner")),
         }
     }
 
@@ -192,15 +197,7 @@ impl Completion {
             Self::TailCall(_) => Err(Error::runtime("tail call escaped its function owner")),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            Self::Suspended(_) => Err(Error::runtime(
-                "suspended bytecode escaped its function owner",
-            )),
-            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
-                "yielded bytecode escaped its generator function owner",
-            )),
-            Self::GeneratorStart => Err(Error::runtime(
-                "generator start escaped its generator function owner",
-            )),
+            Self::Suspend(_) => Err(Error::runtime("suspension escaped its function owner")),
         }
     }
 
@@ -212,11 +209,7 @@ impl Completion {
             Self::TailCall(request) => Ok(Self::TailCall(request)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
-            Self::Yielded(_) | Self::DelegatedYield(_) => {
-                Err(Error::runtime("yielded bytecode escaped its call owner"))
-            }
-            Self::GeneratorStart => Err(Error::runtime("generator start escaped its call owner")),
+            Self::Suspend(_) => Err(Error::runtime("suspension escaped its call owner")),
         }
     }
 
@@ -227,15 +220,7 @@ impl Completion {
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
-            Self::Suspended(_) => Err(Error::runtime(
-                "suspended bytecode escaped its native-call owner",
-            )),
-            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
-                "yielded bytecode escaped its native-call owner",
-            )),
-            Self::GeneratorStart => Err(Error::runtime(
-                "generator start escaped its native-call owner",
-            )),
+            Self::Suspend(_) => Err(Error::runtime("suspension escaped its native-call owner")),
         }
     }
 }

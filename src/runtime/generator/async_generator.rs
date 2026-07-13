@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         Context, VmStorageKind,
         call::RuntimeCallArgs,
-        control::{Completion, runtime_exception_value},
+        control::{Completion, Suspension, runtime_exception_value},
         native::NativeFunctionKind,
         object::{
             DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
@@ -284,7 +284,9 @@ impl Context {
             }
             GeneratorState::Completed => {
                 if kind == GeneratorResumeKind::Return {
-                    let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                    let Completion::Suspend(Suspension::Await(awaited)) =
+                        self.eval_bytecode_await(value)?
+                    else {
                         return Err(Error::runtime(
                             "completed async generator return did not await a Promise",
                         ));
@@ -301,7 +303,7 @@ impl Context {
                 let function = execution.function();
                 if kind == GeneratorResumeKind::Return && !execution.has_yield_delegate() {
                     let awaited = match self.eval_bytecode_await(value) {
-                        Ok(Completion::Suspended(awaited)) => awaited,
+                        Ok(Completion::Suspend(Suspension::Await(awaited))) => awaited,
                         Ok(completion) => {
                             return Err(Error::runtime(format!(
                                 "async generator return resumption produced {completion:?}"
@@ -489,15 +491,17 @@ impl Context {
         completion: Completion,
     ) -> Result<AsyncGeneratorStep> {
         match completion {
-            Completion::Suspended(awaited) => {
+            Completion::Suspend(Suspension::Await(awaited)) => {
                 let execution = self.detach_function_execution(function)?;
                 Ok(AsyncGeneratorStep::Awaiting(
                     AsyncGeneratorAwaitState::Body(execution),
                     awaited,
                 ))
             }
-            Completion::Yielded(value) => {
-                let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+            Completion::Suspend(Suspension::Yield(value)) => {
+                let Completion::Suspend(Suspension::Await(awaited)) =
+                    self.eval_bytecode_await(value)?
+                else {
                     return Err(Error::runtime(
                         "async generator yield did not await a Promise",
                     ));
@@ -508,10 +512,12 @@ impl Context {
                     awaited,
                 ))
             }
-            Completion::DelegatedYield(delegated) => {
+            Completion::Suspend(Suspension::DelegatedYield(delegated)) => {
                 let (value, await_before_yield) = delegated.into_async_value()?;
                 if await_before_yield {
-                    let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                    let Completion::Suspend(Suspension::Await(awaited)) =
+                        self.eval_bytecode_await(value)?
+                    else {
                         return Err(Error::runtime(
                             "async generator delegated yield did not await a Promise",
                         ));
@@ -530,7 +536,9 @@ impl Context {
                 ))
             }
             Completion::Return(value) => {
-                let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                let Completion::Suspend(Suspension::Await(awaited)) =
+                    self.eval_bytecode_await(value)?
+                else {
                     return Err(Error::runtime(
                         "async generator return did not await a Promise",
                     ));
