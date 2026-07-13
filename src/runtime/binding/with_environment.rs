@@ -1,7 +1,7 @@
 use crate::{
     bytecode::BytecodeBinding,
     error::{Error, Result},
-    runtime::{Context, abstract_operations::to_boolean},
+    runtime::{Context, abstract_operations::to_boolean, activation::ActivationFrame},
     value::Value,
 };
 
@@ -97,14 +97,15 @@ impl Context {
         &[]
     }
 
-    fn current_with_environments_mut(&mut self) -> Result<&mut Vec<Value>> {
-        let Some(index) = self
-            .activation_frames
+    fn current_with_environment_index(&self) -> Result<usize> {
+        self.activation_frames
             .iter()
             .rposition(|frame| frame.is_eval_boundary() || frame.with_environments().is_some())
-        else {
-            return Err(Error::runtime("with environment activation is missing"));
-        };
+            .ok_or_else(|| Error::runtime("with environment activation is missing"))
+    }
+
+    fn current_with_environments_mut(&mut self) -> Result<&mut Vec<Value>> {
+        let index = self.current_with_environment_index()?;
         let frame = self
             .activation_frames
             .get_mut(index)
@@ -115,14 +116,35 @@ impl Context {
     }
 
     pub(in crate::runtime) fn push_with_environment(&mut self, object: Value) -> Result<()> {
-        self.current_with_environments_mut()?.push(object);
+        let index = self.current_with_environment_index()?;
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
+        let Some(environments) = self
+            .activation_frames
+            .get_mut(index)
+            .and_then(ActivationFrame::with_environments_mut)
+        else {
+            self.storage_ledger
+                .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
+            return Err(Error::runtime("with environment activation disappeared"));
+        };
+        environments.push(object);
         Ok(())
     }
 
     pub(in crate::runtime) fn pop_with_environment(&mut self) -> Result<Value> {
-        self.current_with_environments_mut()?
+        let object = self
+            .current_with_environments_mut()?
             .pop()
-            .ok_or_else(|| Error::runtime("with environment disappeared"))
+            .ok_or_else(|| Error::runtime("with environment disappeared"))?;
+        if let Err(error) = self
+            .storage_ledger
+            .release_count(crate::runtime::VmStorageKind::Binding, 1)
+        {
+            self.current_with_environments_mut()?.push(object);
+            return Err(error);
+        }
+        Ok(object)
     }
 
     pub(in crate::runtime) fn resolve_with_binding(

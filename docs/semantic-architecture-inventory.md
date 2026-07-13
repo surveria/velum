@@ -546,6 +546,16 @@ ledger owner for its own mutable property/cache storage. Other distributed
 record types remain follow-up centralization work rather than being hidden by a
 guarded copy of their current formulas.
 
+The second tranche gives every synchronous `ActivationFrame` one checked
+binding and execution-frame footprint. Live push/pop and unwind paths,
+suspended async/generator ownership, cancellation, and the independent recount
+all consume that owner-derived result. In particular, bytecode child frames
+charge copied `with` environments instead of leaving them visible only to the
+recount. The boundary guard protects this shared ownership route and the single
+Context activation stack; frame variants, fields, helper names, and source-file
+layout may be redesigned together with equivalent behavioral and mutation
+evidence.
+
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
 and checked category/total record sums. AS-05b2b adds an independent per-kind

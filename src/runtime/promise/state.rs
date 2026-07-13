@@ -71,6 +71,17 @@ impl Promise {
         })
     }
 
+    pub(in crate::runtime) fn suspended_binding_count(&self) -> Result<usize> {
+        let PromiseState::Pending { reactions } = &self.state else {
+            return Ok(0);
+        };
+        reactions.iter().try_fold(0_usize, |count, reaction| {
+            count
+                .checked_add(reaction.binding_count()?)
+                .ok_or_else(|| crate::Error::limit("suspended binding count overflowed"))
+        })
+    }
+
     pub(in crate::runtime) fn suspended_cache_entry_count(&self) -> Result<usize> {
         let PromiseState::Pending { reactions } = &self.state else {
             return Ok(0);

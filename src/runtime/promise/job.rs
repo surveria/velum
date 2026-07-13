@@ -171,6 +171,17 @@ impl PromiseReaction {
         }
     }
 
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        match self {
+            Self::Await { continuation } => continuation.binding_count(),
+            Self::Then { .. }
+            | Self::AsyncGeneratorAwait { .. }
+            | Self::ArrayFromAsync { .. }
+            | Self::AsyncDisposableStack { .. }
+            | Self::ResourceScope { .. } => Ok(0),
+        }
+    }
+
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Await { continuation } => continuation.cache_entry_count(),
@@ -287,6 +298,13 @@ impl PromiseJob {
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
+        }
+    }
+
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        match self {
+            Self::Reaction { reaction, .. } => reaction.binding_count(),
             Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
         }
     }
