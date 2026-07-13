@@ -20,6 +20,7 @@ use super::{
 pub(in crate::runtime) enum ActivationFrame {
     Call {
         local_base: usize,
+        environment_phase: FunctionEnvironmentPhase,
         upvalues: FunctionUpvalues,
         with_environments: Vec<Value>,
         this_value: Value,
@@ -47,6 +48,20 @@ pub(in crate::runtime) enum ActivationFrame {
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum FunctionEnvironmentPhase {
+    Setup,
+    ParameterInitialization,
+    SharedBody,
+    SeparateBody,
+}
+
+impl FunctionEnvironmentPhase {
+    pub(in crate::runtime) const fn has_separate_body_scope(self) -> bool {
+        matches!(self, Self::SeparateBody)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -113,6 +128,7 @@ impl ActivationFrame {
         let (upvalues, with_environments) = environment;
         Self::Call {
             local_base,
+            environment_phase: FunctionEnvironmentPhase::Setup,
             upvalues,
             with_environments,
             this_value,
@@ -220,6 +236,28 @@ impl ActivationFrame {
                 Some(*local_base)
             }
             Self::TemporaryThis { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn function_environment_phase(
+        &self,
+    ) -> Option<FunctionEnvironmentPhase> {
+        match self {
+            Self::Call {
+                environment_phase, ..
+            } => Some(*environment_phase),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn function_environment_phase_mut(
+        &mut self,
+    ) -> Option<&mut FunctionEnvironmentPhase> {
+        match self {
+            Self::Call {
+                environment_phase, ..
+            } => Some(environment_phase),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 

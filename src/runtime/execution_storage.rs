@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     Context, FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
-    activation::{ActivationFrame, ActivationFrameStorageFootprint},
+    activation::{ActivationFrame, ActivationFrameStorageFootprint, FunctionEnvironmentPhase},
     binding::scope::BindingScope,
     function::FunctionSuperBinding,
     private::PrivateEnvironment,
@@ -114,6 +114,21 @@ impl Context {
             return Err(Error::runtime("function activation frame disappeared"));
         };
         self.release_frame_storage(frame.storage_footprint()?)
+    }
+
+    pub(super) fn set_current_function_environment_phase(
+        &mut self,
+        phase: FunctionEnvironmentPhase,
+    ) -> Result<()> {
+        let frame = self
+            .activation_frames
+            .last_mut()
+            .ok_or_else(|| Error::runtime("function activation frame disappeared"))?;
+        let current = frame
+            .function_environment_phase_mut()
+            .ok_or_else(|| Error::runtime("active frame is not a function call"))?;
+        *current = phase;
+        Ok(())
     }
 
     pub(super) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {

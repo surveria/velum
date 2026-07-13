@@ -243,6 +243,7 @@ impl BytecodeFunction {
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
+        let uses_arguments = collected.uses_arguments || arguments_binding.is_some();
         Ok(Self::new(BytecodeFunctionInit {
             self_binding,
             arguments_binding,
@@ -250,7 +251,7 @@ impl BytecodeFunction {
             body: BytecodeBlock::compile_function_statements(statements, mode.kind, layout)?,
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
-            uses_arguments: collected.uses_arguments,
+            uses_arguments,
             strict: mode.strict,
             simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
         }))

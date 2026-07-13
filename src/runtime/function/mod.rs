@@ -105,6 +105,7 @@ fn expected_function_local_count(
     base: usize,
     has_arguments_binding: bool,
     has_self_binding: bool,
+    has_separate_body_scope: bool,
 ) -> Result<usize> {
     let with_function_scope = base
         .checked_add(1)
@@ -112,6 +113,7 @@ fn expected_function_local_count(
     with_function_scope
         .checked_add(usize::from(has_arguments_binding))
         .and_then(|count| count.checked_add(usize::from(has_self_binding)))
+        .and_then(|count| count.checked_add(usize::from(has_separate_body_scope)))
         .ok_or_else(|| Error::limit("function local scope count overflowed"))
 }
 

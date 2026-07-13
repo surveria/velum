@@ -90,7 +90,7 @@ impl Parser {
         self.validate_statement_refs(&statements, true, true)
     }
 
-    pub(super) fn validate_generator_parameter_lexicals(
+    pub(super) fn validate_function_parameter_lexicals(
         &self,
         params: &[FunctionParam],
         body: &[Statement],
@@ -110,7 +110,7 @@ impl Parser {
                 .any(|name| parameter_names.contains(name))
             {
                 return Err(self
-                    .parse_error("generator parameter conflicts with a lexical body declaration"));
+                    .parse_error("function parameter conflicts with a lexical body declaration"));
             }
         }
         Ok(())

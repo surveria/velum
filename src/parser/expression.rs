@@ -8,7 +8,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Parser, SUPER_IDENTIFIER_NAME};
+use super::{ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_DEFER_PROPERTY_NAME: &str = "defer";
@@ -185,6 +185,10 @@ impl Parser {
                 self.arguments()?
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
+            if matches!(expr.kind(), Expr::Identifier(binding) if binding.as_str() == EVAL_IDENTIFIER_NAME)
+            {
+                self.note_arguments_reference(ARGUMENTS_IDENTIFIER_NAME);
+            }
             let site = self.static_call_site()?;
             let start = expr.span();
             expr = self.expression_node(
@@ -677,6 +681,7 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
+        self.validate_function_parameter_lexicals(&parameters.params, &body.statements)?;
         let id = self.static_function()?;
         let strict = inherited_strict || body.contains_use_strict;
         let params = parameters.into_params();

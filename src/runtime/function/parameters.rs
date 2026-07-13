@@ -209,6 +209,61 @@ impl Context {
         BindingScope::from_compiled_slots(scope, vec![(binding.atom(), cell)])
     }
 
+    fn parameter_expression_body_scope(
+        &mut self,
+        bytecode: &BytecodeFunction,
+    ) -> Result<BindingScope> {
+        let parameter_scope_index = self
+            .locals
+            .len()
+            .checked_sub(1)
+            .ok_or_else(|| Error::runtime("function parameter scope disappeared"))?;
+        let arguments_scope_index = if bytecode.arguments_binding().is_some() {
+            Some(
+                parameter_scope_index
+                    .checked_sub(1)
+                    .ok_or_else(|| Error::runtime("function arguments scope disappeared"))?,
+            )
+        } else {
+            None
+        };
+        let mut scope = BindingScope::new();
+        for binding in bytecode.hoist_plan().var_declarations() {
+            let atom = self.intern_static_name_atom(binding.name())?;
+            if scope.contains(atom) {
+                continue;
+            }
+            let parameter_cell = self
+                .locals
+                .get(parameter_scope_index)
+                .and_then(|parameter_scope| parameter_scope.get(atom))
+                .or_else(|| {
+                    arguments_scope_index
+                        .and_then(|index| self.locals.get(index))
+                        .and_then(|arguments_scope| arguments_scope.get(atom))
+                });
+            let Some(parameter_cell) = parameter_cell else {
+                continue;
+            };
+            let extra_bindings = scope
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("function body binding count overflowed"))?;
+            self.ensure_extra_binding_capacity(extra_bindings)?;
+            let value = parameter_cell.value(binding.as_str())?;
+            let frame = self.compiled_local_binding_frame(binding)?;
+            let inserted = scope.insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::new(value, true, crate::syntax::DeclKind::Var),
+                frame.map(CompiledBindingFrame::slot),
+            )?;
+            if let Some(frame) = frame {
+                Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+            }
+        }
+        Ok(scope)
+    }
+
     pub(super) fn eval_function_body<const CAN_SUSPEND: bool>(
         &mut self,
         static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
@@ -227,69 +282,92 @@ impl Context {
                 Some(static_name_atom_cache),
                 Some(static_binding_cache),
                 Some(static_binding_layout),
-            ) => {
-                self.with_static_name_caches(
-                    static_name_atom_cache,
-                    static_binding_cache,
-                    static_binding_layout,
-                    |context| {
-                        // Parameter slots never move between calls; the
-                        // per-function binding cache stays warm after the
-                        // first call.
-                        if remember_params {
-                            context.remember_function_params(
-                                parameters.binding_ids,
-                                parameters.atoms,
-                            )?;
-                        }
-                        if let Some(completion) =
-                            context.apply_function_parameters(bytecode, parameters.args)?
-                        {
-                            return Ok(completion);
-                        }
-                        context
-                            .hoist_bytecode_declarations(bytecode.hoist_plan())
-                            .and_then(|()| {
-                                context.eval_function_body_after_setup::<CAN_SUSPEND>(
-                                    parameters.function,
-                                    bytecode,
-                                )
-                            })
-                    },
-                )
-            }
+            ) => self.with_static_name_caches(
+                static_name_atom_cache,
+                static_binding_cache,
+                static_binding_layout,
+                |context| {
+                    context.eval_function_body_with_active_layout::<CAN_SUSPEND>(
+                        parameters,
+                        bytecode,
+                        remember_params,
+                    )
+                },
+            ),
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
-                    if let Some(completion) =
-                        context.apply_function_parameters(bytecode, parameters.args)?
-                    {
-                        return Ok(completion);
-                    }
-                    context
-                        .hoist_bytecode_declarations(bytecode.hoist_plan())
-                        .and_then(|()| {
-                            context.eval_function_body_after_setup::<CAN_SUSPEND>(
-                                parameters.function,
-                                bytecode,
-                            )
-                        })
+                    context.eval_function_body_with_active_layout::<CAN_SUSPEND>(
+                        parameters, bytecode, false,
+                    )
                 })
             }
-            (None, _, _) | (Some(_), Some(_), None) => {
-                if let Some(completion) =
-                    self.apply_function_parameters(bytecode, parameters.args)?
-                {
-                    return Ok(completion);
-                }
-                self.hoist_bytecode_declarations(bytecode.hoist_plan())
-                    .and_then(|()| {
-                        self.eval_function_body_after_setup::<CAN_SUSPEND>(
-                            parameters.function,
-                            bytecode,
-                        )
-                    })
-            }
+            (None, _, _) | (Some(_), Some(_), None) => self
+                .eval_function_body_with_active_layout::<CAN_SUSPEND>(parameters, bytecode, false),
         }
+    }
+
+    fn eval_function_body_with_active_layout<const CAN_SUSPEND: bool>(
+        &mut self,
+        parameters: FunctionParameterState<'_>,
+        bytecode: &BytecodeFunction,
+        remember_params: bool,
+    ) -> Result<Completion> {
+        if remember_params {
+            // Parameter slots never move between calls; the per-function
+            // binding cache stays warm after the first call.
+            self.remember_function_params(parameters.binding_ids, parameters.atoms)?;
+        }
+        self.set_current_function_environment_phase(
+            crate::runtime::activation::FunctionEnvironmentPhase::ParameterInitialization,
+        )?;
+        let parameter_result = self.apply_function_parameters(bytecode, parameters.args);
+        let parameter_completion = match parameter_result {
+            Ok(completion) => completion,
+            Err(error) => {
+                self.set_current_function_environment_phase(
+                    crate::runtime::activation::FunctionEnvironmentPhase::SharedBody,
+                )?;
+                return Err(error);
+            }
+        };
+        if let Some(completion) = parameter_completion {
+            self.set_current_function_environment_phase(
+                crate::runtime::activation::FunctionEnvironmentPhase::SharedBody,
+            )?;
+            return Ok(completion);
+        }
+
+        if bytecode.requires_parameter_initialization() {
+            let scope = match self.parameter_expression_body_scope(bytecode) {
+                Ok(scope) => scope,
+                Err(error) => {
+                    self.set_current_function_environment_phase(
+                        crate::runtime::activation::FunctionEnvironmentPhase::SharedBody,
+                    )?;
+                    return Err(error);
+                }
+            };
+            if let Err(error) = self.push_lexical_scope_with(scope) {
+                self.set_current_function_environment_phase(
+                    crate::runtime::activation::FunctionEnvironmentPhase::SharedBody,
+                )?;
+                return Err(error);
+            }
+            if let Err(error) = self.set_current_function_environment_phase(
+                crate::runtime::activation::FunctionEnvironmentPhase::SeparateBody,
+            ) {
+                self.pop_lexical_scope()?
+                    .ok_or_else(|| Error::runtime("function body scope disappeared"))?;
+                return Err(error);
+            }
+        } else {
+            self.set_current_function_environment_phase(
+                crate::runtime::activation::FunctionEnvironmentPhase::SharedBody,
+            )?;
+        }
+
+        self.hoist_bytecode_declarations(bytecode.hoist_plan())?;
+        self.eval_function_body_after_setup::<CAN_SUSPEND>(parameters.function, bytecode)
     }
 
     fn eval_function_body_after_setup<const CAN_SUSPEND: bool>(

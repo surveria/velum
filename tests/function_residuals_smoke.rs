@@ -67,6 +67,55 @@ fn apply_accepts_callable_array_like_values_and_dynamic_html_comments() -> TestR
 }
 
 #[test]
+fn parameter_expression_closures_keep_the_parameter_environment() -> TestResult {
+    assert_script(
+        r#"
+        function evaluate(value = 1, capture = () => value) {
+            var value = 2;
+            return capture() === 1 && value === 2;
+        }
+        evaluate() ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn direct_eval_in_a_function_body_uses_the_body_environment() -> TestResult {
+    assert_script(
+        r#"
+        function bodyEval(value = 1) {
+            eval("var local = 42");
+            return local;
+        }
+        bodyEval() === 42 ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn direct_eval_parameter_arguments_conflicts_are_syntax_errors() -> TestResult {
+    assert_script(
+        r#"
+        function evaluate(value = eval("var arguments")) {}
+        var threw = false;
+        try { evaluate(); } catch (error) { threw = error instanceof SyntaxError; }
+        threw ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn rejects_parameter_and_body_lexical_name_conflicts_during_parsing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let result = vm.eval("async function evaluate(value = 1) { let value; }");
+    if matches!(result, Err(rs_quickjs::Error::Parse { .. })) {
+        return Ok(());
+    }
+    Err(format!("expected parse error, got {result:?}").into())
+}
+
+#[test]
 fn module_code_rejects_html_comments() -> TestResult {
     let runtime = Runtime::new();
     let result = runtime.compile_module_named("html-comment.js", "/*\n*/-->");

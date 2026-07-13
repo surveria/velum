@@ -120,8 +120,16 @@ impl LayoutBuilder {
                     .for_each_expr(&mut |expr| self.analyze_expr(expr, function_scope, function))?;
             }
         }
-        self.collect_annex_b_var_bindings(body, function_scope)?;
-        self.analyze_statements(body, function_scope, function_scope, function)
+        let body_scope = if params
+            .iter()
+            .any(crate::ast::FunctionParam::requires_runtime_initialization)
+        {
+            self.add_scope(Some(function_scope), function, ScopeKind::Local)
+        } else {
+            function_scope
+        };
+        self.collect_annex_b_var_bindings(body, body_scope)?;
+        self.analyze_statements(body, body_scope, body_scope, function)
     }
 
     pub(super) fn analyze_nested_function(
