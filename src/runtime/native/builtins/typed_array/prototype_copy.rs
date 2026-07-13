@@ -192,26 +192,54 @@ impl Context {
         let relative_start = start_index
             .checked_mul(bytes_per_element)
             .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        let source_start = source
-            .byte_offset()
-            .checked_add(relative_start)
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
         let count_bytes = count
             .checked_mul(bytes_per_element)
             .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        let target_start = target.byte_offset();
-        for byte_offset in 0..count_bytes {
-            self.step()?;
-            let source_index = source_start
-                .checked_add(byte_offset)
+        if source.buffer().shares_storage(target.buffer()) {
+            let source_start = source
+                .byte_offset()
+                .checked_add(relative_start)
                 .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-            let target_index = target_start
-                .checked_add(byte_offset)
-                .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-            let byte = source.buffer().read::<1>(source_index)?;
-            target.buffer().write(target_index, &byte)?;
+            let target_start = target.byte_offset();
+            return source.buffer().with_exclusive_bytes_mut(|bytes| {
+                for byte_offset in 0..count_bytes {
+                    self.step()?;
+                    let source_index = source_start
+                        .checked_add(byte_offset)
+                        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+                    let Some(byte) = bytes.get(source_index).copied() else {
+                        return Err(Error::type_error(SOURCE_OUT_OF_BOUNDS_ERROR));
+                    };
+                    let target_index = target_start
+                        .checked_add(byte_offset)
+                        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+                    let Some(destination) = bytes.get_mut(target_index) else {
+                        return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+                    };
+                    *destination = byte;
+                }
+                Ok(())
+            });
         }
-        Ok(())
+        let source_end = relative_start
+            .checked_add(count_bytes)
+            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+        let source_bytes = source.with_bytes(|bytes| {
+            bytes
+                .get(relative_start..source_end)
+                .map(<[u8]>::to_vec)
+                .ok_or_else(|| Error::type_error(SOURCE_OUT_OF_BOUNDS_ERROR))
+        })?;
+        target.with_bytes_mut(|target_bytes| {
+            for (offset, byte) in source_bytes.iter().enumerate() {
+                self.step()?;
+                let Some(destination) = target_bytes.get_mut(offset) else {
+                    return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+                };
+                *destination = *byte;
+            }
+            Ok(())
+        })
     }
 
     fn eval_typed_array_copy_within_record(
@@ -240,17 +268,36 @@ impl Context {
             return Ok(this_value.clone());
         }
         let backward = start < target && target < start.saturating_add(count);
-        if backward {
-            for offset in (0..count).rev() {
-                self.step()?;
-                Self::copy_typed_array_element(&record.view, start, target, offset)?;
+        let bytes_per_element = record.view.element_kind().bytes_per_element();
+        record.view.with_bytes_mut(|bytes| {
+            let mut scratch = vec![0_u8; bytes_per_element];
+            if backward {
+                for offset in (0..count).rev() {
+                    self.step()?;
+                    copy_typed_array_element(
+                        bytes,
+                        bytes_per_element,
+                        start,
+                        target,
+                        offset,
+                        &mut scratch,
+                    )?;
+                }
+            } else {
+                for offset in 0..count {
+                    self.step()?;
+                    copy_typed_array_element(
+                        bytes,
+                        bytes_per_element,
+                        start,
+                        target,
+                        offset,
+                        &mut scratch,
+                    )?;
+                }
             }
-        } else {
-            for offset in 0..count {
-                self.step()?;
-                Self::copy_typed_array_element(&record.view, start, target, offset)?;
-            }
-        }
+            Ok(())
+        })?;
         Ok(this_value.clone())
     }
 
@@ -265,60 +312,75 @@ impl Context {
             ));
         }
         let record = self.typed_array_view_record(this_value)?;
-        for lower in 0..record.length / 2 {
-            self.step()?;
-            let upper = record
-                .length
-                .checked_sub(lower)
-                .and_then(|index| index.checked_sub(1))
-                .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-            let lower_bytes = Self::typed_array_element_bytes(&record.view, lower)?;
-            let upper_bytes = Self::typed_array_element_bytes(&record.view, upper)?;
-            Self::write_typed_array_element_bytes(&record.view, lower, &upper_bytes)?;
-            Self::write_typed_array_element_bytes(&record.view, upper, &lower_bytes)?;
-        }
+        let bytes_per_element = record.view.element_kind().bytes_per_element();
+        record.view.with_bytes_mut(|bytes| {
+            let mut lower_copy = vec![0_u8; bytes_per_element];
+            let mut upper_copy = vec![0_u8; bytes_per_element];
+            for lower in 0..record.length / 2 {
+                self.step()?;
+                let upper = record
+                    .length
+                    .checked_sub(lower)
+                    .and_then(|index| index.checked_sub(1))
+                    .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+                let (lower_start, lower_end) = typed_array_element_range(lower, bytes_per_element)?;
+                let (upper_start, upper_end) = typed_array_element_range(upper, bytes_per_element)?;
+                let Some(lower_bytes) = bytes.get(lower_start..lower_end) else {
+                    return Err(Error::type_error(SOURCE_OUT_OF_BOUNDS_ERROR));
+                };
+                lower_copy.copy_from_slice(lower_bytes);
+                let Some(upper_bytes) = bytes.get(upper_start..upper_end) else {
+                    return Err(Error::type_error(SOURCE_OUT_OF_BOUNDS_ERROR));
+                };
+                upper_copy.copy_from_slice(upper_bytes);
+                let Some(lower_target) = bytes.get_mut(lower_start..lower_end) else {
+                    return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+                };
+                lower_target.copy_from_slice(&upper_copy);
+                let Some(upper_target) = bytes.get_mut(upper_start..upper_end) else {
+                    return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+                };
+                upper_target.copy_from_slice(&lower_copy);
+            }
+            Ok(())
+        })?;
         Ok(this_value.clone())
     }
+}
 
-    fn copy_typed_array_element(
-        view: &TypedArrayView,
-        source: usize,
-        target: usize,
-        offset: usize,
-    ) -> Result<()> {
-        let source = source
-            .checked_add(offset)
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        let target = target
-            .checked_add(offset)
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        let bytes = Self::typed_array_element_bytes(view, source)?;
-        Self::write_typed_array_element_bytes(view, target, &bytes)
-    }
+fn copy_typed_array_element(
+    bytes: &mut [u8],
+    bytes_per_element: usize,
+    source: usize,
+    target: usize,
+    offset: usize,
+    scratch: &mut [u8],
+) -> Result<()> {
+    let source = source
+        .checked_add(offset)
+        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+    let target = target
+        .checked_add(offset)
+        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+    let (source_start, source_end) = typed_array_element_range(source, bytes_per_element)?;
+    let Some(source_bytes) = bytes.get(source_start..source_end) else {
+        return Err(Error::type_error(SOURCE_OUT_OF_BOUNDS_ERROR));
+    };
+    scratch.copy_from_slice(source_bytes);
+    let (target_start, target_end) = typed_array_element_range(target, bytes_per_element)?;
+    let Some(target_bytes) = bytes.get_mut(target_start..target_end) else {
+        return Err(Error::type_error(RESULT_OUT_OF_BOUNDS_ERROR));
+    };
+    target_bytes.copy_from_slice(scratch);
+    Ok(())
+}
 
-    fn typed_array_element_bytes(view: &TypedArrayView, index: usize) -> Result<Vec<u8>> {
-        let start = Self::typed_array_element_byte_offset(view, index)?;
-        let end = start
-            .checked_add(view.element_kind().bytes_per_element())
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        view.buffer().copy_bytes(start, end)
-    }
-
-    fn write_typed_array_element_bytes(
-        view: &TypedArrayView,
-        index: usize,
-        bytes: &[u8],
-    ) -> Result<()> {
-        let start = Self::typed_array_element_byte_offset(view, index)?;
-        view.buffer().write(start, bytes)
-    }
-
-    fn typed_array_element_byte_offset(view: &TypedArrayView, index: usize) -> Result<usize> {
-        let relative = index
-            .checked_mul(view.element_kind().bytes_per_element())
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
-        view.byte_offset()
-            .checked_add(relative)
-            .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))
-    }
+fn typed_array_element_range(index: usize, bytes_per_element: usize) -> Result<(usize, usize)> {
+    let start = index
+        .checked_mul(bytes_per_element)
+        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+    let end = start
+        .checked_add(bytes_per_element)
+        .ok_or_else(|| Error::limit(COPY_RANGE_ERROR))?;
+    Ok((start, end))
 }

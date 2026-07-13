@@ -521,14 +521,26 @@ impl Context {
     }
 
     pub(super) fn typed_array_view_values(&mut self, view: &TypedArrayView) -> Result<Vec<Value>> {
-        let mut values = Vec::with_capacity(view.length());
-        for index in 0..view.length() {
+        let length = view.length();
+        let kind = view.element_kind();
+        let bytes_per_element = kind.bytes_per_element();
+        view.with_bytes(|bytes| {
+            let mut values = Vec::with_capacity(length);
+            for index in 0..length {
+                self.step()?;
+                let offset = index
+                    .checked_mul(bytes_per_element)
+                    .ok_or_else(|| Error::limit(TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR))?;
+                values.push(kind.read_from_bytes(bytes, offset)?);
+            }
+            Ok(values)
+        })
+    }
+
+    pub(super) fn typed_array_view_bytes(&mut self, view: &TypedArrayView) -> Result<Vec<u8>> {
+        for _ in 0..view.length() {
             self.step()?;
-            values.push(
-                view.read(index)?
-                    .ok_or_else(|| Error::runtime("typed array index is out of bounds"))?,
-            );
         }
-        Ok(values)
+        view.with_bytes(|bytes| Ok(bytes.to_vec()))
     }
 }

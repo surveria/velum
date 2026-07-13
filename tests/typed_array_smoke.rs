@@ -470,6 +470,42 @@ fn supports_typed_array_mutation_sort_iteration_and_statics() -> TestResult {
 }
 
 #[test]
+fn batches_typed_array_storage_without_changing_numeric_or_overlap_semantics() -> TestResult {
+    ensure_eval(
+        r#"
+        let overlap = new Uint16Array([1, 2, 3, 4]);
+        overlap.set(overlap.subarray(0, 3), 1);
+
+        let converted = new Float64Array(4);
+        converted.set(new Uint16Array([6, 7]), 1);
+
+        let filled = new BigInt64Array(4);
+        filled.fill(-1n, 1, 3);
+
+        let copied = new Uint32Array([1, 2, 3, 4, 5]);
+        copied.copyWithin(1, 0, 4).reverse();
+
+        let sorted = new Float64Array([4, NaN, -0, 2]);
+        sorted.sort();
+
+        let indexed = new Uint8Array([4]);
+        indexed["01"] = 9;
+        let huge = "184467440737095516160";
+        let hugeIsOrdinary = Reflect.set(indexed, huge, 8) === true && indexed[huge] === 8;
+
+        overlap.join(",") === "1,1,2,3" &&
+            converted.join(",") === "0,6,7,0" &&
+            filled.join(",") === "0,-1,-1,0" &&
+            copied.join(",") === "4,3,2,1,1" &&
+            sorted[0] === 0 && 1 / sorted[0] === -Infinity &&
+            sorted[1] === 2 && sorted[2] === 4 && Number.isNaN(sorted[3]) &&
+            indexed[0] === 4 && indexed["01"] === 9 && hugeIsOrdinary ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn typed_array_set_preserves_array_like_order_and_resize_semantics() -> TestResult {
     ensure_eval(
         r#"

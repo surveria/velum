@@ -281,7 +281,6 @@ impl Context {
             && let Some(source_view) = self.objects.typed_array(source_id)?
         {
             return self.set_typed_array_from_typed_array(
-                target_id,
                 &target,
                 target_length,
                 offset,
@@ -312,7 +311,6 @@ impl Context {
 
     fn set_typed_array_from_typed_array(
         &mut self,
-        target_id: ObjectId,
         target: &TypedArrayView,
         target_length: usize,
         offset: usize,
@@ -324,20 +322,43 @@ impl Context {
         if source.element_kind().content_type() != target.element_kind().content_type() {
             return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
+        if source.element_kind() == target.element_kind() {
+            let source_length = source.length();
+            let source_bytes = self.typed_array_view_bytes(source)?;
+            Self::ensure_typed_array_set_range(offset, source_length, target_length)?;
+            let bytes_per_element = target.element_kind().bytes_per_element();
+            let target_start = offset
+                .checked_mul(bytes_per_element)
+                .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+            let target_end = target_start
+                .checked_add(source_bytes.len())
+                .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+            target.with_bytes_mut(|target_bytes| {
+                let Some(destination) = target_bytes.get_mut(target_start..target_end) else {
+                    return Err(Error::runtime("typed array set index is out of bounds"));
+                };
+                destination.copy_from_slice(&source_bytes);
+                Ok(())
+            })?;
+            return Ok(Value::Undefined);
+        }
         let values = self.typed_array_view_values(source)?;
         Self::ensure_typed_array_set_range(offset, values.len(), target_length)?;
-        for (source_index, value) in values.into_iter().enumerate() {
-            let element = self.convert_typed_array_element_value(target.element_kind(), &value)?;
-            let target_index = offset
-                .checked_add(source_index)
-                .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
-            if !self
-                .objects
-                .set_typed_array_value(target_id, target_index, &element)?
-            {
-                return Err(Error::runtime("typed array set index is out of bounds"));
+        let target_kind = target.element_kind();
+        let bytes_per_element = target_kind.bytes_per_element();
+        target.with_bytes_mut(|target_bytes| {
+            for (source_index, value) in values.iter().enumerate() {
+                let target_index = offset
+                    .checked_add(source_index)
+                    .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+                let target_offset = target_index
+                    .checked_mul(bytes_per_element)
+                    .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+                let encoded = target_kind.encode(value)?;
+                target_kind.write_encoded(target_bytes, target_offset, &encoded)?;
             }
-        }
+            Ok(())
+        })?;
         Ok(Value::Undefined)
     }
 
@@ -359,7 +380,7 @@ impl Context {
     }
 
     fn eval_typed_array_fill(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
-        let (id, view) = self.typed_array_receiver(this_value)?;
+        let (_, view) = self.typed_array_receiver(this_value)?;
         let length = view.length();
         let value = args.first().unwrap_or(&Value::Undefined);
         let element = self.convert_typed_array_element_value(view.element_kind(), value)?;
@@ -368,12 +389,23 @@ impl Context {
         if view.is_out_of_bounds() {
             return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
         }
-        for index in start..end {
-            self.step()?;
-            if !self.objects.set_typed_array_value(id, index, &element)? {
-                return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
+        let kind = view.element_kind();
+        let encoded = kind.encode(&element)?;
+        let bytes_per_element = kind.bytes_per_element();
+        view.with_bytes_mut(|bytes| {
+            let current_length = bytes.len() / bytes_per_element;
+            for index in start..end {
+                self.step()?;
+                if index >= current_length {
+                    return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
+                }
+                let offset = index
+                    .checked_mul(bytes_per_element)
+                    .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+                kind.write_encoded(bytes, offset, &encoded)?;
             }
-        }
+            Ok(())
+        })?;
         Ok(this_value.clone())
     }
 
@@ -637,14 +669,20 @@ impl Context {
     }
 
     fn write_typed_array_values(&mut self, target: &Value, values: &[Value]) -> Result<()> {
-        let (id, _) = self.typed_array_receiver(target)?;
-        for (index, value) in values.iter().enumerate() {
-            self.step()?;
-            if !self.objects.set_typed_array_value(id, index, value)? {
-                return Err(Error::runtime("typed array write index is out of bounds"));
+        let (_, view) = self.typed_array_receiver(target)?;
+        let kind = view.element_kind();
+        let bytes_per_element = kind.bytes_per_element();
+        view.with_bytes_mut(|bytes| {
+            for (index, value) in values.iter().enumerate() {
+                self.step()?;
+                let offset = index
+                    .checked_mul(bytes_per_element)
+                    .ok_or_else(|| Error::limit(TYPED_ARRAY_LENGTH_ERROR))?;
+                let encoded = kind.encode(value)?;
+                kind.write_encoded(bytes, offset, &encoded)?;
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     pub(super) fn typed_array_usize_value(value: usize) -> Result<Value> {

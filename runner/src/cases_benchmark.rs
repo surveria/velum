@@ -121,6 +121,8 @@ const PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P: &str =
     "tests/corpora/benchmarks/active/typed_array_rgba_blur_72p.js";
 const PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P: &str =
     "tests/corpora/benchmarks/active/typed_array_rgba_sharpen_72p.js";
+const PATH_BENCH_TYPED_ARRAY_BULK_METHODS_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_bulk_methods_72p.js";
 const PATH_BENCH_SENTINEL_ARITHMETIC: &str =
     "tests/corpora/benchmarks/prepared/sentinel_arithmetic.js";
 const PATH_BENCH_SENTINEL_ARRAY_INDEX: &str =
@@ -167,6 +169,10 @@ fn benchmark_typed_array_image_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase::cold(
             "typed_array_owned_rgba_sharpen_72p",
             PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
+        ),
+        BenchmarkCase::cold(
+            "typed_array_bulk_methods_72p",
+            PATH_BENCH_TYPED_ARRAY_BULK_METHODS_72P,
         ),
         BenchmarkCase::cold_host_image(
             "typed_array_host_rgba_fill_72p",
