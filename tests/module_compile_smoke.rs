@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use rs_quickjs::{
-    Error, ModuleExport, ModuleImportName, ModuleLoader, ModuleSource, Runtime, Value, VmRootKind,
+    Error, ImportPhase, ModuleExport, ModuleImportName, ModuleLoader, ModuleSource, Runtime, Value,
+    VmRootKind,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -49,6 +50,32 @@ fn compiles_module_requests_imports_and_exports() -> TestResult {
         "local export metadata is missing",
     )?;
     Ok(())
+}
+
+#[test]
+fn records_static_import_phases_and_attributes() -> TestResult {
+    let runtime = Runtime::new();
+    let module = runtime.compile_module_named(
+        "app/main.js",
+        "import defer * as data from './data.json' with { type: 'json' }; data;",
+    )?;
+    let request = module
+        .module_requests()
+        .first()
+        .ok_or("static module request metadata is missing")?;
+
+    ensure(
+        request.specifier() == "./data.json",
+        "static module request specifier mismatch",
+    )?;
+    ensure(
+        request.phase() == ImportPhase::Defer,
+        "static module request phase mismatch",
+    )?;
+    ensure(
+        request.attributes() == [("type".to_owned(), "json".to_owned())],
+        "static module request attributes mismatch",
+    )
 }
 
 #[test]
@@ -180,6 +207,33 @@ fn namespace_import_properties_read_live_export_cells() -> TestResult {
     ensure(
         value == Value::Number(2.0),
         "namespace export did not stay live",
+    )
+}
+
+#[test]
+fn defers_static_namespace_evaluation_until_a_string_property_is_read() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([(
+        "dep.js",
+        "globalThis.moduleEvaluations += 1; export const value = 42;".to_owned(),
+    )]);
+    let value = context.eval_module_named(
+        "main.js",
+        r"
+            globalThis.moduleEvaluations = 0;
+            import defer * as namespace from 'dep.js';
+            try { namespace.value = 0; } catch (_) {}
+            const before = globalThis.moduleEvaluations;
+            const imported = namespace.value;
+            before * 100 + globalThis.moduleEvaluations * 10 + imported;
+        ",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(52.0),
+        "static deferred namespace evaluated at the wrong time",
     )
 }
 

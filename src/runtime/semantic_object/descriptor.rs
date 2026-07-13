@@ -247,6 +247,9 @@ impl Context {
                 | Value::HostFunction(_) => Ok(None),
             };
         };
+        if let Value::Object(id) = object_ref.value {
+            self.evaluate_deferred_module_namespace_property(*id, property.lookup())?;
+        }
         match object_ref.value {
             Value::Object(id) if self.objects.is_proxy(*id) => {
                 self.proxy_get_own_property_descriptor(*id, property.lookup())

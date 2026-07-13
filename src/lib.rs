@@ -30,7 +30,7 @@ pub use crate::api::shared_array_buffer::SharedArrayBufferHandle;
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_module::{
     CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImport, ModuleImportName,
-    ModuleLoader, ModuleSource,
+    ModuleLoader, ModuleRequest, ModuleSource,
 };
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
 pub use crate::error::{Error, JavaScriptErrorMetadata, JavaScriptException, Result};

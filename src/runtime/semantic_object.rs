@@ -234,6 +234,7 @@ impl Context {
         };
         let presence = match object_ref.value {
             Value::Object(id) => {
+                self.evaluate_deferred_module_namespace_property(*id, property)?;
                 if self.objects.is_proxy(*id) {
                     SemanticPropertyPresence::Resolved(self.proxy_has(*id, property)?)
                 } else if let Some(value) = self.global_object_has_property(*id, property)? {

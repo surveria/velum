@@ -223,6 +223,7 @@ impl Context {
         };
         let deletion = match object_ref.value {
             Value::Object(id) => {
+                self.evaluate_deferred_module_namespace_property(*id, property)?;
                 if self.objects.is_proxy(*id) {
                     SemanticPropertyDelete::Resolved(self.proxy_delete(*id, property)?)
                 } else {
