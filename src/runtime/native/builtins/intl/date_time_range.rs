@@ -1,10 +1,16 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{
+        Context,
+        call::RuntimeCallArgs,
+        object::{DateTimeFormatValue, TemporalValue},
+    },
     value::Value,
 };
 
-use super::formatting::{DateTimeInputKind, FormatPart, format_parts};
+use super::formatting::{
+    DateTimeInput, DateTimeInputKind, FormatPart, date_time_number_input, format_parts,
+};
 
 const RANGE_SEPARATOR: &str = "\u{2009}–\u{2009}";
 
@@ -27,18 +33,20 @@ impl Context {
                 "startDate and endDate must not be undefined",
             ));
         }
-        let start = self.intl_date_time_input(&formatter, start_value)?;
-        let end = self.intl_date_time_input(&formatter, end_value)?;
-        if start.kind != end.kind {
+        let start = self.date_time_range_formattable(start_value)?;
+        let end = self.date_time_range_formattable(end_value)?;
+        if start.kind() != end.kind() {
             return Err(Error::type_error(
                 "startDate and endDate must have the same date-time type",
             ));
         }
-        if start.kind == DateTimeInputKind::ZonedDateTime {
+        if start.kind() == DateTimeInputKind::ZonedDateTime {
             return Err(Error::type_error(
                 "Temporal.ZonedDateTime is not supported by DateTimeFormat range methods",
             ));
         }
+        let start = start.into_input(self, &formatter)?;
+        let end = end.into_input(self, &formatter)?;
         let start_parts = format_parts(&formatter, &start)?;
         let end_parts = format_parts(&formatter, &end)?;
         let range_parts = if start_parts == end_parts {
@@ -78,6 +86,52 @@ impl Context {
             ])?);
         }
         self.create_array_from_elements(values)
+    }
+
+    fn date_time_range_formattable(&mut self, value: &Value) -> Result<RangeFormattable> {
+        if let Value::Object(id) = value
+            && let Some(temporal) = self.objects.temporal_value(*id)?
+        {
+            let kind = match temporal {
+                TemporalValue::Duration(_) => {
+                    return Err(Error::type_error("Duration cannot be date-time formatted"));
+                }
+                TemporalValue::Instant(_) => DateTimeInputKind::Instant,
+                TemporalValue::PlainDate(_) => DateTimeInputKind::PlainDate,
+                TemporalValue::PlainDateTime(_) => DateTimeInputKind::PlainDateTime,
+                TemporalValue::PlainMonthDay(_) => DateTimeInputKind::PlainMonthDay,
+                TemporalValue::PlainTime(_) => DateTimeInputKind::PlainTime,
+                TemporalValue::PlainYearMonth(_) => DateTimeInputKind::PlainYearMonth,
+                TemporalValue::ZonedDateTime(_) => DateTimeInputKind::ZonedDateTime,
+            };
+            return Ok(RangeFormattable::Temporal(value.clone(), kind));
+        }
+        Ok(RangeFormattable::Number(self.to_number(value)?))
+    }
+}
+
+enum RangeFormattable {
+    Temporal(Value, DateTimeInputKind),
+    Number(f64),
+}
+
+impl RangeFormattable {
+    const fn kind(&self) -> DateTimeInputKind {
+        match self {
+            Self::Temporal(_, kind) => *kind,
+            Self::Number(_) => DateTimeInputKind::LegacyDate,
+        }
+    }
+
+    fn into_input(
+        self,
+        context: &mut Context,
+        formatter: &DateTimeFormatValue,
+    ) -> Result<DateTimeInput> {
+        match self {
+            Self::Temporal(value, _) => context.intl_date_time_input(formatter, &value),
+            Self::Number(number) => date_time_number_input(formatter, number),
+        }
     }
 }
 

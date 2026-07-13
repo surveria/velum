@@ -16,7 +16,7 @@ use temporal_rs::{Calendar, Instant, TimeZone};
 
 use super::date_time_text::{
     flexible_day_period, format_month, localize_numeric_parts, time_zone_name, weekday_name,
-    year_string,
+    year_parts,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -35,6 +35,7 @@ pub(super) enum DateTimeInputKind {
 pub(super) struct DateTimeInput {
     pub(super) kind: DateTimeInputKind,
     pub(super) year: Option<i32>,
+    pub(super) era: Option<String>,
     pub(super) month: Option<u8>,
     pub(super) day: Option<u8>,
     pub(super) weekday: Option<u16>,
@@ -116,22 +117,11 @@ impl Context {
                 return legacy_millis_input(formatter, i128::from(millis));
             }
         }
-        let millis = if matches!(value, Value::Undefined) {
-            current_time_millis()?
-        } else {
-            let number = self.to_number(value)?;
-            if !number.is_finite() || number.abs() > 8_640_000_000_000_000.0 {
-                return Err(Error::exception(
-                    ErrorName::RangeError,
-                    "Date-time value is outside the valid range",
-                ));
-            }
-            number
-                .trunc()
-                .to_i128()
-                .ok_or_else(|| Error::limit("Date-time milliseconds exceeded i128"))?
-        };
-        legacy_millis_input(formatter, millis)
+        if matches!(value, Value::Undefined) {
+            return legacy_millis_input(formatter, current_time_millis()?);
+        }
+        let number = self.to_number(value)?;
+        date_time_number_input(formatter, number)
     }
 
     fn intl_parts_value(&mut self, parts: Vec<FormatPart>) -> Result<Value> {
@@ -143,6 +133,23 @@ impl Context {
         }
         self.create_array_from_elements(values)
     }
+}
+
+pub(super) fn date_time_number_input(
+    formatter: &DateTimeFormatValue,
+    number: f64,
+) -> Result<DateTimeInput> {
+    if !number.is_finite() || number.abs() > 8_640_000_000_000_000.0 {
+        return Err(Error::exception(
+            ErrorName::RangeError,
+            "Date-time value is outside the valid range",
+        ));
+    }
+    let millis = number
+        .trunc()
+        .to_i128()
+        .ok_or_else(|| Error::limit("Date-time milliseconds exceeded i128"))?;
+    legacy_millis_input(formatter, millis)
 }
 
 fn temporal_input(formatter: &DateTimeFormatValue, value: TemporalValue) -> Result<DateTimeInput> {
@@ -172,7 +179,8 @@ fn plain_date_input(date: temporal_rs::PlainDate, calendar: Calendar) -> Result<
     };
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainDate,
-        year: Some(date.year()),
+        year: Some(date.era_year().unwrap_or_else(|| date.year())),
+        era: date.era().map(|era| era.to_string()),
         month: Some(date.month()),
         day: Some(date.day()),
         weekday: Some(date.day_of_week()),
@@ -197,7 +205,8 @@ fn plain_date_time_input(
     };
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainDateTime,
-        year: Some(date_time.year()),
+        year: Some(date_time.era_year().unwrap_or_else(|| date_time.year())),
+        era: date_time.era().map(|era| era.to_string()),
         month: Some(date_time.month()),
         day: Some(date_time.day()),
         weekday: Some(date_time.day_of_week()),
@@ -218,6 +227,7 @@ fn plain_month_day_input(
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainMonthDay,
         year: Some(month_day.reference_year()),
+        era: None,
         month: Some(month_day.month_code().to_month_integer()),
         day: Some(month_day.day()),
         weekday: None,
@@ -234,6 +244,7 @@ const fn plain_time_input(time: temporal_rs::PlainTime) -> DateTimeInput {
     DateTimeInput {
         kind: DateTimeInputKind::PlainTime,
         year: None,
+        era: None,
         month: None,
         day: None,
         weekday: None,
@@ -253,7 +264,8 @@ fn plain_year_month_input(
     check_calendar_exact(year_month.calendar(), calendar)?;
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainYearMonth,
-        year: Some(year_month.year()),
+        year: Some(year_month.era_year().unwrap_or_else(|| year_month.year())),
+        era: year_month.era().map(|era| era.to_string()),
         month: Some(year_month.month()),
         day: Some(year_month.reference_day()),
         weekday: None,
@@ -282,7 +294,8 @@ fn zoned_date_time_input(
         .map_err(intl_temporal_error)?;
     Ok(DateTimeInput {
         kind: DateTimeInputKind::ZonedDateTime,
-        year: Some(zoned.year()),
+        year: Some(zoned.era_year().unwrap_or_else(|| zoned.year())),
+        era: zoned.era().map(|era| era.to_string()),
         month: Some(zoned.month()),
         day: Some(zoned.day()),
         weekday: Some(zoned.day_of_week()),
@@ -313,7 +326,8 @@ fn instant_input(
         .map_err(intl_temporal_error)?;
     Ok(DateTimeInput {
         kind,
-        year: Some(zoned.year()),
+        year: Some(zoned.era_year().unwrap_or_else(|| zoned.year())),
+        era: zoned.era().map(|era| era.to_string()),
         month: Some(zoned.month()),
         day: Some(zoned.day()),
         weekday: Some(zoned.day_of_week()),
@@ -410,12 +424,16 @@ fn validate_styles(formatter: &DateTimeFormatValue, kind: DateTimeInputKind) -> 
             | DateTimeInputKind::PlainMonthDay
             | DateTimeInputKind::PlainYearMonth
     );
-    if date_only && formatter.options.time_style.is_some() {
+    if date_only && formatter.options.time_style.is_some() && formatter.options.date_style.is_none()
+    {
         return Err(Error::type_error(
             "timeStyle is invalid for this Temporal value",
         ));
     }
-    if kind == DateTimeInputKind::PlainTime && formatter.options.date_style.is_some() {
+    if kind == DateTimeInputKind::PlainTime
+        && formatter.options.date_style.is_some()
+        && formatter.options.time_style.is_none()
+    {
         return Err(Error::type_error(
             "dateStyle is invalid for Temporal.PlainTime",
         ));
@@ -544,39 +562,103 @@ fn append_date_parts(
     let month_text = format_month(month, month_style, &formatter.calendar);
     let german = formatter.locale.to_ascii_lowercase().starts_with("de");
     let japanese = formatter.locale.to_ascii_lowercase().starts_with("ja");
-    if japanese {
-        append_selected(parts, show_year, "year", year_string(year, year_style));
-        append_literal_if(parts, show_year && show_month, "/");
-        append_selected(parts, show_month, "month", month_text);
-        append_literal_if(parts, show_month && show_day, "/");
-        append_selected(parts, show_day, "day", day.to_string());
-    } else if german {
-        append_selected(parts, show_day, "day", day.to_string());
-        append_literal_if(parts, show_day && show_month, ".");
-        append_selected(parts, show_month, "month", month_text);
-        append_literal_if(parts, show_month && show_year, ".");
-        append_selected(parts, show_year, "year", year_string(year, year_style));
-    } else if matches!(month_style, Some("long" | "short" | "narrow")) {
-        append_selected(parts, show_month, "month", month_text);
-        append_literal_if(parts, show_month && show_day, " ");
-        append_selected(parts, show_day, "day", day.to_string());
-        append_literal_if(parts, (show_month || show_day) && show_year, ", ");
-        append_selected(parts, show_year, "year", year_string(year, year_style));
-    } else {
-        append_selected(parts, show_month, "month", month_text);
-        append_literal_if(parts, show_month && show_day, "/");
-        append_selected(parts, show_day, "day", day.to_string());
-        append_literal_if(parts, (show_month || show_day) && show_year, "/");
-        append_selected(parts, show_year, "year", year_string(year, year_style));
-    }
-    if options.era.is_some() {
+    append_date_layout(
+        parts,
+        formatter,
+        DatePattern {
+            year: show_year.then_some((year, year_style)),
+            month_text: show_month.then_some(month_text),
+            day: show_day.then_some(day),
+            layout: if japanese {
+                DateLayout::Japanese
+            } else if german {
+                DateLayout::German
+            } else if matches!(month_style, Some("long" | "short" | "narrow")) {
+                DateLayout::Textual
+            } else {
+                DateLayout::Numeric
+            },
+        },
+    );
+    if options.era.is_some()
+        && let Some(era) = input.era.as_deref()
+    {
         parts.push(literal(" "));
         parts.push(FormatPart {
             kind: "era",
-            value: if year > 0 { "AD" } else { "BC" }.to_owned(),
+            value: match era {
+                "ce" => "AD",
+                "bce" => "BC",
+                other => other,
+            }
+            .to_owned(),
         });
     }
     Ok(())
+}
+
+struct DatePattern<'a> {
+    year: Option<(i32, Option<&'a str>)>,
+    month_text: Option<String>,
+    day: Option<u8>,
+    layout: DateLayout,
+}
+
+enum DateLayout {
+    Japanese,
+    German,
+    Textual,
+    Numeric,
+}
+
+fn append_date_layout(
+    parts: &mut Vec<FormatPart>,
+    formatter: &DateTimeFormatValue,
+    pattern: DatePattern<'_>,
+) {
+    let show_year = pattern.year.is_some();
+    let show_month = pattern.month_text.is_some();
+    let show_day = pattern.day.is_some();
+    let pattern_year = pattern.year.map_or_else(Vec::new, |(year, style)| {
+        year_parts(year, style, &formatter.calendar, &formatter.locale)
+    });
+    let day_text = pattern.day.map(|day| day.to_string());
+    match pattern.layout {
+        DateLayout::Japanese => {
+            parts.extend(pattern_year);
+            append_literal_if(parts, show_year && show_month, "/");
+            append_optional(parts, "month", pattern.month_text);
+            append_literal_if(parts, show_month && show_day, "/");
+            append_optional(parts, "day", day_text);
+        }
+        DateLayout::German => {
+            append_optional(parts, "day", day_text);
+            append_literal_if(parts, show_day && show_month, ".");
+            append_optional(parts, "month", pattern.month_text);
+            append_literal_if(parts, show_month && show_year, ".");
+            parts.extend(pattern_year);
+        }
+        DateLayout::Textual => {
+            append_optional(parts, "month", pattern.month_text);
+            append_literal_if(parts, show_month && show_day, " ");
+            append_optional(parts, "day", day_text);
+            append_literal_if(parts, (show_month || show_day) && show_year, ", ");
+            parts.extend(pattern_year);
+        }
+        DateLayout::Numeric => {
+            append_optional(parts, "month", pattern.month_text);
+            append_literal_if(parts, show_month && show_day, "/");
+            append_optional(parts, "day", day_text);
+            append_literal_if(parts, (show_month || show_day) && show_year, "/");
+            parts.extend(pattern_year);
+        }
+    }
+}
+
+fn append_optional(parts: &mut Vec<FormatPart>, kind: &'static str, value: Option<String>) {
+    if let Some(value) = value {
+        parts.push(FormatPart { kind, value });
+    }
 }
 
 fn append_time_parts(
@@ -586,7 +668,24 @@ fn append_time_parts(
 ) -> Result<()> {
     let options = &formatter.options;
     let style = options.time_style.as_deref();
-    let no_components = options.default_components;
+    let only_era = options.era.is_some()
+        && options.weekday.is_none()
+        && options.year.is_none()
+        && options.month.is_none()
+        && options.day.is_none()
+        && options.hour.is_none()
+        && options.minute.is_none()
+        && options.second.is_none()
+        && options.day_period.is_none()
+        && options.fractional_second_digits.is_none();
+    let only_zone = options.time_zone_name.is_some()
+        && options.hour.is_none()
+        && options.minute.is_none()
+        && options.second.is_none()
+        && options.day_period.is_none()
+        && options.fractional_second_digits.is_none()
+        && !options.has_explicit_date_fields();
+    let no_components = options.default_components || only_era || only_zone;
     let show_hour = options.hour.is_some() || no_components || style.is_some();
     let show_minute = options.minute.is_some() || no_components || style.is_some();
     let show_second = options.second.is_some()

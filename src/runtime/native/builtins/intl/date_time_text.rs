@@ -35,6 +35,64 @@ pub(super) fn year_string(year: i32, style: Option<&str>) -> String {
     }
 }
 
+pub(super) fn year_parts(
+    year: i32,
+    style: Option<&str>,
+    calendar: &str,
+    locale: &str,
+) -> Vec<FormatPart> {
+    if !matches!(calendar, "chinese" | "dangi") {
+        return vec![FormatPart {
+            kind: "year",
+            value: year_string(year, style),
+        }];
+    }
+    let mut parts = vec![FormatPart {
+        kind: "relatedYear",
+        value: year_string(year, style),
+    }];
+    let year_name = cyclical_year_name(year);
+    if locale.to_ascii_lowercase().starts_with("zh") {
+        parts.push(FormatPart {
+            kind: "yearName",
+            value: year_name,
+        });
+        parts.push(FormatPart {
+            kind: "literal",
+            value: "年".to_owned(),
+        });
+    } else {
+        parts.push(FormatPart {
+            kind: "literal",
+            value: " (".to_owned(),
+        });
+        parts.push(FormatPart {
+            kind: "yearName",
+            value: year_name,
+        });
+        parts.push(FormatPart {
+            kind: "literal",
+            value: ")".to_owned(),
+        });
+    }
+    parts
+}
+
+fn cyclical_year_name(year: i32) -> String {
+    const STEMS: [&str; 10] = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"];
+    const BRANCHES: [&str; 12] = [
+        "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥",
+    ];
+    let cycle = year.saturating_sub(1984).rem_euclid(60);
+    let stem_index = usize::try_from(cycle.rem_euclid(10)).unwrap_or(0);
+    let branch_index = usize::try_from(cycle.rem_euclid(12)).unwrap_or(0);
+    format!(
+        "{}{}",
+        STEMS.get(stem_index).copied().unwrap_or("甲"),
+        BRANCHES.get(branch_index).copied().unwrap_or("子")
+    )
+}
+
 pub(super) fn weekday_name(day: u16, locale: &str) -> &'static str {
     let index = usize::from(day.saturating_sub(1));
     let names = if locale.to_ascii_lowercase().starts_with("de") {
