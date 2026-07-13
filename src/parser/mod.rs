@@ -151,7 +151,7 @@ enum FunctionDeclarationContext {
 }
 
 impl Parser {
-    const fn new(tokens: TokenStream, limits: RuntimeLimits, strict_mode: bool) -> Self {
+    fn new(tokens: TokenStream, limits: RuntimeLimits, strict_mode: bool) -> Self {
         Self {
             tokens,
             cursor: 0,
@@ -183,7 +183,7 @@ impl Parser {
         }
     }
 
-    const fn new_module(tokens: TokenStream, limits: RuntimeLimits) -> Self {
+    fn new_module(tokens: TokenStream, limits: RuntimeLimits) -> Self {
         let mut parser = Self::new(tokens, limits, true);
         parser.await_identifier_context = AwaitIdentifierContext::Reserved;
         parser.source_goal = SourceGoal::Module;

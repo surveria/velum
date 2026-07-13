@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use rs_quickjs::{Engine, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -27,6 +29,14 @@ for (let index = 0; index < 2; index = index + 1) {
     index;
 }
 ";
+
+const REPEATED_STATIC_STRING_SOURCE: &str = r#"
+let first = "shared \u03c0";
+let second = "shared \u03c0";
+first + second;
+"#;
+
+const DISTINCT_STATIC_VALUES: usize = 1_000;
 
 #[test]
 fn compiled_script_deduplicates_static_names() -> TestResult {
@@ -60,6 +70,33 @@ fn for_statement_checkpoint_does_not_keep_speculative_bindings() -> TestResult {
 
     ensure_usize(script.usage().static_name_count(), 1)?;
     ensure_usize(script.usage().static_binding_count(), 5)
+}
+
+#[test]
+fn compiled_script_deduplicates_utf16_static_strings() -> TestResult {
+    let engine = Engine::new();
+    let vm = engine.create_vm();
+    let script = vm.compile(REPEATED_STATIC_STRING_SOURCE)?;
+
+    ensure_usize(script.usage().static_string_count(), 1)
+}
+
+#[test]
+fn compiles_many_distinct_names_and_strings_without_duplicate_owners() -> TestResult {
+    let mut source = String::new();
+    for index in 0..DISTINCT_STATIC_VALUES {
+        writeln!(
+            source,
+            r#"let distinct_name_{index} = "distinct_string_{index}_\u03c0";"#
+        )?;
+    }
+
+    let engine = Engine::new();
+    let vm = engine.create_vm();
+    let script = vm.compile(&source)?;
+
+    ensure_usize(script.usage().static_name_count(), DISTINCT_STATIC_VALUES)?;
+    ensure_usize(script.usage().static_string_count(), DISTINCT_STATIC_VALUES)
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

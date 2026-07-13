@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::{StaticBindingId, StaticNameId, StaticStringId};
+use super::{StaticBindingId, StaticNameId};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticName {
@@ -30,6 +30,10 @@ impl StaticName {
     pub fn as_str(&self) -> &str {
         self.text.as_ref()
     }
+
+    pub(crate) fn shared_text(&self) -> Rc<str> {
+        Rc::clone(&self.text)
+    }
 }
 
 impl std::fmt::Display for StaticName {
@@ -48,23 +52,17 @@ impl std::ops::Deref for StaticName {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticString {
-    id: StaticStringId,
     units: Rc<[u16]>,
     text: Rc<str>,
 }
 
 impl StaticString {
-    pub fn new(id: StaticStringId, value: Vec<u16>) -> Self {
+    pub fn new(value: Vec<u16>) -> Self {
         let text = String::from_utf16_lossy(&value);
         Self {
-            id,
             units: Rc::from(value.into_boxed_slice()),
             text: Rc::from(text.into_boxed_str()),
         }
-    }
-
-    pub const fn id(&self) -> StaticStringId {
-        self.id
     }
 
     pub fn as_str(&self) -> &str {
@@ -73,6 +71,10 @@ impl StaticString {
 
     pub fn as_utf16(&self) -> &[u16] {
         self.units.as_ref()
+    }
+
+    pub(crate) fn shared_units(&self) -> Rc<[u16]> {
+        Rc::clone(&self.units)
     }
 }
 

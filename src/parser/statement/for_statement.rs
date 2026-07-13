@@ -27,9 +27,9 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
         let cursor = self.cursor;
         let expression_depth = self.expression_depth;
-        let static_names = self.static_names.clone();
-        let static_bindings = self.static_bindings.clone();
-        let static_functions = self.static_functions.clone();
+        let static_name_count = self.static_names.len();
+        let static_binding_count = self.static_bindings.len();
+        let static_function_count = self.static_functions.len();
         let arguments_reference_count = self.arguments_reference_count;
         if let Some((target, object, head)) = self.for_in_header()? {
             if asynchronous && head == ForHeadKind::In {
@@ -64,9 +64,12 @@ impl Parser {
         }
         self.cursor = cursor;
         self.expression_depth = expression_depth;
-        self.static_names = static_names;
-        self.static_bindings = static_bindings;
-        self.static_functions = static_functions;
+        let offset = self.offset();
+        self.static_names.rollback_to(static_name_count, offset)?;
+        self.static_bindings
+            .rollback_to(static_binding_count, offset)?;
+        self.static_functions
+            .rollback_to(static_function_count, offset)?;
         self.arguments_reference_count = arguments_reference_count;
 
         let init = self.for_init()?;
