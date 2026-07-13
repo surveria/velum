@@ -16,6 +16,8 @@ mod iterator_static;
 mod iterator_stepping;
 mod json;
 mod json_meta;
+mod json_parse;
+mod json_quote;
 mod json_raw;
 mod map_modern;
 mod map_set;
