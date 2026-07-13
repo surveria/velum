@@ -64,6 +64,23 @@ fn default_derived_constructor_forwards_arguments() -> TestResult {
 }
 
 #[test]
+fn default_derived_constructor_does_not_iterate_arguments() -> TestResult {
+    ensure_string(
+        r#"
+        Array.prototype[Symbol.iterator] = function () {
+            throw new Error("iterator must not run");
+        };
+        class Base {
+            constructor(value) { this.value = value; }
+        }
+        class Derived extends Base {}
+        "" + new Derived(42).value
+        "#,
+        "42",
+    )
+}
+
+#[test]
 fn super_method_calls_resolve_through_the_chain() -> TestResult {
     ensure_string(
         r#"

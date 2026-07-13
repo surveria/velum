@@ -163,6 +163,7 @@ struct Function {
     constructable: bool,
     kind: FunctionKind,
     class_constructor: bool,
+    default_derived_constructor: bool,
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
@@ -742,6 +743,12 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         new_target: Value,
     ) -> Result<Value> {
+        if let Some(super_constructor) = self.default_derived_constructor_super(id)? {
+            let instance =
+                self.semantic_construct(&super_constructor, args.as_slice(), new_target)?;
+            self.initialize_class_fields(id, &instance)?;
+            return Ok(instance);
+        }
         let prototype = self
             .constructor_instance_prototype_with_default(&new_target, NativeFunctionKind::Object)?;
         let constructor_key = self.object_constructor_property_key()?;

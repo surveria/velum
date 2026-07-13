@@ -440,6 +440,7 @@ impl<'a> BytecodeCompiler<'a> {
                 inner_name_binding,
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
+                default_derived_constructor: class.constructor.default_derived,
                 constructor: BytecodeFunction::compile(
                     None,
                     class.constructor.arguments_binding.clone(),

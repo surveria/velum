@@ -79,6 +79,31 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(in crate::runtime) fn set_function_default_derived_constructor(
+        &mut self,
+        id: FunctionId,
+        default_derived: bool,
+    ) -> Result<()> {
+        self.function_mut(id)?.default_derived_constructor = default_derived;
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn default_derived_constructor_super(
+        &self,
+        id: FunctionId,
+    ) -> Result<Option<Value>> {
+        let function = self.function(id)?;
+        if !function.default_derived_constructor {
+            return Ok(None);
+        }
+        function
+            .super_binding
+            .as_ref()
+            .and_then(|binding| binding.constructor.clone())
+            .map(Some)
+            .ok_or_else(|| Error::runtime("default derived constructor has no superclass"))
+    }
+
     pub(in crate::runtime) fn current_class_field_initializer_context(&self) -> Result<bool> {
         for frame in self.activation_frames.iter().rev() {
             if let Some(context) = frame.class_field_initializer_context() {

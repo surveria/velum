@@ -49,6 +49,7 @@ pub struct ClassField {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassConstructor {
     pub id: StaticFunctionId,
+    pub default_derived: bool,
     pub arguments_binding: Option<StaticBinding>,
     pub params: Rc<[FunctionParam]>,
     pub body: Rc<[Statement]>,

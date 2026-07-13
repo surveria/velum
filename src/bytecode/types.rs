@@ -198,6 +198,7 @@ pub struct BytecodeClass {
     /// When true the heritage value sits on the stack below computed keys.
     pub heritage: bool,
     pub constructor_id: StaticFunctionId,
+    pub default_derived_constructor: bool,
     pub constructor: BytecodeFunction,
     pub members: Rc<[BytecodeClassMember]>,
     pub fields: Rc<[BytecodeClassField]>,

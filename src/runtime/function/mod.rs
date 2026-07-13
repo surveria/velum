@@ -220,6 +220,7 @@ impl Context {
             constructable: init.constructable,
             kind: init.kind,
             class_constructor: init.class_constructor,
+            default_derived_constructor: false,
             super_binding,
             static_parent: None,
             class_fields: None,

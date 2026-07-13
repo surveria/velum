@@ -145,6 +145,7 @@ impl Parser {
     fn default_class_constructor(&mut self) -> Result<ClassConstructor> {
         Ok(ClassConstructor {
             id: self.static_function()?,
+            default_derived: false,
             arguments_binding: None,
             params: Vec::new().into(),
             body: Vec::new().into(),
@@ -161,6 +162,7 @@ impl Parser {
         let forward = Expression::new(Expr::SuperCall { args: vec![spread] }, span);
         Ok(ClassConstructor {
             id: self.static_function()?,
+            default_derived: true,
             arguments_binding: None,
             params: vec![crate::ast::FunctionParam::rest(rest)].into(),
             body: vec![Statement::new(Stmt::Expr(forward), span)].into(),
@@ -394,6 +396,7 @@ impl Parser {
         )?;
         *constructor = Some(ClassConstructor {
             id: function.id,
+            default_derived: false,
             arguments_binding: function.arguments_binding,
             params: function.params,
             body: function.body,

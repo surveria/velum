@@ -62,6 +62,10 @@ impl Context {
         let Value::Function(constructor_id) = &constructor else {
             return Err(Error::runtime("class constructor creation failed"));
         };
+        self.set_function_default_derived_constructor(
+            *constructor_id,
+            class.default_derived_constructor,
+        )?;
         if let Some(binding) = &class.inner_name_binding {
             self.eval_bytecode_declaration(
                 binding,
