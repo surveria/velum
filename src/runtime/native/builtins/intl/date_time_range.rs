@@ -48,9 +48,10 @@ impl Context {
         }
         let start = start.into_input(self, &formatter)?;
         let end = end.into_input(self, &formatter)?;
+        let input_kind = start.kind;
         let start_parts = format_parts(&formatter, &start)?;
         let end_parts = format_parts(&formatter, &end)?;
-        let range_parts = partition_range_parts(&formatter, start_parts, end_parts);
+        let range_parts = partition_range_parts(&formatter, input_kind, start_parts, end_parts);
         if to_parts {
             return self.date_time_range_parts_value(range_parts);
         }
@@ -137,20 +138,26 @@ fn source_parts(parts: Vec<FormatPart>, source: &'static str) -> Vec<SourcePart>
 
 fn partition_range_parts(
     formatter: &DateTimeFormatValue,
+    input_kind: DateTimeInputKind,
     start: Vec<FormatPart>,
     end: Vec<FormatPart>,
 ) -> Vec<SourcePart> {
     if start == end {
         return source_parts(start, "shared");
     }
-    if !uses_textual_month(formatter) {
-        return uncollapsed_range_parts(start, end);
-    }
     let prefix_len = start
         .iter()
         .zip(&end)
         .take_while(|(start_part, end_part)| start_part == end_part)
         .count();
+    let shared_date_prefix = input_kind == DateTimeInputKind::PlainDateTime
+        && prefix_len
+            .checked_sub(1)
+            .and_then(|index| start.get(index))
+            .is_some_and(|part| part.kind == "literal" && part.value == ", ");
+    if !uses_textual_month(formatter) && !shared_date_prefix {
+        return uncollapsed_range_parts(start, end);
+    }
     let suffix_limit = start.len().min(end.len()).saturating_sub(prefix_len);
     let suffix_len = start
         .iter()
@@ -159,7 +166,7 @@ fn partition_range_parts(
         .take(suffix_limit)
         .take_while(|(start_part, end_part)| start_part == end_part)
         .count();
-    if suffix_len == 0 {
+    if suffix_len == 0 && !shared_date_prefix {
         return uncollapsed_range_parts(start, end);
     }
     let start_middle_len = start
