@@ -92,7 +92,7 @@ impl Parser {
             shorthand_name: Some(binding),
         } = name
         {
-            self.note_arguments_reference(binding.as_str())?;
+            self.note_arguments_reference(binding.as_str());
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
                 key: ObjectPropertyKey::Static(key),
@@ -129,41 +129,23 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
-        let arguments_snapshot = self.arguments_reference_snapshot();
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.with_await_context(false, false, Self::function_parameters)?;
-        self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
-        match kind {
-            ObjectPropertyKind::Get if !parameters.params.is_empty() => {
-                return Err(Error::parse_at("getter must not declare parameters", start));
-            }
-            ObjectPropertyKind::Set if parameters.params.len() != 1 => {
-                return Err(Error::parse_at(
-                    "setter must declare exactly one parameter",
-                    start,
-                ));
-            }
-            ObjectPropertyKind::Set
-                if parameters.params.first().is_some_and(|param| param.rest) =>
-            {
-                return Err(Error::parse_at(
-                    "setter parameter cannot be a rest parameter",
-                    start,
-                ));
-            }
-            ObjectPropertyKind::Init
-            | ObjectPropertyKind::Get
-            | ObjectPropertyKind::Set
-            | ObjectPropertyKind::Spread => {}
-        }
-        self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
-        let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(true, false, |parser| {
-                parser.with_await_context(false, false, |parser| {
-                    parser.function_body(inherited_strict)
-                })
-            })
-        })?;
+        let ((parameters, body), uses_arguments) =
+            self.with_function_arguments_context(|parser| {
+                let parameters =
+                    parser.with_await_context(false, false, Self::function_parameters)?;
+                parser.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
+                Self::validate_object_accessor_parameters(kind, &parameters, start)?;
+                parser.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
+                let body = parser.with_new_target_scope(|parser| {
+                    parser.with_super_context(true, false, |parser| {
+                        parser.with_await_context(false, false, |parser| {
+                            parser.function_body(inherited_strict)
+                        })
+                    })
+                })?;
+                Ok((parameters, body))
+            })?;
         self.validate_function_parameters(
             &parameters.bound_names,
             parameters.is_simple,
@@ -172,7 +154,6 @@ impl Parser {
         )?;
         let id = self.static_function()?;
         let strict = inherited_strict || body.contains_use_strict;
-        let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
         let arguments_binding = if uses_arguments {
             Some(self.implicit_arguments_binding()?)
         } else {
@@ -201,6 +182,34 @@ impl Parser {
         Ok(ObjectProperty { key, kind, value })
     }
 
+    fn validate_object_accessor_parameters(
+        kind: ObjectPropertyKind,
+        parameters: &super::function::ParsedParameters,
+        start: crate::SourceSpan,
+    ) -> Result<()> {
+        match kind {
+            ObjectPropertyKind::Get if !parameters.params.is_empty() => {
+                Err(Error::parse_at("getter must not declare parameters", start))
+            }
+            ObjectPropertyKind::Set if parameters.params.len() != 1 => Err(Error::parse_at(
+                "setter must declare exactly one parameter",
+                start,
+            )),
+            ObjectPropertyKind::Set
+                if parameters.params.first().is_some_and(|param| param.rest) =>
+            {
+                Err(Error::parse_at(
+                    "setter parameter cannot be a rest parameter",
+                    start,
+                ))
+            }
+            ObjectPropertyKind::Init
+            | ObjectPropertyKind::Get
+            | ObjectPropertyKind::Set
+            | ObjectPropertyKind::Spread => Ok(()),
+        }
+    }
+
     fn async_object_method_start(&mut self) -> bool {
         self.peek_kind_is(0, &TokenKind::Async)
             && !self.peek_has_line_terminator_before(1)
@@ -226,25 +235,30 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let arguments_snapshot = self.arguments_reference_snapshot();
-        let parameters = self.with_await_context(false, kind.is_async(), |parser| {
-            parser.with_yield_expression(false, |parser| {
-                parser
-                    .with_yield_identifier_reserved(kind.is_generator(), Self::function_parameters)
-            })
-        })?;
-        self.reject_duplicate_parameters(&parameters.bound_names)?;
-        self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
-        self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-        let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(true, false, |parser| {
-                parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
-                    parser.with_yield_expression(kind.is_generator(), |parser| {
-                        parser.function_body(inherited_strict)
+        let ((parameters, body), uses_arguments) =
+            self.with_function_arguments_context(|parser| {
+                let parameters = parser.with_await_context(false, kind.is_async(), |parser| {
+                    parser.with_yield_expression(false, |parser| {
+                        parser.with_yield_identifier_reserved(
+                            kind.is_generator(),
+                            Self::function_parameters,
+                        )
                     })
-                })
-            })
-        })?;
+                })?;
+                parser.reject_duplicate_parameters(&parameters.bound_names)?;
+                parser.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
+                parser.consume(&TokenKind::LBrace, "expected '{' before method body")?;
+                let body = parser.with_new_target_scope(|parser| {
+                    parser.with_super_context(true, false, |parser| {
+                        parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
+                            parser.with_yield_expression(kind.is_generator(), |parser| {
+                                parser.function_body(inherited_strict)
+                            })
+                        })
+                    })
+                })?;
+                Ok((parameters, body))
+            })?;
         self.validate_function_parameters(
             &parameters.bound_names,
             parameters.is_simple,
@@ -256,7 +270,6 @@ impl Parser {
         }
         let id = self.static_function()?;
         let strict = inherited_strict || body.contains_use_strict;
-        let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
         let arguments_binding = if uses_arguments {
             Some(self.implicit_arguments_binding()?)
         } else {

@@ -520,7 +520,7 @@ impl Parser {
                     ));
                 }
                 self.validate_strict_identifier_reference(&name)?;
-                self.note_arguments_reference(&name)?;
+                self.note_arguments_reference(&name);
                 Expression::new(
                     Expr::Identifier(self.static_binding_name(name)?),
                     token_span,

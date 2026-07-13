@@ -1,31 +1,22 @@
 use crate::{
-    ast::{Expr, Expression, FunctionKind},
+    ast::{FunctionKind, Stmt},
     error::Result,
     lexer::TokenKind,
 };
 
-use super::Parser;
+use super::super::Parser;
 
 impl Parser {
-    pub(super) fn function_expression(&mut self, kind: FunctionKind) -> Result<Expression> {
-        let start = self.previous_span();
-        let inherited_strict = self.is_strict_mode();
-        let name_await_reserved = kind.is_async()
-            || (self.await_expression_is_allowed() && self.await_identifier_is_reserved());
+    pub(in crate::parser) fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
+        let name_await_reserved = kind.is_async() || self.await_identifier_is_reserved();
         let name = self.with_await_identifier_reserved(name_await_reserved, |parser| {
-            if !parser.next_is_identifier() {
-                return Ok(None);
-            }
-            let name = parser.consume_identifier("expected function name")?;
-            if kind.is_generator() && name.as_str() == super::YIELD_IDENTIFIER_NAME {
-                return Err(parser.parse_error("yield is not a valid generator expression name"));
-            }
-            if inherited_strict {
-                parser.validate_function_name_in_strict_code(&name)?;
-            }
-            parser.static_binding(name).map(Some)
+            parser.consume_binding_identifier("expected function declaration name")
         })?;
-        self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
+        let inherited_strict = self.is_strict_mode();
+        if inherited_strict {
+            self.validate_function_binding_in_strict_code(&name)?;
+        }
+        self.consume(&TokenKind::LParen, "expected '(' after function name")?;
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
                 let parameters = parser.with_await_context(false, kind.is_async(), |parser| {
@@ -67,18 +58,25 @@ impl Parser {
         };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
-        Ok(self.expression_node(
-            start,
-            Expr::Function {
-                id,
-                name,
-                arguments_binding,
-                params: params.into(),
-                body: statements.into(),
-                parameter_prologue_count,
-                kind,
-                strict,
-            },
-        ))
+        let block_scoped =
+            self.function_declaration_context == super::super::FunctionDeclarationContext::Lexical;
+        let annex_b_var_binding =
+            if block_scoped && !self.is_strict_mode() && kind == FunctionKind::Ordinary {
+                Some(self.static_binding(name.name().clone())?)
+            } else {
+                None
+            };
+        Ok(Stmt::FunctionDecl {
+            name,
+            block_scoped,
+            annex_b_var_binding,
+            arguments_binding,
+            id,
+            params: params.into(),
+            body: statements.into(),
+            parameter_prologue_count,
+            kind,
+            strict,
+        })
     }
 }
