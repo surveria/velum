@@ -14,6 +14,8 @@ mod calendar_types;
 mod duration;
 mod install;
 mod plain_date;
+mod plain_date_time;
+mod plain_date_time_options;
 
 use crate::runtime::call::RuntimeCallArgs;
 use crate::runtime::native::{TEMPORAL_NAME, TemporalFunctionKind};
