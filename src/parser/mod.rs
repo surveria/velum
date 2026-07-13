@@ -250,15 +250,14 @@ impl Parser {
         let token_span = token.span;
         let token_offset = token.offset();
         match token.kind {
-            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
-                "super is not a valid identifier",
-                token_span,
-            )),
+            TokenKind::Identifier(name) if name.as_ref() == SUPER_IDENTIFIER_NAME => Err(
+                Error::parse_at("super is not a valid identifier", token_span),
+            ),
             TokenKind::Super => Err(Error::parse_at(
                 "super is not a valid identifier",
                 token_span,
             )),
-            TokenKind::Identifier(name) => self.static_name_at(name, token_offset),
+            TokenKind::Identifier(name) => self.static_name_shared_at(name, token_offset),
             TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token_offset),
             TokenKind::Await if !self.await_identifier_is_reserved() => {
                 self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, token_offset)
@@ -273,7 +272,7 @@ impl Parser {
     pub(super) fn consume_binding_identifier(&mut self, message: &str) -> Result<StaticBinding> {
         if self.peek().is_some_and(|token| {
             token.kind == TokenKind::Super
-                || matches!(&token.kind, TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME)
+                || matches!(&token.kind, TokenKind::Identifier(name) if name.as_ref() == SUPER_IDENTIFIER_NAME)
         }) {
             return Err(self.parse_error("super is not a valid binding identifier"));
         }

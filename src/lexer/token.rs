@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{Error, SourceSpan, value::JsBigInt};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,14 +12,14 @@ pub struct Token {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StringToken {
-    pub cooked: Vec<u16>,
+    pub cooked: Rc<[u16]>,
     pub escape_free: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TemplatePart {
-    pub cooked: Vec<u16>,
-    pub raw: Vec<u16>,
+    pub cooked: Rc<[u16]>,
+    pub raw: Rc<[u16]>,
 }
 
 impl Token {
@@ -27,7 +29,7 @@ impl Token {
 
     pub fn is_unescaped_identifier_named(&self, expected: &str) -> bool {
         !self.identifier_escaped
-            && matches!(&self.kind, TokenKind::Identifier(name) if name == expected)
+            && matches!(&self.kind, TokenKind::Identifier(name) if name.as_ref() == expected)
     }
 }
 
@@ -43,13 +45,13 @@ pub enum TokenKind {
     TemplateMiddle(TemplatePart),
     TemplateTail(TemplatePart),
     RegExp {
-        pattern: String,
-        flags: String,
+        pattern: Rc<str>,
+        flags: Rc<str>,
     },
-    Identifier(String),
+    Identifier(Rc<str>),
     /// A `#name` private identifier; the text keeps its leading `#` so
     /// private names can never collide with public identifier names.
-    PrivateName(String),
+    PrivateName(Rc<str>),
     Let,
     Const,
     Var,

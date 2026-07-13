@@ -74,7 +74,7 @@ impl Parser {
         let TokenKind::PrivateName(text) = token.kind else {
             return Err(Error::parse_at("expected private name", token_span));
         };
-        let name = self.static_name(text)?;
+        let name = self.static_name_shared(text)?;
         self.record_private_name_use(&name, token_span)?;
         Ok(Some(name))
     }
@@ -112,7 +112,7 @@ impl Parser {
         let token = self.advance_token(message)?;
         let token_span = token.span;
         match token.kind {
-            TokenKind::Identifier(name) => self.static_name(name),
+            TokenKind::Identifier(name) => self.static_name_shared(name),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
                     return Err(Error::parse_at(message, token_span));

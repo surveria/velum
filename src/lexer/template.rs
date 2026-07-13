@@ -38,5 +38,9 @@ pub(super) fn template_part_value(
             push_utf16_char(&mut raw, ch);
         }
     }
-    Ok(TemplatePart { cooked, raw })
+    Ok(TemplatePart {
+        cooked: Rc::from(cooked.into_boxed_slice()),
+        raw: Rc::from(raw.into_boxed_slice()),
+    })
 }
+use std::rc::Rc;

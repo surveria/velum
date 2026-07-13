@@ -347,7 +347,7 @@ impl Parser {
         let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => {
-                let name = self.static_name(name)?;
+                let name = self.static_name_shared(name)?;
                 Ok(ObjectPropertyName::Static {
                     key: name.clone(),
                     shorthand_name: Some(name),

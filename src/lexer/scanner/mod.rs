@@ -18,7 +18,6 @@ use crate::{
     source::{SourceId, SourceSpan},
     value::JsBigInt,
 };
-
 mod names;
 mod operators;
 
@@ -32,7 +31,6 @@ pub(super) struct LexerCheckpoint {
 pub(super) struct Lexer {
     source: String,
     source_id: SourceId,
-    chars: Vec<(usize, char)>,
     cursor: usize,
     pending: Option<Token>,
     line_terminator_before: bool,
@@ -44,7 +42,6 @@ impl Lexer {
         Self {
             source: source.to_owned(),
             source_id,
-            chars: source.char_indices().collect(),
             cursor: 0,
             pending: None,
             line_terminator_before: false,
@@ -201,7 +198,13 @@ impl Lexer {
                     let flags = self.regexp_flags();
                     validate_regexp_literal(&pattern, &flags)
                         .map_err(|error| Error::lex(error.to_string(), offset))?;
-                    self.push(TokenKind::RegExp { pattern, flags }, offset);
+                    self.push(
+                        TokenKind::RegExp {
+                            pattern: pattern.into(),
+                            flags: flags.into(),
+                        },
+                        offset,
+                    );
                     return Ok(());
                 }
                 _ => pattern.push(ch),
@@ -389,7 +392,7 @@ impl Lexer {
                 ch if ch == quote => {
                     self.push(
                         TokenKind::String(StringToken {
-                            cooked: output,
+                            cooked: output.into(),
                             escape_free,
                         }),
                         offset,
@@ -758,11 +761,9 @@ impl Lexer {
     }
 
     fn advance(&mut self) -> Option<(usize, char)> {
-        let value = self.peek();
-        if value.is_some() {
-            self.cursor = self.cursor.saturating_add(1);
-        }
-        value
+        let (offset, ch) = self.peek()?;
+        self.cursor = self.cursor.saturating_add(ch.len_utf8());
+        Some((offset, ch))
     }
 
     fn match_char(&mut self, expected: char) -> bool {
@@ -775,7 +776,11 @@ impl Lexer {
     }
 
     fn peek(&self) -> Option<(usize, char)> {
-        self.chars.get(self.cursor).copied()
+        self.source
+            .get(self.cursor..)?
+            .chars()
+            .next()
+            .map(|ch| (self.cursor, ch))
     }
 
     fn peek_char(&self) -> Option<char> {
@@ -783,13 +788,12 @@ impl Lexer {
     }
 
     fn peek_next_char(&self) -> Option<char> {
-        let next_cursor = self.cursor.checked_add(1)?;
-        self.chars.get(next_cursor).map(|(_, ch)| *ch)
+        let current = self.peek_char()?;
+        let next_cursor = self.cursor.checked_add(current.len_utf8())?;
+        self.source.get(next_cursor..)?.chars().next()
     }
 
-    fn current_offset(&self) -> usize {
-        self.chars
-            .get(self.cursor)
-            .map_or(self.source.len(), |entry| entry.0)
+    const fn current_offset(&self) -> usize {
+        self.cursor
     }
 }

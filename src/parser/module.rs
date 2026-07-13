@@ -371,7 +371,7 @@ impl Parser {
         let token = self.advance_token("expected module export name")?;
         let span = token.span;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(name),
+            TokenKind::Identifier(name) => Ok(name.as_ref().to_owned()),
             TokenKind::String(value) if allow_string => String::from_utf16(&value.cooked)
                 .map_err(|_| Error::parse_at("module name contains a lone surrogate", span)),
             kind => keyword_property_name(&kind)

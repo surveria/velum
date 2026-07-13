@@ -248,7 +248,7 @@ impl Parser {
         let TokenKind::PrivateName(text) = token.kind else {
             return Err(Error::parse_at("expected class element name", token_span));
         };
-        Ok(ClassKeySeed::Private(self.static_name(text)?))
+        Ok(ClassKeySeed::Private(self.static_name_shared(text)?))
     }
 
     fn class_static_block_start(&mut self) -> bool {

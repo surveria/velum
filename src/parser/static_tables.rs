@@ -8,6 +8,32 @@ use crate::{
     },
 };
 
+use super::Parser;
+
+impl Parser {
+    pub(super) fn static_name_shared(&mut self, name: Rc<str>) -> Result<StaticName> {
+        self.static_name_shared_at(name, self.previous_offset())
+    }
+
+    pub(super) fn static_binding_name_shared(&mut self, name: Rc<str>) -> Result<StaticBinding> {
+        let name = self.static_name_shared(name)?;
+        self.static_binding(name)
+    }
+
+    pub(super) fn static_string_shared(&mut self, value: Rc<[u16]>) -> Result<StaticString> {
+        self.static_strings
+            .intern_shared(value, self.previous_offset())
+    }
+
+    pub(super) fn static_name_shared_at(
+        &mut self,
+        name: Rc<str>,
+        offset: usize,
+    ) -> Result<StaticName> {
+        self.static_names.intern_shared(name, offset)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct StaticStringTable {
     strings: Vec<StaticString>,
@@ -27,11 +53,19 @@ impl StaticStringTable {
     }
 
     pub(super) fn intern_owned(&mut self, value: Vec<u16>, offset: usize) -> Result<StaticString> {
-        if let Some(id) = self.index.get(value.as_slice()).copied() {
+        self.intern_shared(Rc::from(value.into_boxed_slice()), offset)
+    }
+
+    pub(super) fn intern_shared(
+        &mut self,
+        value: Rc<[u16]>,
+        offset: usize,
+    ) -> Result<StaticString> {
+        if let Some(id) = self.index.get(value.as_ref()).copied() {
             return self.static_string(id, offset);
         }
         let id = StaticStringId::from_index(self.strings.len())?;
-        let value = StaticString::new(value);
+        let value = StaticString::from_shared(value);
         self.strings.push(value.clone());
         self.index.insert(value.shared_units(), id);
         Ok(value)
@@ -67,7 +101,14 @@ impl StaticNameTable {
         if let Some(id) = self.index.get(name.as_str()).copied() {
             return self.static_name(id, offset);
         }
-        self.insert_owned(name)
+        self.insert_shared(Rc::from(name.into_boxed_str()))
+    }
+
+    pub(super) fn intern_shared(&mut self, name: Rc<str>, offset: usize) -> Result<StaticName> {
+        if let Some(id) = self.index.get(name.as_ref()).copied() {
+            return self.static_name(id, offset);
+        }
+        self.insert_shared(name)
     }
 
     pub(super) fn intern_borrowed(&mut self, name: &str, offset: usize) -> Result<StaticName> {
@@ -80,9 +121,9 @@ impl StaticNameTable {
         Ok(name)
     }
 
-    fn insert_owned(&mut self, name: String) -> Result<StaticName> {
+    fn insert_shared(&mut self, name: Rc<str>) -> Result<StaticName> {
         let id = StaticNameId::from_index(self.names.len())?;
-        let name = StaticName::new(id, name);
+        let name = StaticName::from_shared(id, name);
         self.remember_name(name.clone());
         Ok(name)
     }

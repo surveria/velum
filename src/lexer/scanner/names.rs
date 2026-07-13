@@ -35,7 +35,10 @@ impl Lexer {
         let mut name = String::with_capacity(text.len().saturating_add(1));
         name.push(PRIVATE_NAME_MARKER);
         name.push_str(&text);
-        self.push(TokenKind::PrivateName(name), offset);
+        self.push(
+            TokenKind::PrivateName(Rc::from(name.into_boxed_str())),
+            offset,
+        );
         Ok(())
     }
 
@@ -102,3 +105,4 @@ impl Lexer {
         self.unicode_escape(escape_offset)
     }
 }
+use std::rc::Rc;

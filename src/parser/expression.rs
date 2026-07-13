@@ -326,8 +326,8 @@ impl Parser {
         part: crate::lexer::TemplatePart,
     ) -> Result<crate::ast::TemplateElement> {
         Ok(crate::ast::TemplateElement {
-            cooked: self.static_string(part.cooked)?,
-            raw: self.static_string(part.raw)?,
+            cooked: self.static_string_shared(part.cooked)?,
+            raw: self.static_string_shared(part.raw)?,
         })
     }
 
@@ -338,7 +338,7 @@ impl Parser {
     ) -> Result<Expression> {
         Ok(Expression::new(
             Expr::StringLiteral {
-                value: self.static_string(value.cooked)?,
+                value: self.static_string_shared(value.cooked)?,
                 escape_free: value.escape_free,
             },
             span,
@@ -476,7 +476,7 @@ impl Parser {
             TokenKind::False => Expression::new(Expr::Literal(Value::Bool(false)), token_span),
             TokenKind::Null => Expression::new(Expr::Literal(Value::Null), token_span),
             TokenKind::This => Expression::new(Expr::This, token_span),
-            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => {
+            TokenKind::Identifier(name) if name.as_ref() == SUPER_IDENTIFIER_NAME => {
                 return Err(Error::parse_at(
                     "super is only valid inside class methods",
                     token_span,
@@ -484,22 +484,24 @@ impl Parser {
             }
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Identifier(name) => {
-                if self.class_arguments_are_restricted() && name == "arguments" {
+                if self.class_arguments_are_restricted() && name.as_ref() == "arguments" {
                     return Err(Error::parse_at(
                         "arguments is not allowed in a class field or static block",
                         token_span,
                     ));
                 }
-                if self.yield_identifier_is_reserved() && name == super::YIELD_IDENTIFIER_NAME {
+                if self.yield_identifier_is_reserved()
+                    && name.as_ref() == super::YIELD_IDENTIFIER_NAME
+                {
                     return Err(Error::parse_at(
                         "yield is not a valid identifier reference",
                         token_span,
                     ));
                 }
-                self.validate_strict_identifier_reference(&name)?;
-                self.note_arguments_reference(&name);
+                self.validate_strict_identifier_reference(name.as_ref())?;
+                self.note_arguments_reference(name.as_ref());
                 Expression::new(
-                    Expr::Identifier(self.static_binding_name(name)?),
+                    Expr::Identifier(self.static_binding_name_shared(name)?),
                     token_span,
                 )
             }
