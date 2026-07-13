@@ -143,6 +143,14 @@ pub(in crate::runtime) struct PluralRulesValue {
 }
 
 #[derive(Debug, Clone)]
+pub(in crate::runtime) struct RelativeTimeFormatValue {
+    pub locale: String,
+    pub numbering_system: String,
+    pub style: String,
+    pub numeric: String,
+}
+
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct SegmenterValue {
     pub locale: String,
     pub granularity: String,
@@ -203,6 +211,7 @@ pub(in crate::runtime) enum IntlValue {
     Locale(Box<LocaleValue>),
     Number(Box<NumberFormatValue>),
     PluralRules(Box<PluralRulesValue>),
+    RelativeTimeFormat(Box<RelativeTimeFormatValue>),
     Segmenter(Box<SegmenterValue>),
     Segments(Box<SegmentsValue>),
     SegmentIterator(Box<SegmentIteratorValue>),
@@ -250,6 +259,12 @@ impl IntlValue {
             .flatten()
             .map(String::len)
             .sum(),
+            Self::RelativeTimeFormat(value) => value
+                .locale
+                .len()
+                .saturating_add(value.numbering_system.len())
+                .saturating_add(value.style.len())
+                .saturating_add(value.numeric.len()),
             Self::Segmenter(value) => value.locale.len().saturating_add(value.granularity.len()),
             Self::Segments(value) => value
                 .input
@@ -284,6 +299,7 @@ impl IntlValue {
             | Self::List(_)
             | Self::Locale(_)
             | Self::PluralRules(_)
+            | Self::RelativeTimeFormat(_)
             | Self::Segmenter(_)
             | Self::Segments(_) => None,
         };

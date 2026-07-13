@@ -156,6 +156,7 @@ impl Context {
                 | IntlValue::Locale(_)
                 | IntlValue::Number(_)
                 | IntlValue::PluralRules(_)
+                | IntlValue::RelativeTimeFormat(_)
                 | IntlValue::Segmenter(_)
                 | IntlValue::Segments(_)
                 | IntlValue::SegmentIterator(_),

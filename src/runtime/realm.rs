@@ -348,6 +348,9 @@ impl Context {
             NativeFunctionKind::Intl(IntlFunctionKind::PluralRulesConstructor) => {
                 self.intl_plural_rules_constructor_value()?
             }
+            NativeFunctionKind::Intl(IntlFunctionKind::RelativeTimeFormatConstructor) => {
+                self.intl_relative_time_format_constructor_value()?
+            }
             _ => self
                 .builtin_value(kind.name())?
                 .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,

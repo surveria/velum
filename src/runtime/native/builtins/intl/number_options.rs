@@ -474,13 +474,13 @@ fn range_error(message: &str) -> Error {
     Error::exception(ErrorName::RangeError, message)
 }
 
-fn is_unicode_type(value: &str) -> bool {
+pub(super) fn is_unicode_type(value: &str) -> bool {
     value.split('-').all(|part| {
         (3..=8).contains(&part.len()) && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
     })
 }
 
-fn resolved_numbering_system(locale: &str, option: Option<String>) -> (String, String) {
+pub(super) fn resolved_numbering_system(locale: &str, option: Option<String>) -> (String, String) {
     let base = locale.split("-u-").next().unwrap_or(locale).to_owned();
     let extension = super::options::unicode_extension(locale, "nu")
         .filter(|value| super::number_digits::digits(value).is_some());
