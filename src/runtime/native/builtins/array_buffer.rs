@@ -37,6 +37,7 @@ impl Context {
             ),
             ("resizable", ArrayBufferFunctionKind::ResizableGetter),
             ("detached", ArrayBufferFunctionKind::DetachedGetter),
+            ("immutable", ArrayBufferFunctionKind::ImmutableGetter),
         ] {
             self.define_array_buffer_accessor(prototype, name, kind)?;
         }
@@ -47,6 +48,14 @@ impl Context {
             (
                 "transferToFixedLength",
                 ArrayBufferFunctionKind::TransferToFixedLength,
+            ),
+            (
+                "sliceToImmutable",
+                ArrayBufferFunctionKind::SliceToImmutable,
+            ),
+            (
+                "transferToImmutable",
+                ArrayBufferFunctionKind::TransferToImmutable,
             ),
         ] {
             self.define_array_buffer_method(prototype, name, kind)?;
@@ -78,6 +87,10 @@ impl Context {
                 let (_, buffer) = self.array_buffer_receiver(this_value)?;
                 Ok(Value::Bool(buffer.is_detached()))
             }
+            ArrayBufferFunctionKind::ImmutableGetter => {
+                let (_, buffer) = self.array_buffer_receiver(this_value)?;
+                Ok(Value::Bool(buffer.is_immutable()))
+            }
             ArrayBufferFunctionKind::Resize => self.eval_array_buffer_resize(args, this_value),
             ArrayBufferFunctionKind::Slice => self.eval_array_buffer_slice(args, this_value),
             ArrayBufferFunctionKind::Transfer => {
@@ -85,6 +98,12 @@ impl Context {
             }
             ArrayBufferFunctionKind::TransferToFixedLength => {
                 self.eval_array_buffer_transfer(args, this_value, false)
+            }
+            ArrayBufferFunctionKind::SliceToImmutable => {
+                self.eval_array_buffer_slice_to_immutable(args, this_value)
+            }
+            ArrayBufferFunctionKind::TransferToImmutable => {
+                self.eval_array_buffer_transfer_to_immutable(args, this_value)
             }
         }
     }
@@ -103,7 +122,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let (id, _) = self.array_buffer_receiver(this_value)?;
+        let (id, buffer) = self.array_buffer_receiver(this_value)?;
+        buffer.ensure_mutable()?;
         let new_length =
             Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_LIMIT_ERROR)?;
         self.objects.resize_array_buffer(id, new_length)?;
@@ -176,6 +196,7 @@ impl Context {
         if source.is_detached() {
             return Err(Error::type_error(DETACHED_BUFFER_ERROR));
         }
+        source.ensure_mutable()?;
         let max_byte_length = source.max_byte_length();
         if preserve_resizability && source.is_resizable() && new_length > max_byte_length {
             return Err(Error::exception(
@@ -192,6 +213,72 @@ impl Context {
             ByteBuffer::from_bytes(bytes, crate::runtime::object::ByteBufferOrigin::EngineOwned)
         };
         let result = self.create_array_buffer_value(result_buffer)?;
+        self.objects.detach_array_buffer(id)?;
+        Ok(result)
+    }
+
+    fn eval_array_buffer_slice_to_immutable(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let (_, source) = self.array_buffer_receiver(this_value)?;
+        if source.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
+        let length = source.byte_length();
+        let values = args.as_slice();
+        let start = self.array_buffer_relative_index(values.first(), length, 0)?;
+        let end = if values
+            .get(1)
+            .is_some_and(|value| !matches!(value, Value::Undefined))
+        {
+            self.array_buffer_relative_index(values.get(1), length, length)?
+        } else {
+            length
+        };
+        if source.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
+        if end > source.byte_length() {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                "ArrayBuffer shrank below immutable slice bounds",
+            ));
+        }
+        let new_length = end.saturating_sub(start);
+        self.check_byte_buffer_length(new_length)?;
+        let copy_end = start
+            .checked_add(new_length)
+            .ok_or_else(|| Error::limit(LENGTH_LIMIT_ERROR))?;
+        let bytes = source.copy_bytes(start, copy_end)?;
+        self.create_array_buffer_value(ByteBuffer::from_immutable_bytes(bytes))
+    }
+
+    fn eval_array_buffer_transfer_to_immutable(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let (id, source) = self.array_buffer_receiver(this_value)?;
+        let current_length = source.byte_length();
+        let new_length = if args
+            .as_slice()
+            .first()
+            .is_some_and(|value| !matches!(value, Value::Undefined))
+        {
+            Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_LIMIT_ERROR)?
+        } else {
+            current_length
+        };
+        if source.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
+        source.ensure_mutable()?;
+        self.check_byte_buffer_length(new_length)?;
+        let mut bytes = source.copy_bytes(0, current_length)?;
+        bytes.resize(new_length, 0);
+        let result = self.create_array_buffer_value(ByteBuffer::from_immutable_bytes(bytes))?;
         self.objects.detach_array_buffer(id)?;
         Ok(result)
     }

@@ -19,6 +19,7 @@ const TYPED_ARRAY_RANGE_ERROR: &str = "typed array byte range exceeded supported
 const DETACHED_BUFFER_ERROR: &str = "ArrayBuffer is detached";
 const FIXED_BUFFER_ERROR: &str = "ArrayBuffer is not resizable";
 const RESIZE_LIMIT_ERROR: &str = "ArrayBuffer resize exceeds maxByteLength";
+const IMMUTABLE_BUFFER_ERROR: &str = "ArrayBuffer is immutable";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ByteBufferOrigin {
@@ -42,6 +43,7 @@ enum ByteBufferStorage {
 struct ByteBufferState {
     bytes: Option<Vec<u8>>,
     max_byte_length: Option<usize>,
+    immutable: bool,
 }
 
 impl ByteBuffer {
@@ -64,6 +66,7 @@ impl ByteBuffer {
             storage: ByteBufferStorage::Local(Rc::new(RefCell::new(ByteBufferState {
                 bytes: Some(vec![0; length]),
                 max_byte_length: None,
+                immutable: false,
             }))),
             origin,
         }
@@ -74,6 +77,7 @@ impl ByteBuffer {
             storage: ByteBufferStorage::Local(Rc::new(RefCell::new(ByteBufferState {
                 bytes: Some(vec![0; length]),
                 max_byte_length: Some(max_byte_length),
+                immutable: false,
             }))),
             origin: ByteBufferOrigin::EngineOwned,
         }
@@ -84,6 +88,7 @@ impl ByteBuffer {
             storage: ByteBufferStorage::Local(Rc::new(RefCell::new(ByteBufferState {
                 bytes: Some(bytes),
                 max_byte_length: Some(max_byte_length),
+                immutable: false,
             }))),
             origin: ByteBufferOrigin::EngineOwned,
         }
@@ -94,8 +99,20 @@ impl ByteBuffer {
             storage: ByteBufferStorage::Local(Rc::new(RefCell::new(ByteBufferState {
                 bytes: Some(bytes),
                 max_byte_length: None,
+                immutable: false,
             }))),
             origin,
+        }
+    }
+
+    pub(in crate::runtime) fn from_immutable_bytes(bytes: Vec<u8>) -> Self {
+        Self {
+            storage: ByteBufferStorage::Local(Rc::new(RefCell::new(ByteBufferState {
+                bytes: Some(bytes),
+                max_byte_length: None,
+                immutable: true,
+            }))),
+            origin: ByteBufferOrigin::EngineOwned,
         }
     }
 
@@ -104,6 +121,7 @@ impl ByteBuffer {
             storage: ByteBufferStorage::Shared(Arc::new(SharedByteBuffer::new(ByteBufferState {
                 bytes: Some(vec![0; length]),
                 max_byte_length,
+                immutable: false,
             }))),
             origin: ByteBufferOrigin::EngineOwned,
         }
@@ -158,6 +176,17 @@ impl ByteBuffer {
         self.with_state(|state| state.bytes.is_none())
     }
 
+    pub(in crate::runtime) fn is_immutable(&self) -> bool {
+        self.with_state(|state| state.immutable)
+    }
+
+    pub(in crate::runtime) fn ensure_mutable(&self) -> Result<()> {
+        if self.is_immutable() {
+            return Err(Error::type_error(IMMUTABLE_BUFFER_ERROR));
+        }
+        Ok(())
+    }
+
     pub(crate) const fn is_shared(&self) -> bool {
         matches!(&self.storage, ByteBufferStorage::Shared(_))
     }
@@ -178,6 +207,9 @@ impl ByteBuffer {
 
     pub(in crate::runtime) fn resize(&self, new_length: usize) -> Result<()> {
         self.with_state_mut(|state| {
+            if state.immutable {
+                return Err(Error::type_error(IMMUTABLE_BUFFER_ERROR));
+            }
             let Some(max_byte_length) = state.max_byte_length else {
                 return Err(Error::type_error(FIXED_BUFFER_ERROR));
             };
@@ -200,6 +232,9 @@ impl ByteBuffer {
             return Err(Error::type_error("SharedArrayBuffer cannot be detached"));
         }
         self.with_state_mut(|state| {
+            if state.immutable {
+                return Err(Error::type_error(IMMUTABLE_BUFFER_ERROR));
+            }
             state
                 .bytes
                 .take()
@@ -372,6 +407,10 @@ impl TypedArrayView {
 
     pub(in crate::runtime) const fn buffer(&self) -> &ByteBuffer {
         &self.buffer
+    }
+
+    pub(in crate::runtime) fn ensure_mutable(&self) -> Result<()> {
+        self.buffer.ensure_mutable()
     }
 
     pub(in crate::runtime) const fn element_kind(&self) -> TypedArrayElementKind {
@@ -623,6 +662,13 @@ impl ObjectHeap {
 
 impl Context {
     pub(crate) fn detach_host_array_buffer(&mut self, id: ObjectId) -> Result<()> {
+        if self
+            .objects
+            .array_buffer(id)?
+            .is_some_and(|buffer| buffer.is_detached())
+        {
+            return Ok(());
+        }
         self.objects.detach_array_buffer(id).map(drop)
     }
 }

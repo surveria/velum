@@ -107,15 +107,17 @@ impl Context {
     }
 
     fn eval_atomic_load(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
-        let raw = location.buffer.with_exclusive_bytes_mut(|bytes| {
-            read_atomic_word(bytes, location.offset, location.kind)
-        })?;
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer, false)?;
+        let raw = location
+            .buffer
+            .with_bytes(|bytes| read_atomic_word(bytes, location.offset, location.kind))?;
         self.atomic_word_value(location.kind, raw)
     }
 
     fn eval_atomic_store(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer, true)?;
         let value = args.as_slice().get(2).unwrap_or(&Value::Undefined);
         let operand = self.atomic_operand(location.kind, value)?;
         location.buffer.with_exclusive_bytes_mut(|bytes| {
@@ -129,7 +131,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         update: AtomicUpdate,
     ) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer, true)?;
         let operand = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -152,7 +155,8 @@ impl Context {
     }
 
     fn eval_atomic_compare_exchange(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer, true)?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -178,25 +182,29 @@ impl Context {
     }
 
     fn eval_atomic_notify(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Waitable)?;
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::Waitable, false)?;
+        let count = self.atomic_notify_count(args.as_slice().get(2))?;
         if !location.buffer.is_shared() {
             return Ok(Value::Number(0.0));
         }
-        let count = self.atomic_notify_count(args.as_slice().get(2))?;
         let notified = location.buffer.notify_at(location.offset, count)?;
         Self::atomic_count_value(notified)
     }
 
     fn eval_atomic_wait(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location =
-            self.atomic_location(args.as_slice(), AtomicViewRequirement::SharedWaitable)?;
+        let location = self.atomic_location(
+            args.as_slice(),
+            AtomicViewRequirement::SharedWaitable,
+            false,
+        )?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
         )?;
-        let current = location.buffer.with_exclusive_bytes_mut(|bytes| {
-            read_atomic_word(bytes, location.offset, location.kind)
-        })?;
+        let current = location
+            .buffer
+            .with_bytes(|bytes| read_atomic_word(bytes, location.offset, location.kind))?;
         if current != expected.raw {
             return self.heap_string_value("not-equal");
         }
@@ -212,15 +220,18 @@ impl Context {
     }
 
     fn eval_atomic_wait_async(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location =
-            self.atomic_location(args.as_slice(), AtomicViewRequirement::SharedWaitable)?;
+        let location = self.atomic_location(
+            args.as_slice(),
+            AtomicViewRequirement::SharedWaitable,
+            false,
+        )?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
         )?;
-        let current = location.buffer.with_exclusive_bytes_mut(|bytes| {
-            read_atomic_word(bytes, location.offset, location.kind)
-        })?;
+        let current = location
+            .buffer
+            .with_bytes(|bytes| read_atomic_word(bytes, location.offset, location.kind))?;
         let timeout = self.atomic_wait_timeout(args.as_slice().get(3))?;
         let result = if current != expected.raw {
             self.heap_string_value("not-equal")?
@@ -266,6 +277,7 @@ impl Context {
         &mut self,
         args: &[Value],
         requirement: AtomicViewRequirement,
+        write: bool,
     ) -> Result<AtomicLocation> {
         let Value::Object(id) = args.first().unwrap_or(&Value::Undefined) else {
             return Err(Error::type_error(RECEIVER_ERROR));
@@ -278,6 +290,9 @@ impl Context {
             || (requirement.requires_shared() && !view.buffer().is_shared())
         {
             return Err(Error::type_error(RECEIVER_ERROR));
+        }
+        if write {
+            view.ensure_mutable()?;
         }
         let length = view.length();
         let byte_offset = view.byte_offset();

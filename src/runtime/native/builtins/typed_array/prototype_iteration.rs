@@ -313,6 +313,7 @@ impl Context {
 
         let (result, result_id, result_view) =
             self.typed_array_species_create_with_length(this_value, record.length)?;
+        result_view.ensure_mutable()?;
         let _result_scope = self.transient_root_scope(
             crate::runtime::roots::VmRootKind::TransientTemporary,
             std::iter::once(&result),

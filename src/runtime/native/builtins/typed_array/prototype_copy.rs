@@ -248,6 +248,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let record = self.typed_array_view_record(this_value)?;
+        record.view.ensure_mutable()?;
         let target = self.typed_array_relative_index(args.first(), record.length, 0)?;
         let start = self.typed_array_relative_index(args.get(1), record.length, 0)?;
         let end = self.typed_array_relative_index(args.get(2), record.length, record.length)?;
