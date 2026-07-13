@@ -214,8 +214,8 @@ impl IntlFunctionKind {
             | Self::NumberFormatSupportedLocalesOf
             | Self::DateTimeFormatBoundFormat(_)
             | Self::DateTimeFormatSupportedLocalesOf
-            | Self::GetCanonicalLocales => 1.0,
-            Self::ListFormatFormat
+            | Self::GetCanonicalLocales
+            | Self::ListFormatFormat
             | Self::ListFormatFormatToParts
             | Self::ListFormatSupportedLocalesOf => 1.0,
             Self::NumberFormatFormatRange
@@ -228,11 +228,13 @@ impl IntlFunctionKind {
     pub(in crate::runtime) const fn name(self) -> &'static str {
         match self {
             Self::DateTimeFormatConstructor => "DateTimeFormat",
-            Self::DurationFormatFormat => "format",
-            Self::DateTimeFormatFormatToParts | Self::NumberFormatFormatToParts => "formatToParts",
-            Self::DateTimeFormatResolvedOptions | Self::NumberFormatResolvedOptions => {
-                "resolvedOptions"
-            }
+            Self::DurationFormatFormat | Self::ListFormatFormat => "format",
+            Self::DateTimeFormatFormatToParts
+            | Self::NumberFormatFormatToParts
+            | Self::ListFormatFormatToParts => "formatToParts",
+            Self::DateTimeFormatResolvedOptions
+            | Self::NumberFormatResolvedOptions
+            | Self::ListFormatResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
@@ -243,9 +245,9 @@ impl IntlFunctionKind {
             Self::NumberFormatFormatRangeToParts | Self::DateTimeFormatFormatRangeToParts => {
                 "formatRangeToParts"
             }
-            Self::NumberFormatSupportedLocalesOf | Self::DateTimeFormatSupportedLocalesOf => {
-                "supportedLocalesOf"
-            }
+            Self::NumberFormatSupportedLocalesOf
+            | Self::DateTimeFormatSupportedLocalesOf
+            | Self::ListFormatSupportedLocalesOf => "supportedLocalesOf",
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
             Self::LocaleConstructor => "Locale",
@@ -253,10 +255,6 @@ impl IntlFunctionKind {
             Self::LocaleMethod(kind) => kind.name(),
             Self::GetCanonicalLocales => "getCanonicalLocales",
             Self::ListFormatConstructor => "ListFormat",
-            Self::ListFormatFormat => "format",
-            Self::ListFormatFormatToParts => "formatToParts",
-            Self::ListFormatResolvedOptions => "resolvedOptions",
-            Self::ListFormatSupportedLocalesOf => "supportedLocalesOf",
         }
     }
 }

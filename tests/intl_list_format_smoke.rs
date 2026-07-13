@@ -37,7 +37,7 @@ fn formats_lists_and_exposes_resolved_state() -> TestResult {
 #[test]
 fn closes_iterators_after_non_string_values() -> TestResult {
     ensure_true(&eval(
-        r#"
+        r"
         let closed = false;
         const values = {
             [Symbol.iterator]() {
@@ -57,6 +57,6 @@ fn closes_iterators_after_non_string_values() -> TestResult {
             typeError = error instanceof TypeError;
         }
         typeError && closed
-        "#,
+        ",
     )?)
 }

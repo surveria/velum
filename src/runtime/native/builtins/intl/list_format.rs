@@ -285,7 +285,7 @@ impl Context {
     }
 }
 
-fn is_object_value(value: &Value) -> bool {
+const fn is_object_value(value: &Value) -> bool {
     matches!(
         value,
         Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
@@ -334,7 +334,7 @@ fn list_pattern(formatter: &ListFormatValue, count: usize) -> ListPattern {
             pair: " ",
             end: " ",
         },
-        ("unit", "long", true, _) => ListPattern {
+        ("unit", "long", true, _) | ("conjunction", _, true, _) => ListPattern {
             middle: ", ",
             pair: " y ",
             end: " y ",
@@ -363,11 +363,6 @@ fn list_pattern(formatter: &ListFormatValue, count: usize) -> ListPattern {
             middle: ", ",
             pair: " & ",
             end: ", & ",
-        },
-        ("conjunction", _, true, _) => ListPattern {
-            middle: ", ",
-            pair: " y ",
-            end: " y ",
         },
         _ => ListPattern {
             middle: ", ",
