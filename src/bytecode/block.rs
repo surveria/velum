@@ -5,7 +5,7 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::{BytecodeAddress, BytecodeInstruction};
+use super::{BytecodeAddress, BytecodeInstruction, BytecodeLinearTemplate};
 
 /// One instruction and its canonical source range.
 pub struct BytecodeStep<'a> {
@@ -32,6 +32,7 @@ impl<'a> BytecodeStep<'a> {
 pub struct BytecodeBlock {
     instructions: Rc<[BytecodeInstruction]>,
     spans: Rc<[SourceSpan]>,
+    linear_template: BytecodeLinearTemplate,
 }
 
 impl BytecodeBlock {
@@ -61,9 +62,11 @@ impl BytecodeBlock {
                 "bytecode block spans multiple source identities",
             ));
         }
+        let linear_template = BytecodeLinearTemplate::compile(&instructions)?;
         Ok(Self {
             instructions: Rc::from(instructions.into_boxed_slice()),
             spans: Rc::from(spans.into_boxed_slice()),
+            linear_template,
         })
     }
 
@@ -95,5 +98,9 @@ impl BytecodeBlock {
 
     pub(crate) fn instructions(&self) -> &[BytecodeInstruction] {
         &self.instructions
+    }
+
+    pub(crate) const fn linear_template(&self) -> &BytecodeLinearTemplate {
+        &self.linear_template
     }
 }

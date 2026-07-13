@@ -287,8 +287,8 @@ impl Context {
         body: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let condition_plan = self.compile_bytecode_linear_plan(condition)?;
-        let body_plan = self.compile_bytecode_linear_plan(body)?;
+        let condition_plan = self.bind_bytecode_linear_plan(condition)?;
+        let body_plan = self.bind_bytecode_linear_plan(body)?;
         let handle = self
             .push_bytecode_control(BytecodeControlRecord::loop_record(BytecodeLoopKind::While))?;
         let mut control = self.checkout_bytecode_control(handle)?;
@@ -466,11 +466,7 @@ impl Context {
             }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
             let reduction = self.run_bytecode_control_action(handle, &control, |context| {
-                context.compile_numeric_array_reduction_plan(
-                    parts.condition,
-                    parts.update,
-                    parts.body,
-                )
+                context.bind_numeric_array_reduction_plan(parts.condition, parts.update, parts.body)
             })?;
             if let Some(reduction) = reduction {
                 match self.eval_numeric_array_reduction_plan(state, next, &reduction) {
@@ -618,13 +614,13 @@ impl Context {
         parts: BytecodeForParts<'a>,
     ) -> Result<BytecodeForPlans<'a>> {
         let condition = if let Some(condition) = parts.condition {
-            self.compile_bytecode_linear_plan(condition)?
+            self.bind_bytecode_linear_plan(condition)?
         } else {
             None
         };
-        let body = self.compile_bytecode_linear_plan(parts.body)?;
+        let body = self.bind_bytecode_linear_plan(parts.body)?;
         let update = if let Some(update) = parts.update {
-            self.compile_bytecode_linear_plan(update)?
+            self.bind_bytecode_linear_plan(update)?
         } else {
             None
         };

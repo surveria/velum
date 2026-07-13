@@ -282,22 +282,22 @@ check_frontend_span_boundary() {
 }
 
 check_bytecode_span_boundary() {
-  local block_fields
+  local instruction_field_count
+  local span_field_count
   local compiler_fields
   local execution_owners
   local expected_execution_owners
   local runtime_span_fields
 
-  block_fields="$(
-    awk '
-      /^pub struct BytecodeBlock \{/ { inside = 1; next }
-      inside && /^}/ { exit }
-      inside { print }
-    ' "${repo_root}/src/bytecode/block.rs" \
-      | sed '/^[[:space:]]*\/\//d' \
-      | tr -d '[:space:]'
+  instruction_field_count="$(
+    grep -F -x -c '    instructions: Rc<[BytecodeInstruction]>,' \
+      "${repo_root}/src/bytecode/block.rs" || true
   )"
-  if [[ "${block_fields}" != 'instructions:Rc<[BytecodeInstruction]>,spans:Rc<[SourceSpan]>,' ]]; then
+  span_field_count="$(
+    grep -F -x -c '    spans: Rc<[SourceSpan]>,' \
+      "${repo_root}/src/bytecode/block.rs" || true
+  )"
+  if [[ "${instruction_field_count}" != "1" || "${span_field_count}" != "1" ]]; then
     fail "bytecode source span boundary changed; BytecodeBlock requires one aligned span table"
   fi
 
@@ -1443,6 +1443,7 @@ clone_derive_count() {
 
 check_optimization_shape_boundary() {
   local shaped_control_markers
+  local runtime_linear_recognizers
   shaped_control_markers="$(
     grep -R -nE \
       'LoopFastPath|loop_fast_path|BytecodeCatchFastPath|BytecodeTryFinallyFastPath|body_fast_path|try_fast_path' \
@@ -1455,6 +1456,28 @@ check_optimization_shape_boundary() {
   if [[ -n "${shaped_control_markers}" ]]; then
     printf '%s\n' "${shaped_control_markers}" >&2
     fail "workload-shaped control recognizer boundary changed; use reusable bytecode plans"
+  fi
+
+  runtime_linear_recognizers="$(
+    grep -R -nE \
+      'recognize_.*linear|compile_bytecode_linear_plan|compile_numeric_array_reduction_plan' \
+      "${repo_root}/src/runtime/bytecode/linear" \
+      "${repo_root}/src/runtime/bytecode/control.rs" \
+      "${repo_root}/src/runtime/bytecode/control" || true
+  )"
+  if [[ -n "${runtime_linear_recognizers}" ]]; then
+    printf '%s\n' "${runtime_linear_recognizers}" >&2
+    fail "runtime linear recognition boundary changed; recognize immutable bytecode templates once"
+  fi
+  if ! grep -F -q 'linear_template: BytecodeLinearTemplate,' \
+      "${repo_root}/src/bytecode/block.rs" \
+    || ! grep -F -q 'BytecodeLinearTemplate::compile(&instructions)?;' \
+      "${repo_root}/src/bytecode/block.rs" \
+    || ! grep -F -q 'fn bind_bytecode_linear_plan' \
+      "${repo_root}/src/runtime/bytecode/linear/segment.rs" \
+    || ! grep -F -q 'fn bind_numeric_array_reduction_plan' \
+      "${repo_root}/src/runtime/bytecode/linear/numeric_array_reduction.rs"; then
+    fail "bytecode linear template ownership boundary changed"
   fi
 }
 
@@ -1863,6 +1886,12 @@ mutate_control_recognizer() {
     >>"${fixture_root}/src/runtime/bytecode/control.rs"
 }
 
+mutate_runtime_linear_recognizer() {
+  local fixture_root="$1"
+  printf '\nfn recognize_bytecode_linear_plan() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/linear/segment.rs"
+}
+
 mutate_optimizer_state_owner() {
   local fixture_root="$1"
   printf 'fn architecture_probe(context: &mut super::Context) { context.optimizer.record_native_call_cache_hit(); }\n' \
@@ -2006,6 +2035,8 @@ run_self_tests() {
     'VM primitive owner boundary changed' mutate_vm_primitive_owner
   expect_guard_failure "${temp_dir}" control-recognizer \
     'workload-shaped control recognizer boundary changed' mutate_control_recognizer
+  expect_guard_failure "${temp_dir}" runtime-linear-recognizer \
+    'runtime linear recognition boundary changed' mutate_runtime_linear_recognizer
   expect_guard_failure "${temp_dir}" optimizer-state-owner \
     'optimizer state owner allowlist changed' mutate_optimizer_state_owner
   expect_guard_failure "${temp_dir}" harness-opcode-owner \

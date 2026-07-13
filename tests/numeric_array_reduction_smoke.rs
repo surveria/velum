@@ -17,6 +17,17 @@ fn numeric_array_reduction_matches_generic_execution() -> TestResult {
     let mut disabled =
         Vm::with_config(VmConfig::default().with_optimization_mode(OptimizationMode::Disabled));
     let script = enabled.compile(REDUCTION_SOURCE)?;
+    let usage = script.usage();
+    ensure_at_least(
+        usage.bytecode_linear_peephole_candidate_count(),
+        2,
+        "compiled linear peephole candidates",
+    )?;
+    ensure_at_least(
+        usage.bytecode_numeric_array_reduction_role_count(),
+        3,
+        "compiled numeric-array reduction roles",
+    )?;
     let enabled_value = enabled.eval_compiled_owned(&script)?;
     let disabled_value = disabled.eval_compiled_owned(&script)?;
 
@@ -29,6 +40,37 @@ fn numeric_array_reduction_matches_generic_execution() -> TestResult {
             snapshot.bytecode_linear_direct_runs()
         )
         .into());
+    }
+    Ok(())
+}
+
+#[test]
+fn compiled_linear_templates_are_reused_across_vms() -> TestResult {
+    let compiler = Vm::new();
+    let script = compiler.compile(REDUCTION_SOURCE)?;
+    let usage = script.usage();
+    ensure_at_least(
+        usage.bytecode_linear_peephole_candidate_count(),
+        2,
+        "reusable linear peephole candidates",
+    )?;
+    ensure_at_least(
+        usage.bytecode_numeric_array_reduction_role_count(),
+        3,
+        "reusable numeric-array reduction roles",
+    )?;
+
+    for _ in 0..4 {
+        let mut vm = Vm::new();
+        for _ in 0..3 {
+            let value = vm.eval_compiled_owned(&script)?;
+            ensure_equal(&value, &OwnedValue::Number(42.0))?;
+        }
+        ensure_at_least(
+            vm.optimization_snapshot().bytecode_linear_direct_runs(),
+            54,
+            "cross-VM reusable reduction runs",
+        )?;
     }
     Ok(())
 }
@@ -102,4 +144,11 @@ fn ensure_equal(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_at_least(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual >= minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} >= {minimum}, got {actual}").into())
 }

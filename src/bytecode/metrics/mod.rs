@@ -32,6 +32,14 @@ impl BytecodeMetrics {
         self.numeric_instructions
     }
 
+    pub const fn linear_peephole_candidate_count(self) -> usize {
+        self.linear_peephole_candidates
+    }
+
+    pub const fn numeric_array_reduction_role_count(self) -> usize {
+        self.numeric_array_reduction_roles
+    }
+
     pub(super) const fn binding_operands(count: usize) -> Self {
         Self {
             binding_operands: count,
@@ -42,6 +50,14 @@ impl BytecodeMetrics {
     pub(super) const fn property_operands(count: usize) -> Self {
         Self {
             property_operands: count,
+            ..Self::empty()
+        }
+    }
+
+    const fn linear_template(peephole_candidates: usize, reduction_roles: usize) -> Self {
+        Self {
+            linear_peephole_candidates: peephole_candidates,
+            numeric_array_reduction_roles: reduction_roles,
             ..Self::empty()
         }
     }
@@ -72,6 +88,8 @@ impl BytecodeMetrics {
             direct_native_calls: 0,
             array_native_calls: 0,
             numeric_instructions: 0,
+            linear_peephole_candidates: 0,
+            numeric_array_reduction_roles: 0,
         }
     }
 
@@ -90,6 +108,12 @@ impl BytecodeMetrics {
         self.numeric_instructions = self
             .numeric_instructions
             .saturating_add(other.numeric_instructions);
+        self.linear_peephole_candidates = self
+            .linear_peephole_candidates
+            .saturating_add(other.linear_peephole_candidates);
+        self.numeric_array_reduction_roles = self
+            .numeric_array_reduction_roles
+            .saturating_add(other.numeric_array_reduction_roles);
     }
 
     pub(super) const fn combine(mut self, other: Self) -> Self {
@@ -105,7 +129,10 @@ impl BytecodeMetrics {
 
 impl BytecodeBlock {
     pub(super) fn metrics(&self) -> BytecodeMetrics {
-        let mut metrics = BytecodeMetrics::empty();
+        let mut metrics = BytecodeMetrics::linear_template(
+            self.linear_template().peephole_candidate_count(),
+            usize::from(self.linear_template().reduction_role().is_some()),
+        );
         for instruction in self.instructions() {
             metrics.add(instruction.metrics());
         }

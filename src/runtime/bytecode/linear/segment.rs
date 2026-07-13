@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
+    bytecode::{BytecodeAddress, BytecodeBlock},
     error::{Error, Result},
     runtime::{Context, control::Completion},
 };
@@ -21,7 +21,7 @@ struct BytecodeLinearSegment<'a> {
 }
 
 impl Context {
-    pub(in crate::runtime) fn compile_bytecode_linear_plan<'a>(
+    pub(in crate::runtime) fn bind_bytecode_linear_plan<'a>(
         &mut self,
         block: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeLinearPlan<'a>>> {
@@ -29,7 +29,8 @@ impl Context {
             return Ok(None);
         }
         let instructions = block.instructions();
-        if instructions.iter().any(instruction_uses_with_environment) {
+        let template = block.linear_template();
+        if template.uses_with_environment() {
             return Ok(None);
         }
         let mut builder = BytecodeLinearPlanBuilder::new(instructions.len());
@@ -39,8 +40,9 @@ impl Context {
         let mut index = 0;
 
         while index < instructions.len() {
+            let peepholes = template.peepholes_at(index)?;
             if let Some((op, consumed)) =
-                self.compile_bytecode_linear_peephole(instructions, index)?
+                self.bind_bytecode_linear_peephole(instructions, index, peepholes)?
             {
                 ensure_positive_consumed(consumed)?;
                 if segment_start.is_none() {
@@ -55,7 +57,9 @@ impl Context {
             let Some(instruction) = instructions.get(index) else {
                 return Err(Error::runtime("bytecode instruction index is not defined"));
             };
-            if let Some(op) = self.compile_bytecode_linear_op(instruction)? {
+            if template.instruction_is_linear(index)?
+                && let Some(op) = self.compile_bytecode_linear_op(instruction)?
+            {
                 if segment_start.is_none() {
                     segment_start = Some(index);
                 }
@@ -156,29 +160,6 @@ impl Context {
         }
         state.pc = BytecodeAddress::new(segment.end);
         Ok(None)
-    }
-}
-
-const fn instruction_uses_with_environment(instruction: &BytecodeInstruction) -> bool {
-    match instruction {
-        BytecodeInstruction::LoadBinding(binding)
-        | BytecodeInstruction::StoreBinding(binding)
-        | BytecodeInstruction::ResolveBinding(binding)
-        | BytecodeInstruction::StoreResolvedBinding(binding)
-        | BytecodeInstruction::TypeOfBinding(binding)
-        | BytecodeInstruction::DeleteBinding(binding) => binding.with_environment_count() > 0,
-        BytecodeInstruction::DeclareBinding { name, .. }
-        | BytecodeInstruction::UpdateBinding { name, .. }
-        | BytecodeInstruction::CompoundStoreBinding { name, .. } => {
-            name.with_environment_count() > 0
-        }
-        BytecodeInstruction::CallBinding { callee, .. }
-        | BytecodeInstruction::CallBindingSpread { callee, .. }
-        | BytecodeInstruction::Construct {
-            constructor: callee,
-            ..
-        } => callee.with_environment_count() > 0,
-        _ => false,
     }
 }
 

@@ -9,7 +9,7 @@ use crate::{
     value::Value,
 };
 
-use super::{BytecodeState, numeric_chain::apply_number_binary};
+use super::{BytecodeState, numeric_chain::apply_number_binary, window::instruction_window};
 
 #[derive(Debug)]
 pub(super) struct CompiledPropertyMutation<'a> {
@@ -746,13 +746,4 @@ impl Context {
         }
         Ok(value)
     }
-}
-
-fn instruction_window(
-    instructions: &[BytecodeInstruction],
-    start: usize,
-    len: usize,
-) -> Option<&[BytecodeInstruction]> {
-    let end = start.checked_add(len)?;
-    instructions.get(start..end)
 }

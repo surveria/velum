@@ -10,6 +10,8 @@ use crate::{
     value::Value,
 };
 
+use super::window::{instruction_window, same_bytecode_binding};
+
 #[derive(Debug)]
 pub(super) struct CompiledNumericBindingChain<'a> {
     pub(super) op: NumericBindingChain<'a>,
@@ -590,17 +592,4 @@ pub(in crate::runtime::bytecode::linear) fn apply_number_binary(
         ),
     };
     Ok(value)
-}
-
-fn instruction_window(
-    instructions: &[BytecodeInstruction],
-    start: usize,
-    len: usize,
-) -> Option<&[BytecodeInstruction]> {
-    let end = start.checked_add(len)?;
-    instructions.get(start..end)
-}
-
-fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
-    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }

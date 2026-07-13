@@ -102,11 +102,14 @@ without exposing cache records or runtime ids.
 
 Reusable control machinery is limited to `for_in`, `structured_do_while`,
 `structured_switch`, and `try_catch`. Counted loops execute their original
-condition, body, and update bytecode through linear plans. One broad linear
-reduction plan may sum a packed default numeric array when binding identity,
-numeric values, array shape, unit update, and step accounting are all proven;
-any hole, indexed prototype behavior, non-number, or guard miss runs the same
-structured bytecode path.
+condition, body, and update bytecode through linear plans. Each immutable,
+`Rc`-shared `BytecodeBlock` owns the structural linear and reduction templates
+recognized when the block is compiled. Loop entry resolves only the current
+activation's binding cells and does not rescan the block for instruction
+shapes. One broad linear reduction plan may sum a packed default numeric array
+when binding identity, numeric values, array shape, unit update, and step
+accounting are all proven; any hole, indexed prototype behavior, non-number,
+or guard miss runs the same structured bytecode path.
 
 Test support is not part of bytecode semantics. `print` is an ordinary lazy
 native global binding and therefore follows normal lookup, call, shadowing,
