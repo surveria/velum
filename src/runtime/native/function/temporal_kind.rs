@@ -557,6 +557,7 @@ impl TemporalFunctionKind {
 
     const fn plain_month_day_name(self) -> &'static str {
         match self {
+            Self::PlainMonthDayConstructor => "PlainMonthDay",
             Self::PlainMonthDayFrom => "from",
             Self::PlainMonthDayPrototypeCalendarId => "get calendarId",
             Self::PlainMonthDayPrototypeMonthCode => "get monthCode",
