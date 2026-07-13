@@ -15,7 +15,7 @@ fn async_edge_snapshots_start_empty_and_classify_stable_categories() -> TestResu
     ensure_usize(snapshot.total(), 0, "fresh asynchronous edge total")?;
     ensure_usize(
         VmAsyncEdgeKind::all().len(),
-        10,
+        15,
         "asynchronous edge kind count",
     )?;
     ensure_usize(
@@ -32,6 +32,11 @@ fn async_edge_snapshots_start_empty_and_classify_stable_categories() -> TestResu
         VmAsyncEdgeKind::WeakCollectionEphemeron,
         VmAsyncEdgeStrength::Ephemeron,
     )?;
+    ensure_strength(
+        VmAsyncEdgeKind::FinalizationRegistryHeldValue,
+        VmAsyncEdgeStrength::Strong,
+    )?;
+    ensure_strength(VmAsyncEdgeKind::WeakRefTarget, VmAsyncEdgeStrength::Weak)?;
     ensure_snapshot_sums(snapshot)
 }
 
@@ -153,6 +158,55 @@ fn snapshots_weak_set_keys_and_weak_map_ephemerons_without_strong_entries() -> T
     ensure_snapshot_sums(snapshot)?;
 
     let value = vm.eval("weakMap.get(weakMapKey) === weakMapValue && weakSet.has(weakSetKey)")?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn snapshots_finalization_registry_and_weak_ref_edge_strengths() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    vm.eval(
+        r"
+        var cleanup = function cleanup() {};
+        var target = {};
+        var heldValue = {};
+        var token = {};
+        var registry = new FinalizationRegistry(cleanup);
+        registry.register(target, heldValue, token);
+        var reference = new WeakRef(target);
+        ",
+    )?;
+
+    let snapshot = vm.async_edge_snapshot()?;
+    ensure_usize(
+        snapshot.count(VmAsyncEdgeKind::FinalizationRegistryCleanupCallback),
+        1,
+        "FinalizationRegistry cleanup callback",
+    )?;
+    ensure_usize(
+        snapshot.count(VmAsyncEdgeKind::FinalizationRegistryHeldValue),
+        1,
+        "FinalizationRegistry held value",
+    )?;
+    ensure_usize(
+        snapshot.count(VmAsyncEdgeKind::FinalizationRegistryTarget),
+        1,
+        "FinalizationRegistry weak target",
+    )?;
+    ensure_usize(
+        snapshot.count(VmAsyncEdgeKind::FinalizationRegistryUnregisterToken),
+        1,
+        "FinalizationRegistry weak unregister token",
+    )?;
+    ensure_usize(
+        snapshot.count(VmAsyncEdgeKind::WeakRefTarget),
+        1,
+        "WeakRef weak target",
+    )?;
+    ensure_snapshot_sums(snapshot)?;
+
+    let value = vm.eval("reference.deref() === target && registry.unregister(token)")?;
     ensure_value(&value, &Value::Bool(true))
 }
 

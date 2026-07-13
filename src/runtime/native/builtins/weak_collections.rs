@@ -46,6 +46,8 @@ impl Context {
             CollectionKind::WeakSet => NativeFunctionKind::WeakSet,
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -80,6 +82,8 @@ impl Context {
             CollectionKind::WeakSet => WEAK_SET_NAME,
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -123,6 +127,8 @@ impl Context {
             ],
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -172,6 +178,8 @@ impl Context {
             CollectionKind::WeakSet => WEAK_SET_NAME,
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -240,6 +248,8 @@ impl Context {
             CollectionKind::WeakSet => WEAK_COLLECTION_ADD_NAME,
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -287,6 +297,8 @@ impl Context {
             CollectionKind::WeakSet => vec![item],
             CollectionKind::Map
             | CollectionKind::Set
+            | CollectionKind::FinalizationRegistry
+            | CollectionKind::WeakRef
             | CollectionKind::AsyncDisposableStack
             | CollectionKind::DisposableStack => {
                 return Err(Error::runtime(
@@ -451,7 +463,7 @@ impl Context {
         self.collection_set(collection, value.clone(), value)
     }
 
-    fn can_be_held_weakly(&self, value: &Value) -> Result<bool> {
+    pub(in crate::runtime::native) fn can_be_held_weakly(&self, value: &Value) -> Result<bool> {
         match value {
             Value::Object(_)
             | Value::Function(_)

@@ -6,8 +6,8 @@ mod function;
 pub(super) use default_global_bindings::DEFAULT_GLOBAL_BINDING_NAMES;
 
 pub(in crate::runtime::native) use builtins::{
-    CollectionIterationTarget, MAP_NAME, RegExpCallMode, SET_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
-    number_intrinsic_property,
+    CollectionIterationTarget, FINALIZATION_REGISTRY_NAME, MAP_NAME, RegExpCallMode, SET_NAME,
+    WEAK_MAP_NAME, WEAK_REF_NAME, WEAK_SET_NAME, number_intrinsic_property,
 };
 pub(in crate::runtime::native) use function::{
     ARRAY_BUFFER_NAME, ARRAY_NAME, ATOMICS_NAME, BIGINT_AS_INT_N_NAME, BIGINT_AS_UINT_N_NAME,

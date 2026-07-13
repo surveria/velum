@@ -290,7 +290,12 @@ const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330)
 const REGEXP_ESCAPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(331);
 const TEMPORAL_FUNCTION_SLOT_BASE: usize = 332;
 const INTL_FUNCTION_SLOT_BASE: usize = 564;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 611;
+const FINALIZATION_REGISTRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(611);
+const FINALIZATION_REGISTRY_REGISTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(612);
+const FINALIZATION_REGISTRY_UNREGISTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(613);
+const WEAK_REF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(614);
+const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 616;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -693,6 +698,15 @@ const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot>
         NativeFunctionKind::WeakSetAdd => Some(WEAK_SET_ADD_SLOT),
         NativeFunctionKind::WeakSetHas => Some(WEAK_SET_HAS_SLOT),
         NativeFunctionKind::WeakSetDelete => Some(WEAK_SET_DELETE_SLOT),
+        NativeFunctionKind::FinalizationRegistry => Some(FINALIZATION_REGISTRY_SLOT),
+        NativeFunctionKind::FinalizationRegistryRegister => {
+            Some(FINALIZATION_REGISTRY_REGISTER_SLOT)
+        }
+        NativeFunctionKind::FinalizationRegistryUnregister => {
+            Some(FINALIZATION_REGISTRY_UNREGISTER_SLOT)
+        }
+        NativeFunctionKind::WeakRef => Some(WEAK_REF_SLOT),
+        NativeFunctionKind::WeakRefDeref => Some(WEAK_REF_DEREF_SLOT),
         _ => None,
     }
 }

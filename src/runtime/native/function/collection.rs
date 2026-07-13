@@ -23,7 +23,16 @@ impl Context {
             NativeFunctionKind::Map
             | NativeFunctionKind::Set
             | NativeFunctionKind::WeakMap
-            | NativeFunctionKind::WeakSet => Self::eval_collection_constructor_call(),
+            | NativeFunctionKind::WeakSet
+            | NativeFunctionKind::FinalizationRegistry
+            | NativeFunctionKind::WeakRef => Self::eval_collection_constructor_call(),
+            NativeFunctionKind::FinalizationRegistryRegister => {
+                self.eval_finalization_registry_register(args, this_value)
+            }
+            NativeFunctionKind::FinalizationRegistryUnregister => {
+                self.eval_finalization_registry_unregister(args, this_value)
+            }
+            NativeFunctionKind::WeakRefDeref => self.eval_weak_ref_deref(this_value),
             NativeFunctionKind::MapGet => self.eval_map_get(args, this_value),
             NativeFunctionKind::MapSet => self.eval_map_set(args, this_value),
             NativeFunctionKind::MapHas => {

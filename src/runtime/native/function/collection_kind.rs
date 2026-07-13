@@ -1,6 +1,11 @@
 use super::kind::NativeFunctionKind;
 
 const MAP_NAME: &str = "Map";
+const FINALIZATION_REGISTRY_NAME: &str = "FinalizationRegistry";
+const FINALIZATION_REGISTRY_REGISTER_NAME: &str = "register";
+const FINALIZATION_REGISTRY_UNREGISTER_NAME: &str = "unregister";
+const WEAK_REF_NAME: &str = "WeakRef";
+const WEAK_REF_DEREF_NAME: &str = "deref";
 const MAP_GROUP_BY_NAME: &str = "groupBy";
 const MAP_GET_OR_INSERT_NAME: &str = "getOrInsert";
 const MAP_GET_OR_INSERT_COMPUTED_NAME: &str = "getOrInsertComputed";
@@ -47,7 +52,11 @@ impl NativeFunctionKind {
             | Self::CollectionIteratorNext(_)
             | Self::IteratorSelf
             | Self::WeakMap
-            | Self::WeakSet => Some(0.0),
+            | Self::WeakSet
+            | Self::WeakRefDeref => Some(0.0),
+            Self::FinalizationRegistry | Self::FinalizationRegistryUnregister | Self::WeakRef => {
+                Some(1.0)
+            }
             Self::MapGet
             | Self::WeakMapGet
             | Self::MapHas
@@ -76,6 +85,7 @@ impl NativeFunctionKind {
             | Self::MapGetOrInsertComputed
             | Self::WeakMapGetOrInsert
             | Self::WeakMapGetOrInsertComputed => Some(2.0),
+            Self::FinalizationRegistryRegister => Some(2.0),
             _ => None,
         }
     }
@@ -88,6 +98,11 @@ impl NativeFunctionKind {
             Self::Set => Some(SET_NAME),
             Self::WeakMap => Some(WEAK_MAP_NAME),
             Self::WeakSet => Some(WEAK_SET_NAME),
+            Self::FinalizationRegistry => Some(FINALIZATION_REGISTRY_NAME),
+            Self::FinalizationRegistryRegister => Some(FINALIZATION_REGISTRY_REGISTER_NAME),
+            Self::FinalizationRegistryUnregister => Some(FINALIZATION_REGISTRY_UNREGISTER_NAME),
+            Self::WeakRef => Some(WEAK_REF_NAME),
+            Self::WeakRefDeref => Some(WEAK_REF_DEREF_NAME),
             Self::MapGet | Self::WeakMapGet => Some(COLLECTION_METHOD_GET_NAME),
             Self::MapGroupBy => Some(MAP_GROUP_BY_NAME),
             Self::MapGetOrInsert => Some(MAP_GET_OR_INSERT_NAME),

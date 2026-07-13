@@ -8,7 +8,7 @@ use super::{
     },
 };
 
-const ASYNC_EDGE_KIND_COUNT: usize = 10;
+const ASYNC_EDGE_KIND_COUNT: usize = 15;
 const ASYNC_EDGE_STRENGTH_COUNT: usize = 3;
 
 /// Trace strength assigned to one asynchronous-store edge category.
@@ -50,6 +50,11 @@ pub enum VmAsyncEdgeKind {
     IteratorItem,
     WeakCollectionKey,
     WeakCollectionEphemeron,
+    FinalizationRegistryCleanupCallback,
+    FinalizationRegistryHeldValue,
+    FinalizationRegistryTarget,
+    FinalizationRegistryUnregisterToken,
+    WeakRefTarget,
     GeneratorObjectAssociation,
     GeneratorState,
 }
@@ -64,6 +69,11 @@ impl VmAsyncEdgeKind {
         Self::IteratorItem,
         Self::WeakCollectionKey,
         Self::WeakCollectionEphemeron,
+        Self::FinalizationRegistryCleanupCallback,
+        Self::FinalizationRegistryHeldValue,
+        Self::FinalizationRegistryTarget,
+        Self::FinalizationRegistryUnregisterToken,
+        Self::WeakRefTarget,
         Self::GeneratorObjectAssociation,
         Self::GeneratorState,
     ];
@@ -84,9 +94,14 @@ impl VmAsyncEdgeKind {
             | Self::CollectionObjectAssociation
             | Self::CollectionEntry
             | Self::IteratorItem
+            | Self::FinalizationRegistryCleanupCallback
+            | Self::FinalizationRegistryHeldValue
             | Self::GeneratorObjectAssociation
             | Self::GeneratorState => VmAsyncEdgeStrength::Strong,
-            Self::WeakCollectionKey => VmAsyncEdgeStrength::Weak,
+            Self::WeakCollectionKey
+            | Self::FinalizationRegistryTarget
+            | Self::FinalizationRegistryUnregisterToken
+            | Self::WeakRefTarget => VmAsyncEdgeStrength::Weak,
             Self::WeakCollectionEphemeron => VmAsyncEdgeStrength::Ephemeron,
         }
     }
@@ -101,8 +116,13 @@ impl VmAsyncEdgeKind {
             Self::IteratorItem => 5,
             Self::WeakCollectionKey => 6,
             Self::WeakCollectionEphemeron => 7,
-            Self::GeneratorObjectAssociation => 8,
-            Self::GeneratorState => 9,
+            Self::FinalizationRegistryCleanupCallback => 8,
+            Self::FinalizationRegistryHeldValue => 9,
+            Self::FinalizationRegistryTarget => 10,
+            Self::FinalizationRegistryUnregisterToken => 11,
+            Self::WeakRefTarget => 12,
+            Self::GeneratorObjectAssociation => 13,
+            Self::GeneratorState => 14,
         }
     }
 }

@@ -6,6 +6,7 @@ mod boolean;
 mod data_view;
 mod date;
 mod eval;
+mod finalization_registry;
 mod function_constructor;
 mod global;
 mod group_by;
@@ -48,14 +49,17 @@ mod symbol;
 mod temporal;
 mod typed_array;
 mod weak_collections;
+mod weak_ref;
 
 use crate::{error::Error, value::ErrorName};
 
+pub(in crate::runtime::native) use finalization_registry::FINALIZATION_REGISTRY_NAME;
 pub(in crate::runtime::native) use iterator_consumers::IteratorConsumer;
 pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
 pub(in crate::runtime::native) use number::number_intrinsic_property;
 pub(in crate::runtime::native) use regexp::RegExpCallMode;
 pub(in crate::runtime::native) use weak_collections::{WEAK_MAP_NAME, WEAK_SET_NAME};
+pub(in crate::runtime::native) use weak_ref::WEAK_REF_NAME;
 
 fn dynamic_compilation_error(error: Error) -> Error {
     match error {
