@@ -331,6 +331,7 @@ impl TemporalFunctionKind {
             | Self::PrototypeWith
             | Self::PrototypeAdd
             | Self::PrototypeSubtract
+            | Self::PrototypeRound
             | Self::PrototypeTotal => 1.0,
             _ => 0.0,
         }
