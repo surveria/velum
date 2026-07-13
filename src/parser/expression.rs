@@ -4,7 +4,7 @@ use crate::{
         UpdateOp,
     },
     error::{Error, Result},
-    lexer::TokenKind,
+    lexer::{NumberToken, TokenKind},
     value::Value,
 };
 
@@ -474,15 +474,7 @@ impl Parser {
         let token_span = token.span;
         Ok(match token.kind {
             TokenKind::LexicalError(error) => return Err(*error),
-            TokenKind::Number(value) => {
-                if self.is_strict_mode() && value.legacy {
-                    return Err(Error::parse_at(
-                        "legacy numeric literal is not allowed in strict mode",
-                        token_span,
-                    ));
-                }
-                Expression::new(Expr::Literal(Value::Number(value.value)), token_span)
-            }
+            TokenKind::Number(value) => self.number_literal(value, token_span)?,
             TokenKind::BigInt(value) => {
                 Expression::new(Expr::Literal(Value::BigInt(value)), token_span)
             }
@@ -573,6 +565,19 @@ impl Parser {
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         })
+    }
+
+    fn number_literal(&self, value: NumberToken, span: crate::SourceSpan) -> Result<Expression> {
+        if self.is_strict_mode() && value.legacy {
+            return Err(Error::parse_at(
+                "legacy numeric literal is not allowed in strict mode",
+                span,
+            ));
+        }
+        Ok(Expression::new(
+            Expr::Literal(Value::Number(value.value)),
+            span,
+        ))
     }
 
     fn regexp_literal(
