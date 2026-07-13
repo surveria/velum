@@ -336,6 +336,7 @@ name = "rs-quickjs"
 version = "0.2.130"
 dependencies = [
  "anyhow",
+ "icu_locale",
  "jiff-tzdb",
  "num-bigint",
  "num-traits",

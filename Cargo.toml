@@ -26,6 +26,7 @@ path = "src/bin/rsqjs.rs"
 # do not become engine dependencies.
 [dependencies]
 anyhow = "1"
+icu_locale = "2.2"
 jiff-tzdb = "0.1.8"
 num-bigint = "0.4"
 num-traits = "0.2"
