@@ -167,6 +167,12 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_utf16(this_value)?;
+        let search = args.first().cloned().unwrap_or(Value::Undefined);
+        if self.string_is_regexp(&search)? {
+            return Err(Error::type_error(
+                "String.prototype.includes does not accept a RegExp",
+            ));
+        }
         let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_contains_from(
@@ -273,6 +279,12 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_utf16(this_value)?;
+        let search = args.first().cloned().unwrap_or(Value::Undefined);
+        if self.string_is_regexp(&search)? {
+            return Err(Error::type_error(
+                "String.prototype.startsWith does not accept a RegExp",
+            ));
+        }
         let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_starts_with_at(
@@ -294,6 +306,12 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_utf16(this_value)?;
+        let search = args.first().cloned().unwrap_or(Value::Undefined);
+        if self.string_is_regexp(&search)? {
+            return Err(Error::type_error(
+                "String.prototype.endsWith does not accept a RegExp",
+            ));
+        }
         let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let length = Self::char_len(&text);
         let end_position = self.ends_with_position(args.get(1), length)?;
@@ -343,7 +361,7 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_string_args(args.as_slice());
         let text = self.string_receiver_value(this_value)?;
-        let output = text.trim().to_owned();
+        let output = text.trim_matches(Self::is_ecmascript_whitespace).to_owned();
         self.heap_string_value(&output)
     }
 
@@ -354,7 +372,9 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_string_args(args.as_slice());
         let text = self.string_receiver_value(this_value)?;
-        let output = text.trim_start().to_owned();
+        let output = text
+            .trim_start_matches(Self::is_ecmascript_whitespace)
+            .to_owned();
         self.heap_string_value(&output)
     }
 
@@ -365,8 +385,26 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_string_args(args.as_slice());
         let text = self.string_receiver_value(this_value)?;
-        let output = text.trim_end().to_owned();
+        let output = text
+            .trim_end_matches(Self::is_ecmascript_whitespace)
+            .to_owned();
         self.heap_string_value(&output)
+    }
+
+    const fn is_ecmascript_whitespace(character: char) -> bool {
+        matches!(
+            character,
+            '\u{0009}' | '\u{000B}' | '\u{000C}' | '\u{0020}' | '\u{00A0}' | '\u{1680}' | '\u{2000}'
+                ..='\u{200A}'
+                    | '\u{2028}'
+                    | '\u{2029}'
+                    | '\u{202F}'
+                    | '\u{205F}'
+                    | '\u{3000}'
+                    | '\u{FEFF}'
+                    | '\n'
+                    | '\r'
+        )
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_to_lower_case(

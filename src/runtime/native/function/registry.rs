@@ -15,7 +15,7 @@ mod string_prototype_slot;
 
 use data_view_slot::data_view_slot;
 use object_slot::object_slot;
-use string_prototype_slot::string_prototype_slot;
+use string_prototype_slot::{string_prototype_slot, string_static_slot};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -298,7 +298,9 @@ const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
 const ARRAY_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(628);
 const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(629);
 const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 631;
+const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
+const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 633;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -490,6 +492,8 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         }
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
+        NativeFunctionKind::PromiseTry => Some(PROMISE_TRY_SLOT),
+        NativeFunctionKind::PromiseWithResolvers => Some(PROMISE_WITH_RESOLVERS_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
         NativeFunctionKind::PromiseFinally => Some(PROMISE_FINALLY_SLOT),
@@ -786,15 +790,6 @@ const fn primitive_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunc
         NativeFunctionKind::SymbolPrototypeValueOf => Some(SYMBOL_PROTOTYPE_VALUE_OF_SLOT),
         NativeFunctionKind::SymbolFor => Some(SYMBOL_FOR_SLOT),
         NativeFunctionKind::SymbolKeyFor => Some(SYMBOL_KEY_FOR_SLOT),
-        _ => None,
-    }
-}
-
-const fn string_static_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
-    match kind {
-        NativeFunctionKind::StringFromCharCode => Some(STRING_FROM_CHAR_CODE_SLOT),
-        NativeFunctionKind::StringFromCodePoint => Some(STRING_FROM_CODE_POINT_SLOT),
-        NativeFunctionKind::StringRaw => Some(STRING_RAW_SLOT),
         _ => None,
     }
 }

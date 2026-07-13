@@ -20,7 +20,7 @@ mod utility;
 
 pub(in crate::runtime::native) use promise::{
     PROMISE_CATCH_NAME, PROMISE_FINALLY_NAME, PROMISE_NAME, PROMISE_REJECT_NAME,
-    PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+    PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, PROMISE_TRY_NAME, PROMISE_WITH_RESOLVERS_NAME,
 };
 
 pub(in crate::runtime) use regexp::LegacyRegExpStaticKind;
@@ -468,6 +468,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     },
     PromiseResolve,
     PromiseReject,
+    PromiseTry,
+    PromiseWithResolvers,
     PromiseThen,
     PromiseCatch,
     PromiseFinally,

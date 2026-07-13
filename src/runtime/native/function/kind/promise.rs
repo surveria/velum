@@ -10,6 +10,10 @@ pub(super) const PROMISE_REJECT_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_REJECT_NAME: &str = "reject";
 pub(super) const PROMISE_RESOLVE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_RESOLVE_NAME: &str = "resolve";
+pub(super) const PROMISE_TRY_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const PROMISE_TRY_NAME: &str = "try";
+pub(super) const PROMISE_WITH_RESOLVERS_FUNCTION_LENGTH: f64 = 0.0;
+pub(in crate::runtime::native) const PROMISE_WITH_RESOLVERS_NAME: &str = "withResolvers";
 pub(super) const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
@@ -25,6 +29,8 @@ impl NativeFunctionKind {
             }
             Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
             Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
+            Self::PromiseTry => Some(PROMISE_TRY_FUNCTION_LENGTH),
+            Self::PromiseWithResolvers => Some(PROMISE_WITH_RESOLVERS_FUNCTION_LENGTH),
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseFinally => Some(PROMISE_FINALLY_FUNCTION_LENGTH),
@@ -41,6 +47,8 @@ impl NativeFunctionKind {
             Self::PromiseCapabilityExecutor { .. } => Some(PROMISE_CAPABILITY_EXECUTOR_NAME),
             Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
             Self::PromiseReject => Some(PROMISE_REJECT_NAME),
+            Self::PromiseTry => Some(PROMISE_TRY_NAME),
+            Self::PromiseWithResolvers => Some(PROMISE_WITH_RESOLVERS_NAME),
             Self::PromiseThen => Some(PROMISE_THEN_NAME),
             Self::PromiseCatch => Some(PROMISE_CATCH_NAME),
             Self::PromiseFinally => Some(PROMISE_FINALLY_NAME),
