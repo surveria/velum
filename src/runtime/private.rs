@@ -82,7 +82,7 @@ impl PrivateEnvironment {
     pub(in crate::runtime) fn visible_names(&self) -> Rc<[StaticName]> {
         let mut names = self.names.to_vec();
         let mut parent = self.parent.clone();
-        while let Some(environment) = parent {
+        while let Some(environment) = parent.take() {
             for name in environment.names.iter() {
                 if !names
                     .iter()
@@ -91,7 +91,7 @@ impl PrivateEnvironment {
                     names.push(name.clone());
                 }
             }
-            parent = environment.parent.clone();
+            parent.clone_from(&environment.parent);
         }
         names.into()
     }

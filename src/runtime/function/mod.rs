@@ -10,7 +10,7 @@ use crate::{
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
         PropertyWritable,
     },
-    runtime::{CompiledBindingFrame, Context},
+    runtime::{CompiledBindingFrame, Context, FunctionClassConstructor},
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
@@ -219,8 +219,7 @@ impl Context {
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
             constructable: init.constructable,
             kind: init.kind,
-            class_constructor: init.class_constructor,
-            default_derived_constructor: false,
+            class_constructor: FunctionClassConstructor::from_flag(init.class_constructor),
             super_binding,
             static_parent: None,
             class_fields: None,
@@ -509,7 +508,7 @@ impl Context {
 
     /// Class constructors are constructor-only callables.
     fn reject_class_constructor_call(&self, id: FunctionId) -> Result<()> {
-        if self.function(id)?.class_constructor {
+        if self.function(id)?.class_constructor.is_class() {
             return Err(Error::type_error(
                 "Class constructor cannot be invoked without 'new'",
             ));

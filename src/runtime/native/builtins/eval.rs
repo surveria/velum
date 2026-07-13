@@ -57,11 +57,22 @@ impl Context {
         direct: bool,
     ) -> Result<Value> {
         let super_binding = direct.then(|| self.current_super_frame()).flatten();
-        let allow_super_property = super_binding.is_some();
         let allow_super_call = super_binding.as_ref().is_some_and(|binding| {
             binding.constructor.is_some() && binding.allow_direct_eval_super_call.get()
         });
+        let super_context = if allow_super_call {
+            crate::compiled_script::EvalSuperContext::PropertyAndCall
+        } else if super_binding.is_some() {
+            crate::compiled_script::EvalSuperContext::Property
+        } else {
+            crate::compiled_script::EvalSuperContext::None
+        };
         let class_field_initializer = direct && self.current_class_field_initializer_context()?;
+        let class_field_context = if class_field_initializer {
+            crate::compiled_script::EvalClassFieldContext::Initializer
+        } else {
+            crate::compiled_script::EvalClassFieldContext::None
+        };
         let private_names: Rc<[crate::syntax::StaticName]> = if direct {
             self.current_private_environment()
                 .map_or_else(|| Rc::from([]), |environment| environment.visible_names())
@@ -71,12 +82,12 @@ impl Context {
         let script = crate::compiled_script::CompiledScript::compile_eval(
             source,
             self.limits.clone(),
-            strict_mode,
-            allow_super_property,
-            allow_super_call,
-            class_field_initializer,
-            class_field_initializer,
-            private_names,
+            crate::compiled_script::EvalCompileContext::new(
+                strict_mode,
+                super_context,
+                class_field_context,
+                private_names,
+            ),
         )
         .map_err(dynamic_compilation_error)?;
         self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;

@@ -162,8 +162,7 @@ struct Function {
     properties: function::FunctionProperties,
     constructable: bool,
     kind: FunctionKind,
-    class_constructor: bool,
-    default_derived_constructor: bool,
+    class_constructor: FunctionClassConstructor,
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
@@ -175,6 +174,27 @@ struct Function {
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,
     lexical_this: Option<Value>,
     new_target: FunctionNewTarget,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FunctionClassConstructor {
+    None,
+    Explicit,
+    DefaultDerived,
+}
+
+impl FunctionClassConstructor {
+    const fn from_flag(class_constructor: bool) -> Self {
+        if class_constructor {
+            Self::Explicit
+        } else {
+            Self::None
+        }
+    }
+
+    const fn is_class(self) -> bool {
+        !matches!(self, Self::None)
+    }
 }
 
 type FunctionUpvalues = Rc<[BindingCell]>;

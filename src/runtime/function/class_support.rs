@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::control::{Completion, TailCallReturnMode},
+    runtime::{Context, FunctionClassConstructor},
     value::{FunctionId, Value},
 };
 
@@ -84,7 +84,15 @@ impl Context {
         id: FunctionId,
         default_derived: bool,
     ) -> Result<()> {
-        self.function_mut(id)?.default_derived_constructor = default_derived;
+        if default_derived {
+            let function = self.function_mut(id)?;
+            if !function.class_constructor.is_class() {
+                return Err(Error::runtime(
+                    "default derived constructor is not a class constructor",
+                ));
+            }
+            function.class_constructor = FunctionClassConstructor::DefaultDerived;
+        }
         Ok(())
     }
 
@@ -93,7 +101,7 @@ impl Context {
         id: FunctionId,
     ) -> Result<Option<Value>> {
         let function = self.function(id)?;
-        if !function.default_derived_constructor {
+        if function.class_constructor != FunctionClassConstructor::DefaultDerived {
             return Ok(None);
         }
         function

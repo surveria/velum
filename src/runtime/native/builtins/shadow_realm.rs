@@ -165,12 +165,12 @@ impl Context {
         let script = CompiledScript::compile_eval(
             &source,
             self.limits.clone(),
-            false,
-            false,
-            false,
-            false,
-            false,
-            std::rc::Rc::from([]),
+            crate::compiled_script::EvalCompileContext::new(
+                false,
+                crate::compiled_script::EvalSuperContext::None,
+                crate::compiled_script::EvalClassFieldContext::None,
+                std::rc::Rc::from([]),
+            ),
         )
         .map_err(dynamic_compilation_error)?;
         let result = self.with_realm(realm, |context| {
