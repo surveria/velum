@@ -191,41 +191,71 @@ impl Parser {
                     self.parse_error("default function or class export must be a declaration")
                 );
             }
-            let declaration_name = if declaration_like {
-                match expression.kind() {
-                    Expr::Function {
-                        name: Some(name), ..
-                    } => Some(name.name().as_str().to_owned()),
-                    Expr::Class(class) => class.name.as_ref().map(|name| name.as_str().to_owned()),
-                    _ => None,
+            let expression_span = expression.span();
+            let (local_name, default_expression) = match expression.into_kind() {
+                Expr::Function {
+                    id,
+                    name: Some(name),
+                    arguments_binding,
+                    params,
+                    body,
+                    parameter_prologue_count,
+                    kind,
+                    strict,
+                } if declaration_like => {
+                    let local_name = name.name().as_str().to_owned();
+                    statements.push(self.statement_node(
+                        start,
+                        Stmt::FunctionDecl {
+                            name,
+                            block_scoped: false,
+                            annex_b_var_binding: None,
+                            arguments_binding,
+                            id,
+                            params,
+                            body,
+                            parameter_prologue_count,
+                            kind,
+                            strict,
+                        },
+                    ));
+                    (local_name, None)
                 }
-            } else {
-                None
+                Expr::Class(class) if declaration_like && class.name.is_some() => {
+                    let name = class
+                        .name
+                        .clone()
+                        .ok_or_else(|| self.parse_error("default class name disappeared"))?;
+                    let local_name = name.as_str().to_owned();
+                    let binding = self.static_binding(name)?;
+                    statements.push(self.statement_node(
+                        start,
+                        Stmt::ClassDecl {
+                            name: binding,
+                            class,
+                        },
+                    ));
+                    (local_name, None)
+                }
+                kind => (
+                    "default".to_owned(),
+                    Some(crate::ast::Expression::new(kind, expression_span)),
+                ),
             };
-            let binding = self.static_binding_name("default".to_owned())?;
-            statements.push(self.statement_node(
-                start,
-                Stmt::VarDecl {
-                    name: binding.clone(),
-                    kind: DeclKind::Const,
-                    init: Some(expression),
-                },
-            ));
-            if let Some(name) = declaration_name {
-                let named_binding = self.static_binding_name(name)?;
-                let default_value = self.expression_node(start, Expr::Identifier(binding));
+            if let Some(expression) = default_expression {
+                let binding = self.static_binding_name(local_name.clone())?;
                 statements.push(self.statement_node(
                     start,
                     Stmt::VarDecl {
-                        name: named_binding,
+                        name: binding,
                         kind: DeclKind::Const,
-                        init: Some(default_value),
+                        init: Some(expression),
                     },
                 ));
             }
             module.exports.push(ModuleExportEntry::Local {
                 export_name: "default".to_owned(),
-                local_name: "default".to_owned(),
+                local_name,
             });
             if declaration_like {
                 self.consume_optional_semicolon();

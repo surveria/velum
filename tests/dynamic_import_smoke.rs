@@ -96,8 +96,11 @@ fn reuses_namespace_and_evaluates_a_module_once() -> TestResult {
     let (loader, _requests) = RecordingLoader::new([(
         "dependency.js",
         r#"
-        globalThis.dynamicImportEvaluationCount =
-            (globalThis.dynamicImportEvaluationCount || 0) + 1;
+        var global = Function("return this;")();
+        if (global.dynamicImportEvaluationCount) {
+            throw new Error("module was evaluated more than once");
+        }
+        global.dynamicImportEvaluationCount = 1;
         export const answer = 42;
         "#,
     )]);
@@ -107,13 +110,87 @@ fn reuses_namespace_and_evaluates_a_module_once() -> TestResult {
         r#"
         var importsMatch = false;
         Promise.all([import("./dependency.js"), import("./dependency.js")])
-            .then(values => { importsMatch = values[0] === values[1]; });
+            .then(async values => {
+                const third = await import("./dependency.js");
+                const fourth = await import("./dependency.js");
+                importsMatch = values[0] === values[1]
+                    && values[0] === third
+                    && third === fourth;
+            });
         "#,
     )?;
     let result = context.eval("importsMatch && dynamicImportEvaluationCount === 1")?;
     ensure(
         result == Value::Bool(true),
         "dynamic imports did not reuse one evaluated namespace",
+    )
+}
+
+#[test]
+fn preserves_live_module_bindings_updated_through_the_global_object() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        var dynamicImportGlobalObject = Function("return this;")();
+        function dynamicImportGlobal() { return dynamicImportGlobalObject; }
+        "#,
+    )?;
+    let global = context.eval("dynamicImportGlobal() === globalThis")?;
+    ensure(
+        global == Value::Bool(true),
+        "Function constructor did not preserve the script global object",
+    )?;
+    let (loader, _requests) = RecordingLoader::new([(
+        "dependency.js",
+        r#"
+        var value = 1;
+        export { value };
+        Function("return this;")().updateDynamicImportValue = function() { value = 2; };
+        "#,
+    )]);
+    context.set_dynamic_module_loader(loader);
+    context.eval_named(
+        "main.js",
+        r#"
+        var liveBindingWorked = false;
+        import("./dependency.js").then(namespace => {
+            const before = namespace.value;
+            dynamicImportGlobal().updateDynamicImportValue();
+            liveBindingWorked = before === 1 && namespace.value === 2;
+        });
+        "#,
+    )?;
+    let result = context.eval("liveBindingWorked")?;
+    ensure(
+        result == Value::Bool(true),
+        "dynamic namespace did not expose the updated live binding",
+    )
+}
+
+#[test]
+fn keeps_named_default_function_exports_mutable() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let (loader, _requests) = RecordingLoader::new([(
+        "dependency.js",
+        "export default function fn() { fn = 2; return 1; }",
+    )]);
+    context.set_dynamic_module_loader(loader);
+    context.eval_named(
+        "main.js",
+        r#"
+        var defaultBindingWorked = false;
+        import("./dependency.js").then(namespace => {
+            const before = namespace.default();
+            defaultBindingWorked = before === 1 && namespace.default === 2;
+        });
+        "#,
+    )?;
+    let result = context.eval("defaultBindingWorked")?;
+    ensure(
+        result == Value::Bool(true),
+        "named default function export was not mutable",
     )
 }
 

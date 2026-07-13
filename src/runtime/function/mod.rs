@@ -208,10 +208,12 @@ impl Context {
         let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
         let lexical_this =
             self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
+        let script_or_module_name = self.active_script_or_module_name();
         self.functions.insert_at_next(
             id.index(),
             super::Function {
                 realm: self.active_realm_index(),
+                script_or_module_name,
                 self_binding,
                 arguments_binding,
                 param_binding_ids,
@@ -245,6 +247,19 @@ impl Context {
             },
         )?;
         Ok(function)
+    }
+
+    pub(in crate::runtime) fn active_script_or_module_name(&self) -> Option<String> {
+        self.activation_frames
+            .iter()
+            .rev()
+            .filter_map(crate::runtime::activation::ActivationFrame::function_id)
+            .find_map(|id| {
+                self.function(id)
+                    .ok()
+                    .and_then(|function| function.script_or_module_name.clone())
+            })
+            .or_else(|| self.active_module_name.clone())
     }
 
     fn compile_optional_function_fast_path(

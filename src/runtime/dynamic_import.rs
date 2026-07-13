@@ -27,7 +27,7 @@ impl Context {
         options: &Value,
     ) -> Result<Value> {
         let attributes = self.dynamic_import_attributes(options)?;
-        let referrer = self.active_module_name.clone().unwrap_or_default();
+        let referrer = self.active_script_or_module_name().unwrap_or_default();
         let request = DynamicModuleRequest::new(specifier, phase, attributes);
         let (promise, object) = self.create_pending_promise()?;
         self.enqueue_promise_job(crate::runtime::promise::PromiseJob::DynamicImport(

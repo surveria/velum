@@ -143,6 +143,7 @@ pub struct Context {
 #[derive(Debug, Clone)]
 struct Function {
     realm: RealmIndex,
+    script_or_module_name: Option<String>,
     self_binding: Option<function::FunctionSelfBinding>,
     arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,

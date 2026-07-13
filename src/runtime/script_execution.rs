@@ -191,13 +191,14 @@ impl Context {
     }
 
     fn eval_compiled_program(&mut self, script: &CompiledScript) -> Result<BytecodeOutcome> {
+        let drain_jobs = self.activation_frames.is_empty();
         let previous_source = script
             .source_name()
             .map(|name| self.active_module_name.replace(name.to_owned()));
         let result = self
             .eval_bytecode_program(script.bytecode())
             .and_then(|outcome| {
-                if outcome.is_normal() {
+                if drain_jobs && outcome.is_normal() {
                     self.drain_promise_jobs()?;
                 }
                 Ok(outcome)

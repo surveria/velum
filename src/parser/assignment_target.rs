@@ -94,6 +94,8 @@ const fn await_identifier_continuation(kind: &TokenKind) -> bool {
             | TokenKind::QuestionQuestion
             | TokenKind::Question
             | TokenKind::Dot
+            | TokenKind::LParen
+            | TokenKind::LBracket
             | TokenKind::In
             | TokenKind::InstanceOf
             | TokenKind::Semicolon

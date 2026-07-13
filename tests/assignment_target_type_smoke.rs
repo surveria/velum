@@ -25,6 +25,17 @@ fn script_await_identifier_remains_a_simple_assignment_target() -> TestResult {
 }
 
 #[test]
+fn script_await_identifier_can_be_called_and_indexed() -> TestResult {
+    expect_true(
+        r"
+        function await(value) { return value; }
+        var holder = { await: await };
+        await(20) + [holder.await][0](22) === 42;
+        ",
+    )
+}
+
+#[test]
 fn sloppy_call_assignment_targets_throw_before_rhs_and_conversion() -> TestResult {
     expect_true(
         r"
