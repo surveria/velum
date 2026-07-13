@@ -103,6 +103,11 @@ pub(in crate::runtime) struct NumberFormatValue {
     pub bound_format: Option<Value>,
 }
 
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct LocaleValue {
+    pub tag: String,
+}
+
 impl NumberFormatValue {
     fn storage_payload_bytes(&self) -> usize {
         [
@@ -133,6 +138,7 @@ impl NumberFormatValue {
 pub(in crate::runtime) enum IntlValue {
     DateTime(Box<DateTimeFormatValue>),
     Duration,
+    Locale(Box<LocaleValue>),
     Number(Box<NumberFormatValue>),
 }
 
@@ -147,6 +153,7 @@ impl IntlValue {
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
             Self::Duration => 0,
+            Self::Locale(value) => value.tag.len(),
             Self::Number(value) => value.storage_payload_bytes(),
         }
     }
@@ -158,7 +165,7 @@ impl IntlValue {
         let bound_format = match self {
             Self::DateTime(value) => value.bound_format.as_ref(),
             Self::Number(value) => value.bound_format.as_ref(),
-            Self::Duration => None,
+            Self::Duration | Self::Locale(_) => None,
         };
         if let Some(bound_format) = bound_format {
             visitor.visit(

@@ -63,9 +63,10 @@ pub(in crate::runtime) use function::{
     ASYNC_DISPOSABLE_STACK_NAME, ArrayBufferFunctionKind, AsyncDisposableStackFunctionKind,
     AtomicsFunctionKind, DATA_VIEW_NAME, DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME,
     DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
-    INTL_NAME, ITERATOR_NAME, IntlFunctionKind, IteratorFunctionKind, NativeFunction,
-    NativeFunctionKind, NativeFunctionRegistry, SHADOW_REALM_NAME, ShadowRealmFunctionKind,
-    SharedArrayBufferFunctionKind, TEMPORAL_NAME, TemporalFunctionKind, TypedArrayFunctionKind,
+    INTL_NAME, ITERATOR_NAME, IntlFunctionKind, IteratorFunctionKind, LocaleAccessorKind,
+    LocaleMethodKind, NativeFunction, NativeFunctionKind, NativeFunctionRegistry,
+    SHADOW_REALM_NAME, ShadowRealmFunctionKind, SharedArrayBufferFunctionKind, TEMPORAL_NAME,
+    TemporalFunctionKind, TypedArrayFunctionKind,
 };
 pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_DEFINE_GETTER_NAME,
