@@ -1308,7 +1308,7 @@ check_async_edge_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/async_trace.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${edge_kinds}" != 'PromiseState,PromiseReaction,PromiseObjectAssociation,CollectionObjectAssociation,CollectionEntry,IteratorItem,WeakCollectionKey,WeakCollectionEphemeron,GeneratorObjectAssociation,GeneratorState,' ]]; then
+  if [[ "${edge_kinds}" != 'PromiseState,PromiseReaction,PromiseObjectAssociation,CollectionObjectAssociation,CollectionEntry,IteratorItem,WeakCollectionKey,WeakCollectionEphemeron,FinalizationRegistryCleanupCallback,FinalizationRegistryHeldValue,FinalizationRegistryTarget,FinalizationRegistryUnregisterToken,WeakRefTarget,GeneratorObjectAssociation,GeneratorState,' ]]; then
     fail "asynchronous edge boundary changed; categories require an assigned AS migration"
   fi
 
@@ -1331,10 +1331,26 @@ check_async_edge_boundary() {
     'for iterator in &self.collection_iterators {' \
     'for (index, generator) in self.generator_object_slots.iter().enumerate() {' \
     'for generator in &self.generators {' \
-    'Self::WeakCollectionKey => VmAsyncEdgeStrength::Weak' \
-    'Self::WeakCollectionEphemeron => VmAsyncEdgeStrength::Ephemeron'; do
+    'Self::WeakCollectionKey' \
+    'Self::WeakCollectionEphemeron' \
+    'Self::FinalizationRegistryCleanupCallback' \
+    'Self::FinalizationRegistryHeldValue' \
+    'Self::FinalizationRegistryTarget' \
+    'Self::FinalizationRegistryUnregisterToken' \
+    'Self::WeakRefTarget'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/async_trace.rs"; then
       fail "asynchronous edge boundary changed; Context source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'VmAsyncEdgeKind::FinalizationRegistryCleanupCallback' \
+    'VmAsyncEdgeKind::FinalizationRegistryHeldValue' \
+    'VmAsyncEdgeKind::FinalizationRegistryTarget' \
+    'VmAsyncEdgeKind::FinalizationRegistryUnregisterToken' \
+    'VmAsyncEdgeKind::WeakRefTarget'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/collection_storage.rs"; then
+      fail "asynchronous edge boundary changed; weak lifecycle source '${source}' is missing"
     fi
   done
 

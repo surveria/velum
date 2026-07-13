@@ -16,7 +16,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Option<Result<Value>> {
-        if let Some(result) = self.eval_modern_collection_kind(kind, args, this_value) {
+        if let Some(result) = self.eval_collection_extension_kind(kind, args, this_value) {
             return Some(result);
         }
         let result = match kind {
@@ -115,5 +115,36 @@ impl Context {
             _ => return None,
         };
         Some(result)
+    }
+
+    fn eval_collection_extension_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        self.eval_modern_collection_kind(kind, args, this_value)
+            .or_else(|| self.eval_weak_lifecycle_function_kind(kind, args, this_value))
+    }
+
+    fn eval_weak_lifecycle_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::FinalizationRegistry | NativeFunctionKind::WeakRef => {
+                Some(Self::eval_collection_constructor_call())
+            }
+            NativeFunctionKind::FinalizationRegistryRegister => {
+                Some(self.eval_finalization_registry_register(args, this_value))
+            }
+            NativeFunctionKind::FinalizationRegistryUnregister => {
+                Some(self.eval_finalization_registry_unregister(args, this_value))
+            }
+            NativeFunctionKind::WeakRefDeref => Some(self.eval_weak_ref_deref(this_value)),
+            _ => None,
+        }
     }
 }

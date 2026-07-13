@@ -49,6 +49,8 @@ impl Context {
                 CollectionKind::Set => CollectionIteratorBrand::Set,
                 CollectionKind::WeakMap
                 | CollectionKind::WeakSet
+                | CollectionKind::FinalizationRegistry
+                | CollectionKind::WeakRef
                 | CollectionKind::AsyncDisposableStack
                 | CollectionKind::DisposableStack => {
                     return Err(Error::runtime(

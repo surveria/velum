@@ -248,3 +248,72 @@ fn weak_collection_to_string_tags_have_standard_descriptors() -> TestResult {
         "WeakMap:WeakSet:false:false:true:false:false:true",
     )
 }
+
+#[test]
+fn weak_ref_preserves_brand_metadata_and_immediate_target_access() -> TestResult {
+    ensure_string(
+        r#"
+        const target = {};
+        const reference = new WeakRef(target);
+        const descriptor = Object.getOwnPropertyDescriptor(
+            WeakRef.prototype,
+            Symbol.toStringTag
+        );
+        "" + (reference.deref() === target)
+            + ":" + (reference instanceof WeakRef)
+            + ":" + WeakRef.length + ":" + WeakRef.prototype.deref.length
+            + ":" + WeakRef.prototype[Symbol.toStringTag]
+            + ":" + descriptor.writable + ":" + descriptor.enumerable
+            + ":" + descriptor.configurable
+        "#,
+        "true:true:1:0:WeakRef:false:false:true",
+    )
+}
+
+#[test]
+fn finalization_registry_registers_and_removes_all_matching_tokens() -> TestResult {
+    ensure_string(
+        r#"
+        const registry = new FinalizationRegistry(function () {});
+        const first = {};
+        const second = {};
+        const token = {};
+        const other = {};
+        const firstResult = registry.register(first, "first", token);
+        registry.register(second, "second", token);
+        registry.register({}, "other", other);
+        "" + (firstResult === undefined)
+            + ":" + registry.unregister(token)
+            + ":" + registry.unregister(token)
+            + ":" + registry.unregister(other)
+            + ":" + (registry instanceof FinalizationRegistry)
+        "#,
+        "true:true:false:true:true",
+    )
+}
+
+#[test]
+fn weak_lifecycle_builtins_reject_incompatible_values_and_receivers() -> TestResult {
+    ensure_string(
+        r#"
+        function kind(callback) {
+            try {
+                callback();
+                return "none";
+            } catch (error) {
+                return error instanceof TypeError ? "TypeError" : "other";
+            }
+        }
+        const registry = new FinalizationRegistry(function () {});
+        const registered = Symbol.for("registered");
+        "" + kind(function () { WeakRef({}); })
+            + ":" + kind(function () { new WeakRef(1); })
+            + ":" + kind(function () { new WeakRef(registered); })
+            + ":" + kind(function () { WeakRef.prototype.deref.call({}); })
+            + ":" + kind(function () { registry.register({}, {}, registered); })
+            + ":" + kind(function () { registry.register(registered, {}); })
+            + ":" + kind(function () { FinalizationRegistry(function () {}); })
+        "#,
+        "TypeError:TypeError:TypeError:TypeError:TypeError:TypeError:TypeError",
+    )
+}

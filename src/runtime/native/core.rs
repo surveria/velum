@@ -13,14 +13,14 @@ use super::{
     ARRAY_BUFFER_NAME, ARRAY_NAME, ASYNC_DISPOSABLE_STACK_NAME, ATOMICS_NAME,
     AsyncDisposableStackFunctionKind, BIGINT_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME,
     DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
-    EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
-    GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
-    GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
-    INFINITY_NAME, INTL_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
-    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
-    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, TEMPORAL_NAME,
-    UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    EVAL_NAME, FINALIZATION_REGISTRY_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
+    GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
+    GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, INTL_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
+    NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+    OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME,
+    SHADOW_REALM_NAME, SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind,
+    TEMPORAL_NAME, UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_REF_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -105,7 +105,9 @@ impl Context {
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
             TEMPORAL_NAME => self.temporal_namespace_value().map(Some),
+            FINALIZATION_REGISTRY_NAME => self.finalization_registry_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
+            WEAK_REF_NAME => self.weak_ref_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
                 let Some(name) =
@@ -174,7 +176,9 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            FINALIZATION_REGISTRY_NAME => self.finalization_registry_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
+            WEAK_REF_NAME => self.weak_ref_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
                 let Some(name) =
@@ -257,6 +261,8 @@ impl Context {
                 crate::runtime::collections::CollectionKind::Set,
                 args,
             ),
+            NativeFunctionKind::FinalizationRegistry => self.construct_finalization_registry(args),
+            NativeFunctionKind::WeakRef => self.construct_weak_ref(args),
             NativeFunctionKind::WeakMap => self.construct_weak_collection_object(
                 crate::runtime::collections::CollectionKind::WeakMap,
                 args,

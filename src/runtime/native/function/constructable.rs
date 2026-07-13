@@ -18,6 +18,8 @@ impl NativeFunctionKind {
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function
+                | Self::FinalizationRegistry
+                | Self::WeakRef
                 | Self::Iterator(IteratorFunctionKind::Constructor)
                 | Self::Intl(
                     IntlFunctionKind::DateTimeFormatConstructor
@@ -75,6 +77,8 @@ impl NativeFunctionKind {
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function
+                | Self::FinalizationRegistry
+                | Self::WeakRef
                 | Self::Iterator(IteratorFunctionKind::Constructor)
                 | Self::Intl(
                     IntlFunctionKind::DateTimeFormatConstructor

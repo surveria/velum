@@ -11,6 +11,8 @@ use crate::{
 use super::collection_array_iterator::LiveArrayIteratorState;
 use super::collection_regexp_iterator::RegExpStringIteratorState;
 
+mod weak_lifecycle;
+
 pub(in crate::runtime) use super::collection_storage::{CollectionData, CollectionKind};
 
 const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";

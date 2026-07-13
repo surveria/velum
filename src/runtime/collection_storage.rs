@@ -22,8 +22,107 @@ pub(in crate::runtime) enum CollectionKind {
     Set,
     WeakMap,
     WeakSet,
+    FinalizationRegistry,
+    WeakRef,
     AsyncDisposableStack,
     DisposableStack,
+}
+
+#[derive(Debug, Clone)]
+struct FinalizationRegistryCell {
+    target: Value,
+    held_value: Value,
+    unregister_token: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+struct FinalizationRegistryData {
+    cleanup_callback: Value,
+    cells: Vec<FinalizationRegistryCell>,
+}
+
+#[derive(Debug, Clone)]
+struct WeakRefData {
+    target: Value,
+}
+
+impl WeakRefData {
+    const fn new(target: Value) -> Self {
+        Self { target }
+    }
+
+    fn visit_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: WeakEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        visitor.visit_weak(
+            VmAsyncEdgeKind::WeakRefTarget,
+            WeakEdgeReference::Value(&self.target),
+        )
+    }
+}
+
+impl FinalizationRegistryData {
+    const fn new(cleanup_callback: Value) -> Self {
+        Self {
+            cleanup_callback,
+            cells: Vec::new(),
+        }
+    }
+
+    fn register(
+        &mut self,
+        target: Value,
+        held_value: Value,
+        unregister_token: Option<Value>,
+    ) -> Result<()> {
+        self.cells
+            .try_reserve(1)
+            .map_err(|_| Error::limit("finalization registry cell capacity exceeded"))?;
+        self.cells.push(FinalizationRegistryCell {
+            target,
+            held_value,
+            unregister_token,
+        });
+        Ok(())
+    }
+
+    fn unregister(&mut self, token: &Value) -> usize {
+        let before = self.cells.len();
+        self.cells.retain(|cell| {
+            cell.unregister_token.as_ref().is_none_or(|candidate| {
+                !crate::runtime::abstract_operations::same_value(candidate, token)
+            })
+        });
+        before.saturating_sub(self.cells.len())
+    }
+
+    fn visit_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        visitor.visit(
+            VmAsyncEdgeKind::FinalizationRegistryCleanupCallback,
+            StrongEdgeReference::Value(&self.cleanup_callback),
+        )?;
+        for cell in &self.cells {
+            visitor.visit_weak(
+                VmAsyncEdgeKind::FinalizationRegistryTarget,
+                WeakEdgeReference::Value(&cell.target),
+            )?;
+            visitor.visit(
+                VmAsyncEdgeKind::FinalizationRegistryHeldValue,
+                StrongEdgeReference::Value(&cell.held_value),
+            )?;
+            if let Some(token) = &cell.unregister_token {
+                visitor.visit_weak(
+                    VmAsyncEdgeKind::FinalizationRegistryUnregisterToken,
+                    WeakEdgeReference::Value(token),
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -85,6 +184,8 @@ pub(in crate::runtime) struct CollectionData {
     cursor_pins: usize,
     pub(in crate::runtime) async_disposable_stack: Option<AsyncDisposableStackData>,
     pub(in crate::runtime) disposable_stack: Option<DisposableStackData>,
+    finalization_registry: Option<FinalizationRegistryData>,
+    weak_ref: Option<WeakRefData>,
 }
 
 impl CollectionData {
@@ -107,16 +208,82 @@ impl CollectionData {
             cursor_pins: 0,
             async_disposable_stack,
             disposable_stack,
+            finalization_registry: None,
+            weak_ref: None,
         }
     }
 
     pub(in crate::runtime) fn logical_entry_count(&self) -> usize {
+        if let Some(registry) = &self.finalization_registry {
+            return registry.cells.len();
+        }
+        if self.weak_ref.is_some() {
+            return 1;
+        }
         if let Some(stack) = &self.async_disposable_stack {
             return stack.resource_count();
         }
         self.disposable_stack
             .as_ref()
             .map_or_else(|| self.key_index.len(), DisposableStackData::resource_count)
+    }
+
+    pub(in crate::runtime) fn initialize_finalization_registry(
+        &mut self,
+        cleanup_callback: Value,
+    ) -> Result<()> {
+        if self.kind != CollectionKind::FinalizationRegistry {
+            return Err(Error::runtime(
+                "finalization registry data requires matching collection kind",
+            ));
+        }
+        if self.finalization_registry.is_some() {
+            return Err(Error::runtime(
+                "finalization registry is already initialized",
+            ));
+        }
+        self.finalization_registry = Some(FinalizationRegistryData::new(cleanup_callback));
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn register_finalization(
+        &mut self,
+        target: Value,
+        held_value: Value,
+        unregister_token: Option<Value>,
+    ) -> Result<()> {
+        self.finalization_registry
+            .as_mut()
+            .ok_or_else(|| Error::runtime("finalization registry data is not initialized"))?
+            .register(target, held_value, unregister_token)
+    }
+
+    pub(in crate::runtime) fn unregister_finalizations(&mut self, token: &Value) -> Result<usize> {
+        Ok(self
+            .finalization_registry
+            .as_mut()
+            .ok_or_else(|| Error::runtime("finalization registry data is not initialized"))?
+            .unregister(token))
+    }
+
+    pub(in crate::runtime) fn initialize_weak_ref(&mut self, target: Value) -> Result<()> {
+        if self.kind != CollectionKind::WeakRef {
+            return Err(Error::runtime(
+                "weak reference requires matching collection kind",
+            ));
+        }
+        if self.weak_ref.is_some() {
+            return Err(Error::runtime("weak reference is already initialized"));
+        }
+        self.weak_ref = Some(WeakRefData::new(target));
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn weak_ref_target(&self) -> Result<Value> {
+        self.weak_ref
+            .as_ref()
+            .map(|weak_ref| weak_ref.target.clone())
+            .ok_or_else(|| Error::runtime("weak reference is not initialized"))
     }
 
     pub(in crate::runtime) fn entry_index(&self, key: &Value) -> Option<usize> {
@@ -284,6 +451,12 @@ impl CollectionData {
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
     {
+        if let Some(registry) = &self.finalization_registry {
+            return registry.visit_edges(visitor);
+        }
+        if let Some(weak_ref) = &self.weak_ref {
+            return weak_ref.visit_edges(visitor);
+        }
         if let Some(stack) = &self.async_disposable_stack {
             return stack.visit_edges(visitor);
         }
@@ -311,7 +484,10 @@ impl CollectionData {
                     VmAsyncEdgeKind::WeakCollectionKey,
                     WeakEdgeReference::Value(key),
                 )?,
-                CollectionKind::AsyncDisposableStack | CollectionKind::DisposableStack => {}
+                CollectionKind::FinalizationRegistry
+                | CollectionKind::WeakRef
+                | CollectionKind::AsyncDisposableStack
+                | CollectionKind::DisposableStack => {}
             }
         }
         Ok(())
