@@ -156,48 +156,8 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let Some(locales) = args.as_slice().first() else {
-            return self.create_array_from_elements(Vec::new());
-        };
-        if matches!(locales, Value::Undefined) {
-            return self.create_array_from_elements(Vec::new());
-        }
-        let inputs = if locales.string_text().is_some() || self.is_locale_value(locales)? {
-            vec![locales.clone()]
-        } else {
-            if !matches!(
-                locales,
-                Value::Object(_)
-                    | Value::Function(_)
-                    | Value::NativeFunction(_)
-                    | Value::HostFunction(_)
-            ) {
-                return Err(Error::type_error("Intl locale list is invalid"));
-            }
-            let length_value = self.get_named(locales, "length")?;
-            let length = Self::length_to_usize(
-                self.to_length(&length_value)?,
-                "Intl locale list length exceeded supported range",
-            )?;
-            let mut values = Vec::new();
-            for index in 0..length {
-                self.step()?;
-                let name = index.to_string();
-                let lookup = self.property_lookup(&name);
-                if self.has_property_value_with_lookup(locales, lookup)? {
-                    values.push(self.get_named(locales, &name)?);
-                }
-            }
-            values
-        };
-        let mut canonical = Vec::new();
-        for input in inputs {
-            let tag = self.locale_source_tag(&input)?;
-            let tag = parse_and_canonicalize_locale(&tag)?.to_string();
-            if !canonical.contains(&tag) {
-                canonical.push(tag);
-            }
-        }
+        let locales = args.as_slice().first().unwrap_or(&Value::Undefined);
+        let canonical = self.intl_locale_list(locales)?;
         let values = canonical
             .iter()
             .map(|tag| self.heap_string_value(tag))
@@ -521,16 +481,6 @@ impl Context {
             self.limits.max_object_properties,
         )
     }
-
-    fn is_locale_value(&self, value: &Value) -> Result<bool> {
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(matches!(
-            self.objects.intl_value(*id)?,
-            Some(IntlValue::Locale(_))
-        ))
-    }
 }
 
 fn apply_locale_options(locale: &mut Locale, options: LocaleOptions) -> Result<()> {
@@ -585,7 +535,10 @@ fn parse_and_canonicalize_locale(tag: &str) -> Result<Locale> {
 }
 
 pub(super) fn canonicalize_locale_tag(tag: &str) -> Result<String> {
-    parse_and_canonicalize_locale(tag).map(|locale| locale.to_string())
+    if tag.eq_ignore_ascii_case("posix") {
+        return Ok("posix".to_owned());
+    }
+    parse_and_canonicalize_locale(tag).map(|locale| canonical_locale_string(&locale))
 }
 
 fn parse_locale(tag: &str) -> Result<Locale> {
@@ -603,14 +556,19 @@ fn parse_locale(tag: &str) -> Result<Locale> {
 
 fn canonicalize_locale(locale: &mut Locale) -> Result<()> {
     LocaleCanonicalizer::new_extended().canonicalize(locale);
-    let calendar = locale_keyword_text(locale, "ca")?;
-    if let Some(calendar) = calendar {
-        let canonical = canonical_unicode_value("ca", &calendar);
-        if canonical != calendar {
-            set_unicode_keyword(locale, "ca", canonical)?;
+    for key in ["ca", "kb", "kc", "kh", "kk", "kn", "ks", "ms", "tz"] {
+        if let Some(value) = locale_keyword_text(locale, key)? {
+            let canonical = canonical_unicode_value(key, &value);
+            if canonical != value {
+                set_unicode_keyword(locale, key, canonical)?;
+            }
         }
     }
     Ok(())
+}
+
+fn canonical_locale_string(locale: &Locale) -> String {
+    locale.to_string().replace("-m0-names", "-m0-prprname")
 }
 
 fn parse_variants(input: &str) -> Result<Variants> {
@@ -640,6 +598,15 @@ fn canonical_unicode_value<'a>(key: &str, value: &'a str) -> &'a str {
     match (key, value) {
         ("ca", "islamicc") => "islamic-civil",
         ("ca", "ethiopic-amete-alem") => "ethioaa",
+        ("kb" | "kc" | "kh" | "kk" | "kn", "yes") => "true",
+        ("ks", "primary") => "level1",
+        ("ks", "tertiary") => "level3",
+        ("ms", "imperial") => "uksystem",
+        ("tz", "cnckg") => "cnsha",
+        ("tz", "eire") => "iedub",
+        ("tz", "est") => "papty",
+        ("tz", "gmt0") => "gmt",
+        ("tz", "uct" | "zulu") => "utc",
         _ => value,
     }
 }

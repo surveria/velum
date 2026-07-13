@@ -90,3 +90,28 @@ fn canonical_locale_lists_use_locale_internal_slots() -> TestResult {
     )?;
     ensure_value(&value, &Value::Bool(true))
 }
+
+#[test]
+fn canonicalizes_unicode_aliases_and_boxes_primitive_lists() -> TestResult {
+    let value = eval(
+        r#"
+        Number.prototype[0] = "en-US";
+        Number.prototype.length = 1;
+        const canonical = Intl.getCanonicalLocales([
+            "und-u-ks-primary",
+            "und-u-ms-imperial",
+            "und-u-tz-zulu",
+            "und-u-kn-yes",
+            "und-Latn-t-und-hani-m0-names"
+        ]).join(",");
+        const boxed = Intl.getCanonicalLocales(1).join(",");
+        delete Number.prototype[0];
+        delete Number.prototype.length;
+        canonical ===
+            "und-u-ks-level1,und-u-ms-uksystem,und-u-tz-utc,und-u-kn,und-Latn-t-und-hani-m0-prprname" &&
+            boxed === "en-US" &&
+            Intl.getCanonicalLocales(false).length === 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
