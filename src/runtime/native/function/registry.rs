@@ -289,7 +289,7 @@ const ATOMICS_METHOD_SLOT_BASE: usize = 316;
 const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330);
 const REGEXP_ESCAPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(331);
 const TEMPORAL_FUNCTION_SLOT_BASE: usize = 332;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 498;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 515;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {

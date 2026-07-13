@@ -13,6 +13,7 @@ use crate::{
 mod calendar_types;
 mod duration;
 mod install;
+mod instant;
 mod plain_date;
 mod plain_date_time;
 mod plain_date_time_options;

@@ -169,6 +169,23 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     PlainYearMonthPrototypeToLocaleString,
     PlainYearMonthPrototypeToJson,
     PlainYearMonthPrototypeValueOf,
+    InstantFrom,
+    InstantFromEpochMilliseconds,
+    InstantFromEpochNanoseconds,
+    InstantCompare,
+    InstantPrototypeEpochMilliseconds,
+    InstantPrototypeEpochNanoseconds,
+    InstantPrototypeAdd,
+    InstantPrototypeSubtract,
+    InstantPrototypeUntil,
+    InstantPrototypeSince,
+    InstantPrototypeRound,
+    InstantPrototypeEquals,
+    InstantPrototypeToZonedDateTimeIso,
+    InstantPrototypeToString,
+    InstantPrototypeToLocaleString,
+    InstantPrototypeToJson,
+    InstantPrototypeValueOf,
 }
 
 impl TemporalFunctionKind {
@@ -346,6 +363,7 @@ impl TemporalFunctionKind {
             | Self::PlainDateTimeCompare
             | Self::PlainTimeCompare
             | Self::PlainYearMonthCompare
+            | Self::InstantCompare
             | Self::ZonedDateTimeConstructor
             | Self::PlainMonthDayConstructor
             | Self::PlainYearMonthConstructor => 2.0,
@@ -391,6 +409,16 @@ impl TemporalFunctionKind {
             | Self::PlainYearMonthPrototypeSince
             | Self::PlainYearMonthPrototypeEquals
             | Self::PlainYearMonthPrototypeToPlainDate
+            | Self::InstantFrom
+            | Self::InstantFromEpochMilliseconds
+            | Self::InstantFromEpochNanoseconds
+            | Self::InstantPrototypeAdd
+            | Self::InstantPrototypeSubtract
+            | Self::InstantPrototypeUntil
+            | Self::InstantPrototypeSince
+            | Self::InstantPrototypeRound
+            | Self::InstantPrototypeEquals
+            | Self::InstantPrototypeToZonedDateTimeIso
             | Self::ZonedDateTimeFrom
             | Self::PrototypeWith
             | Self::PrototypeAdd
