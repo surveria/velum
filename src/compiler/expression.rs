@@ -117,6 +117,20 @@ impl BytecodeCompiler<'_> {
             } => {
                 return self.compile_call_expr(callee, *site, *strict, args);
             }
+            Expr::DynamicImport {
+                phase,
+                specifier,
+                options,
+            } => {
+                self.emit(BytecodeInstruction::DynamicImport {
+                    phase: *phase,
+                    specifier: BytecodeBlock::compile_expression(specifier, self.layout)?,
+                    options: options
+                        .as_deref()
+                        .map(|options| BytecodeBlock::compile_expression(options, self.layout))
+                        .transpose()?,
+                });
+            }
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 return self.compile_function_literal(expr);
             }

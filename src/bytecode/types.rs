@@ -1,18 +1,4 @@
-use std::rc::Rc;
-
 use super::BytecodeCompletion;
-
-use crate::{
-    api::native_call::NativeCallTarget,
-    bytecode::BytecodeHoistPlan,
-    error::{Error, Result},
-    syntax::{
-        AccessorKind, BinaryOp, DeclKind, FunctionKind, StaticCallSiteId, StaticFunctionId,
-        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
-    },
-    value::Value,
-};
-
 use super::block::BytecodeBlock;
 use super::function::BytecodeFunction;
 use super::function_mode::BytecodeNewTargetMode;
@@ -23,9 +9,20 @@ use super::numeric::{
 use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
 use super::super_property::BytecodeSuperProperty;
 use super::{BytecodeAddress, BytecodeDirectThrow};
+use crate::{
+    api::native_call::NativeCallTarget,
+    bytecode::BytecodeHoistPlan,
+    error::{Error, Result},
+    syntax::{
+        AccessorKind, BinaryOp, DeclKind, FunctionKind, ImportPhase, StaticBinding,
+        StaticCallSiteId, StaticFunctionId, StaticName, StaticPropertyAccessId, StaticString,
+        UnaryOp, UpdateOp,
+    },
+    value::Value,
+};
+use std::rc::Rc;
 
 mod binding;
-
 pub use binding::BytecodeBinding;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -406,6 +403,11 @@ pub enum BytecodeInstruction {
     CreateRegExp {
         pattern: StaticString,
         flags: StaticString,
+    },
+    DynamicImport {
+        phase: ImportPhase,
+        specifier: BytecodeBlock,
+        options: Option<BytecodeBlock>,
     },
     PushUndefined,
     LoadThis,

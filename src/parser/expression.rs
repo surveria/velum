@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Expr, Expression, FunctionKind, FunctionParam, Statement, Stmt, UnaryOp, UpdateOp},
+    ast::{
+        Expr, Expression, FunctionKind, FunctionParam, ImportPhase, Statement, Stmt, UnaryOp,
+        UpdateOp,
+    },
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -8,6 +11,8 @@ use crate::{
 use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
+const IMPORT_DEFER_PROPERTY_NAME: &str = "defer";
+const IMPORT_SOURCE_PROPERTY_NAME: &str = "source";
 
 #[derive(Debug, Clone, Copy)]
 enum ArrowParameters {
@@ -449,6 +454,47 @@ impl Parser {
         Ok(args)
     }
 
+    fn dynamic_import(&mut self, start: crate::SourceSpan) -> Result<Expression> {
+        let phase = if self.match_kind(&TokenKind::Dot) {
+            let token = self.advance_token("expected import phase after 'import.'")?;
+            if token.is_unescaped_identifier_named(IMPORT_SOURCE_PROPERTY_NAME) {
+                ImportPhase::Source
+            } else if token.is_unescaped_identifier_named(IMPORT_DEFER_PROPERTY_NAME) {
+                ImportPhase::Defer
+            } else {
+                return Err(Error::parse_at("invalid import phase", token.span));
+            }
+        } else {
+            ImportPhase::Evaluation
+        };
+        self.consume(&TokenKind::LParen, "expected '(' after import")?;
+        if self.check(&TokenKind::RParen) || self.check(&TokenKind::DotDotDot) {
+            return Err(self.parse_error("import call requires one specifier expression"));
+        }
+        let specifier = self.assignment_expression()?;
+        let options = if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
+            if self.check(&TokenKind::DotDotDot) {
+                return Err(self.parse_error("import call does not accept spread arguments"));
+            }
+            let options = self.assignment_expression()?;
+            if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
+                return Err(self.parse_error("import call accepts at most two arguments"));
+            }
+            Some(Box::new(options))
+        } else {
+            None
+        };
+        self.consume(&TokenKind::RParen, "expected ')' after import arguments")?;
+        Ok(self.expression_node(
+            start,
+            Expr::DynamicImport {
+                phase,
+                specifier: Box::new(specifier),
+                options,
+            },
+        ))
+    }
+
     fn primary(&mut self) -> Result<Expression> {
         let token = self.advance_primary_token()?;
         let token_span = token.span;
@@ -483,6 +529,7 @@ impl Parser {
                 ));
             }
             TokenKind::Super => self.super_expression(token_span)?,
+            TokenKind::Import => self.dynamic_import(token_span)?,
             TokenKind::Identifier(name) => {
                 if self.class_arguments_are_restricted() && name.as_ref() == "arguments" {
                     return Err(Error::parse_at(

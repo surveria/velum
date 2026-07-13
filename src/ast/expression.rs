@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    syntax::{BinaryOp, FunctionKind, UnaryOp, UpdateOp},
+    syntax::{BinaryOp, FunctionKind, ImportPhase, UnaryOp, UpdateOp},
     value::Value,
 };
 
@@ -182,6 +182,11 @@ pub enum Expr {
         site: StaticCallSiteId,
         strict: bool,
         args: Vec<Expression>,
+    },
+    DynamicImport {
+        phase: ImportPhase,
+        specifier: Box<Expression>,
+        options: Option<Box<Expression>>,
     },
     Function {
         id: StaticFunctionId,

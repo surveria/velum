@@ -240,6 +240,7 @@ impl Parser {
             | Expr::PrivateAssignment { .. }
             | Expr::PrivateIn { .. }
             | Expr::Call { .. }
+            | Expr::DynamicImport { .. }
             | Expr::Function { .. }
             | Expr::ArrowFunction { .. }
             | Expr::MethodFunction { .. }

@@ -89,6 +89,14 @@ pub enum FunctionKind {
     AsyncGenerator,
 }
 
+/// Module phase requested by an import call.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ImportPhase {
+    Evaluation,
+    Source,
+    Defer,
+}
+
 impl FunctionKind {
     pub const fn is_async_generator(self) -> bool {
         matches!(self, Self::AsyncGenerator)

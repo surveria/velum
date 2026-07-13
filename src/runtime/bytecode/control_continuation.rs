@@ -16,6 +16,14 @@ pub(super) enum BytecodeControlStateSlot {
     Update,
     Catch,
     Finally,
+    ImportSpecifier,
+    ImportOptions,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BytecodeDynamicImportPhase {
+    Specifier,
+    Options,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,6 +102,12 @@ pub(super) enum BytecodeControlRecord {
         finally_state: BytecodeState,
         pending: Option<Completion>,
     },
+    DynamicImport {
+        phase: BytecodeDynamicImportPhase,
+        specifier_state: BytecodeState,
+        options_state: BytecodeState,
+        specifier: Option<String>,
+    },
 }
 
 impl BytecodeControlRecord {
@@ -138,6 +152,15 @@ impl BytecodeControlRecord {
                 BytecodeTryPhase::Body => body_state,
                 BytecodeTryPhase::Catch => catch_state,
                 BytecodeTryPhase::Finally => finally_state,
+            },
+            Self::DynamicImport {
+                phase,
+                specifier_state,
+                options_state,
+                ..
+            } => match phase {
+                BytecodeDynamicImportPhase::Specifier => specifier_state,
+                BytecodeDynamicImportPhase::Options => options_state,
             },
         };
         if !state.is_awaiting() && !state.is_generator_starting() && !state.is_yielding() {
@@ -210,6 +233,15 @@ impl BytecodeControlRecord {
         }
     }
 
+    pub(super) const fn dynamic_import() -> Self {
+        Self::DynamicImport {
+            phase: BytecodeDynamicImportPhase::Specifier,
+            specifier_state: BytecodeState::new(),
+            options_state: BytecodeState::new(),
+            specifier: None,
+        }
+    }
+
     pub(super) fn root_values(&self) -> impl Iterator<Item = &Value> {
         let mut roots = Vec::new();
         match self {
@@ -273,6 +305,14 @@ impl BytecodeControlRecord {
                     roots.push(value);
                 }
             }
+            Self::DynamicImport {
+                specifier_state,
+                options_state,
+                ..
+            } => {
+                roots.extend(specifier_state.root_values());
+                roots.extend(options_state.root_values());
+            }
         }
         roots.into_iter()
     }
@@ -300,6 +340,18 @@ impl BytecodeControlRecord {
             return Err(Error::runtime("structured try record mismatch"));
         };
         Ok((phase, pending))
+    }
+
+    pub(super) fn dynamic_import_mut(
+        &mut self,
+    ) -> Result<(&mut BytecodeDynamicImportPhase, &mut Option<String>)> {
+        let Self::DynamicImport {
+            phase, specifier, ..
+        } = self
+        else {
+            return Err(Error::runtime("dynamic import control record mismatch"));
+        };
+        Ok((phase, specifier))
     }
 
     pub(super) fn switch_state_mut(&mut self) -> Result<(&mut usize, &mut Value)> {
@@ -427,6 +479,7 @@ impl BytecodeControlRecord {
                 None,
                 None,
             ],
+            Self::DynamicImport { .. } => [None, None, None, None],
         };
         roots.into_iter().flatten()
     }
@@ -465,6 +518,7 @@ impl BytecodeControlRecord {
                 .as_ref()
                 .and_then(completion_value)
                 .is_some_and(crate::runtime::transient_roots::is_traceable),
+            Self::DynamicImport { .. } => false,
         }
     }
 
@@ -492,6 +546,16 @@ impl BytecodeControlRecord {
             (Self::Try { finally_state, .. }, BytecodeControlStateSlot::Finally) => {
                 Ok(finally_state)
             }
+            (
+                Self::DynamicImport {
+                    specifier_state, ..
+                },
+                BytecodeControlStateSlot::ImportSpecifier,
+            ) => Ok(specifier_state),
+            (
+                Self::DynamicImport { options_state, .. },
+                BytecodeControlStateSlot::ImportOptions,
+            ) => Ok(options_state),
             _ => Err(Error::runtime("structured control state slot mismatch")),
         }
     }

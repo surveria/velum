@@ -35,6 +35,7 @@ mod collection_storage;
 pub mod collections;
 pub mod control;
 mod disposable_stack;
+mod dynamic_import;
 pub mod engine;
 mod execution_storage;
 pub mod function;

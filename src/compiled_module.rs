@@ -3,7 +3,45 @@ use crate::{
     error::Result,
     runtime::limits::RuntimeLimits,
     source::SourceId,
+    syntax::ImportPhase,
 };
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DynamicModuleRequest {
+    specifier: String,
+    phase: ImportPhase,
+    attributes: Box<[(String, String)]>,
+}
+
+impl DynamicModuleRequest {
+    #[must_use]
+    pub fn new(
+        specifier: impl Into<String>,
+        phase: ImportPhase,
+        attributes: impl Into<Box<[(String, String)]>>,
+    ) -> Self {
+        Self {
+            specifier: specifier.into(),
+            phase,
+            attributes: attributes.into(),
+        }
+    }
+
+    #[must_use]
+    pub const fn specifier(&self) -> &str {
+        self.specifier.as_str()
+    }
+
+    #[must_use]
+    pub const fn phase(&self) -> ImportPhase {
+        self.phase
+    }
+
+    #[must_use]
+    pub const fn attributes(&self) -> &[(String, String)] {
+        &self.attributes
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModuleSource {
@@ -38,6 +76,19 @@ pub trait ModuleLoader {
     /// # Errors
     /// Returns an embedder or policy error when resolution or loading fails.
     fn load(&mut self, referrer: &str, request: &str) -> Result<ModuleSource>;
+
+    /// Resolves a dynamic import request. Loaders that do not need phase or
+    /// attribute metadata may rely on the default static-load behavior.
+    ///
+    /// # Errors
+    /// Returns an embedder or policy error when resolution or loading fails.
+    fn load_dynamic(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> Result<ModuleSource> {
+        self.load(referrer, request.specifier())
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

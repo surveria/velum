@@ -21,6 +21,7 @@ pub use pattern::{
 pub use statement::{CatchClause, ForInTarget, Program, Statement, Stmt, SwitchCase};
 
 pub use crate::syntax::{
-    BinaryOp, DeclKind, FunctionKind, StaticBinding, StaticCallSiteId, StaticFunctionId,
-    StaticName, StaticNameId, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    BinaryOp, DeclKind, FunctionKind, ImportPhase, StaticBinding, StaticCallSiteId,
+    StaticFunctionId, StaticName, StaticNameId, StaticPropertyAccessId, StaticString, UnaryOp,
+    UpdateOp,
 };

@@ -518,7 +518,7 @@ impl Context {
         Ok(())
     }
 
-    fn enqueue_promise_job(&mut self, job: PromiseJob) -> Result<()> {
+    pub(in crate::runtime) fn enqueue_promise_job(&mut self, job: PromiseJob) -> Result<()> {
         self.storage_ledger
             .grow_count(VmStorageKind::PromiseJob, 1)?;
         self.promise_jobs.push_back(job);
@@ -533,6 +533,7 @@ impl Context {
                 thenable,
                 then,
             } => self.run_promise_resolve_thenable(promise, thenable, &then),
+            PromiseJob::DynamicImport(job) => self.run_dynamic_import_job(job),
         }
     }
 

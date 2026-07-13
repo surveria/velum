@@ -4,6 +4,7 @@ use crate::{
         async_disposable_stack::AsyncDisposableStackContinuation,
         async_operation::ArrayFromAsyncContinuation,
         async_trace::VmAsyncEdgeKind,
+        dynamic_import::DynamicImportJob,
         function::SuspendedAsyncFunction,
         generator::GeneratorId,
         resource_scope::ResourceScopeContinuation,
@@ -257,6 +258,7 @@ pub(in crate::runtime) enum PromiseJob {
         thenable: Value,
         then: Value,
     },
+    DynamicImport(DynamicImportJob),
 }
 
 impl PromiseJob {
@@ -278,6 +280,7 @@ impl PromiseJob {
                 visitor.visit_value(VmRootKind::QueuedJob, thenable)?;
                 visitor.visit_value(VmRootKind::QueuedJob, then)
             }
+            Self::DynamicImport(job) => visitor.visit_promise(VmRootKind::QueuedJob, job.promise()),
         }
     }
 
@@ -285,6 +288,7 @@ impl PromiseJob {
         match self {
             Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
             Self::ResolveThenable { .. } => Ok(0),
+            Self::DynamicImport(_) => Ok(0),
         }
     }
 
@@ -292,6 +296,7 @@ impl PromiseJob {
         match self {
             Self::Reaction { reaction, .. } => reaction.cache_entry_count(),
             Self::ResolveThenable { .. } => Ok(0),
+            Self::DynamicImport(_) => Ok(0),
         }
     }
 
@@ -299,6 +304,7 @@ impl PromiseJob {
         match self {
             Self::Reaction { reaction, .. } => reaction.into_cancellation(),
             Self::ResolveThenable { .. } => None,
+            Self::DynamicImport(_) => None,
         }
     }
 }

@@ -8,7 +8,9 @@ use parking_lot::Mutex;
 
 use crate::{
     binding_metadata::BindingLayout,
-    compiled_module::{CompiledModule, ModuleExport, ModuleImportName, ModuleLoader},
+    compiled_module::{
+        CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImportName, ModuleLoader,
+    },
     error::{Error, Result},
     runtime::{
         Context, VmStorageKind,
@@ -50,6 +52,14 @@ impl fmt::Debug for DynamicModuleLoader {
 impl ModuleLoader for DynamicModuleLoader {
     fn load(&mut self, referrer: &str, request: &str) -> Result<crate::ModuleSource> {
         self.owner.lock().load(referrer, request)
+    }
+
+    fn load_dynamic(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> Result<crate::ModuleSource> {
+        self.owner.lock().load_dynamic(referrer, request)
     }
 }
 
@@ -156,30 +166,56 @@ impl Context {
         export_name: &str,
     ) -> Result<Value> {
         let referrer = self.active_module_name.clone().unwrap_or_default();
-        let mut loader = self
-            .dynamic_module_loader
-            .clone()
-            .ok_or_else(|| Error::runtime("dynamic module loader is not installed"))?;
-        let source = loader.load(&referrer, request)?;
-        let specifier = source.specifier().to_owned();
-        self.eval_module_named(&specifier, source.source(), &mut loader)?;
-        let namespace = self
-            .modules
-            .iter()
-            .rev()
-            .find(|module| module.name == specifier)
-            .map(|module| module.namespace.clone())
-            .ok_or_else(|| Error::runtime("dynamic module namespace was not persisted"))?;
+        let request = DynamicModuleRequest::new(
+            request,
+            crate::syntax::ImportPhase::Evaluation,
+            Vec::<(String, String)>::new(),
+        );
+        let namespace = self.load_dynamic_module_namespace(&referrer, &request)?;
         let property = crate::runtime::property::DynamicPropertyKey::new(
             export_name.to_owned(),
             self.known_property_key(export_name),
         );
         if !self.has_own_property_value(&namespace, &property)? {
             return Err(Error::type_error(format!(
-                "module '{specifier}' does not export '{export_name}'"
+                "module '{}' does not export '{export_name}'",
+                request.specifier()
             )));
         }
         self.get_named(&namespace, export_name)
+    }
+
+    pub(in crate::runtime) fn load_dynamic_module_namespace(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> Result<Value> {
+        let mut loader = self
+            .dynamic_module_loader
+            .clone()
+            .ok_or_else(|| Error::runtime("dynamic module loader is not installed"))?;
+        let source = loader.load_dynamic(referrer, request)?;
+        if request.phase() == crate::syntax::ImportPhase::Source {
+            return Err(Error::exception(
+                crate::value::ErrorName::SyntaxError,
+                "source phase import is unavailable for source text modules",
+            ));
+        }
+        let specifier = source.specifier().to_owned();
+        if let Some(namespace) = self
+            .modules
+            .iter()
+            .find(|module| module.name == specifier)
+            .map(|module| module.namespace.clone())
+        {
+            return Ok(namespace);
+        }
+        self.eval_module_named(&specifier, source.source(), &mut loader)?;
+        self.modules
+            .iter()
+            .find(|module| module.name == specifier)
+            .map(|module| module.namespace.clone())
+            .ok_or_else(|| Error::runtime("dynamic module namespace was not persisted"))
     }
 
     fn with_module_evaluation<T>(
@@ -469,13 +505,15 @@ impl Context {
                 let module_name = graph
                     .get(module_index)
                     .map_or("<missing>", |module| module.name.as_str());
-                Err(Error::runtime(format!(
-                    "module '{module_name}' does not export '{export_name}'"
-                )))
+                Err(Error::exception(
+                    crate::value::ErrorName::SyntaxError,
+                    format!("module '{module_name}' does not export '{export_name}'"),
+                ))
             }
-            ExportResolution::Ambiguous => Err(Error::runtime(format!(
-                "module export '{export_name}' is ambiguous"
-            ))),
+            ExportResolution::Ambiguous => Err(Error::exception(
+                crate::value::ErrorName::SyntaxError,
+                format!("module export '{export_name}' is ambiguous"),
+            )),
         }
     }
 

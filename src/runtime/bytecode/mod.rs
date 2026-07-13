@@ -7,6 +7,7 @@ mod control;
 mod control_continuation;
 mod destructure;
 mod destructure_continuation;
+mod dynamic_import;
 mod execution;
 mod for_of;
 mod in_operator;
@@ -56,6 +57,17 @@ impl Context {
             return result;
         }
         match instruction {
+            BytecodeInstruction::DynamicImport {
+                phase,
+                specifier,
+                options,
+            } => self.eval_bytecode_dynamic_import_instruction(
+                state,
+                *phase,
+                specifier,
+                options.as_ref(),
+                next,
+            ),
             BytecodeInstruction::BeginPrivateEnvironment { .. }
             | BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)

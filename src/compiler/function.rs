@@ -678,6 +678,14 @@ impl CaptureBindingCollector {
                 self.collect_expr(callee);
                 self.collect_exprs(args);
             }
+            Expr::DynamicImport {
+                specifier, options, ..
+            } => {
+                self.collect_expr(specifier);
+                if let Some(options) = options {
+                    self.collect_expr(options);
+                }
+            }
             Expr::Object(properties) => self.collect_object_properties(properties),
             Expr::Array(elements) => self.collect_exprs(elements),
         }

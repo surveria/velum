@@ -228,13 +228,13 @@ fn execute_variant_result(
         }
     }
 
+    let mut loader = Test262ModuleLoader::new(test262_dir);
+    context.set_dynamic_module_loader(loader.clone());
     let result = if metadata.has_flag(FLAG_MODULE) {
-        let mut loader = Test262ModuleLoader::new(test262_dir);
-        context.set_dynamic_module_loader(loader.clone());
         context.eval_module_named(relative_path, source, &mut loader)
     } else {
         let source = variant_source(source, strict);
-        context.eval(&source)
+        context.eval_named(relative_path, &source)
     };
     if let Some(negative) = &metadata.negative {
         return ensure_negative_result(relative_path, negative, result);

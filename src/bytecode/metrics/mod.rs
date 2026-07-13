@@ -179,6 +179,15 @@ impl BytecodeInstruction {
             | Self::NumberCompare(_)
             | Self::NumberEquality(_) => BytecodeMetrics::numeric_instruction(),
             Self::NullishCoalescing { right } => right.metrics(),
+            Self::DynamicImport {
+                specifier, options, ..
+            } => {
+                let mut metrics = specifier.metrics();
+                if let Some(options) = options {
+                    metrics.add(options.metrics());
+                }
+                metrics
+            }
             Self::LogicalAssignment { target, value, .. } => {
                 target.metrics().combine(value.metrics())
             }

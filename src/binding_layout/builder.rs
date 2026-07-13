@@ -633,6 +633,12 @@ impl LayoutBuilder {
                 self.analyze_expr(callee, scope, function)?;
                 self.analyze_exprs(args, scope, function)
             }
+            Expr::DynamicImport {
+                specifier, options, ..
+            } => {
+                self.analyze_expr(specifier, scope, function)?;
+                self.analyze_optional_expr(options.as_deref(), scope, function)
+            }
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 self.analyze_nested_function(expr.kind(), scope, function)
             }
