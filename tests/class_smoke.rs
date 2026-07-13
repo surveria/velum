@@ -338,6 +338,21 @@ fn rejects_class_early_errors() -> TestResult {
 }
 
 #[test]
+fn class_names_use_strict_binding_identifier_rules() -> TestResult {
+    for source in [
+        "class let {}",
+        "class st\\u0061tic {}",
+        "var value = class st\\u0061tic {};",
+        "var value = class y\\u0069eld {};",
+    ] {
+        if eval(source).is_ok() {
+            return Err(format!("expected strict class name '{source}' to fail").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn rejects_nonordinary_class_constructors() -> TestResult {
     ensure_error_contains(
         "class AsyncConstructor { async constructor() {} }",
