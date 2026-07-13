@@ -32,6 +32,7 @@ pub(in crate::runtime) enum PromiseResolverKind {
 #[derive(Debug)]
 pub(in crate::runtime) struct Promise {
     pub(super) state: PromiseState,
+    pub(super) resolution_generation: usize,
 }
 
 impl Promise {
@@ -40,6 +41,7 @@ impl Promise {
             state: PromiseState::Pending {
                 reactions: Vec::new(),
             },
+            resolution_generation: 0,
         }
     }
 

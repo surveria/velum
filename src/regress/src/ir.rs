@@ -88,6 +88,9 @@ pub enum Node {
     /// are emitted through alternations of backreferences.
     BackRef { group: u32, icase: bool },
 
+    /// A named backreference shared by capture groups in disjoint alternatives.
+    NamedBackRef { groups: Box<[u32]>, icase: bool },
+
     /// A bracket.
     Bracket(BracketContents),
 
@@ -238,6 +241,10 @@ impl Node {
                 unicode_icase,
             },
             &Node::BackRef { group, icase } => Node::BackRef { group, icase },
+            Node::NamedBackRef { groups, icase } => Node::NamedBackRef {
+                groups: groups.clone(),
+                icase: *icase,
+            },
             Node::Bracket(bc) => Node::Bracket(bc.clone()),
             // Do not reverse into lookarounds, they already have the right sense.
             Node::LookaroundAssertion {
@@ -314,6 +321,7 @@ where
             | Node::CharSet(..)
             | Node::WordBoundary { .. }
             | Node::BackRef { .. }
+            | Node::NamedBackRef { .. }
             | Node::Bracket { .. }
             | Node::MatchAny
             | Node::MatchAnyExceptLineTerminator
@@ -387,6 +395,7 @@ where
             | Node::Anchor { .. }
             | Node::WordBoundary { .. }
             | Node::BackRef { .. }
+            | Node::NamedBackRef { .. }
             | Node::Bracket { .. } => {}
             Node::Cat(nodes) => {
                 nodes.iter_mut().for_each(|node| self.process(node));
@@ -553,6 +562,9 @@ fn display_node(node: &Node, depth: usize, f: &mut fmt::Formatter) -> fmt::Resul
         }
         &Node::BackRef { group, .. } => {
             writeln!(f, "BackRef {:?} ", group)?;
+        }
+        Node::NamedBackRef { groups, .. } => {
+            writeln!(f, "NamedBackRef {:?} ", groups)?;
         }
         Node::Bracket(contents) => {
             writeln!(f, "Bracket {:?}", contents)?;

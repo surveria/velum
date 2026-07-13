@@ -560,13 +560,11 @@ impl Context {
             }
         };
         let next = self.iterator_direct_next(this_value)?;
-        self.create_iterator_helper_object(IteratorHelperState {
-            iterator: this_value.clone(),
+        self.create_iterator_helper_object(IteratorHelperState::new(
+            this_value.clone(),
             next,
-            counter: 0.0,
-            done: false,
-            mode: mode(callback),
-        })
+            mode(callback),
+        ))
     }
 
     pub(in crate::runtime::native) fn eval_iterator_prototype_map(
@@ -614,13 +612,11 @@ impl Context {
             }
         };
         let next = self.iterator_direct_next(this_value)?;
-        self.create_iterator_helper_object(IteratorHelperState {
-            iterator: this_value.clone(),
+        self.create_iterator_helper_object(IteratorHelperState::new(
+            this_value.clone(),
             next,
-            counter: 0.0,
-            done: false,
-            mode: mode(integer),
-        })
+            mode(integer),
+        ))
     }
 
     fn validated_iterator_limit(&mut self, args: &RuntimeCallArgs<'_>) -> Result<f64> {

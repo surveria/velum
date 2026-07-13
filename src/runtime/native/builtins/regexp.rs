@@ -589,8 +589,9 @@ impl Context {
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
+        let last_index = self.regexp_last_index_utf16(this_value, input)?;
         let start = if flags.global() || flags.sticky() {
-            self.regexp_last_index_utf16(this_value, input)?
+            last_index
         } else {
             0
         };
@@ -611,8 +612,9 @@ impl Context {
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
+        let last_index = self.regexp_last_index_utf16(this_value, input)?;
         let start = if flags.global() || flags.sticky() {
-            self.regexp_last_index_utf16(this_value, input)?
+            last_index
         } else {
             0
         };

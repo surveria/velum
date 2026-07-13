@@ -104,7 +104,7 @@ impl Context {
 
     pub(in crate::runtime) fn promise_id_from_value(&self, value: &Value) -> Result<PromiseId> {
         let Value::Object(object) = value else {
-            return Err(Error::runtime(
+            return Err(Error::type_error(
                 "Promise operation requires a Promise receiver",
             ));
         };
@@ -116,7 +116,7 @@ impl Context {
             .get(object.index())
             .copied()
             .flatten()
-            .ok_or_else(|| Error::runtime("Promise operation requires a Promise object"))
+            .ok_or_else(|| Error::type_error("Promise operation requires a Promise object"))
     }
 
     pub(in crate::runtime) fn resolve_promise(
@@ -417,8 +417,13 @@ impl Context {
         promise: PromiseId,
         kind: PromiseResolverKind,
     ) -> Result<Value> {
+        let generation = self.promise(promise)?.resolution_generation;
         self.create_ephemeral_native_function(
-            crate::runtime::native::NativeFunctionKind::PromiseResolver { promise, kind },
+            crate::runtime::native::NativeFunctionKind::PromiseResolver {
+                promise,
+                generation,
+                kind,
+            },
             Value::Undefined,
         )
     }
@@ -426,15 +431,30 @@ impl Context {
     pub(in crate::runtime) fn eval_promise_resolver(
         &mut self,
         promise: PromiseId,
+        generation: usize,
         kind: PromiseResolverKind,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        if !self.claim_promise_resolution(promise, generation)? {
+            return Ok(Value::Undefined);
+        }
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         match kind {
             PromiseResolverKind::Resolve => self.resolve_promise(promise, value)?,
             PromiseResolverKind::Reject => self.reject_promise(promise, value)?,
         }
         Ok(Value::Undefined)
+    }
+
+    fn claim_promise_resolution(&mut self, promise: PromiseId, generation: usize) -> Result<bool> {
+        let promise = self.promise_mut(promise)?;
+        if promise.resolution_generation != generation {
+            return Ok(false);
+        }
+        promise.resolution_generation = generation
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("Promise resolution generation overflowed"))?;
+        Ok(true)
     }
 
     pub(in crate::runtime) fn promise_reaction_handler(
@@ -570,13 +590,14 @@ impl Context {
             self.create_promise_resolving_function(promise, PromiseResolverKind::Resolve)?;
         let reject =
             self.create_promise_resolving_function(promise, PromiseResolverKind::Reject)?;
-        match self.call_value(then, &[resolve, reject], thenable) {
+        match self.call_value(then, &[resolve, reject.clone()], thenable) {
             Ok(_) => Ok(()),
             Err(error) => {
                 let Some(reason) = runtime_exception_value(self, &error)? else {
                     return Err(error);
                 };
-                self.reject_promise(promise, reason)
+                self.call_value(&reject, &[reason], Value::Undefined)?;
+                Ok(())
             }
         }
     }
@@ -715,6 +736,12 @@ impl Context {
             PromiseState::Fulfilled(value) => Ok(Some(Completion::Normal(value.clone()))),
             PromiseState::Rejected(reason) => Ok(Some(Completion::Throw(reason.clone()))),
         }
+    }
+
+    fn promise(&self, id: PromiseId) -> Result<&Promise> {
+        self.promises
+            .get(id.index())
+            .ok_or_else(|| Error::runtime("Promise id is not defined"))
     }
 
     fn promise_mut(&mut self, id: PromiseId) -> Result<&mut Promise> {

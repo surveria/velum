@@ -480,6 +480,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     },
     PromiseResolver {
         promise: crate::runtime::promise::PromiseId,
+        generation: usize,
         kind: crate::runtime::promise::PromiseResolverKind,
     },
     Proxy,

@@ -124,7 +124,9 @@ impl Context {
             let raw_part = self.raw_part(&raw, index)?;
             output.push_str(&raw_part);
             self.check_string_len(&output)?;
-            if let Some(substitution) = args.get(index.saturating_add(1)) {
+            if index.saturating_add(1) < raw_length
+                && let Some(substitution) = args.get(index.saturating_add(1))
+            {
                 let text = self.string_argument_text(substitution)?;
                 output.push_str(&text);
                 self.check_string_len(&output)?;
@@ -171,7 +173,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let units = self.string_receiver_utf16(this_value)?;
-        let position = self.position_arg(args.first())?;
+        let Some(position) = self.position_arg(args.first())? else {
+            return Ok(Value::Undefined);
+        };
         let Some(unit) = units.get(position).copied() else {
             return Ok(Value::Undefined);
         };
@@ -208,29 +212,36 @@ impl Context {
         this_value: &Value,
         side: PadSide,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let target_length = self.string_length_arg(args.first())?;
-        let current_length = text.chars().count();
+        let current_length = text.len();
         if target_length <= current_length {
-            return self.heap_string_value(&text);
+            return self.heap_utf16_string_value(&text);
         }
         let filler = match args.get(1) {
-            None | Some(Value::Undefined) => DEFAULT_PAD_STRING.to_owned(),
-            Some(value) => self.string_argument_text(value)?,
+            None | Some(Value::Undefined) => DEFAULT_PAD_STRING.encode_utf16().collect(),
+            Some(value) => self.string_argument_utf16(value)?,
         };
         if filler.is_empty() {
-            return self.heap_string_value(&text);
+            return self.heap_utf16_string_value(&text);
         }
         let fill_count = target_length
             .checked_sub(current_length)
             .ok_or_else(|| Error::limit("string pad length underflowed"))?;
-        let padding = self.repeat_to_char_len(&filler, fill_count)?;
-        let output = match side {
-            PadSide::Start => format!("{padding}{text}"),
-            PadSide::End => format!("{text}{padding}"),
-        };
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
+        let padding = self.repeat_to_code_unit_len(&filler, fill_count)?;
+        let mut output = Vec::with_capacity(target_length);
+        match side {
+            PadSide::Start => {
+                output.extend_from_slice(&padding);
+                output.extend_from_slice(&text);
+            }
+            PadSide::End => {
+                output.extend_from_slice(&text);
+                output.extend_from_slice(&padding);
+            }
+        }
+        self.check_utf16_string_len(&output)?;
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_to_string(
@@ -278,18 +289,11 @@ impl Context {
         self.string_argument_text(&value)
     }
 
-    fn repeat_to_char_len(&self, filler: &str, target_len: usize) -> Result<String> {
-        let mut output = String::new();
-        let mut length = 0_usize;
-        for ch in filler.chars().cycle() {
-            if length >= target_len {
-                break;
-            }
-            output.push(ch);
-            length = length
-                .checked_add(1)
-                .ok_or_else(|| Error::limit("string pad character count overflowed"))?;
-            self.check_string_len(&output)?;
+    fn repeat_to_code_unit_len(&self, filler: &[u16], target_len: usize) -> Result<Vec<u16>> {
+        let mut output = Vec::with_capacity(target_len);
+        for unit in filler.iter().copied().cycle().take(target_len) {
+            output.push(unit);
+            self.check_utf16_string_len(&output)?;
         }
         Ok(output)
     }
@@ -348,19 +352,22 @@ impl Context {
         Self::finite_nonnegative_integer_to_usize(index, "string index exceeded range").map(Some)
     }
 
-    fn position_arg(&mut self, value: Option<&Value>) -> Result<usize> {
+    fn position_arg(&mut self, value: Option<&Value>) -> Result<Option<usize>> {
         let argument = value.cloned().unwrap_or(Value::Undefined);
         let integer = self.to_integer_or_infinity(&argument)?;
-        if integer <= 0.0 {
-            return Ok(0);
+        if integer < 0.0 {
+            return Ok(None);
+        }
+        if integer == 0.0 {
+            return Ok(Some(0));
         }
         if !integer.is_finite() {
-            return Ok(usize::MAX);
+            return Ok(Some(usize::MAX));
         }
-        Ok(
+        Ok(Some(
             Self::finite_nonnegative_integer_to_usize(integer, "string index exceeded range")
                 .map_or(usize::MAX, |index| index),
-        )
+        ))
     }
 
     fn string_length_arg(&mut self, value: Option<&Value>) -> Result<usize> {

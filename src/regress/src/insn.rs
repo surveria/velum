@@ -105,6 +105,11 @@ pub enum Insn {
         icase: bool,
     },
 
+    NamedBackRef {
+        groups: Box<[u32]>,
+        icase: bool,
+    },
+
     /// Match the next character against the bracket contents, stored at the given index in the CompiledRegex.
     Bracket(usize),
 

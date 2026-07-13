@@ -1,7 +1,6 @@
 use crate::{
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
     runtime::{
         Context,
         abstract_operations::{PreferredType, to_string_primitive},
@@ -442,18 +441,29 @@ impl Context {
 
     fn string_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype_property(
-            None,
-            ObjectPropertyInit::new(
-                constructor_key,
-                OBJECT_CONSTRUCTOR_PROPERTY,
-                constructor,
-                PropertyEnumerable::No,
-            ),
+        let object_prototype = self.objects.object_prototype_id(
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
-        )
+        )?;
+        let empty = self.intern_utf16_heap_string(&[])?;
+        let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
+        let Value::Object(prototype) = self.objects.create_string_object(
+            empty,
+            object_prototype,
+            length_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?
+        else {
+            return Err(Error::runtime("String prototype is not an object"));
+        };
+        self.define_non_enumerable_object_property(
+            prototype,
+            OBJECT_CONSTRUCTOR_PROPERTY,
+            constructor,
+        )?;
+        Ok(prototype)
     }
 
     pub(in crate::runtime) fn string_constructor_prototype(&mut self) -> Result<ObjectId> {
@@ -642,7 +652,12 @@ impl Context {
         match value {
             None | Some(Value::Undefined) => Ok(length),
             Some(value) => {
-                let integer = self.to_integer_or_infinity(value)?;
+                let number = self.to_number(value)?;
+                let integer = if number.is_nan() {
+                    f64::INFINITY
+                } else {
+                    self.to_integer_or_infinity(&Value::Number(number))?
+                };
                 Self::clamp_integer(integer, length)
             }
         }
@@ -682,7 +697,12 @@ impl Context {
         match value {
             None | Some(Value::Undefined) => Ok(length),
             Some(value) => {
-                let integer = self.to_integer_or_infinity(value)?;
+                let number = self.to_number(value)?;
+                let integer = if number.is_nan() {
+                    f64::INFINITY
+                } else {
+                    self.to_integer_or_infinity(&Value::Number(number))?
+                };
                 Self::clamp_integer(integer, length)
             }
         }

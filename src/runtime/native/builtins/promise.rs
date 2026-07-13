@@ -133,25 +133,26 @@ impl Context {
             promise,
             crate::runtime::promise::PromiseResolverKind::Reject,
         )?;
+        let executor_args = [resolve, reject.clone()];
         let call_result = match executor {
             Value::Function(id) => self.eval_function_completion_with_this(
                 id,
-                RuntimeCallArgs::values(&[resolve, reject]),
+                RuntimeCallArgs::values(&executor_args),
                 Value::Undefined,
             )?,
             callee => {
-                if let Err(error) = self.call_value(&callee, &[resolve, reject], Value::Undefined) {
+                if let Err(error) = self.call_value(&callee, &executor_args, Value::Undefined) {
                     let Some(reason) = runtime_exception_value(self, &error)? else {
                         return Err(error);
                     };
-                    self.reject_promise(promise, reason)?;
+                    self.call_value(&reject, &[reason], Value::Undefined)?;
                     return Ok(object);
                 }
                 Completion::Normal(Value::Undefined)
             }
         };
         if let Completion::Throw(value) = call_result {
-            self.reject_promise(promise, value)?;
+            self.call_value(&reject, &[value], Value::Undefined)?;
         }
         Ok(object)
     }
@@ -298,7 +299,9 @@ impl Context {
         this_value: &Value,
     ) -> Option<Result<Value>> {
         match kind {
-            NativeFunctionKind::Promise => Some(self.eval_promise_constructor(args)),
+            NativeFunctionKind::Promise => {
+                Some(Err(Error::type_error("Promise constructor requires 'new'")))
+            }
             NativeFunctionKind::PromiseCombinator(kind) => {
                 Some(self.eval_promise_combinator(kind, args, this_value))
             }
@@ -320,9 +323,11 @@ impl Context {
             NativeFunctionKind::PromiseFinallyFunction { state, kind } => {
                 Some(self.eval_promise_finally_function(state, kind, args))
             }
-            NativeFunctionKind::PromiseResolver { promise, kind } => {
-                Some(self.eval_promise_resolver(promise, kind, args))
-            }
+            NativeFunctionKind::PromiseResolver {
+                promise,
+                generation,
+                kind,
+            } => Some(self.eval_promise_resolver(promise, generation, kind, args)),
             _ => None,
         }
     }

@@ -29,6 +29,11 @@ impl RegExpFlags {
         if self.bits & bit != 0 {
             return Err(RegExpSyntaxError::DuplicateFlag(flag));
         }
+        if bit & (REGEXP_FLAG_UNICODE | REGEXP_FLAG_UNICODE_SETS) != 0
+            && self.bits & (REGEXP_FLAG_UNICODE | REGEXP_FLAG_UNICODE_SETS) != 0
+        {
+            return Err(RegExpSyntaxError::IncompatibleUnicodeModes);
+        }
         self.bits |= bit;
         Ok(())
     }
@@ -110,6 +115,8 @@ pub enum RegExpSyntaxError {
     UnsupportedFlag(char),
     #[error("duplicate regular expression flag: {0}")]
     DuplicateFlag(char),
+    #[error("regular expression flags 'u' and 'v' are mutually exclusive")]
+    IncompatibleUnicodeModes,
     #[error("invalid regular expression pattern: {0}")]
     InvalidPattern(String),
 }
