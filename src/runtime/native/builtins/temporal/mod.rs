@@ -16,6 +16,7 @@ mod install;
 mod plain_date;
 mod plain_date_time;
 mod plain_date_time_options;
+mod plain_time;
 
 use crate::runtime::call::RuntimeCallArgs;
 use crate::runtime::native::{TEMPORAL_NAME, TemporalFunctionKind};
