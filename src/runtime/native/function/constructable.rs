@@ -28,6 +28,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::LocaleConstructor
                         | IntlFunctionKind::ListFormatConstructor
                         | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::SegmenterConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor
                 )
@@ -88,6 +89,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::LocaleConstructor
                         | IntlFunctionKind::ListFormatConstructor
                         | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::SegmenterConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor
                 )

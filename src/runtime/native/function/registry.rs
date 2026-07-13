@@ -295,7 +295,7 @@ const FINALIZATION_REGISTRY_REGISTER_SLOT: NativeFunctionSlot = NativeFunctionSl
 const FINALIZATION_REGISTRY_UNREGISTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(613);
 const WEAK_REF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(614);
 const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 621;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 628;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {

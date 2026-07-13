@@ -150,6 +150,13 @@ pub(in crate::runtime) enum IntlFunctionKind {
     ListFormatFormatToParts,
     ListFormatResolvedOptions,
     ListFormatSupportedLocalesOf,
+    SegmenterConstructor,
+    SegmenterSegment,
+    SegmenterResolvedOptions,
+    SegmenterSupportedLocalesOf,
+    SegmentsIterator,
+    SegmentsContaining,
+    SegmentIteratorNext,
 }
 
 impl IntlFunctionKind {
@@ -186,6 +193,13 @@ impl IntlFunctionKind {
             Self::ListFormatFormatToParts => 54,
             Self::ListFormatResolvedOptions => 55,
             Self::ListFormatSupportedLocalesOf => 56,
+            Self::SegmenterConstructor => 57,
+            Self::SegmenterSegment => 58,
+            Self::SegmenterResolvedOptions => 59,
+            Self::SegmenterSupportedLocalesOf => 60,
+            Self::SegmentsIterator => 61,
+            Self::SegmentsContaining => 62,
+            Self::SegmentIteratorNext => 63,
         }
     }
 
@@ -202,6 +216,10 @@ impl IntlFunctionKind {
             | Self::RelativeTimeFormatConstructor
             | Self::ListFormatConstructor
             | Self::ListFormatResolvedOptions
+            | Self::SegmenterConstructor
+            | Self::SegmenterResolvedOptions
+            | Self::SegmentsIterator
+            | Self::SegmentIteratorNext
             | Self::DateTimeFormatFormatGetter
             | Self::LocaleAccessor(_)
             | Self::LocaleMethod(_) => 0.0,
@@ -217,7 +235,10 @@ impl IntlFunctionKind {
             | Self::GetCanonicalLocales
             | Self::ListFormatFormat
             | Self::ListFormatFormatToParts
-            | Self::ListFormatSupportedLocalesOf => 1.0,
+            | Self::ListFormatSupportedLocalesOf
+            | Self::SegmenterSegment
+            | Self::SegmenterSupportedLocalesOf
+            | Self::SegmentsContaining => 1.0,
             Self::NumberFormatFormatRange
             | Self::NumberFormatFormatRangeToParts
             | Self::DateTimeFormatFormatRange
@@ -234,7 +255,8 @@ impl IntlFunctionKind {
             | Self::ListFormatFormatToParts => "formatToParts",
             Self::DateTimeFormatResolvedOptions
             | Self::NumberFormatResolvedOptions
-            | Self::ListFormatResolvedOptions => "resolvedOptions",
+            | Self::ListFormatResolvedOptions
+            | Self::SegmenterResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
@@ -247,7 +269,8 @@ impl IntlFunctionKind {
             }
             Self::NumberFormatSupportedLocalesOf
             | Self::DateTimeFormatSupportedLocalesOf
-            | Self::ListFormatSupportedLocalesOf => "supportedLocalesOf",
+            | Self::ListFormatSupportedLocalesOf
+            | Self::SegmenterSupportedLocalesOf => "supportedLocalesOf",
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
             Self::LocaleConstructor => "Locale",
@@ -255,6 +278,11 @@ impl IntlFunctionKind {
             Self::LocaleMethod(kind) => kind.name(),
             Self::GetCanonicalLocales => "getCanonicalLocales",
             Self::ListFormatConstructor => "ListFormat",
+            Self::SegmenterConstructor => "Segmenter",
+            Self::SegmenterSegment => "segment",
+            Self::SegmentsIterator => "[Symbol.iterator]",
+            Self::SegmentsContaining => "containing",
+            Self::SegmentIteratorNext => "next",
         }
     }
 }

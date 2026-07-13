@@ -878,6 +878,7 @@ dependencies = [
  "temporal_rs",
  "thiserror",
  "unicode-ident",
+ "unicode-segmentation",
 ]
 
 [[package]]
