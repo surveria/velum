@@ -472,6 +472,20 @@ one marker and a safe non-moving sweep over sparse indexed arenas.
 | embedder-visible state | output, host callbacks, VM-owned dynamic module loader, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; the loader is an embedder-owned source capability with no JavaScript `Value` edge; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
 
+Shape metadata is an optimization index, not an object-layout authority.
+Stable `ShapeId` values describe ordered property keys and descriptor
+attributes, while semantic property operations remain owned by `Object` and
+`ObjectProperty`. Add, update, and remove edges are indexed by their semantic
+transition; a collision-checked layout index canonicalizes paths that reach
+the same result. Linear add chains share one append-only property family and
+each shape selects a checked prefix, so constructing one wide object does not
+copy every preceding layout. Branches may choose another family without
+changing existing shape ids. Integrity operations compute and intern one final
+layout before mutating the object, rather than materializing one full-width
+shape per property. These concrete indexes and family boundaries may be
+replaced when a new representation preserves property order, descriptor
+semantics, root tracing, checked storage accounting, and behavioral coverage.
+
 The AS-05b1a direct-root registry currently enumerates initialized global,
 builtin-global, local, and captured binding cells; active `this`,
 `new.target`, and `super` values; global-object and Promise-prototype runtime
