@@ -657,6 +657,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Option<Result<Value>> {
         match kind {
+            NativeFunctionKind::AnnexBGlobal(kind) => Some(self.eval_annex_b_global(kind, args)),
             NativeFunctionKind::GlobalDecodeUri => Some(self.eval_global_decode_uri(args)),
             NativeFunctionKind::GlobalDecodeUriComponent => {
                 Some(self.eval_global_decode_uri_component(args))

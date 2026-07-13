@@ -36,6 +36,7 @@ impl NativeFunctionKind {
             | Self::GeneratorNext
             | Self::GeneratorReturn
             | Self::GeneratorThrow
+            | Self::AnnexBGlobal(_)
             | Self::PromiseCombinatorElement { .. } => Some(1.0),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
@@ -107,6 +108,7 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
+            Self::AnnexBGlobal(kind) => Some(kind.name()),
             Self::ThrowTypeError | Self::PromiseCombinatorElement { .. } => Some(""),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),

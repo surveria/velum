@@ -289,22 +289,22 @@ impl Context {
         if self.semantic_is_callable(value)? {
             return Ok(JsonReplacer::Function(value.clone()));
         }
-        let Value::Object(id) = value else {
+        let Value::Object(_) = value else {
             return Ok(JsonReplacer::None);
         };
-        if self.objects.array_len_if_array(*id)?.is_none() {
+        if !self.semantic_is_array(value)? {
             return Ok(JsonReplacer::None);
         }
-        self.json_replacer_property_list(*id)
+        self.json_replacer_property_list(value)
             .map(JsonReplacer::PropertyList)
     }
 
-    fn json_replacer_property_list(&mut self, id: ObjectId) -> Result<Vec<String>> {
-        let length = self.objects.array_len(id)?;
+    fn json_replacer_property_list(&mut self, value: &Value) -> Result<Vec<String>> {
+        let length = self.array_like_length(value)?;
         let mut keys = Vec::new();
         for index in 0..length {
-            let value = self.objects.array_get_index(id, index)?;
-            let Some(key) = self.json_replacer_property_name(&value)? else {
+            let element = self.get_named(value, &index.to_string())?;
+            let Some(key) = self.json_replacer_property_name(&element)? else {
                 continue;
             };
             if !keys.contains(&key) {
@@ -405,7 +405,7 @@ impl Context {
     }
 
     fn apply_json_to_json(&mut self, value: Value, key: &str) -> Result<Value> {
-        if !matches!(value, Value::Object(_)) {
+        if !matches!(value, Value::Object(_) | Value::BigInt(_)) {
             return Ok(value);
         }
         let to_json = self.get_named(&value, JSON_TO_JSON_NAME)?;
@@ -463,7 +463,9 @@ impl Context {
         state: &mut JsonStringifyState,
     ) -> Result<String> {
         Self::push_json_stack(id, &mut state.stack)?;
-        let result = if let Some(length) = self.objects.array_len_if_array(id)? {
+        let object = Value::Object(id);
+        let result = if self.semantic_is_array(&object)? {
+            let length = self.array_like_length(&object)?;
             self.stringify_json_array(id, length, state)
         } else {
             self.stringify_plain_json_object(id, state)
@@ -708,6 +710,9 @@ impl Context {
             Some(ObjectPrimitiveValue::Number(_))
         ) {
             return self.json_object_to_number(value).map(Value::Number);
+        }
+        if let Some(ObjectPrimitiveValue::BigInt(value)) = self.objects.primitive_value(*id)? {
+            return Ok(Value::BigInt(value.clone()));
         }
         if self.objects.string_object_value(*id)?.is_some() {
             let units = self.to_utf16_string(value)?;
