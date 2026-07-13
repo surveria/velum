@@ -101,7 +101,25 @@ fn replaces_cached_regexp_state_transactionally() -> TestResult {
             rejected = error instanceof SyntaxError;
         }
         target.lastIndex = 0;
-        copied && replaced && rejected && target.test("lens") ? 42 : 0
+
+        const immutableLastIndex = /initial/;
+        Object.defineProperty(immutableLastIndex, "lastIndex", {
+            value: 45,
+            writable: false
+        });
+        let lastIndexRejected = false;
+        try {
+            immutableLastIndex.compile(/updated/gi);
+        } catch (error) {
+            lastIndexRejected = error instanceof TypeError;
+        }
+        const changedBeforeLastIndexFailure = lastIndexRejected &&
+            immutableLastIndex.source === "updated" &&
+            immutableLastIndex.flags === "gi" &&
+            immutableLastIndex.lastIndex === 45;
+
+        copied && replaced && rejected && target.test("lens") &&
+            changedBeforeLastIndexFailure ? 42 : 0
         "#,
     )?;
 

@@ -380,14 +380,6 @@ impl ObjectHeap {
         Ok(())
     }
 
-    pub(in crate::runtime) fn check_regexp_value_replacement(
-        &self,
-        id: ObjectId,
-        value: &RegExpValue,
-    ) -> Result<()> {
-        self.projected_regexp_payload_bytes(id, value).map(|_| ())
-    }
-
     fn projected_regexp_payload_bytes(&self, id: ObjectId, value: &RegExpValue) -> Result<usize> {
         let Some(previous) = self.object(id)?.regexp_value.as_ref() else {
             return Err(Error::type_error("object is not a RegExp"));

@@ -50,10 +50,8 @@ impl Context {
             let compiled = compile_regexp_pattern_utf16(&pattern, parsed_flags)?;
             RegExpValue::new_utf16(pattern, parsed_flags, compiled)?
         };
-        self.objects
-            .check_regexp_value_replacement(*receiver, &replacement)?;
-        self.set_regexp_last_index(this_value, 0)?;
         self.objects.replace_regexp_value(*receiver, replacement)?;
+        self.set_regexp_last_index(this_value, 0)?;
         Ok(this_value.clone())
     }
 }
