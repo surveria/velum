@@ -90,8 +90,10 @@ impl Context {
                 let display = self.plain_date_display_calendar(args.as_slice().first())?;
                 self.plain_month_day_string(receiver, display)
             }
-            TemporalFunctionKind::PlainMonthDayPrototypeToLocaleString
-            | TemporalFunctionKind::PlainMonthDayPrototypeToJson => {
+            TemporalFunctionKind::PlainMonthDayPrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
+            }
+            TemporalFunctionKind::PlainMonthDayPrototypeToJson => {
                 self.plain_month_day_string(receiver, DisplayCalendar::Auto)
             }
             TemporalFunctionKind::PlainMonthDayPrototypeValueOf => Err(Error::type_error(

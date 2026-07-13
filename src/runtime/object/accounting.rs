@@ -89,8 +89,13 @@ impl super::Object {
             .temporal_value
             .as_ref()
             .map_or(0, super::TemporalValue::storage_payload_bytes);
+        let intl_payload_bytes = self
+            .intl_value
+            .as_ref()
+            .map_or(0, super::IntlValue::storage_payload_bytes);
         let object_payload_bytes = regexp_payload_bytes
-            .checked_add(temporal_payload_bytes)
+            .checked_add(intl_payload_bytes)
+            .and_then(|bytes| bytes.checked_add(temporal_payload_bytes))
             .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
         let byte_buffer_count = usize::from(self.byte_buffer.is_some());
         let byte_buffer_payload_bytes = self

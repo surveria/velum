@@ -59,6 +59,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: Some(value),
+            intl_value: None,
             temporal_value: None,
             regexp_value: None,
             proxy_value: None,

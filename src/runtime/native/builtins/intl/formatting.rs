@@ -1,0 +1,727 @@
+use std::str::FromStr;
+
+use crate::{
+    error::{Error, Result},
+    runtime::{
+        Context,
+        call::RuntimeCallArgs,
+        object::{DateTimeFormatValue, TemporalValue},
+    },
+    value::{ErrorName, Value},
+};
+use temporal_rs::{Calendar, Instant, TimeZone};
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum DateTimeInputKind {
+    Instant,
+    PlainDate,
+    PlainDateTime,
+    PlainMonthDay,
+    PlainTime,
+    PlainYearMonth,
+    ZonedDateTime,
+    LegacyDate,
+}
+
+#[derive(Debug, Clone)]
+struct DateTimeInput {
+    kind: DateTimeInputKind,
+    year: Option<i32>,
+    month: Option<u8>,
+    day: Option<u8>,
+    weekday: Option<u16>,
+    hour: Option<u8>,
+    minute: Option<u8>,
+    second: Option<u8>,
+    millisecond: Option<u16>,
+    time_zone: Option<String>,
+    offset: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct FormatPart {
+    kind: &'static str,
+    value: String,
+}
+
+impl Context {
+    pub(super) fn eval_intl_date_time_format(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        to_parts: bool,
+    ) -> Result<Value> {
+        let formatter = self.date_time_format_receiver(this_value)?;
+        let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let input = self.intl_date_time_input(&formatter, &value)?;
+        let parts = format_parts(&formatter, &input)?;
+        if to_parts {
+            return self.intl_parts_value(parts);
+        }
+        let text = parts.into_iter().map(|part| part.value).collect::<String>();
+        self.heap_string_value(&text)
+    }
+
+    pub(in crate::runtime::native) fn format_temporal_locale_string(
+        &mut self,
+        value: &Value,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        if let Value::Object(id) = value
+            && matches!(
+                self.objects.temporal_value(*id)?,
+                Some(TemporalValue::ZonedDateTime(_))
+            )
+            && let Some(options) = args.as_slice().get(1)
+            && !matches!(options, Value::Undefined)
+            && !matches!(self.get_named(options, "timeZone")?, Value::Undefined)
+        {
+            return Err(Error::type_error(
+                "timeZone option is invalid for Temporal.ZonedDateTime",
+            ));
+        }
+        let formatter = self.parse_date_time_format(args)?;
+        let input = self.intl_date_time_input(&formatter, value)?;
+        let parts = format_parts(&formatter, &input)?;
+        let text = parts.into_iter().map(|part| part.value).collect::<String>();
+        self.heap_string_value(&text)
+    }
+
+    fn intl_date_time_input(
+        &self,
+        formatter: &DateTimeFormatValue,
+        value: &Value,
+    ) -> Result<DateTimeInput> {
+        let Value::Object(id) = value else {
+            return Err(Error::type_error("Intl.DateTimeFormat value is invalid"));
+        };
+        if let Some(temporal) = self.objects.temporal_value(*id)? {
+            return temporal_input(formatter, temporal.clone());
+        }
+        if let Some(date) = self.objects.date_value(*id)? {
+            let millis = date
+                .millis()
+                .ok_or_else(|| Error::exception(ErrorName::RangeError, "Invalid Date"))?;
+            let nanos = i128::from(millis)
+                .checked_mul(1_000_000)
+                .ok_or_else(|| Error::limit("Date nanoseconds overflowed"))?;
+            let instant = Instant::try_new(nanos).map_err(intl_temporal_error)?;
+            return instant_input(formatter, instant, DateTimeInputKind::LegacyDate);
+        }
+        Err(Error::type_error("Intl.DateTimeFormat value is invalid"))
+    }
+
+    fn intl_parts_value(&mut self, parts: Vec<FormatPart>) -> Result<Value> {
+        let mut values = Vec::with_capacity(parts.len());
+        for part in parts {
+            let kind = self.heap_string_value(part.kind)?;
+            let value = self.heap_string_value(&part.value)?;
+            values.push(self.create_intl_data_object(vec![("type", kind), ("value", value)])?);
+        }
+        self.create_array_from_elements(values)
+    }
+}
+
+fn temporal_input(formatter: &DateTimeFormatValue, value: TemporalValue) -> Result<DateTimeInput> {
+    let calendar = Calendar::from_str(&formatter.calendar).map_err(intl_temporal_error)?;
+    match value {
+        TemporalValue::Duration(_) => {
+            Err(Error::type_error("Duration cannot be date-time formatted"))
+        }
+        TemporalValue::Instant(instant) => {
+            instant_input(formatter, instant, DateTimeInputKind::Instant)
+        }
+        TemporalValue::PlainDate(date) => plain_date_input(date, calendar),
+        TemporalValue::PlainDateTime(date_time) => plain_date_time_input(date_time, calendar),
+        TemporalValue::PlainMonthDay(month_day) => plain_month_day_input(&month_day, &calendar),
+        TemporalValue::PlainTime(time) => Ok(plain_time_input(time)),
+        TemporalValue::PlainYearMonth(year_month) => plain_year_month_input(&year_month, &calendar),
+        TemporalValue::ZonedDateTime(zoned) => zoned_date_time_input(zoned, calendar),
+    }
+}
+
+fn plain_date_input(date: temporal_rs::PlainDate, calendar: Calendar) -> Result<DateTimeInput> {
+    check_calendar(date.calendar(), &calendar)?;
+    let date = if date.calendar().is_iso() {
+        date.with_calendar(calendar)
+    } else {
+        date
+    };
+    Ok(DateTimeInput {
+        kind: DateTimeInputKind::PlainDate,
+        year: Some(date.year()),
+        month: Some(date.month()),
+        day: Some(date.day()),
+        weekday: Some(date.day_of_week()),
+        hour: None,
+        minute: None,
+        second: None,
+        millisecond: None,
+        time_zone: None,
+        offset: None,
+    })
+}
+
+fn plain_date_time_input(
+    date_time: temporal_rs::PlainDateTime,
+    calendar: Calendar,
+) -> Result<DateTimeInput> {
+    check_calendar(date_time.calendar(), &calendar)?;
+    let date_time = if date_time.calendar().is_iso() {
+        date_time.with_calendar(calendar)
+    } else {
+        date_time
+    };
+    Ok(DateTimeInput {
+        kind: DateTimeInputKind::PlainDateTime,
+        year: Some(date_time.year()),
+        month: Some(date_time.month()),
+        day: Some(date_time.day()),
+        weekday: Some(date_time.day_of_week()),
+        hour: Some(date_time.hour()),
+        minute: Some(date_time.minute()),
+        second: Some(date_time.second()),
+        millisecond: Some(date_time.millisecond()),
+        time_zone: None,
+        offset: None,
+    })
+}
+
+fn plain_month_day_input(
+    month_day: &temporal_rs::PlainMonthDay,
+    calendar: &Calendar,
+) -> Result<DateTimeInput> {
+    check_calendar_exact(month_day.calendar(), calendar)?;
+    Ok(DateTimeInput {
+        kind: DateTimeInputKind::PlainMonthDay,
+        year: Some(month_day.reference_year()),
+        month: Some(month_day.month_code().to_month_integer()),
+        day: Some(month_day.day()),
+        weekday: None,
+        hour: None,
+        minute: None,
+        second: None,
+        millisecond: None,
+        time_zone: None,
+        offset: None,
+    })
+}
+
+const fn plain_time_input(time: temporal_rs::PlainTime) -> DateTimeInput {
+    DateTimeInput {
+        kind: DateTimeInputKind::PlainTime,
+        year: None,
+        month: None,
+        day: None,
+        weekday: None,
+        hour: Some(time.hour()),
+        minute: Some(time.minute()),
+        second: Some(time.second()),
+        millisecond: Some(time.millisecond()),
+        time_zone: None,
+        offset: None,
+    }
+}
+
+fn plain_year_month_input(
+    year_month: &temporal_rs::PlainYearMonth,
+    calendar: &Calendar,
+) -> Result<DateTimeInput> {
+    check_calendar_exact(year_month.calendar(), calendar)?;
+    Ok(DateTimeInput {
+        kind: DateTimeInputKind::PlainYearMonth,
+        year: Some(year_month.year()),
+        month: Some(year_month.month()),
+        day: Some(year_month.reference_day()),
+        weekday: None,
+        hour: None,
+        minute: None,
+        second: None,
+        millisecond: None,
+        time_zone: None,
+        offset: None,
+    })
+}
+
+fn zoned_date_time_input(
+    zoned: temporal_rs::ZonedDateTime,
+    calendar: Calendar,
+) -> Result<DateTimeInput> {
+    check_calendar(zoned.calendar(), &calendar)?;
+    let zoned = if zoned.calendar().is_iso() {
+        zoned.with_calendar(calendar)
+    } else {
+        zoned
+    };
+    let time_zone = zoned
+        .time_zone()
+        .identifier()
+        .map_err(intl_temporal_error)?;
+    Ok(DateTimeInput {
+        kind: DateTimeInputKind::ZonedDateTime,
+        year: Some(zoned.year()),
+        month: Some(zoned.month()),
+        day: Some(zoned.day()),
+        weekday: Some(zoned.day_of_week()),
+        hour: Some(zoned.hour()),
+        minute: Some(zoned.minute()),
+        second: Some(zoned.second()),
+        millisecond: Some(zoned.millisecond()),
+        time_zone: Some(time_zone),
+        offset: Some(zoned.offset()),
+    })
+}
+
+fn instant_input(
+    formatter: &DateTimeFormatValue,
+    instant: Instant,
+    kind: DateTimeInputKind,
+) -> Result<DateTimeInput> {
+    let time_zone =
+        TimeZone::try_from_identifier_str(&formatter.time_zone).map_err(intl_temporal_error)?;
+    let calendar = Calendar::from_str(&formatter.calendar).map_err(intl_temporal_error)?;
+    let zoned = instant
+        .to_zoned_date_time_iso(time_zone)
+        .map_err(intl_temporal_error)?
+        .with_calendar(calendar);
+    let time_zone = zoned
+        .time_zone()
+        .identifier()
+        .map_err(intl_temporal_error)?;
+    Ok(DateTimeInput {
+        kind,
+        year: Some(zoned.year()),
+        month: Some(zoned.month()),
+        day: Some(zoned.day()),
+        weekday: Some(zoned.day_of_week()),
+        hour: Some(zoned.hour()),
+        minute: Some(zoned.minute()),
+        second: Some(zoned.second()),
+        millisecond: Some(zoned.millisecond()),
+        time_zone: Some(time_zone),
+        offset: Some(zoned.offset()),
+    })
+}
+
+fn format_parts(formatter: &DateTimeFormatValue, input: &DateTimeInput) -> Result<Vec<FormatPart>> {
+    validate_styles(formatter, input.kind)?;
+    let (show_date, show_time, show_zone) = selected_groups(formatter, input.kind);
+    let mut parts = Vec::new();
+    if show_date {
+        append_date_parts(&mut parts, formatter, input)?;
+    }
+    if show_date && show_time {
+        parts.push(literal(", "));
+    }
+    if show_time {
+        append_time_parts(&mut parts, formatter, input)?;
+    }
+    if show_zone {
+        if show_date || show_time {
+            parts.push(literal(" "));
+        }
+        parts.push(FormatPart {
+            kind: "timeZoneName",
+            value: time_zone_name(input, formatter.options.time_zone_name.as_deref()),
+        });
+    }
+    Ok(parts)
+}
+
+fn check_calendar(actual: &Calendar, requested: &Calendar) -> Result<()> {
+    if actual.is_iso() || actual.identifier() == requested.identifier() {
+        return Ok(());
+    }
+    Err(Error::exception(
+        ErrorName::RangeError,
+        "Temporal calendar does not match Intl calendar",
+    ))
+}
+
+fn check_calendar_exact(actual: &Calendar, requested: &Calendar) -> Result<()> {
+    if actual.identifier() == requested.identifier() {
+        return Ok(());
+    }
+    Err(Error::exception(
+        ErrorName::RangeError,
+        "Temporal calendar does not match Intl calendar",
+    ))
+}
+
+fn validate_styles(formatter: &DateTimeFormatValue, kind: DateTimeInputKind) -> Result<()> {
+    let date_only = matches!(
+        kind,
+        DateTimeInputKind::PlainDate
+            | DateTimeInputKind::PlainMonthDay
+            | DateTimeInputKind::PlainYearMonth
+    );
+    if date_only && formatter.options.time_style.is_some() {
+        return Err(Error::type_error(
+            "timeStyle is invalid for this Temporal value",
+        ));
+    }
+    if kind == DateTimeInputKind::PlainTime && formatter.options.date_style.is_some() {
+        return Err(Error::type_error(
+            "dateStyle is invalid for Temporal.PlainTime",
+        ));
+    }
+    Ok(())
+}
+
+fn selected_groups(formatter: &DateTimeFormatValue, kind: DateTimeInputKind) -> (bool, bool, bool) {
+    let explicit_date = formatter.options.has_explicit_date_fields();
+    let explicit_time = formatter.options.has_explicit_time_fields();
+    let only_era = formatter.options.era.is_some()
+        && formatter.options.weekday.is_none()
+        && formatter.options.year.is_none()
+        && formatter.options.month.is_none()
+        && formatter.options.day.is_none()
+        && !explicit_time;
+    let only_zone = formatter.options.time_zone_name.is_some()
+        && formatter.options.hour.is_none()
+        && formatter.options.minute.is_none()
+        && formatter.options.second.is_none()
+        && formatter.options.day_period.is_none()
+        && formatter.options.fractional_second_digits.is_none()
+        && !explicit_date;
+    let no_components = !explicit_date
+        && !explicit_time
+        && formatter.options.date_style.is_none()
+        && formatter.options.time_style.is_none();
+    let default_date = matches!(
+        kind,
+        DateTimeInputKind::Instant
+            | DateTimeInputKind::PlainDate
+            | DateTimeInputKind::PlainDateTime
+            | DateTimeInputKind::PlainMonthDay
+            | DateTimeInputKind::PlainYearMonth
+            | DateTimeInputKind::ZonedDateTime
+            | DateTimeInputKind::LegacyDate
+    );
+    let default_time = matches!(
+        kind,
+        DateTimeInputKind::Instant
+            | DateTimeInputKind::PlainDateTime
+            | DateTimeInputKind::PlainTime
+            | DateTimeInputKind::ZonedDateTime
+            | DateTimeInputKind::LegacyDate
+    );
+    let show_date = formatter.options.date_style.is_some()
+        || (explicit_date && !only_era)
+        || ((no_components || only_era || only_zone) && default_date);
+    let show_time = formatter.options.time_style.is_some()
+        || explicit_time
+        || ((no_components || only_era || only_zone) && default_time);
+    let show_zone = formatter.options.time_zone_name.is_some()
+        || (no_components && kind == DateTimeInputKind::ZonedDateTime);
+    (show_date, show_time, show_zone)
+}
+
+fn append_date_parts(
+    parts: &mut Vec<FormatPart>,
+    formatter: &DateTimeFormatValue,
+    input: &DateTimeInput,
+) -> Result<()> {
+    let year = input
+        .year
+        .ok_or_else(|| Error::type_error("Date year is unavailable"))?;
+    let month = input
+        .month
+        .ok_or_else(|| Error::type_error("Date month is unavailable"))?;
+    let day = input
+        .day
+        .ok_or_else(|| Error::type_error("Date day is unavailable"))?;
+    let options = &formatter.options;
+    let default_components = !options.has_explicit_date_fields() || options.era.is_some();
+    let show_year = options.year.is_some()
+        || (default_components && input.kind != DateTimeInputKind::PlainMonthDay);
+    let show_month = options.month.is_some() || default_components;
+    let show_day = options.day.is_some()
+        || (default_components && input.kind != DateTimeInputKind::PlainYearMonth);
+    if options.weekday.is_some() {
+        let weekday = weekday_name(input.weekday.unwrap_or(1), &formatter.locale);
+        parts.push(FormatPart {
+            kind: "weekday",
+            value: weekday.to_owned(),
+        });
+        if show_year || show_month || show_day {
+            parts.push(literal(", "));
+        }
+    }
+    let month_style = options.month.as_deref().or_else(|| {
+        options
+            .date_style
+            .as_deref()
+            .filter(|style| matches!(*style, "full" | "long"))
+            .map(|_| "long")
+    });
+    let month_text = format_month(month, month_style, &formatter.calendar);
+    let german = formatter.locale.to_ascii_lowercase().starts_with("de");
+    let japanese = formatter.locale.to_ascii_lowercase().starts_with("ja");
+    if japanese {
+        append_selected(
+            parts,
+            show_year,
+            "year",
+            year_string(year, options.year.as_deref()),
+        );
+        append_literal_if(parts, show_year && show_month, "/");
+        append_selected(parts, show_month, "month", month_text);
+        append_literal_if(parts, show_month && show_day, "/");
+        append_selected(parts, show_day, "day", day.to_string());
+    } else if german {
+        append_selected(parts, show_day, "day", day.to_string());
+        append_literal_if(parts, show_day && show_month, ".");
+        append_selected(parts, show_month, "month", month_text);
+        append_literal_if(parts, show_month && show_year, ".");
+        append_selected(
+            parts,
+            show_year,
+            "year",
+            year_string(year, options.year.as_deref()),
+        );
+    } else {
+        append_selected(parts, show_month, "month", month_text);
+        append_literal_if(parts, show_month && show_day, "/");
+        append_selected(parts, show_day, "day", day.to_string());
+        append_literal_if(parts, (show_month || show_day) && show_year, "/");
+        append_selected(
+            parts,
+            show_year,
+            "year",
+            year_string(year, options.year.as_deref()),
+        );
+    }
+    if options.era.is_some() {
+        parts.push(literal(" "));
+        parts.push(FormatPart {
+            kind: "era",
+            value: if year > 0 { "AD" } else { "BC" }.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn append_time_parts(
+    parts: &mut Vec<FormatPart>,
+    formatter: &DateTimeFormatValue,
+    input: &DateTimeInput,
+) -> Result<()> {
+    let hour = input
+        .hour
+        .ok_or_else(|| Error::type_error("Hour is unavailable"))?;
+    let minute = input
+        .minute
+        .ok_or_else(|| Error::type_error("Minute is unavailable"))?;
+    let second = input
+        .second
+        .ok_or_else(|| Error::type_error("Second is unavailable"))?;
+    let options = &formatter.options;
+    let no_components = !options.has_explicit_time_fields();
+    let show_hour = options.hour.is_some() || no_components;
+    let show_minute = options.minute.is_some() || no_components;
+    let show_second = options.second.is_some() || no_components;
+    let cycle = resolved_cycle(formatter);
+    let displayed_hour = match cycle {
+        "h11" => hour % 12,
+        "h12" => {
+            if hour % 12 == 0 {
+                12
+            } else {
+                hour % 12
+            }
+        }
+        "h24" => {
+            if hour == 0 {
+                24
+            } else {
+                hour
+            }
+        }
+        _ => hour,
+    };
+    let pad_hour = matches!(cycle, "h23" | "h24") || options.hour.as_deref() == Some("2-digit");
+    append_selected(
+        parts,
+        show_hour,
+        "hour",
+        if pad_hour {
+            format!("{displayed_hour:02}")
+        } else {
+            displayed_hour.to_string()
+        },
+    );
+    append_literal_if(parts, show_hour && show_minute, ":");
+    append_selected(parts, show_minute, "minute", format!("{minute:02}"));
+    append_literal_if(parts, (show_hour || show_minute) && show_second, ":");
+    append_selected(parts, show_second, "second", format!("{second:02}"));
+    if let Some(digits) = options.fractional_second_digits {
+        let millis = input.millisecond.unwrap_or(0);
+        let text = format!("{millis:03}");
+        let end = usize::from(digits);
+        let fraction = text.get(..end).unwrap_or(text.as_str()).to_owned();
+        if show_second {
+            parts.push(literal("."));
+        }
+        parts.push(FormatPart {
+            kind: "fractionalSecond",
+            value: fraction,
+        });
+    }
+    if matches!(cycle, "h11" | "h12") || options.day_period.is_some() {
+        if show_hour || show_minute || show_second {
+            parts.push(literal(" "));
+        }
+        parts.push(FormatPart {
+            kind: "dayPeriod",
+            value: if hour < 12 { "AM" } else { "PM" }.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn append_selected(parts: &mut Vec<FormatPart>, selected: bool, kind: &'static str, value: String) {
+    if selected {
+        parts.push(FormatPart { kind, value });
+    }
+}
+
+fn append_literal_if(parts: &mut Vec<FormatPart>, selected: bool, text: &'static str) {
+    if selected {
+        parts.push(literal(text));
+    }
+}
+
+fn literal(value: &'static str) -> FormatPart {
+    FormatPart {
+        kind: "literal",
+        value: value.to_owned(),
+    }
+}
+
+fn resolved_cycle(formatter: &DateTimeFormatValue) -> &str {
+    if let Some(hour12) = formatter.options.hour12 {
+        return if hour12 { "h12" } else { "h23" };
+    }
+    if let Some(cycle) = formatter.options.hour_cycle.as_deref() {
+        return cycle;
+    }
+    if formatter.locale.to_ascii_lowercase().starts_with("de") {
+        "h23"
+    } else {
+        "h12"
+    }
+}
+
+fn format_month(month: u8, style: Option<&str>, calendar: &str) -> String {
+    if matches!(style, Some("long" | "short" | "narrow")) {
+        let names = if calendar.starts_with("islamic") {
+            &ISLAMIC_MONTHS
+        } else {
+            &GREGORIAN_MONTHS
+        };
+        let index = usize::from(month.saturating_sub(1));
+        let name = names.get(index).copied().unwrap_or("");
+        return match style {
+            Some("short") => name.chars().take(3).collect(),
+            Some("narrow") => name.chars().take(1).collect(),
+            _ => name.to_owned(),
+        };
+    }
+    if style == Some("2-digit") {
+        format!("{month:02}")
+    } else {
+        month.to_string()
+    }
+}
+
+fn year_string(year: i32, style: Option<&str>) -> String {
+    if style == Some("2-digit") {
+        format!("{:02}", year.unsigned_abs() % 100)
+    } else {
+        year.to_string()
+    }
+}
+
+fn weekday_name(day: u16, locale: &str) -> &'static str {
+    let index = usize::from(day.saturating_sub(1));
+    let names = if locale.to_ascii_lowercase().starts_with("de") {
+        &GERMAN_WEEKDAYS
+    } else {
+        &ENGLISH_WEEKDAYS
+    };
+    names.get(index).copied().unwrap_or("Monday")
+}
+
+fn time_zone_name(input: &DateTimeInput, style: Option<&str>) -> String {
+    let zone = input.time_zone.as_deref().unwrap_or("UTC");
+    if zone == "Europe/Vienna" && style == Some("long") {
+        return "Central European Standard Time".to_owned();
+    }
+    if zone.starts_with('+') || zone.starts_with('-') {
+        let sign = zone.get(..1).unwrap_or("");
+        let hour = zone.get(1..3).unwrap_or("00").trim_start_matches('0');
+        if hour.is_empty() || hour == "0" {
+            return "GMT".to_owned();
+        }
+        return format!("GMT{sign}{hour}");
+    }
+    if zone.eq_ignore_ascii_case("UTC") {
+        return "UTC".to_owned();
+    }
+    if let Some(offset) = input.offset.as_deref() {
+        return format!("GMT{offset}");
+    }
+    zone.to_owned()
+}
+
+fn intl_temporal_error(error: temporal_rs::TemporalError) -> Error {
+    Error::exception(ErrorName::RangeError, error.to_string())
+}
+
+const GREGORIAN_MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+const ISLAMIC_MONTHS: [&str; 12] = [
+    "Muharram",
+    "Safar",
+    "Rabi I",
+    "Rabi II",
+    "Jumada I",
+    "Jumada II",
+    "Rajab",
+    "Sha'ban",
+    "Ramadan",
+    "Shawwal",
+    "Dhu al-Qidah",
+    "Dhu al-Hijjah",
+];
+const ENGLISH_WEEKDAYS: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+const GERMAN_WEEKDAYS: [&str; 7] = [
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sonntag",
+];

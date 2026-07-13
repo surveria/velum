@@ -110,8 +110,10 @@ impl Context {
             TemporalFunctionKind::InstantPrototypeToString => {
                 self.eval_instant_to_string(args, receiver)
             }
-            TemporalFunctionKind::InstantPrototypeToLocaleString
-            | TemporalFunctionKind::InstantPrototypeToJson => self.instant_default_string(receiver),
+            TemporalFunctionKind::InstantPrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
+            }
+            TemporalFunctionKind::InstantPrototypeToJson => self.instant_default_string(receiver),
             TemporalFunctionKind::InstantPrototypeValueOf => Err(Error::type_error(
                 "Temporal.Instant cannot be converted to a primitive",
             )),

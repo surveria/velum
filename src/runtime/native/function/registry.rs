@@ -289,7 +289,8 @@ const ATOMICS_METHOD_SLOT_BASE: usize = 316;
 const GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(330);
 const REGEXP_ESCAPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(331);
 const TEMPORAL_FUNCTION_SLOT_BASE: usize = 332;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 564;
+const INTL_FUNCTION_SLOT_BASE: usize = 564;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 571;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -427,6 +428,12 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     }
     if let NativeFunctionKind::Temporal(method) = kind {
         let Some(index) = TEMPORAL_FUNCTION_SLOT_BASE.checked_add(method.index()) else {
+            return None;
+        };
+        return Some(NativeFunctionSlot::new(index));
+    }
+    if let NativeFunctionKind::Intl(method) = kind {
+        let Some(index) = INTL_FUNCTION_SLOT_BASE.checked_add(method.index()) else {
             return None;
         };
         return Some(NativeFunctionSlot::new(index));

@@ -113,10 +113,12 @@ impl Context {
                 let date = self.plain_date_receiver(receiver)?;
                 self.heap_string_value(&date.to_ixdtf_string(display))
             }
-            TemporalFunctionKind::PlainDatePrototypeToJson
-            | TemporalFunctionKind::PlainDatePrototypeToLocaleString => {
+            TemporalFunctionKind::PlainDatePrototypeToJson => {
                 let date = self.plain_date_receiver(receiver)?;
                 self.heap_string_value(&date.to_ixdtf_string(DisplayCalendar::Auto))
+            }
+            TemporalFunctionKind::PlainDatePrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::PlainDatePrototypeValueOf => Err(Error::type_error(
                 "Temporal.PlainDate cannot be converted to a primitive",

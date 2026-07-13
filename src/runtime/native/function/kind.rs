@@ -311,6 +311,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     DisposableStack(super::disposable_stack_kind::DisposableStackFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     Iterator(IteratorFunctionKind),
+    Intl(super::IntlFunctionKind),
     IteratorSelf,
     Eval,
     ErrorConstructor(ErrorName),
@@ -580,6 +581,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
 
 impl NativeFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
+        if let Self::Intl(kind) = self {
+            return kind.length();
+        }
         if let Self::Temporal(kind) = self {
             return kind.length();
         }
@@ -650,6 +654,9 @@ impl NativeFunctionKind {
     }
 
     pub(in crate::runtime) const fn name(self) -> &'static str {
+        if let Self::Intl(kind) = self {
+            return kind.name();
+        }
         if let Self::Temporal(kind) = self {
             return kind.name();
         }

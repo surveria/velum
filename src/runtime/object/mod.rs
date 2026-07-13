@@ -10,6 +10,7 @@ mod data_view;
 mod date;
 mod heap;
 mod integrity;
+mod intl;
 mod private_slot;
 mod property;
 mod prototype;
@@ -26,6 +27,7 @@ use base::LiteralPrototype;
 pub use base::ObjectHeap;
 pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
+pub(in crate::runtime) use intl::{DateTimeFormatOptions, DateTimeFormatValue, IntlValue};
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;
 pub use property::ObjectPropertyInit;
@@ -114,6 +116,7 @@ struct Object {
     primitive_value: Option<ObjectPrimitiveValue>,
     error_metadata: Option<JavaScriptErrorMetadata>,
     date_value: Option<DateValue>,
+    intl_value: Option<IntlValue>,
     temporal_value: Option<TemporalValue>,
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
@@ -151,6 +154,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            intl_value: None,
             temporal_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -222,6 +226,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            intl_value: None,
             temporal_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -249,6 +254,7 @@ impl Object {
             primitive_value: None,
             error_metadata: None,
             date_value: None,
+            intl_value: None,
             temporal_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -276,6 +282,7 @@ impl Object {
             primitive_value: Some(value),
             error_metadata: None,
             date_value: None,
+            intl_value: None,
             temporal_value: None,
             regexp_value: None,
             proxy_value: None,
