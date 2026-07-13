@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Ord, PartialOrd)]
 pub struct AtomId(u32);
 
 impl AtomId {

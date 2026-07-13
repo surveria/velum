@@ -44,15 +44,15 @@ impl Object {
     }
 
     fn seal(&mut self, shapes: &mut ShapeTable) -> Result<()> {
-        self.prevent_extensions();
         self.seal_named_properties(shapes)?;
+        self.prevent_extensions();
         self.array_storage.seal_dense_properties();
         Ok(())
     }
 
     fn freeze(&mut self, shapes: &mut ShapeTable) -> Result<()> {
-        self.prevent_extensions();
         self.freeze_named_properties(shapes)?;
+        self.prevent_extensions();
         self.array_storage.freeze_dense_properties();
         if self.array_length.is_some() {
             self.array_length_writable = PropertyWritable::No;
@@ -82,22 +82,34 @@ impl Object {
     }
 
     fn seal_named_properties(&mut self, shapes: &mut ShapeTable) -> Result<()> {
+        let shape = shapes.transition_after_attributes(
+            self.shape,
+            self.named_properties.iter().map(|entry| {
+                let mut property = entry.property().clone();
+                property.seal();
+                (entry.key(), property.shape_attributes())
+            }),
+        )?;
         for entry in &mut self.named_properties {
-            let key = entry.key();
             entry.property_mut().seal();
-            let attributes = entry.property().shape_attributes();
-            self.shape = shapes.transition_after_update(self.shape, key, attributes)?;
         }
+        self.shape = shape;
         Ok(())
     }
 
     fn freeze_named_properties(&mut self, shapes: &mut ShapeTable) -> Result<()> {
+        let shape = shapes.transition_after_attributes(
+            self.shape,
+            self.named_properties.iter().map(|entry| {
+                let mut property = entry.property().clone();
+                property.freeze();
+                (entry.key(), property.shape_attributes())
+            }),
+        )?;
         for entry in &mut self.named_properties {
-            let key = entry.key();
             entry.property_mut().freeze();
-            let attributes = entry.property().shape_attributes();
-            self.shape = shapes.transition_after_update(self.shape, key, attributes)?;
         }
+        self.shape = shape;
         Ok(())
     }
 }

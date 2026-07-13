@@ -6,7 +6,7 @@ use crate::{
 
 use super::PropertyEnumerable;
 
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PropertyKey {
     Atom(AtomId),
     Symbol(SymbolId),
