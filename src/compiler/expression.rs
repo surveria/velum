@@ -389,7 +389,7 @@ impl BytecodeCompiler<'_> {
             return Ok(());
         }
         if let Some(binding) = constructor_binding_expr(constructor)
-            && args.is_empty()
+            && new_constructor_args_are_side_effect_free(args)
         {
             self.compile_args(args)?;
             self.emit(BytecodeInstruction::Construct {
@@ -694,4 +694,9 @@ impl BytecodeCompiler<'_> {
         }
         Ok(spread_flags.into())
     }
+}
+
+fn new_constructor_args_are_side_effect_free(args: &[Expression]) -> bool {
+    args.iter()
+        .all(|arg| matches!(arg.kind(), Expr::Literal(_) | Expr::StringLiteral { .. }))
 }
