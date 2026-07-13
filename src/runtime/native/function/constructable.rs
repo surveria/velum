@@ -1,7 +1,7 @@
 use super::{
     AsyncDisposableStackFunctionKind, DataViewFunctionKind, DateFunctionKind,
-    DisposableStackFunctionKind, IteratorFunctionKind, NativeFunctionKind, ShadowRealmFunctionKind,
-    TemporalFunctionKind,
+    DisposableStackFunctionKind, IntlFunctionKind, IteratorFunctionKind, NativeFunctionKind,
+    ShadowRealmFunctionKind, TemporalFunctionKind,
 };
 
 impl NativeFunctionKind {
@@ -19,6 +19,14 @@ impl NativeFunctionKind {
                 | Self::ErrorConstructor(_)
                 | Self::Function
                 | Self::Iterator(IteratorFunctionKind::Constructor)
+                | Self::Intl(
+                    IntlFunctionKind::DateTimeFormatConstructor
+                        | IntlFunctionKind::DurationFormatConstructor
+                        | IntlFunctionKind::CollatorConstructor
+                        | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::PluralRulesConstructor
+                        | IntlFunctionKind::RelativeTimeFormatConstructor
+                )
                 | Self::Number
                 | Self::Object
                 | Self::Promise
@@ -67,6 +75,14 @@ impl NativeFunctionKind {
                 | Self::ErrorConstructor(_)
                 | Self::Function
                 | Self::Iterator(IteratorFunctionKind::Constructor)
+                | Self::Intl(
+                    IntlFunctionKind::DateTimeFormatConstructor
+                        | IntlFunctionKind::DurationFormatConstructor
+                        | IntlFunctionKind::CollatorConstructor
+                        | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::PluralRulesConstructor
+                        | IntlFunctionKind::RelativeTimeFormatConstructor
+                )
                 | Self::Number
                 | Self::Object
                 | Self::Promise

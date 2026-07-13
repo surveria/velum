@@ -231,8 +231,10 @@ impl Context {
             TemporalFunctionKind::PlainDateTimePrototypeToString => {
                 self.eval_plain_date_time_to_string(args, receiver)
             }
-            TemporalFunctionKind::PlainDateTimePrototypeToLocaleString
-            | TemporalFunctionKind::PlainDateTimePrototypeToJson => {
+            TemporalFunctionKind::PlainDateTimePrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
+            }
+            TemporalFunctionKind::PlainDateTimePrototypeToJson => {
                 self.plain_date_time_default_string(receiver)
             }
             TemporalFunctionKind::PlainDateTimePrototypeValueOf => Err(Error::type_error(

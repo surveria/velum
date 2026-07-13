@@ -23,6 +23,7 @@ mod date_kind;
 mod direct;
 mod direct_buffer_memory;
 mod disposable_stack_kind;
+mod intl_kind;
 mod iterator;
 mod iterator_kind;
 mod kind;
@@ -61,6 +62,7 @@ pub(in crate::runtime) use date_kind::{
 pub(in crate::runtime) use disposable_stack_kind::{
     DISPOSABLE_STACK_NAME, DisposableStackFunctionKind,
 };
+pub(in crate::runtime) use intl_kind::{INTL_NAME, IntlFunctionKind};
 pub(in crate::runtime::native) use iterator_kind::{
     ITERATOR_CONCAT_NAME, ITERATOR_FROM_NAME, ITERATOR_PROTOTYPE_DROP_NAME,
     ITERATOR_PROTOTYPE_EVERY_NAME, ITERATOR_PROTOTYPE_FILTER_NAME, ITERATOR_PROTOTYPE_FIND_NAME,

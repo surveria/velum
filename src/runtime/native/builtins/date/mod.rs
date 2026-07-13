@@ -238,9 +238,11 @@ impl Context {
             DateFunctionKind::PrototypeToLocaleDateString => {
                 Some(self.eval_date_prototype_to_locale_date_string(this_value))
             }
-            DateFunctionKind::PrototypeToLocaleString => {
-                Some(self.eval_date_prototype_to_locale_string(this_value))
-            }
+            DateFunctionKind::PrototypeToLocaleString => Some(if args.as_slice().is_empty() {
+                self.eval_date_prototype_to_string(this_value)
+            } else {
+                self.format_temporal_locale_string(this_value, args)
+            }),
             DateFunctionKind::PrototypeToLocaleTimeString => {
                 Some(self.eval_date_prototype_to_locale_time_string(this_value))
             }
@@ -493,13 +495,6 @@ impl Context {
             return Ok(Value::Null);
         }
         self.eval_date_prototype_to_iso_string(this_value)
-    }
-
-    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_string(
-        &mut self,
-        this_value: &Value,
-    ) -> Result<Value> {
-        self.eval_date_prototype_to_string(this_value)
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_to_locale_date_string(

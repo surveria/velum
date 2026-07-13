@@ -16,7 +16,7 @@ use super::{
     EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
     GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
     GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
-    INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
+    INFINITY_NAME, INTL_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
     PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
     SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, TEMPORAL_NAME,
@@ -75,6 +75,7 @@ impl Context {
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
+            INTL_NAME => self.intl_namespace_value().map(Some),
             ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             JSON_NAME => self.json_object_value().map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
@@ -219,6 +220,7 @@ impl Context {
             // class rejects. Subclass construction flows through
             // `semantic_construct`.
             NativeFunctionKind::Iterator(_) => Self::eval_iterator_abstract_call(),
+            NativeFunctionKind::Intl(kind) => self.construct_intl_kind(kind, args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::AsyncGeneratorFunction => {
                 self.eval_async_generator_function_constructor(args)

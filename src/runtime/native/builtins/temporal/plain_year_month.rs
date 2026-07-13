@@ -133,8 +133,10 @@ impl Context {
                 let display = self.plain_date_display_calendar(args.as_slice().first())?;
                 self.plain_year_month_string(receiver, display)
             }
-            TemporalFunctionKind::PlainYearMonthPrototypeToLocaleString
-            | TemporalFunctionKind::PlainYearMonthPrototypeToJson => {
+            TemporalFunctionKind::PlainYearMonthPrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
+            }
+            TemporalFunctionKind::PlainYearMonthPrototypeToJson => {
                 self.plain_year_month_string(receiver, DisplayCalendar::Auto)
             }
             TemporalFunctionKind::PlainYearMonthPrototypeValueOf => Err(Error::type_error(

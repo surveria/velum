@@ -29,6 +29,7 @@ pub(in crate::runtime) const DEFAULT_GLOBAL_BINDING_NAMES: &[&str] = &[
     "Int8Array",
     "Int16Array",
     "Int32Array",
+    "Intl",
     "Map",
     "Number",
     "Object",

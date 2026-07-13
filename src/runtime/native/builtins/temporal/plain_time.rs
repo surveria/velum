@@ -92,8 +92,10 @@ impl Context {
             TemporalFunctionKind::PlainTimePrototypeToString => {
                 self.eval_plain_time_to_string(args, receiver)
             }
-            TemporalFunctionKind::PlainTimePrototypeToLocaleString
-            | TemporalFunctionKind::PlainTimePrototypeToJson => {
+            TemporalFunctionKind::PlainTimePrototypeToLocaleString => {
+                self.format_temporal_locale_string(receiver, args)
+            }
+            TemporalFunctionKind::PlainTimePrototypeToJson => {
                 self.plain_time_default_string(receiver)
             }
             TemporalFunctionKind::PlainTimePrototypeValueOf => Err(Error::type_error(

@@ -202,7 +202,10 @@ impl Context {
         Ok(Value::Number(result))
     }
 
-    pub(super) fn duration_from_value(&mut self, value: Option<&Value>) -> Result<Duration> {
+    pub(in crate::runtime::native) fn duration_from_value(
+        &mut self,
+        value: Option<&Value>,
+    ) -> Result<Duration> {
         let Some(value) = value else {
             return Err(Error::type_error(DURATION_ARGUMENT_ERROR));
         };
