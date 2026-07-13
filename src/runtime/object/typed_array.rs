@@ -595,14 +595,13 @@ pub(in crate::runtime::object) fn typed_array_property_index(
         if bytes.len() > 1 && bytes.first().is_some_and(|digit| *digit == b'0') {
             return None;
         }
-        let Ok(index) = property.parse::<usize>() else {
-            return Some(TypedArrayPropertyIndex::Invalid);
-        };
-        return Some(if index < length {
-            TypedArrayPropertyIndex::Valid(index)
-        } else {
-            TypedArrayPropertyIndex::Invalid
-        });
+        if let Ok(index) = property.parse::<usize>() {
+            return Some(if index < length {
+                TypedArrayPropertyIndex::Valid(index)
+            } else {
+                TypedArrayPropertyIndex::Invalid
+            });
+        }
     }
     let number = match property {
         "NaN" => f64::NAN,

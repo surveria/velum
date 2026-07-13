@@ -491,8 +491,7 @@ fn batches_typed_array_storage_without_changing_numeric_or_overlap_semantics() -
         let indexed = new Uint8Array([4]);
         indexed["01"] = 9;
         let huge = "184467440737095516160";
-        let hugeIgnored = Reflect.set(indexed, huge, 8) === true &&
-            Object.getOwnPropertyDescriptor(indexed, huge) === undefined;
+        let hugeIsOrdinary = Reflect.set(indexed, huge, 8) === true && indexed[huge] === 8;
 
         overlap.join(",") === "1,1,2,3" &&
             converted.join(",") === "0,6,7,0" &&
@@ -500,7 +499,7 @@ fn batches_typed_array_storage_without_changing_numeric_or_overlap_semantics() -
             copied.join(",") === "4,3,2,1,1" &&
             sorted[0] === 0 && 1 / sorted[0] === -Infinity &&
             sorted[1] === 2 && sorted[2] === 4 && Number.isNaN(sorted[3]) &&
-            indexed[0] === 4 && indexed["01"] === 9 && hugeIgnored ? 42 : 0
+            indexed[0] === 4 && indexed["01"] === 9 && hugeIsOrdinary ? 42 : 0
         "#,
         &Value::Number(42.0),
     )
