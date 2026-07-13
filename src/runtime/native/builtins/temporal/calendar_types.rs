@@ -4,10 +4,7 @@ use num_traits::ToPrimitive;
 use temporal_rs::{
     Calendar, Instant, PlainDate, PlainDateTime, PlainMonthDay, PlainTime, PlainYearMonth,
     TimeZone, ZonedDateTime,
-    options::{
-        Disambiguation, DisplayCalendar, DisplayOffset, DisplayTimeZone, OffsetDisambiguation,
-        Overflow, ToStringRoundingOptions,
-    },
+    options::{DisplayCalendar, Overflow},
 };
 
 use crate::{
@@ -21,7 +18,7 @@ use crate::{
             TemporalValue,
         },
     },
-    value::{ErrorName, JsBigInt, NativeFunctionId, ObjectId, Value},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
 
 use super::{temporal_error, temporal_kind};
@@ -134,32 +131,9 @@ impl Context {
         self.temporal_calendar_constructor(
             TemporalFunctionKind::ZonedDateTimeConstructor,
             ZONED_DATE_TIME_TAG,
-            &[("from", TemporalFunctionKind::ZonedDateTimeFrom)],
-            &[
-                (
-                    "epochNanoseconds",
-                    TemporalFunctionKind::ZonedDateTimePrototypeEpochNanoseconds,
-                ),
-                (
-                    "timeZoneId",
-                    TemporalFunctionKind::ZonedDateTimePrototypeTimeZoneId,
-                ),
-                (
-                    "calendarId",
-                    TemporalFunctionKind::ZonedDateTimePrototypeCalendarId,
-                ),
-            ],
-            &[
-                (
-                    "toString",
-                    TemporalFunctionKind::ZonedDateTimePrototypeToString,
-                ),
-                ("toJSON", TemporalFunctionKind::ZonedDateTimePrototypeToJson),
-                (
-                    "valueOf",
-                    TemporalFunctionKind::ZonedDateTimePrototypeValueOf,
-                ),
-            ],
+            super::zoned_date_time::STATIC_METHODS,
+            super::zoned_date_time::ACCESSORS,
+            super::zoned_date_time::METHODS,
         )
     }
 
@@ -329,8 +303,10 @@ impl Context {
             )
         })?;
         let zone_value = values.get(1).cloned().unwrap_or(Value::Undefined);
-        let zone_text = self.to_string(&zone_value)?;
-        let time_zone = TimeZone::try_from_str(&zone_text).map_err(temporal_error)?;
+        let zone_text = zone_value
+            .string_text()
+            .ok_or_else(|| Error::type_error("ZonedDateTime timeZone must be a string"))?;
+        let time_zone = TimeZone::try_from_identifier_str(zone_text).map_err(temporal_error)?;
         let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let zoned = ZonedDateTime::try_new(nanos, time_zone, calendar).map_err(temporal_error)?;
         self.create_zoned_date_time_value(zoned)
@@ -550,7 +526,7 @@ impl Context {
         )
     }
 
-    fn create_zoned_date_time_value(&mut self, zoned: ZonedDateTime) -> Result<Value> {
+    pub(super) fn create_zoned_date_time_value(&mut self, zoned: ZonedDateTime) -> Result<Value> {
         let prototype =
             self.temporal_constructor_prototype(TemporalFunctionKind::ZonedDateTimeConstructor)?;
         self.objects.create_temporal_object(
@@ -630,6 +606,9 @@ impl Context {
         if kind.is_instant() {
             return self.eval_instant_kind(kind, args, receiver);
         }
+        if kind.is_zoned_date_time() {
+            return self.eval_zoned_date_time_kind(kind, args, receiver);
+        }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(
                 "Temporal.PlainDate constructor requires 'new'",
@@ -655,44 +634,6 @@ impl Context {
             }
             TemporalFunctionKind::PlainDatePrototypeValueOf => Err(Error::type_error(
                 "Temporal.PlainDate cannot be converted to a primitive",
-            )),
-            TemporalFunctionKind::ZonedDateTimeConstructor => Err(Error::type_error(
-                "Temporal.ZonedDateTime constructor requires 'new'",
-            )),
-            TemporalFunctionKind::ZonedDateTimeFrom => self.eval_zoned_date_time_from(args),
-            TemporalFunctionKind::ZonedDateTimePrototypeEpochNanoseconds => {
-                let zoned = self.zoned_date_time_receiver(receiver)?;
-                let bigint =
-                    JsBigInt::parse_string(&zoned.epoch_nanoseconds().as_i128().to_string())
-                        .ok_or_else(|| {
-                            Error::runtime("ZonedDateTime epoch cannot become BigInt")
-                        })?;
-                Ok(Value::BigInt(bigint))
-            }
-            TemporalFunctionKind::ZonedDateTimePrototypeTimeZoneId => {
-                let zoned = self.zoned_date_time_receiver(receiver)?;
-                let identifier = zoned.time_zone().identifier().map_err(temporal_error)?;
-                self.heap_string_value(&identifier)
-            }
-            TemporalFunctionKind::ZonedDateTimePrototypeCalendarId => {
-                let zoned = self.zoned_date_time_receiver(receiver)?;
-                self.heap_string_value(zoned.calendar().identifier())
-            }
-            TemporalFunctionKind::ZonedDateTimePrototypeToString
-            | TemporalFunctionKind::ZonedDateTimePrototypeToJson => {
-                let zoned = self.zoned_date_time_receiver(receiver)?;
-                let text = zoned
-                    .to_ixdtf_string(
-                        DisplayOffset::Auto,
-                        DisplayTimeZone::Auto,
-                        DisplayCalendar::Auto,
-                        ToStringRoundingOptions::default(),
-                    )
-                    .map_err(temporal_error)?;
-                self.heap_string_value(&text)
-            }
-            TemporalFunctionKind::ZonedDateTimePrototypeValueOf => Err(Error::type_error(
-                "Temporal.ZonedDateTime cannot be converted to a primitive",
             )),
             TemporalFunctionKind::PlainDateTimeConstructor => Err(Error::type_error(
                 "Temporal.PlainDateTime constructor requires 'new'",
@@ -730,29 +671,6 @@ impl Context {
         self.create_plain_date_value(date)
     }
 
-    fn eval_zoned_date_time_from(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let Some(value) = args.as_slice().first() else {
-            return Err(Error::type_error(
-                "Temporal.ZonedDateTime.from requires an argument",
-            ));
-        };
-        let zoned = if let Ok(zoned) = self.zoned_date_time_receiver(value) {
-            zoned
-        } else if let Some(text) = value.string_text() {
-            ZonedDateTime::from_utf8(
-                text.as_bytes(),
-                Disambiguation::Compatible,
-                OffsetDisambiguation::Reject,
-            )
-            .map_err(temporal_error)?
-        } else {
-            return Err(Error::type_error(
-                "Temporal.ZonedDateTime.from argument must be a string or ZonedDateTime",
-            ));
-        };
-        self.create_zoned_date_time_value(zoned)
-    }
-
     pub(super) fn plain_date_receiver(&self, value: &Value) -> Result<PlainDate> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(PLAIN_DATE_RECEIVER_ERROR));
@@ -763,7 +681,7 @@ impl Context {
         }
     }
 
-    fn zoned_date_time_receiver(&self, value: &Value) -> Result<ZonedDateTime> {
+    pub(super) fn zoned_date_time_receiver(&self, value: &Value) -> Result<ZonedDateTime> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(ZONED_DATE_TIME_RECEIVER_ERROR));
         };

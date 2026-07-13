@@ -20,7 +20,7 @@ impl TemporalFunctionKind {
             Self::InstantPrototypeToLocaleString => 180,
             Self::InstantPrototypeToJson => 181,
             Self::InstantPrototypeValueOf => 182,
-            _ => 46,
+            _ => self.zoned_date_time_index(),
         }
     }
 
@@ -43,7 +43,7 @@ impl TemporalFunctionKind {
             Self::InstantPrototypeToLocaleString => "toLocaleString",
             Self::InstantPrototypeToJson => "toJSON",
             Self::InstantPrototypeValueOf => "valueOf",
-            _ => "Instant",
+            _ => self.zoned_date_time_name(),
         }
     }
 
