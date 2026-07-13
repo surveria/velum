@@ -73,6 +73,7 @@ impl Context {
         } else {
             crate::compiled_script::EvalClassFieldContext::None
         };
+        let allow_new_target = direct && self.direct_eval_allows_new_target()?;
         let private_names: Rc<[crate::syntax::StaticName]> = if direct {
             self.current_private_environment()
                 .map_or_else(|| Rc::from([]), |environment| environment.visible_names())
@@ -86,6 +87,7 @@ impl Context {
                 strict_mode,
                 super_context,
                 class_field_context,
+                allow_new_target,
                 private_names,
             ),
         )

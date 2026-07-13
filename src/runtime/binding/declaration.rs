@@ -5,7 +5,9 @@ use crate::{
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::function::BytecodeFunctionInit,
-    runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
+    runtime::object::{
+        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyWritable,
+    },
     storage::atom::AtomId,
     syntax::{DeclKind, StaticBinding},
     value::{ErrorName, Value},
@@ -74,16 +76,27 @@ impl Context {
                     .globals
                     .get(atom)
                     .filter(|cell| cell.kind() == DeclKind::Var)
-            })
-            .ok_or_else(|| Error::runtime(format!("Annex B var binding '{name}' is missing")))?;
+            });
         let value = self.checked_value(value)?;
-        let object_authoritative = self
+        let Some(cell) = cell else {
+            if self.global_object_name_is_authoritative(name.as_str()) {
+                let global_object = self.global_object_id()?;
+                return self.update_global_object_data_property_value(
+                    global_object,
+                    name.as_str(),
+                    value,
+                );
+            }
+            return Err(Error::runtime(format!(
+                "Annex B var binding '{name}' is missing"
+            )));
+        };
+        let global_binding = self
             .realm
             .globals
             .get(atom)
-            .is_some_and(|global| global.same_cell(&cell))
-            && self.global_object_name_is_authoritative(name.as_str());
-        if object_authoritative {
+            .is_some_and(|global| global.same_cell(&cell));
+        if global_binding {
             let global_object = self.global_object_id()?;
             self.update_global_object_data_property_value(
                 global_object,
@@ -174,9 +187,81 @@ impl Context {
         Ok(())
     }
 
+    pub(crate) fn hoist_bytecode_eval_global_var_declarations(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+    ) -> Result<()> {
+        let mut functions = Vec::new();
+        for declaration in plan.function_declarations().iter().rev() {
+            let name = declaration.name().name().as_str();
+            if functions
+                .iter()
+                .any(|existing: &&crate::bytecode::BytecodeFunctionDeclaration| {
+                    existing.name().name().as_str() == name
+                })
+            {
+                continue;
+            }
+            self.ensure_eval_global_name_is_not_lexical(name)?;
+            if !self.can_declare_eval_global_function(name)? {
+                return Err(Error::exception(
+                    ErrorName::TypeError,
+                    format!("global function '{name}' cannot be declared"),
+                ));
+            }
+            functions.push(declaration);
+        }
+
+        let mut vars = Vec::new();
+        for binding in plan.var_declarations() {
+            let name = binding.as_str();
+            if functions
+                .iter()
+                .any(|declaration| declaration.name().name().as_str() == name)
+                || vars
+                    .iter()
+                    .any(|existing: &&StaticBinding| existing.as_str() == name)
+            {
+                continue;
+            }
+            self.ensure_eval_global_name_is_not_lexical(name)?;
+            if !self.can_declare_eval_global_var(name)? {
+                return Err(Error::exception(
+                    ErrorName::TypeError,
+                    format!("global variable '{name}' cannot be declared"),
+                ));
+            }
+            vars.push(binding);
+        }
+
+        for declaration in functions.into_iter().rev() {
+            self.create_eval_global_function(declaration)?;
+        }
+        for binding in vars {
+            self.create_eval_global_var(binding)?;
+        }
+        Ok(())
+    }
+
     fn hoist_lexical(&mut self, name: &StaticBinding, kind: DeclKind) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name())?;
-        if self.active_bindings().contains(atom) {
+        let replaces_configurable_eval_global = if !self.has_visible_local_scope()
+            && self
+                .active_bindings()
+                .get(atom)
+                .is_some_and(|binding| binding.kind() == DeclKind::Var)
+        {
+            self.eval_global_own_property_descriptor(name.as_str())?
+                .is_some_and(|descriptor| match descriptor {
+                    OwnPropertyDescriptor::Data(descriptor) => descriptor.configurable().is_yes(),
+                    OwnPropertyDescriptor::Accessor(descriptor) => {
+                        descriptor.configurable().is_yes()
+                    }
+                })
+        } else {
+            false
+        };
+        if self.active_bindings().contains(atom) && !replaces_configurable_eval_global {
             return Err(Error::exception(
                 ErrorName::SyntaxError,
                 format!("'{name}' has already been declared"),
@@ -240,16 +325,7 @@ impl Context {
         let object_authoritative = self.locals.is_empty()
             && self.global_object_name_is_authoritative(declaration.name().name().name());
         self.hoist_var(declaration.name().name())?;
-        let function = self.create_bytecode_function(&BytecodeFunctionInit {
-            static_function_id: declaration.id(),
-            name: Some(declaration.function_name()),
-            bytecode: declaration.bytecode(),
-            constructable: declaration.kind().is_constructable(),
-            kind: declaration.kind(),
-            class_constructor: false,
-            prototype_parent: None,
-            new_target_mode: BytecodeNewTargetMode::Own,
-        })?;
+        let function = self.instantiate_hoisted_function(declaration)?;
         if object_authoritative {
             let name = declaration.name().name().name();
             let atom = self.intern_atom(name)?;
@@ -261,6 +337,148 @@ impl Context {
             return self.update_global_object_data_property_value(global_object, name, function);
         }
         self.assign_bytecode(declaration.name(), function)
+    }
+
+    fn instantiate_hoisted_function(
+        &mut self,
+        declaration: &crate::bytecode::BytecodeFunctionDeclaration,
+    ) -> Result<Value> {
+        self.create_bytecode_function(&BytecodeFunctionInit {
+            static_function_id: declaration.id(),
+            name: Some(declaration.function_name()),
+            bytecode: declaration.bytecode(),
+            constructable: declaration.kind().is_constructable(),
+            kind: declaration.kind(),
+            class_constructor: false,
+            prototype_parent: None,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        })
+    }
+
+    fn ensure_eval_global_name_is_not_lexical(&self, name: &str) -> Result<()> {
+        let Some(atom) = self.atom(name) else {
+            return Ok(());
+        };
+        if self
+            .realm
+            .globals
+            .get(atom)
+            .is_some_and(|binding| binding.kind() != DeclKind::Var)
+        {
+            return Err(Error::exception(
+                ErrorName::SyntaxError,
+                format!("'{name}' has already been declared"),
+            ));
+        }
+        Ok(())
+    }
+
+    fn can_declare_eval_global_function(&mut self, name: &str) -> Result<bool> {
+        let Some(descriptor) = self.eval_global_own_property_descriptor(name)? else {
+            let global_object = self.global_object_id()?;
+            return self.objects.is_extensible(global_object);
+        };
+        match descriptor {
+            OwnPropertyDescriptor::Data(descriptor) => Ok(descriptor.configurable().is_yes()
+                || (descriptor.writable().is_yes() && descriptor.enumerable().is_yes())),
+            OwnPropertyDescriptor::Accessor(descriptor) => Ok(descriptor.configurable().is_yes()),
+        }
+    }
+
+    fn can_declare_eval_global_var(&mut self, name: &str) -> Result<bool> {
+        if self.eval_global_own_property_descriptor(name)?.is_some() {
+            return Ok(true);
+        }
+        let global_object = self.global_object_id()?;
+        self.objects.is_extensible(global_object)
+    }
+
+    fn eval_global_own_property_descriptor(
+        &mut self,
+        name: &str,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        let global_object = self.global_object_id()?;
+        let lookup = self.property_lookup(name);
+        if let Some(descriptor) = self
+            .objects
+            .own_property_descriptor(global_object, lookup)?
+        {
+            return Ok(Some(descriptor));
+        }
+        self.global_object_property_descriptor(global_object, lookup)
+    }
+
+    fn create_eval_global_function(
+        &mut self,
+        declaration: &crate::bytecode::BytecodeFunctionDeclaration,
+    ) -> Result<()> {
+        let name = declaration.name().name().name();
+        let existing = self.eval_global_own_property_descriptor(name)?;
+        let function = self.instantiate_hoisted_function(declaration)?;
+        let global_object = self.global_object_id()?;
+        let replace_descriptor = existing.as_ref().is_none_or(|descriptor| match descriptor {
+            OwnPropertyDescriptor::Data(descriptor) => descriptor.configurable().is_yes(),
+            OwnPropertyDescriptor::Accessor(descriptor) => descriptor.configurable().is_yes(),
+        });
+        if replace_descriptor {
+            self.define_global_object_data_property(
+                global_object,
+                name,
+                function.clone(),
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::Yes,
+            )?;
+        } else {
+            self.update_global_object_data_property_value(global_object, name, function.clone())?;
+        }
+        self.materialize_eval_global_binding(declaration.name().name(), function, true)
+    }
+
+    fn create_eval_global_var(&mut self, binding: &StaticBinding) -> Result<()> {
+        let name = binding.as_str();
+        if let Some(descriptor) = self.eval_global_own_property_descriptor(name)? {
+            if let OwnPropertyDescriptor::Data(descriptor) = descriptor {
+                self.materialize_eval_global_binding(binding, descriptor.value(), false)?;
+            }
+            return Ok(());
+        }
+        let global_object = self.global_object_id()?;
+        self.define_global_object_data_property(
+            global_object,
+            name,
+            Value::Undefined,
+            PropertyWritable::Yes,
+            PropertyEnumerable::Yes,
+            PropertyConfigurable::Yes,
+        )?;
+        self.materialize_eval_global_binding(binding, Value::Undefined, false)
+    }
+
+    fn materialize_eval_global_binding(
+        &mut self,
+        binding: &StaticBinding,
+        value: Value,
+        replace_existing: bool,
+    ) -> Result<()> {
+        let name = binding.as_str();
+        let atom = self.intern_static_name_atom(binding.name())?;
+        if let Some(cell) = self.realm.globals.get(atom) {
+            if replace_existing {
+                cell.assign(name, value)?;
+                self.clear_global_object_property_authority(name)?;
+            }
+            return Ok(());
+        }
+        if self.realm.builtin_globals.contains(atom) && !replace_existing {
+            return Ok(());
+        }
+        self.ensure_binding_capacity_for_atom(atom)?;
+        self.realm
+            .globals
+            .insert(atom, BindingCell::new(value, true, DeclKind::Var))?;
+        self.clear_global_object_property_authority(name)?;
+        self.remember_active_static_binding(binding, atom)
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {

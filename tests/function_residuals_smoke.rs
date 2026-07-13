@@ -69,13 +69,13 @@ fn apply_accepts_callable_array_like_values_and_dynamic_html_comments() -> TestR
 #[test]
 fn parameter_expression_closures_keep_the_parameter_environment() -> TestResult {
     assert_script(
-        r#"
+        r"
         function evaluate(value = 1, capture = () => value) {
             var value = 2;
             return capture() === 1 && value === 2;
         }
         evaluate() ? 42 : 0
-        "#,
+        ",
     )
 }
 
@@ -100,6 +100,20 @@ fn direct_eval_parameter_arguments_conflicts_are_syntax_errors() -> TestResult {
         var threw = false;
         try { evaluate(); } catch (error) { threw = error instanceof SyntaxError; }
         threw ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn direct_eval_inherits_new_target_only_from_non_arrow_functions() -> TestResult {
+    assert_script(
+        r#"
+        function observeNewTarget() { return eval("new.target"); }
+        var arrowError;
+        try { (() => eval("new.target"))(); } catch (error) { arrowError = error; }
+        observeNewTarget() === undefined &&
+            new observeNewTarget() === observeNewTarget &&
+            arrowError instanceof SyntaxError ? 42 : 0
         "#,
     )
 }

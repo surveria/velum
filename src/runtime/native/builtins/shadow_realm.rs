@@ -169,6 +169,7 @@ impl Context {
                 false,
                 crate::compiled_script::EvalSuperContext::None,
                 crate::compiled_script::EvalClassFieldContext::None,
+                false,
                 std::rc::Rc::from([]),
             ),
         )

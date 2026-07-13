@@ -264,6 +264,22 @@ impl Context {
         None
     }
 
+    pub(in crate::runtime) fn direct_eval_allows_new_target(&self) -> Result<bool> {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return Ok(false);
+            }
+            let Some(function_id) = frame.function_id() else {
+                continue;
+            };
+            return Ok(matches!(
+                self.function(function_id)?.new_target,
+                super::FunctionNewTarget::Own
+            ));
+        }
+        Ok(false)
+    }
+
     pub(in crate::runtime) fn current_activation_super(
         &self,
     ) -> Option<std::rc::Rc<FunctionSuperBinding>> {

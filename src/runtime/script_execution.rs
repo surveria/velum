@@ -142,9 +142,14 @@ impl Context {
                 self.eval_compiled_program(script)
             }
             ScriptExecutionMode::SloppyEval => {
-                if let Some(outcome) =
+                let hoist_result = if self.eval_variable_environment_is_global() {
+                    self.hoist_outcome(|context| {
+                        context.hoist_bytecode_eval_global_var_declarations(plan)
+                    })?
+                } else {
                     self.hoist_outcome(|context| context.hoist_bytecode_var_declarations(plan))?
-                {
+                };
+                if let Some(outcome) = hoist_result {
                     return Ok(outcome);
                 }
                 self.eval_compiled_in_lexical_scope(script, |context| {
@@ -156,6 +161,18 @@ impl Context {
                     context.hoist_bytecode_declarations(plan)
                 }),
         }
+    }
+
+    fn eval_variable_environment_is_global(&self) -> bool {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return true;
+            }
+            if frame.function_id().is_some() {
+                return false;
+            }
+        }
+        true
     }
 
     fn eval_compiled_in_lexical_scope(

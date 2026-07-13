@@ -63,7 +63,7 @@ impl Context {
         match kind {
             DeclKind::Var => {
                 if let Some(value) = value {
-                    self.assign_bytecode(name, value)?;
+                    self.assign_bytecode_or_create_sloppy_global(name, value)?;
                 }
             }
             DeclKind::Let => {

@@ -38,6 +38,7 @@ pub struct EvalParseContext<'a> {
     strict_mode: bool,
     super_context: EvalSuperContext,
     class_field_context: EvalClassFieldContext,
+    allow_new_target: bool,
     private_names: &'a [StaticName],
 }
 
@@ -46,12 +47,14 @@ impl<'a> EvalParseContext<'a> {
         strict_mode: bool,
         super_context: EvalSuperContext,
         class_field_context: EvalClassFieldContext,
+        allow_new_target: bool,
         private_names: &'a [StaticName],
     ) -> Self {
         Self {
             strict_mode,
             super_context,
             class_field_context,
+            allow_new_target,
             private_names,
         }
     }
@@ -67,7 +70,8 @@ pub fn parse_eval_with_usage_in_context(
         context.super_context.allows_property(),
         context.super_context.allows_call(),
     );
-    parser.new_target_scope_depth = usize::from(context.class_field_context.is_initializer());
+    parser.new_target_scope_depth =
+        usize::from(context.class_field_context.is_initializer() || context.allow_new_target);
     parser.reject_all_arguments = context.class_field_context.is_initializer();
     if !context.private_names.is_empty() {
         parser
