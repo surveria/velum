@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T164024Z.md`
-- Task: PR #603: runtime: complete Intl text formatters tranche
-- Performance: 5.42x (4/5 >1.00x) (from `rsqjs-test-report-20260713T164024Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T164024Z.md`)
+- `rsqjs-test-report-20260713T170803Z.md`
+- Task: PR #606: runtime: complete immutable ArrayBuffer Test262 tranche
+- Performance: 5.44x (4/5 >1.00x) (from `rsqjs-test-report-20260713T170803Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T170803Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 99551 passed / 3027 failed (97.05%) (from `rsqjs-test-report-20260713T164024Z.md`)
+- Full Test262: 99677 passed / 2901 failed (97.17%) (from `rsqjs-test-report-20260713T170803Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -550,3 +550,4 @@ Latest report:
 | `20260713T155934Z` `5d370f4` PR #601: runtime: complete compact Array and String locale tranche | 5.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99085 passed / 3493 failed (96.59%) |
 | `20260713T162654Z` `e5e274b` PR #604: runtime: complete compact String and Promise Test262 residuals | 5.42x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99233 passed / 3345 failed (96.74%) |
 | `20260713T164024Z` `4510544` PR #603: runtime: complete Intl text formatters tranche | 5.42x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99551 passed / 3027 failed (97.05%) |
+| `20260713T170803Z` `fd177b3` PR #606: runtime: complete immutable ArrayBuffer Test262 tranche | 5.44x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99677 passed / 2901 failed (97.17%) |
