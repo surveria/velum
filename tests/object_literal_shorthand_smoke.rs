@@ -34,6 +34,25 @@ fn supports_object_literal_shorthand_and_methods() -> TestResult {
 }
 
 #[test]
+fn validates_contextual_object_shorthand_identifiers() -> TestResult {
+    let value = eval("var let = 42; ({ let }).let")?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let Err(error) = eval(
+        r#"
+        var implements = 1;
+        (function() { "use strict"; ({ implements }); });
+        "#,
+    ) else {
+        return Err("expected strict reserved shorthand to fail".into());
+    };
+    if error.to_string().contains("reserved word") {
+        return Ok(());
+    }
+    Err(format!("expected strict shorthand parse error, got {error}").into())
+}
+
+#[test]
 fn supports_computed_object_literal_property_names() -> TestResult {
     let value = eval(
         r#"

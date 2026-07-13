@@ -337,6 +337,7 @@ pub enum BytecodeAssignmentTarget {
 pub struct BytecodeSwitchCase {
     pub test: Option<BytecodeBlock>,
     pub body: BytecodeBlock,
+    pub body_updates_value: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

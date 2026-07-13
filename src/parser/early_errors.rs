@@ -78,23 +78,12 @@ impl Parser {
         self.validate_lexical_var_declarations(statements, true, true)
     }
 
-    pub(super) fn validate_generator_switch_declarations(
-        &self,
-        cases: &[SwitchCase],
-    ) -> Result<()> {
+    pub(super) fn validate_switch_declarations(&self, cases: &[SwitchCase]) -> Result<()> {
         let statements = cases
             .iter()
             .flat_map(|case| case.statements.iter())
             .collect::<Vec<_>>();
-        if !statements.iter().any(|statement| {
-            matches!(
-                statement.kind(),
-                Stmt::FunctionDecl { kind, .. } if kind.is_generator()
-            )
-        }) {
-            return Ok(());
-        }
-        self.validate_statement_refs(&statements, true, false)
+        self.validate_statement_refs(&statements, true, true)
     }
 
     pub(super) fn validate_generator_parameter_lexicals(

@@ -505,7 +505,7 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before switch body")?;
 
         let cases = self.with_switch_statement(Self::switch_cases)?;
-        self.validate_generator_switch_declarations(&cases)?;
+        self.validate_switch_declarations(&cases)?;
         Ok(Stmt::Switch {
             discriminant,
             cases,

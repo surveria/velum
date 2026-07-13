@@ -93,6 +93,23 @@ fn rejects_invalid_compound_assignment_targets() -> TestResult {
 }
 
 #[test]
+fn checks_compound_assignment_reference_before_rhs() -> TestResult {
+    ensure_source_value(
+        r#"
+        let rhs = false;
+        try {
+            let base = null;
+            let key = { toString() { throw "key"; } };
+            base[key] += (rhs = true, 1);
+        } catch (error) {
+            error instanceof TypeError && rhs === false;
+        }
+        "#,
+        &Value::Bool(true),
+    )
+}
+
+#[test]
 fn supports_extended_compound_assignment_operators() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

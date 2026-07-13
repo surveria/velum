@@ -107,8 +107,12 @@ impl Parser {
     }
 
     pub(super) fn validate_strict_identifier_reference(&self, name: &str) -> Result<()> {
-        if self.is_strict_mode() && name == YIELD_IDENTIFIER_NAME {
-            return Err(self.parse_error("yield is not a valid strict identifier reference"));
+        if self.is_strict_mode()
+            && (name == YIELD_IDENTIFIER_NAME || is_strict_future_reserved_word(name))
+        {
+            return Err(
+                self.parse_error("reserved word is not a valid strict identifier reference")
+            );
         }
         Ok(())
     }
