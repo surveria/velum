@@ -16,8 +16,6 @@ use super::NativeFunctionKind;
 mod regexp;
 mod string;
 
-const PROTOTYPE_PROPERTY: &str = "__proto__";
-
 const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
     RuntimeCallArgs::values(args)
 }
@@ -69,9 +67,7 @@ impl Context {
         let Value::Object(object) = this_value else {
             return Ok(None);
         };
-        if property.as_str() == PROTOTYPE_PROPERTY {
-            return Ok(None);
-        }
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(*object, property.as_str())?;
 
         if let Some(kind) =
             self.cached_static_object_property_native_call_kind_for_access(access, *object)?
@@ -155,13 +151,16 @@ impl Context {
         let Value::Object(object) = this_value else {
             return Ok(None);
         };
-        if property.name() == PROTOTYPE_PROPERTY
-            || self.objects.array_len_if_array(*object)?.is_some()
-        {
+        if self.objects.array_len_if_array(*object)?.is_some() {
             return Ok(None);
         }
+        self.ensure_object_prototype_intrinsic_for_ordinary_lookup(*object, property.name())?;
+        let lookup = if property.key().is_some() {
+            property.lookup()
+        } else {
+            self.property_lookup(property.name())
+        };
 
-        let lookup = property.lookup();
         if let Some(kind) =
             self.cached_static_object_property_native_call_kind(access, *object, lookup)?
         {
@@ -171,9 +170,7 @@ impl Context {
                 .map(Some);
         }
 
-        let candidate = self
-            .objects
-            .cacheable_property_lookup(*object, property.lookup())?;
+        let candidate = self.objects.cacheable_property_lookup(*object, lookup)?;
         match self
             .objects
             .read_cacheable_native_property_value_for(*object, candidate)?

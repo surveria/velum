@@ -74,7 +74,7 @@ impl ObjectHeap {
         if let Some(prototype) = prototype
             && self.prototype_chain_contains(prototype, id)?
         {
-            return Err(Error::runtime(PROTOTYPE_CYCLE_SET_ERROR));
+            return Err(Error::type_error(PROTOTYPE_CYCLE_SET_ERROR));
         }
         let before = self.object(id)?.structure_snapshot();
         let object = self.object_mut(id)?;
