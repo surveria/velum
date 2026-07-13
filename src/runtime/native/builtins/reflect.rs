@@ -45,7 +45,9 @@ const REFLECT_METHODS: [(&str, NativeFunctionKind); 13] = [
 
 impl Context {
     pub(in crate::runtime) fn reflect_object_value(&mut self) -> Result<Value> {
-        if let Some(binding) = self.get_binding(REFLECT_NAME) {
+        if let Some(atom) = self.atom(REFLECT_NAME)
+            && let Some(binding) = self.realm.builtin_globals.get(atom)
+        {
             return binding.value(REFLECT_NAME);
         }
         self.object_constructor_value()?;
