@@ -1,4 +1,8 @@
-use std::{fmt, rc::Rc};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    rc::Rc,
+};
 
 const INITIAL_VM_GENERATION: u64 = 1;
 
@@ -50,6 +54,12 @@ impl PartialEq for VmIdentity {
 }
 
 impl Eq for VmIdentity {}
+
+impl Hash for VmIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Rc::as_ptr(&self.owner).hash(state);
+    }
+}
 
 /// Generation of the VM-owned stores covered by a [`VmIdentity`].
 ///

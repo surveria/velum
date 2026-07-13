@@ -651,7 +651,7 @@ impl Context {
             removed = removed
                 .checked_add(
                     collection
-                        .sweep_dead_weak_entries(|key| reachability.weak_key_is_reachable(key)),
+                        .sweep_dead_weak_entries(|key| reachability.weak_key_is_reachable(key))?,
                 )
                 .ok_or_else(|| Error::limit("weak entry removal count overflowed"))?;
         }

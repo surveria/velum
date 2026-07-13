@@ -8,7 +8,7 @@ use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
 /// `BigInt` has mathematical value semantics and no VM identity. The shared
 /// payload keeps cloned bytecode literals and runtime values cheap while
 /// equality always compares the represented integer.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct JsBigInt(Rc<BigInt>);
 
 impl JsBigInt {

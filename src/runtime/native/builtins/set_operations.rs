@@ -131,19 +131,21 @@ impl Context {
         if Self::set_size_as_f64(self.collection_len(this_id)?) > record.size {
             return Ok(Value::Bool(false));
         }
-        let mut cursor = 0usize;
-        while let Some((index, item, _value)) =
-            self.collection_entry_at_or_after(this_id, cursor)?
-        {
-            cursor = index
-                .checked_add(1)
-                .ok_or_else(|| Error::limit("Set subset cursor overflowed"))?;
-            self.step()?;
-            if !self.set_record_has(&record, &item)? {
-                return Ok(Value::Bool(false));
+        self.with_collection_cursor_pin(this_id, |context| {
+            let mut cursor = 0usize;
+            while let Some((index, item, _value)) =
+                context.collection_entry_at_or_after(this_id, cursor)?
+            {
+                cursor = index
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("Set subset cursor overflowed"))?;
+                context.step()?;
+                if !context.set_record_has(&record, &item)? {
+                    return Ok(Value::Bool(false));
+                }
             }
-        }
-        Ok(Value::Bool(true))
+            Ok(Value::Bool(true))
+        })
     }
 
     pub(in crate::runtime::native) fn eval_set_is_superset_of(
@@ -178,18 +180,21 @@ impl Context {
         let this_id = self.collection_from_this(this_value, CollectionKind::Set)?;
         let record = self.get_set_record(&Self::set_first_arg(&args))?;
         if Self::set_size_as_f64(self.collection_len(this_id)?) <= record.size {
-            let mut cursor = 0usize;
-            while let Some((index, item, _value)) =
-                self.collection_entry_at_or_after(this_id, cursor)?
-            {
-                cursor = index
-                    .checked_add(1)
-                    .ok_or_else(|| Error::limit("Set disjoint cursor overflowed"))?;
-                self.step()?;
-                if self.set_record_has(&record, &item)? {
-                    return Ok(Value::Bool(false));
+            self.with_collection_cursor_pin(this_id, |context| {
+                let mut cursor = 0usize;
+                while let Some((index, item, _value)) =
+                    context.collection_entry_at_or_after(this_id, cursor)?
+                {
+                    cursor = index
+                        .checked_add(1)
+                        .ok_or_else(|| Error::limit("Set disjoint cursor overflowed"))?;
+                    context.step()?;
+                    if context.set_record_has(&record, &item)? {
+                        return Ok(Value::Bool(false));
+                    }
                 }
-            }
+                Ok(Value::Bool(true))
+            })
         } else {
             let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
             loop {
@@ -204,7 +209,6 @@ impl Context {
                 }
             }
         }
-        Ok(Value::Bool(true))
     }
 
     fn close_set_predicate_iterator(

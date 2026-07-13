@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionId(usize);
 
 impl FunctionId {
@@ -11,7 +11,7 @@ impl FunctionId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct NativeFunctionId(usize);
 
 impl NativeFunctionId {
@@ -24,7 +24,7 @@ impl NativeFunctionId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct HostFunctionId(usize);
 
 impl HostFunctionId {
@@ -37,7 +37,7 @@ impl HostFunctionId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BoundFunctionId(usize);
 
 impl BoundFunctionId {
@@ -50,7 +50,7 @@ impl BoundFunctionId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ObjectId(usize);
 
 impl ObjectId {

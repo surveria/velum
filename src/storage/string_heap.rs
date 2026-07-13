@@ -97,6 +97,10 @@ impl JsString {
         self.data.as_utf16()
     }
 
+    pub(crate) fn shared_utf16(&self) -> Rc<[u16]> {
+        self.data.0.payload.0.units.clone()
+    }
+
     /// Returns whether this value can be represented losslessly as UTF-8.
     #[must_use]
     pub fn is_well_formed(&self) -> bool {
