@@ -61,3 +61,26 @@ fn formats_parts_and_percent_values() -> TestResult {
         "#,
     )?)
 }
+
+#[test]
+fn rejects_invalid_number_receivers_and_locale_entries() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        function throwsTypeError(callback) {
+            try {
+                callback();
+            } catch (error) {
+                return error instanceof TypeError;
+            }
+            return false;
+        }
+        [undefined, null, "5", false, {}].every((value) =>
+            throwsTypeError(() => Number.prototype.toLocaleString.call(value))) &&
+            Number.prototype.toLocaleString.call(new Number(5)) ===
+                Number.prototype.toLocaleString.call(5) &&
+            [undefined, null, true, false, 0, 5, -5, NaN].every((value) =>
+                throwsTypeError(() => Intl.NumberFormat.supportedLocalesOf([value]))) &&
+            Intl.NumberFormat.supportedLocalesOf(new Array(1)).length === 0
+        "#,
+    )?)
+}

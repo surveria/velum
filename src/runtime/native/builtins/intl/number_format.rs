@@ -310,9 +310,14 @@ impl Context {
         let mut locales = Vec::new();
         for index in 0..length {
             self.step()?;
-            let item = self.get_named(value, &index.to_string())?;
-            if matches!(item, Value::Undefined) {
+            let name = index.to_string();
+            let lookup = self.property_lookup(&name);
+            if !self.has_property_value_with_lookup(value, lookup)? {
                 continue;
+            }
+            let item = self.get_named(value, &name)?;
+            if item.string_text().is_none() && !matches!(item, Value::Object(_)) {
+                return Err(Error::type_error("Intl locale entry is invalid"));
             }
             let locale = self.to_string(&item)?;
             let locale = canonical_locale(&locale)?;

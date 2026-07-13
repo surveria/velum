@@ -130,8 +130,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        let number = self.number_receiver_value(this_value)?;
         let formatter = self.parse_number_format(args)?;
-        let input = self.number_format_input(this_value)?;
+        let input = self.number_format_input(&Value::Number(number))?;
         let output = format_number(&formatter, input)?;
         self.heap_string_value(&output.text)
     }
