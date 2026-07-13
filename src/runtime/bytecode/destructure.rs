@@ -691,23 +691,31 @@ impl Context {
     pub(super) fn eval_for_in_pattern_loop(
         &mut self,
         keys: Vec<String>,
+        source: Option<Value>,
         pattern: &BytecodePattern,
         mode: BytecodeDestructureMode,
         body: &BytecodeBlock,
         labels: Option<&[StaticName]>,
     ) -> Result<Completion> {
-        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys))?;
+        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys, source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
             let phase = *control.for_in_state_mut()?.0;
             let value = if phase == BytecodeLoopPhase::Initialize {
-                let key = {
-                    let (_, keys, _) = control.for_in_state_mut()?;
-                    let Some(key) = keys.next() else {
-                        break;
+                let key = loop {
+                    let Some(key) = control.for_in_state_mut()?.1.next() else {
+                        break None;
                     };
-                    key
+                    let Some(source) = control.for_in_source()?.cloned() else {
+                        break Some(key);
+                    };
+                    let lookup = self.property_lookup(&key);
+                    if self.has_property_value_with_lookup(&source, lookup)? {
+                        break Some(key);
+                    }
+                    self.step()?;
                 };
+                let Some(key) = key else { break };
                 self.step()?;
                 let value = self.heap_string_value(&key)?;
                 if matches!(

@@ -27,10 +27,10 @@ impl Context {
         body: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let keys = if self.resumes_bytecode_control() {
-            Vec::new()
+        let (keys, source) = if self.resumes_bytecode_control() {
+            (Vec::new(), None)
         } else {
-            let object = match self.eval_bytecode_block(object)? {
+            let object = match self.eval_for_in_of_head(state, target, object)? {
                 Completion::Normal(value) => value,
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
@@ -40,26 +40,37 @@ impl Context {
                 | Completion::Break { .. }
                 | Completion::Continue { .. }) => completion.into_result()?,
             };
-            self.enumerable_keys(&object)?
+            if matches!(object, Value::Undefined | Value::Null) {
+                (Vec::new(), None)
+            } else {
+                (self.enumerable_keys(&object)?, Some(object))
+            }
         };
         let completion = match target {
             BytecodeForInTarget::Binding {
                 name,
                 kind:
                     kind @ (DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing),
-            } => self.eval_bytecode_for_in_lexical_binding(name, *kind, keys, body, labels)?,
+            } => {
+                self.eval_bytecode_for_in_lexical_binding(name, *kind, keys, source, body, labels)?
+            }
             BytecodeForInTarget::Binding {
                 name,
                 kind: DeclKind::Var,
-            } => {
-                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
+            } => self.eval_bytecode_for_in_assignment_loop(
+                keys,
+                source,
+                body,
+                labels,
+                |context, key| {
                     let value = context.heap_string_value(&key)?;
                     context.assign_bytecode(name, value)
-                })?
-            }
+                },
+            )?,
             BytecodeForInTarget::PatternBinding { pattern, kind } => self
                 .eval_for_in_pattern_loop(
                     keys,
+                    source,
                     pattern,
                     crate::bytecode::BytecodeDestructureMode::Declaration(*kind),
                     body,
@@ -67,17 +78,22 @@ impl Context {
                 )?,
             BytecodeForInTarget::PatternAssignment(pattern) => self.eval_for_in_pattern_loop(
                 keys,
+                source,
                 pattern,
                 crate::bytecode::BytecodeDestructureMode::Assignment,
                 body,
                 labels,
             )?,
-            BytecodeForInTarget::Assignment(target) => {
-                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
+            BytecodeForInTarget::Assignment(target) => self.eval_bytecode_for_in_assignment_loop(
+                keys,
+                source,
+                body,
+                labels,
+                |context, key| {
                     let value = context.heap_string_value(&key)?;
                     context.assign_bytecode_target(target, value)
-                })?
-            }
+                },
+            )?,
         };
         Ok(Self::store_or_return_completion(state, completion, next))
     }
@@ -87,6 +103,7 @@ impl Context {
         name: &BytecodeBinding,
         kind: DeclKind,
         keys: Vec<String>,
+        source: Option<Value>,
         body: &BytecodeBlock,
         labels: Option<&[StaticName]>,
     ) -> Result<Completion> {
@@ -95,14 +112,13 @@ impl Context {
         let frame = self.compiled_local_binding_frame(name.name())?;
         let mutable = kind.is_mutable();
         let mut scope = BindingScope::new();
-        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys))?;
+        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys, source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
             let resumes_body = control.for_in_state_mut()?.0 == &BytecodeLoopPhase::Body;
             if !resumes_body {
-                let (phase, keys, _) = control.for_in_state_mut()?;
-                *phase = BytecodeLoopPhase::Initialize;
-                let Some(key) = keys.next() else {
+                *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+                let Some(key) = self.next_live_for_in_key(handle, &mut control)? else {
                     break;
                 };
                 self.run_bytecode_control_action(handle, &control, |context| {
@@ -177,18 +193,18 @@ impl Context {
     fn eval_bytecode_for_in_assignment_loop(
         &mut self,
         keys: Vec<String>,
+        source: Option<Value>,
         body: &BytecodeBlock,
         labels: Option<&[StaticName]>,
         mut assign: impl FnMut(&mut Self, String) -> Result<()>,
     ) -> Result<Completion> {
-        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys))?;
+        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys, source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
             let resumes_body = control.for_in_state_mut()?.0 == &BytecodeLoopPhase::Body;
             if !resumes_body {
-                let (phase, keys, _) = control.for_in_state_mut()?;
-                *phase = BytecodeLoopPhase::Initialize;
-                let Some(key) = keys.next() else {
+                *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+                let Some(key) = self.next_live_for_in_key(handle, &mut control)? else {
                     break;
                 };
                 self.run_bytecode_control_action(handle, &control, |context| {
@@ -216,6 +232,29 @@ impl Context {
         let (_, _, last) = control.for_in_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
         Self::finish_for_in_control(self, handle, completion)
+    }
+
+    fn next_live_for_in_key(
+        &mut self,
+        handle: BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+    ) -> Result<Option<String>> {
+        loop {
+            let Some(key) = control.for_in_state_mut()?.1.next() else {
+                return Ok(None);
+            };
+            let Some(source) = control.for_in_source()?.cloned() else {
+                return Ok(Some(key));
+            };
+            let present = self.run_bytecode_control_action(handle, control, |context| {
+                let lookup = context.property_lookup(&key);
+                context.has_property_value_with_lookup(&source, lookup)
+            })?;
+            if present {
+                return Ok(Some(key));
+            }
+            self.run_bytecode_control_action(handle, control, Self::step)?;
+        }
     }
 
     fn finish_for_in_control(

@@ -76,6 +76,7 @@ pub(super) enum BytecodeControlRecord {
     ForIn {
         phase: BytecodeLoopPhase,
         keys: std::vec::IntoIter<String>,
+        source: Option<Value>,
         body_state: BytecodeState,
         last: Value,
     },
@@ -203,10 +204,11 @@ impl BytecodeControlRecord {
         }
     }
 
-    pub(super) fn for_in(keys: Vec<String>) -> Self {
+    pub(super) fn for_in(keys: Vec<String>, source: Option<Value>) -> Self {
         Self::ForIn {
             phase: BytecodeLoopPhase::Initialize,
             keys: keys.into_iter(),
+            source,
             body_state: BytecodeState::new(),
             last: Value::Undefined,
         }
@@ -270,8 +272,14 @@ impl BytecodeControlRecord {
                 roots.push(last);
             }
             Self::ForIn {
-                body_state, last, ..
+                source,
+                body_state,
+                last,
+                ..
             } => {
+                if let Some(source) = source {
+                    roots.push(source);
+                }
                 roots.extend(body_state.root_values());
                 roots.push(last);
             }
@@ -401,6 +409,13 @@ impl BytecodeControlRecord {
         Ok((phase, keys, last))
     }
 
+    pub(super) fn for_in_source(&self) -> Result<Option<&Value>> {
+        let Self::ForIn { source, .. } = self else {
+            return Err(Error::runtime("structured for-in record mismatch"));
+        };
+        Ok(source.as_ref())
+    }
+
     pub(super) fn for_of_state_mut(&mut self) -> Result<(&mut BytecodeLoopPhase, &mut Value)> {
         let Self::ForOf { phase, last, .. } = self else {
             return Err(Error::runtime("structured for-of record mismatch"));
@@ -450,7 +465,8 @@ impl BytecodeControlRecord {
 
     fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
         let roots = match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } => [Some(last), None, None, None],
+            Self::Loop { last, .. } => [Some(last), None, None, None],
+            Self::ForIn { source, last, .. } => [Some(last), source.as_ref(), None, None],
             Self::Switch {
                 discriminant, last, ..
             } => [Some(last), discriminant.as_ref(), None, None],
@@ -486,8 +502,12 @@ impl BytecodeControlRecord {
 
     fn has_traceable_transient_roots(&self) -> bool {
         match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } => {
+            Self::Loop { last, .. } => crate::runtime::transient_roots::is_traceable(last),
+            Self::ForIn { source, last, .. } => {
                 crate::runtime::transient_roots::is_traceable(last)
+                    || source
+                        .as_ref()
+                        .is_some_and(crate::runtime::transient_roots::is_traceable)
             }
             Self::Switch {
                 discriminant, last, ..

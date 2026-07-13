@@ -763,7 +763,7 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/for_in_nullish_error",
             path: PATH_TEST262_FOR_IN_NULLISH_ERROR,
-            expectation: Expectation::ErrorContains("Cannot convert"),
+            expectation: Expectation::Value("42"),
         },
         EngineCase {
             id: "language/statements/switch",

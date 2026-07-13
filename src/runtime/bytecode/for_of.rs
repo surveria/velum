@@ -71,7 +71,7 @@ impl Context {
         let iterator = if self.resumes_bytecode_control() {
             None
         } else {
-            let iterable = match self.eval_bytecode_block(object)? {
+            let iterable = match self.eval_for_in_of_head(state, target, object)? {
                 Completion::Normal(value) => value,
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
@@ -125,6 +125,103 @@ impl Context {
             }
         };
         Ok(Self::store_or_return_completion(state, completion, next))
+    }
+
+    pub(super) fn eval_for_in_of_head(
+        &mut self,
+        state: &mut BytecodeState,
+        target: &BytecodeForInTarget,
+        object: &BytecodeBlock,
+    ) -> Result<Completion> {
+        let lexical = Self::for_in_of_target_is_lexical(target);
+        if lexical && !state.for_in_of_head_scope_active() {
+            self.push_for_in_of_head_scope(target)?;
+            state.set_for_in_of_head_scope_active(true);
+        }
+        let result = self.eval_bytecode_block(object);
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
+            return result;
+        }
+        if state.for_in_of_head_scope_active() {
+            let removed = self.pop_lexical_scope()?;
+            state.set_for_in_of_head_scope_active(false);
+            if removed.is_none() {
+                return Err(Error::runtime("for-in/of head scope disappeared"));
+            }
+        }
+        result
+    }
+
+    fn for_in_of_target_is_lexical(target: &BytecodeForInTarget) -> bool {
+        matches!(
+            target,
+            BytecodeForInTarget::Binding {
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
+            } | BytecodeForInTarget::PatternBinding {
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
+            }
+        )
+    }
+
+    fn push_for_in_of_head_scope(&mut self, target: &BytecodeForInTarget) -> Result<()> {
+        let mut scope = BindingScope::new();
+        Self::for_each_for_in_of_lexical_binding(
+            target,
+            &mut |context, binding, kind| {
+                context.ensure_extra_binding_capacity(1)?;
+                let atom = context.intern_static_name_atom(binding.name().name())?;
+                let frame = context.compiled_local_binding_frame(binding.name())?;
+                let inserted = scope.insert_or_replace_at_optional_slot(
+                    atom,
+                    BindingCell::uninitialized(kind.is_mutable(), kind),
+                    frame.map(crate::runtime::CompiledBindingFrame::slot),
+                )?;
+                if let Some(frame) = frame {
+                    Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+                }
+                Ok(())
+            },
+            self,
+        )?;
+        self.push_lexical_scope_with(scope)?;
+        let remember = Self::for_each_for_in_of_lexical_binding(
+            target,
+            &mut |context, binding, _| {
+                let atom = context.intern_static_name_atom(binding.name().name())?;
+                context.remember_active_static_binding(binding.name(), atom)
+            },
+            self,
+        );
+        if let Err(error) = remember {
+            if self.pop_lexical_scope()?.is_none() {
+                return Err(Error::runtime(
+                    "for-in/of head scope disappeared after binding failure",
+                ));
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn for_each_for_in_of_lexical_binding(
+        target: &BytecodeForInTarget,
+        visit: &mut impl FnMut(&mut Self, &BytecodeBinding, DeclKind) -> Result<()>,
+        context: &mut Self,
+    ) -> Result<()> {
+        match target {
+            BytecodeForInTarget::Binding { name, kind } if *kind != DeclKind::Var => {
+                visit(context, name, *kind)
+            }
+            BytecodeForInTarget::PatternBinding { pattern, kind } if *kind != DeclKind::Var => {
+                pattern.for_each_binding(&mut |binding| visit(context, binding, *kind))
+            }
+            BytecodeForInTarget::Binding { .. }
+            | BytecodeForInTarget::PatternBinding { .. }
+            | BytecodeForInTarget::PatternAssignment(_)
+            | BytecodeForInTarget::Assignment(_) => Ok(()),
+        }
     }
 
     fn eval_for_of_lexical_binding(

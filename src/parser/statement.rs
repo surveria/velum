@@ -279,7 +279,7 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_invalid_single_statement(&body)?;
+        self.reject_invalid_iteration_statement(&body)?;
         Ok(Stmt::While { condition, body })
     }
 
@@ -293,9 +293,7 @@ impl Parser {
             return Err(self.parse_error("declaration is not allowed as a do-while body"));
         }
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        if Self::invalid_do_while_body(&body) {
-            return Err(self.parse_error("declaration is not allowed as a do-while body"));
-        }
+        self.reject_invalid_iteration_statement(&body)?;
         self.consume(&TokenKind::While, "expected 'while' after do body")?;
         self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
         let condition = self.expression()?;
@@ -361,42 +359,6 @@ impl Parser {
         }
     }
 
-    fn invalid_do_while_body(statement: &Statement) -> bool {
-        match statement.kind() {
-            Stmt::VarDecl {
-                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
-                ..
-            }
-            | Stmt::FunctionDecl { .. } => true,
-            Stmt::Label { body, .. } => Self::invalid_do_while_body(body),
-            Stmt::Block(_)
-            | Stmt::DeclList(_)
-            | Stmt::Empty
-            | Stmt::Debugger
-            | Stmt::If { .. }
-            | Stmt::While { .. }
-            | Stmt::DoWhile { .. }
-            | Stmt::With { .. }
-            | Stmt::For { .. }
-            | Stmt::ForIn { .. }
-            | Stmt::ForOf { .. }
-            | Stmt::Switch { .. }
-            | Stmt::Try { .. }
-            | Stmt::Break(_)
-            | Stmt::Continue(_)
-            | Stmt::Throw(_)
-            | Stmt::Return(_)
-            | Stmt::ImportBinding { .. }
-            | Stmt::PatternDecl { .. }
-            | Stmt::ClassDecl { .. }
-            | Stmt::VarDecl {
-                kind: DeclKind::Var,
-                ..
-            }
-            | Stmt::Expr(_) => false,
-        }
-    }
-
     fn label_statement_start(&mut self) -> bool {
         self.peek_is_identifier_name(0) && self.peek_kind_is(1, &TokenKind::Colon)
     }
@@ -417,7 +379,8 @@ impl Parser {
         loop {
             let start = self.current_span();
             let name = self.consume_identifier("expected label name")?;
-            if self.yield_identifier_is_reserved() && name.as_str() == super::YIELD_IDENTIFIER_NAME
+            if (self.yield_identifier_is_reserved() || self.is_strict_mode())
+                && name.as_str() == super::YIELD_IDENTIFIER_NAME
             {
                 return Err(self.parse_error("yield is not a valid label name"));
             }

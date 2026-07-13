@@ -32,6 +32,7 @@ struct BytecodeForParts<'a> {
     body: &'a BytecodeBlock,
     labels: Option<&'a [StaticName]>,
     scoped: bool,
+    per_iteration: bool,
 }
 
 struct BytecodeForPlans<'a> {
@@ -60,6 +61,7 @@ impl<'a> BytecodeForParts<'a> {
         body: &'a BytecodeBlock,
         labels: Option<&'a [StaticName]>,
         scoped: bool,
+        per_iteration: bool,
     ) -> Self {
         Self {
             init,
@@ -68,6 +70,7 @@ impl<'a> BytecodeForParts<'a> {
             body,
             labels,
             scoped,
+            per_iteration,
         }
     }
 }
@@ -98,6 +101,7 @@ impl Context {
                 update,
                 body,
                 scoped,
+                per_iteration,
             } => {
                 let parts = BytecodeForParts::new(
                     init.as_ref(),
@@ -106,6 +110,7 @@ impl Context {
                     body,
                     labels.as_deref(),
                     *scoped,
+                    *per_iteration,
                 );
                 self.eval_bytecode_for(state, parts, next)
             }
@@ -504,10 +509,21 @@ impl Context {
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
             }
+            if parts.per_iteration {
+                self.run_bytecode_control_action(handle, &control, Self::freshen_lexical_scope)?;
+            }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
-            let reduction = self.run_bytecode_control_action(handle, &control, |context| {
-                context.bind_numeric_array_reduction_plan(parts.condition, parts.update, parts.body)
-            })?;
+            let reduction = if parts.per_iteration {
+                None
+            } else {
+                self.run_bytecode_control_action(handle, &control, |context| {
+                    context.bind_numeric_array_reduction_plan(
+                        parts.condition,
+                        parts.update,
+                        parts.body,
+                    )
+                })?
+            };
             if let Some(reduction) = reduction {
                 match self.eval_numeric_array_reduction_plan(state, next, &reduction) {
                     Ok(true) => return self.finish_bytecode_control_result(handle, Ok(None)),
@@ -628,6 +644,10 @@ impl Context {
         parts: BytecodeForParts<'_>,
         plans: &BytecodeForPlans<'_>,
     ) -> Result<StructuredForAction> {
+        let phase = *control.loop_state_mut(BytecodeLoopKind::For)?.0;
+        if parts.per_iteration && phase != BytecodeLoopPhase::Update {
+            self.run_bytecode_control_action(handle, control, Self::freshen_lexical_scope)?;
+        }
         if let Some(update) = parts.update {
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Update;
             let completion = self.run_bytecode_control_segment(
@@ -653,6 +673,13 @@ impl Context {
         &mut self,
         parts: BytecodeForParts<'a>,
     ) -> Result<BytecodeForPlans<'a>> {
+        if parts.per_iteration {
+            return Ok(BytecodeForPlans {
+                condition: None,
+                body: None,
+                update: None,
+            });
+        }
         let condition = if let Some(condition) = parts.condition {
             self.bind_bytecode_linear_plan(condition)?
         } else {

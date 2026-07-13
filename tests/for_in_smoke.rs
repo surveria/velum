@@ -157,9 +157,105 @@ fn creates_fresh_let_binding_per_for_in_iteration() -> TestResult {
 }
 
 #[test]
-fn rejects_for_in_over_nullish_values() -> TestResult {
-    ensure_error_contains("for (let key in null) {}", "Cannot convert")?;
-    ensure_error_contains("for (let key in undefined) {}", "Cannot convert")
+fn skips_for_in_over_nullish_values() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let count = 0;
+        for (let key in null) { count = count + 1; }
+        for (let key in undefined) { count = count + 1; }
+        count === 0 ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn non_enumerable_own_property_shadows_enumerable_prototype_property() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let prototype = { property: 1 };
+        let object = Object.create(prototype);
+        Object.defineProperty(object, "property", {
+            value: 2,
+            enumerable: false
+        });
+        let seen = false;
+        for (let key in object) {
+            if (key === "property") { seen = true; }
+        }
+        seen ? 0 : 42
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_declarations_and_labelled_functions_as_loop_bodies() -> TestResult {
+    ensure_error_contains("for (;;) class C {}", "declaration")?;
+    ensure_error_contains("for (;;) function f() {}", "function declaration")?;
+    ensure_error_contains(
+        "while (false) first: second: function f() {}",
+        "function declaration",
+    )?;
+    ensure_error_contains("do class C {} while (false)", "declaration")
+}
+
+#[test]
+fn lexical_for_in_head_uses_a_tdz_and_iteration_scope() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let x = "outside";
+        let headProbe;
+        let declarationProbe;
+        let bodyProbe;
+        for (
+            let [x, unused = declarationProbe = function() { return x; }]
+            in
+            { i: headProbe = function() { return typeof x; } }
+        ) {
+            bodyProbe = function() { return x; };
+        }
+        let headThrows = false;
+        try { headProbe(); } catch (error) { headThrows = error instanceof ReferenceError; }
+        headThrows && declarationProbe() === "i" && bodyProbe() === "i" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn skips_properties_deleted_before_their_turn() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        var object = Object.create(null);
+        object.first = 1;
+        object.deleted = 2;
+        object.last = 3;
+        var names = "";
+        for (var name in object) {
+            delete object.deleted;
+            names = names + name;
+        }
+        names
+        "#,
+    )?;
+    ensure_value(&value, &Value::from("firstlast"))
+}
+
+#[test]
+fn rejects_unparenthesized_in_in_classic_for_initializer() -> TestResult {
+    ensure_error_contains(
+        "var values = [1]; for (1 in values; true;) { break; }",
+        "unparenthesized 'in'",
+    )
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

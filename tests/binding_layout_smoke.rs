@@ -191,6 +191,14 @@ var step = make(10);
 step(1) + step(2);
 ";
 
+const FOR_PER_ITERATION_SCOPE_SOURCE: &str = r"
+var closures = [];
+for (let index = 0; index < 3; index = index + 1) {
+    closures.push(function() { return index; });
+}
+closures[0]() * 100 + closures[1]() * 10 + closures[2]();
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -529,6 +537,16 @@ fn bytecode_direct_local_and_upvalue_operands_preserve_shadowing() -> TestResult
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(24.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn bytecode_for_let_uses_fresh_per_iteration_cells() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(FOR_PER_ITERATION_SCOPE_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(12.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

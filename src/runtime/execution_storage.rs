@@ -167,6 +167,24 @@ impl Context {
         Ok(Some(scope))
     }
 
+    pub(crate) fn freshen_lexical_scope(&mut self) -> Result<()> {
+        let fresh = self
+            .locals
+            .last()
+            .ok_or_else(|| Error::runtime("lexical scope disappeared before iteration"))?
+            .fresh_iteration_copy()?;
+        let Some(previous) = self.pop_lexical_scope()? else {
+            return Err(Error::runtime(
+                "lexical scope disappeared while starting iteration",
+            ));
+        };
+        if let Err(error) = self.push_lexical_scope_with(fresh) {
+            self.push_lexical_scope_with(previous)?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     pub(super) fn push_class_evaluation(
         &mut self,
         value: Value,
