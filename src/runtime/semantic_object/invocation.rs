@@ -251,7 +251,9 @@ impl Context {
 
         let eager_prototype = if matches!(
             kind,
-            NativeFunctionKind::Intl(IntlFunctionKind::DisplayNamesConstructor)
+            NativeFunctionKind::Intl(
+                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
+            )
         ) && !same_value(constructor, new_target)
         {
             Some(self.constructor_instance_prototype_with_default(new_target, kind)?)

@@ -168,6 +168,10 @@ pub(in crate::runtime) enum IntlFunctionKind {
     RelativeTimeFormatFormatToParts,
     RelativeTimeFormatResolvedOptions,
     RelativeTimeFormatSupportedLocalesOf,
+    CollatorCompareGetter,
+    CollatorBoundCompare(ObjectId),
+    CollatorResolvedOptions,
+    CollatorSupportedLocalesOf,
 }
 
 impl IntlFunctionKind {
@@ -222,6 +226,10 @@ impl IntlFunctionKind {
             Self::RelativeTimeFormatFormatToParts => 77,
             Self::RelativeTimeFormatResolvedOptions => 78,
             Self::RelativeTimeFormatSupportedLocalesOf => 79,
+            Self::CollatorCompareGetter => 80,
+            Self::CollatorBoundCompare(_) => 81,
+            Self::CollatorResolvedOptions => 82,
+            Self::CollatorSupportedLocalesOf => 83,
         }
     }
 
@@ -245,6 +253,8 @@ impl IntlFunctionKind {
             | Self::DisplayNamesResolvedOptions
             | Self::PluralRulesResolvedOptions
             | Self::RelativeTimeFormatResolvedOptions
+            | Self::CollatorCompareGetter
+            | Self::CollatorResolvedOptions
             | Self::DateTimeFormatFormatGetter
             | Self::LocaleAccessor(_)
             | Self::LocaleMethod(_) => 0.0,
@@ -267,7 +277,8 @@ impl IntlFunctionKind {
             | Self::DisplayNamesOf
             | Self::PluralRulesSelect
             | Self::PluralRulesSupportedLocalesOf
-            | Self::RelativeTimeFormatSupportedLocalesOf => 1.0,
+            | Self::RelativeTimeFormatSupportedLocalesOf
+            | Self::CollatorSupportedLocalesOf => 1.0,
             Self::NumberFormatFormatRange
             | Self::NumberFormatFormatRangeToParts
             | Self::DateTimeFormatFormatRange
@@ -275,7 +286,8 @@ impl IntlFunctionKind {
             | Self::DisplayNamesConstructor
             | Self::PluralRulesSelectRange
             | Self::RelativeTimeFormatFormat
-            | Self::RelativeTimeFormatFormatToParts => 2.0,
+            | Self::RelativeTimeFormatFormatToParts
+            | Self::CollatorBoundCompare(_) => 2.0,
         }
     }
 
@@ -295,13 +307,17 @@ impl IntlFunctionKind {
             | Self::SegmenterResolvedOptions
             | Self::DisplayNamesResolvedOptions
             | Self::PluralRulesResolvedOptions
-            | Self::RelativeTimeFormatResolvedOptions => "resolvedOptions",
+            | Self::RelativeTimeFormatResolvedOptions
+            | Self::CollatorResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
             Self::NumberFormatConstructor => "NumberFormat",
             Self::NumberFormatFormatGetter | Self::DateTimeFormatFormatGetter => "get format",
-            Self::NumberFormatBoundFormat(_) | Self::DateTimeFormatBoundFormat(_) => "",
+            Self::CollatorCompareGetter => "get compare",
+            Self::NumberFormatBoundFormat(_)
+            | Self::DateTimeFormatBoundFormat(_)
+            | Self::CollatorBoundCompare(_) => "",
             Self::NumberFormatFormatRange | Self::DateTimeFormatFormatRange => "formatRange",
             Self::NumberFormatFormatRangeToParts | Self::DateTimeFormatFormatRangeToParts => {
                 "formatRangeToParts"
@@ -311,7 +327,8 @@ impl IntlFunctionKind {
             | Self::ListFormatSupportedLocalesOf
             | Self::SegmenterSupportedLocalesOf
             | Self::PluralRulesSupportedLocalesOf
-            | Self::RelativeTimeFormatSupportedLocalesOf => "supportedLocalesOf",
+            | Self::RelativeTimeFormatSupportedLocalesOf
+            | Self::CollatorSupportedLocalesOf => "supportedLocalesOf",
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
             Self::LocaleConstructor => "Locale",

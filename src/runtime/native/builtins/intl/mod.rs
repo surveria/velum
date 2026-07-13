@@ -1,3 +1,4 @@
+mod collator;
 mod date_time_format;
 mod date_time_locale;
 mod date_time_range;
@@ -70,11 +71,7 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "PluralRules", plural_rules)?;
         let relative_time = self.intl_relative_time_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "RelativeTimeFormat", relative_time)?;
-        let collator = self.intl_constructor_value(
-            IntlFunctionKind::CollatorConstructor,
-            "Intl.Collator",
-            &[],
-        )?;
+        let collator = self.intl_collator_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Collator", collator)?;
         let supported = self.create_native_function(
             intl_kind(IntlFunctionKind::SupportedValuesOf),
@@ -115,7 +112,7 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatConstructor => {
                 self.construct_intl_relative_time_format(args)
             }
-            IntlFunctionKind::CollatorConstructor => self.construct_intl_stub(kind),
+            IntlFunctionKind::CollatorConstructor => self.construct_intl_collator(args),
             _ => Err(Error::type_error("Intl method is not a constructor")),
         }
     }
@@ -218,7 +215,7 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatConstructor => {
                 Err(Error::type_error("Intl.RelativeTimeFormat requires new"))
             }
-            IntlFunctionKind::CollatorConstructor => self.construct_intl_stub(kind),
+            IntlFunctionKind::CollatorConstructor => self.construct_intl_collator(args),
             _ => Err(Error::runtime("Intl formatter dispatch is inconsistent")),
         }
     }
@@ -301,6 +298,18 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatSupportedLocalesOf => {
                 self.eval_intl_relative_time_format_supported_locales(args)
             }
+            IntlFunctionKind::CollatorCompareGetter => {
+                self.eval_intl_collator_compare_getter(this_value)
+            }
+            IntlFunctionKind::CollatorBoundCompare(collator) => {
+                self.eval_intl_collator_compare(args, collator)
+            }
+            IntlFunctionKind::CollatorResolvedOptions => {
+                self.eval_intl_collator_resolved_options(this_value)
+            }
+            IntlFunctionKind::CollatorSupportedLocalesOf => {
+                self.eval_intl_collator_supported_locales(args)
+            }
             _ => Err(Error::runtime("Intl text formatter kind is invalid")),
         }
     }
@@ -368,9 +377,7 @@ impl Context {
             IntlFunctionKind::DisplayNamesConstructor => {
                 self.intl_display_names_constructor_value()?
             }
-            IntlFunctionKind::CollatorConstructor => {
-                self.intl_constructor_value(kind, "Intl.Collator", &[])?
-            }
+            IntlFunctionKind::CollatorConstructor => self.intl_collator_constructor_value()?,
             IntlFunctionKind::NumberFormatConstructor => {
                 self.intl_number_format_constructor_value()?
             }
@@ -391,17 +398,6 @@ impl Context {
                 "Intl constructor prototype is not an object",
             )),
         }
-    }
-
-    fn construct_intl_stub(&mut self, kind: IntlFunctionKind) -> Result<Value> {
-        let prototype = self.intl_constructor_prototype(kind)?;
-        let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype(
-            Some(prototype),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
     }
 
     fn define_intl_to_string_tag(&mut self, object: ObjectId, tag: &str) -> Result<()> {
