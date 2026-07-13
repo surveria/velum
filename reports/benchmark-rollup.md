@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T151119Z.md`
-- Task: PR #598: runtime: complete modern Error semantics
-- Performance: 5.33x (4/5 >1.00x) (from `rsqjs-test-report-20260713T151119Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T151119Z.md`)
+- `rsqjs-test-report-20260713T152619Z.md`
+- Task: PR #600: parser: accept trailing commas after call spread
+- Performance: 5.37x (4/5 >1.00x) (from `rsqjs-test-report-20260713T152619Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T152619Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 98784 passed / 3794 failed (96.30%) (from `rsqjs-test-report-20260713T151119Z.md`)
+- Full Test262: 98854 passed / 3724 failed (96.37%) (from `rsqjs-test-report-20260713T152619Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -545,3 +545,4 @@ Latest report:
 | `20260713T144246Z` `a0a47a8` PR #596: runtime: implement FinalizationRegistry and WeakRef semantics | 5.43x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98528 passed / 4050 failed (96.05%) |
 | `20260713T145914Z` `f1bbb59` PR #597: runtime: complete Intl.ListFormat semantics | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98688 passed / 3890 failed (96.21%) |
 | `20260713T151119Z` `7c2914d` PR #598: runtime: complete modern Error semantics | 5.33x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98784 passed / 3794 failed (96.30%) |
+| `20260713T152619Z` `b583757` PR #600: parser: accept trailing commas after call spread | 5.37x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98854 passed / 3724 failed (96.37%) |
