@@ -206,6 +206,15 @@ impl ObjectHeap {
         Ok(self.object(id)?.arguments_brand)
     }
 
+    pub(crate) fn mark_function_prototype(&mut self, id: ObjectId) -> Result<()> {
+        self.object_mut(id)?.function_prototype_brand = super::FunctionPrototypeBrand::Present;
+        Ok(())
+    }
+
+    pub(crate) fn is_function_prototype(&self, id: ObjectId) -> Result<bool> {
+        Ok(self.object(id)?.function_prototype_brand == super::FunctionPrototypeBrand::Present)
+    }
+
     pub(in crate::runtime) fn mark_module_namespace(&mut self, id: ObjectId) -> Result<()> {
         self.object_mut(id)?.module_namespace = true;
         Ok(())

@@ -5,6 +5,8 @@ use crate::{
         abstract_operations::same_value,
         call::RuntimeCallArgs,
         native::NativeFunctionKind,
+        object::{DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyWritable},
+        property::DynamicPropertyKey,
         trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     },
     value::{BoundFunctionId, Value},
@@ -16,6 +18,8 @@ const APPLY_TARGET_NOT_CALLABLE_ERROR: &str = "Function.prototype.apply target i
 const APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR: &str =
     "Function.prototype.apply arguments must be an array-like object";
 const ARRAY_LIKE_LENGTH_PROPERTY: &str = "length";
+const BOUND_FUNCTION_NAME_PREFIX: &str = "bound ";
+const FUNCTION_NAME_PROPERTY: &str = "name";
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct BoundFunction {
@@ -116,6 +120,12 @@ impl Context {
             return Ok(Value::Bool(false));
         }
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        if let Value::NativeFunction(id) = this_value
+            && let NativeFunctionKind::BoundFunction(bound) = self.native_function(*id)?.kind()
+        {
+            let target = self.bound_function_target(bound)?;
+            return self.eval_bytecode_instanceof(&value, &target);
+        }
         // OrdinaryHasInstance(this, value) is `value instanceof this`.
         self.eval_bytecode_instanceof(&value, this_value)
     }
@@ -125,11 +135,22 @@ impl Context {
         if matches!(value, Value::Undefined | Value::Null) {
             return Ok(Vec::new());
         }
-        let Value::Object(id) = value else {
-            return Err(Error::type_error(APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR));
-        };
-        if let Some(values) = self.objects.packed_default_array_values_if_array(*id)? {
-            return Ok(values);
+        match value {
+            Value::Object(id) => {
+                if let Some(values) = self.objects.packed_default_array_values_if_array(*id)? {
+                    return Ok(values);
+                }
+            }
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {}
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::String(_)
+            | Value::Symbol(_) => {
+                return Err(Error::type_error(APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR));
+            }
         }
         let length_value = self.get_named(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
         let length = self.array_like_length_from_value(&length_value)?;
@@ -164,7 +185,10 @@ impl Context {
             } else {
                 (Value::Undefined, Vec::new())
             };
-        self.create_bound_function(this_value.clone(), bound_this, bound_args)
+        let bound_arg_count = bound_args.len();
+        let bound = self.create_bound_function(this_value.clone(), bound_this, bound_args)?;
+        self.configure_bound_function_metadata(&bound, this_value, bound_arg_count)?;
+        Ok(bound)
     }
 
     pub(in crate::runtime) fn eval_bound_function(
@@ -272,6 +296,64 @@ impl Context {
         }
     }
 
+    fn configure_bound_function_metadata(
+        &mut self,
+        bound: &Value,
+        target: &Value,
+        bound_arg_count: usize,
+    ) -> Result<()> {
+        let Value::NativeFunction(bound_id) = bound else {
+            return Err(Error::runtime("bound function value is not native"));
+        };
+        let length_key = self.intern_property_key(ARRAY_LIKE_LENGTH_PROPERTY)?;
+        let length_property =
+            DynamicPropertyKey::new(ARRAY_LIKE_LENGTH_PROPERTY.to_owned(), Some(length_key));
+        let length = if self.has_own_property_value(target, &length_property)? {
+            self.bound_function_length(target, bound_arg_count)?
+        } else {
+            0.0
+        };
+        self.define_native_function_property_key(
+            *bound_id,
+            ARRAY_LIKE_LENGTH_PROPERTY,
+            length_key,
+            bound_metadata_update(Value::Number(length)),
+        )?;
+
+        let target_name = self.get_named(target, FUNCTION_NAME_PROPERTY)?;
+        let name = self.bound_function_name(&target_name)?;
+        let name_key = self.intern_property_key(FUNCTION_NAME_PROPERTY)?;
+        self.define_native_function_property_key(
+            *bound_id,
+            FUNCTION_NAME_PROPERTY,
+            name_key,
+            bound_metadata_update(name),
+        )
+    }
+
+    fn bound_function_length(&mut self, target: &Value, bound_arg_count: usize) -> Result<f64> {
+        let target_length = self.get_named(target, ARRAY_LIKE_LENGTH_PROPERTY)?;
+        let Value::Number(_) = target_length else {
+            return Ok(0.0);
+        };
+        let integer = self.to_integer_or_infinity(&target_length)?;
+        if integer == f64::INFINITY {
+            return Ok(integer);
+        }
+        let argument_count = u32::try_from(bound_arg_count).map_or(f64::INFINITY, f64::from);
+        Ok((integer - argument_count).max(0.0))
+    }
+
+    fn bound_function_name(&mut self, target_name: &Value) -> Result<Value> {
+        let mut units = BOUND_FUNCTION_NAME_PREFIX
+            .encode_utf16()
+            .collect::<Vec<_>>();
+        if let Value::String(name) = target_name {
+            units.extend_from_slice(name.as_utf16());
+        }
+        self.heap_utf16_string_value(&units)
+    }
+
     pub(in crate::runtime) fn create_shadow_realm_wrapper_record(
         &mut self,
         target: Value,
@@ -307,4 +389,13 @@ impl Context {
             .get(id.index())
             .ok_or_else(|| Error::runtime("bound function id is not defined"))
     }
+}
+
+const fn bound_metadata_update(value: Value) -> DataPropertyUpdate {
+    DataPropertyUpdate::new(
+        Some(value),
+        Some(PropertyWritable::No),
+        Some(PropertyEnumerable::No),
+        Some(PropertyConfigurable::Yes),
+    )
 }

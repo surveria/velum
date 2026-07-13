@@ -52,7 +52,10 @@ impl Context {
         };
         match object.value {
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => Ok(true),
-            Value::Object(id) => self.objects.proxy_callability(*id),
+            Value::Object(id) => {
+                Ok(self.objects.is_function_prototype(*id)?
+                    || self.objects.proxy_callability(*id)?)
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -93,6 +96,9 @@ impl Context {
             Value::HostFunction(id) => self
                 .eval_host_function(*id, RuntimeCallArgs::values(args))
                 .map(Completion::Normal),
+            Value::Object(id) if self.objects.is_function_prototype(*id)? => {
+                Ok(Completion::Normal(Value::Undefined))
+            }
             Value::Object(id) if self.objects.proxy_callability(*id)? => self
                 .proxy_apply(*id, args, this_value)
                 .map(Completion::Normal),

@@ -631,7 +631,8 @@ impl Context {
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
         let function = self.function(id)?;
-        Ok((function.kind.is_generator()
+        Ok((function.bytecode.strict()
+            || function.kind.is_generator()
             || function.kind.is_async()
             || function.lexical_this.is_some())
             && Self::is_restricted_property(property))

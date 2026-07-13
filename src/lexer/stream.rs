@@ -23,10 +23,10 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
-    pub(crate) fn new(source: &str, source_id: SourceId) -> Self {
+    pub(crate) fn new(source: &str, source_id: SourceId, allow_html_comments: bool) -> Self {
         let mut stream = Self {
             state: TokenStreamState {
-                lexer: Lexer::new(source, source_id),
+                lexer: Lexer::new(source, source_id, allow_html_comments),
                 tokens: Vec::new(),
             },
         };
