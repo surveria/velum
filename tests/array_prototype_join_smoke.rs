@@ -86,6 +86,43 @@ fn supports_array_join_on_array_like_objects() -> TestResult {
 }
 
 #[test]
+fn supports_array_to_locale_string_element_dispatch() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let calls = [];
+        let first = {
+            toLocaleString: function () {
+                calls.push(this === first && arguments.length === 0 ? "first" : "bad");
+                return "one";
+            }
+        };
+        let inherited = {
+            toLocaleString: function () {
+                calls.push(this === inherited && arguments.length === 0 ? "inherited" : "bad");
+                return "three";
+            }
+        };
+        Array.prototype[3] = inherited;
+        let values = [first, undefined, null];
+        values.length = 4;
+        let localized = values.toLocaleString("ignored", { ignored: true });
+        delete Array.prototype[3];
+
+        localized === "one,,,three" &&
+            calls.join("|") === "first|inherited" &&
+            Array.prototype.hasOwnProperty("toLocaleString") &&
+            Array.prototype.toLocaleString.name === "toLocaleString" &&
+            Array.prototype.toLocaleString.length === 0 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn limits_generic_array_join_on_large_array_like_lengths() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_runtime_steps: 128,

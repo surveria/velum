@@ -295,7 +295,8 @@ const FINALIZATION_REGISTRY_REGISTER_SLOT: NativeFunctionSlot = NativeFunctionSl
 const FINALIZATION_REGISTRY_UNREGISTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(613);
 const WEAK_REF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(614);
 const WEAK_REF_DEREF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(615);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 628;
+const ARRAY_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(628);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 629;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -726,6 +727,7 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
         NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
+        NativeFunctionKind::ArrayToLocaleString => Some(ARRAY_TO_LOCALE_STRING_SLOT),
         NativeFunctionKind::ArrayToString => Some(ARRAY_TO_STRING_SLOT),
         NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayMap => Some(ARRAY_MAP_SLOT),
