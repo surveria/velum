@@ -94,9 +94,11 @@ impl BytecodeBlock {
             .first()
             .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
         let inner = Self::compile_lexical_statements(statements, StatementValue::Store, layout)?;
+        let var_hoist_plan = BytecodeHoistPlan::compile(statements, layout)?;
         let mut compiler = BytecodeCompiler::new(layout, fallback_span);
         compiler.emit(BytecodeInstruction::ScopedBlock {
             block: inner,
+            var_hoist_plan: Some(Rc::new(var_hoist_plan)),
             preserve_last: !statements_have_value_completion(statements),
             push_result: false,
         });
@@ -395,6 +397,7 @@ impl<'a> BytecodeCompiler<'a> {
             compiler.emit(BytecodeInstruction::StoreLast);
             self.emit(BytecodeInstruction::ScopedBlock {
                 block: compiler.finish()?,
+                var_hoist_plan: None,
                 preserve_last: false,
                 push_result: true,
             });
@@ -606,6 +609,7 @@ impl<'a> BytecodeCompiler<'a> {
             let block = BytecodeBlock::compile_lexical_statements(statements, value, self.layout)?;
             self.emit(BytecodeInstruction::ScopedBlock {
                 block,
+                var_hoist_plan: None,
                 preserve_last: !statements_have_value_completion(statements),
                 push_result: false,
             });

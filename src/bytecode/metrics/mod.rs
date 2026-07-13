@@ -228,9 +228,18 @@ impl BytecodeInstruction {
             | Self::DoWhile {
                 condition, body, ..
             } => condition.metrics().combine(body.metrics()),
-            Self::With { body: block }
-            | Self::Label { body: block, .. }
-            | Self::ScopedBlock { block, .. } => block.metrics(),
+            Self::With { body: block } | Self::Label { body: block, .. } => block.metrics(),
+            Self::ScopedBlock {
+                block,
+                var_hoist_plan,
+                ..
+            } => {
+                let mut metrics = block.metrics();
+                if let Some(plan) = var_hoist_plan {
+                    metrics.add(plan.metrics());
+                }
+                metrics
+            }
             Self::For {
                 init,
                 condition,

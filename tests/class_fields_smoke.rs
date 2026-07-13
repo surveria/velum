@@ -80,6 +80,29 @@ fn executes_class_static_blocks_once_with_scoped_bindings() -> TestResult {
 }
 
 #[test]
+fn isolates_var_bindings_between_class_static_blocks() -> TestResult {
+    ensure_string(
+        r#"
+        var value = "outer";
+        var first;
+        var second;
+        class Registry {
+            static {
+                var value = "first block";
+                first = value;
+            }
+            static {
+                second = value;
+                var value = "second block";
+            }
+        }
+        value + ":" + first + ":" + second
+        "#,
+        "outer:first block:undefined",
+    )
+}
+
+#[test]
 fn interleaves_static_fields_and_blocks_in_source_order() -> TestResult {
     ensure_string(
         r#"

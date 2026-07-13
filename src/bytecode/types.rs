@@ -730,6 +730,7 @@ pub enum BytecodeInstruction {
     },
     ScopedBlock {
         block: BytecodeBlock,
+        var_hoist_plan: Option<Rc<BytecodeHoistPlan>>,
         preserve_last: bool,
         push_result: bool,
     },
