@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -17,6 +17,13 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 
 fn ensure_string(source: &str, expected: &str) -> TestResult {
     ensure_value(&eval(source)?, &Value::from(expected))
+}
+
+fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected}, got {actual}").into())
 }
 
 #[test]
@@ -232,6 +239,72 @@ fn functions_without_arguments_references_skip_the_binding() -> TestResult {
         "#,
         "42",
     )
+}
+
+#[test]
+fn nested_functions_own_their_arguments_bindings() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let baseline = vm.compile(
+        r"
+        function outer(value) {
+            function inner() {
+                return 0;
+            }
+            return value + inner();
+        }
+        outer(1);
+        ",
+    )?;
+    let referenced = vm.compile(
+        r"
+        function outer(value) {
+            function inner() {
+                return arguments.length;
+            }
+            return value + inner();
+        }
+        outer(1);
+        ",
+    )?;
+    let expected = baseline
+        .usage()
+        .static_binding_count()
+        .checked_add(2)
+        .ok_or("expected binding count overflowed")?;
+    ensure_usize(referenced.usage().static_binding_count(), expected)?;
+    ensure_value(&vm.eval_compiled(&referenced)?, &Value::Number(1.0))
+}
+
+#[test]
+fn arrows_charge_arguments_to_the_nearest_ordinary_function() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let baseline = vm.compile(
+        r"
+        function outer(value) {
+            const inner = () => 0;
+            return value + inner();
+        }
+        outer(1);
+        ",
+    )?;
+    let referenced = vm.compile(
+        r"
+        function outer(value) {
+            const inner = () => arguments.length;
+            return value + inner();
+        }
+        outer(1);
+        ",
+    )?;
+    let expected = baseline
+        .usage()
+        .static_binding_count()
+        .checked_add(2)
+        .ok_or("expected binding count overflowed")?;
+    ensure_usize(referenced.usage().static_binding_count(), expected)?;
+    ensure_value(&vm.eval_compiled(&referenced)?, &Value::Number(2.0))
 }
 
 #[test]

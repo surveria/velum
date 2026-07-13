@@ -117,7 +117,7 @@ struct Parser {
     allow_super_property: bool,
     allow_super_call: bool,
     static_call_site_count: usize,
-    arguments_reference_count: usize,
+    arguments_reference: ArgumentsReference,
     strict_mode: bool,
     function_declaration_context: FunctionDeclarationContext,
     await_expression_context: AwaitExpressionContext,
@@ -142,6 +142,12 @@ enum SourceGoal {
 enum ClassArgumentsContext {
     Allowed,
     Restricted,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ArgumentsReference {
+    Unreferenced,
+    Referenced,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -170,7 +176,7 @@ impl Parser {
             allow_super_property: false,
             allow_super_call: false,
             static_call_site_count: 0,
-            arguments_reference_count: 0,
+            arguments_reference: ArgumentsReference::Unreferenced,
             strict_mode,
             function_declaration_context: FunctionDeclarationContext::Var,
             await_expression_context: AwaitExpressionContext::Allowed,
@@ -311,23 +317,24 @@ impl Parser {
         self.static_binding_name(ARGUMENTS_IDENTIFIER_NAME.to_owned())
     }
 
-    pub(super) const fn arguments_reference_snapshot(&self) -> usize {
-        self.arguments_reference_count
-    }
-
-    pub(super) const fn arguments_referenced_since(&self, snapshot: usize) -> bool {
-        self.arguments_reference_count > snapshot
-    }
-
-    pub(super) fn note_arguments_reference(&mut self, name: &str) -> Result<()> {
-        if name != ARGUMENTS_IDENTIFIER_NAME {
-            return Ok(());
+    pub(super) fn note_arguments_reference(&mut self, name: &str) {
+        if name == ARGUMENTS_IDENTIFIER_NAME {
+            self.arguments_reference = ArgumentsReference::Referenced;
         }
-        self.arguments_reference_count = self
-            .arguments_reference_count
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("arguments reference count overflowed"))?;
-        Ok(())
+    }
+
+    pub(super) fn with_function_arguments_context<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<(T, bool)> {
+        let outer_reference = std::mem::replace(
+            &mut self.arguments_reference,
+            ArgumentsReference::Unreferenced,
+        );
+        let result = parse(self);
+        let function_referenced = self.arguments_reference == ArgumentsReference::Referenced;
+        self.arguments_reference = outer_reference;
+        result.map(|value| (value, function_referenced))
     }
 
     pub(super) fn static_string(&mut self, value: Vec<u16>) -> Result<StaticString> {

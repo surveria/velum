@@ -383,58 +383,41 @@ impl Parser {
         member_offset: usize,
         allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
-        let arguments_snapshot = self.arguments_reference_snapshot();
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
-        let parameters = self.with_await_context(false, function_kind.is_async(), |parser| {
-            parser.with_yield_expression(false, |parser| {
-                parser.with_yield_identifier_reserved(
-                    function_kind.is_generator(),
-                    Self::function_parameters,
-                )
-            })
-        })?;
-        self.reject_duplicate_parameters(&parameters.bound_names)?;
-        self.consume(
-            &TokenKind::RParen,
-            "expected ')' after class member parameters",
-        )?;
-        match kind {
-            ClassMemberKind::Getter if !parameters.params.is_empty() => {
-                return Err(Error::parse(
-                    "getter must not declare parameters",
-                    member_offset,
-                ));
-            }
-            ClassMemberKind::Setter if parameters.params.len() != 1 => {
-                return Err(Error::parse(
-                    "setter must declare exactly one parameter",
-                    member_offset,
-                ));
-            }
-            ClassMemberKind::Setter
-                if parameters.params.first().is_some_and(|param| param.rest) =>
-            {
-                return Err(Error::parse(
-                    "setter parameter cannot be a rest parameter",
-                    member_offset,
-                ));
-            }
-            ClassMemberKind::Method | ClassMemberKind::Getter | ClassMemberKind::Setter => {}
-        }
-        self.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
-        let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(true, allow_super_call, |parser| {
-                parser.with_await_context(
-                    function_kind.is_async(),
-                    function_kind.is_async(),
-                    |parser| {
-                        parser.with_yield_expression(function_kind.is_generator(), |parser| {
-                            parser.function_body(true)
+        let ((parameters, body), uses_arguments) =
+            self.with_function_arguments_context(|parser| {
+                let parameters =
+                    parser.with_await_context(false, function_kind.is_async(), |parser| {
+                        parser.with_yield_expression(false, |parser| {
+                            parser.with_yield_identifier_reserved(
+                                function_kind.is_generator(),
+                                Self::function_parameters,
+                            )
                         })
-                    },
-                )
-            })
-        })?;
+                    })?;
+                parser.reject_duplicate_parameters(&parameters.bound_names)?;
+                parser.consume(
+                    &TokenKind::RParen,
+                    "expected ')' after class member parameters",
+                )?;
+                Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
+                parser.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
+                let body = parser.with_new_target_scope(|parser| {
+                    parser.with_super_context(true, allow_super_call, |parser| {
+                        parser.with_await_context(
+                            function_kind.is_async(),
+                            function_kind.is_async(),
+                            |parser| {
+                                parser
+                                    .with_yield_expression(function_kind.is_generator(), |parser| {
+                                        parser.function_body(true)
+                                    })
+                            },
+                        )
+                    })
+                })?;
+                Ok((parameters, body))
+            })?;
         self.validate_function_parameters(
             &parameters.bound_names,
             parameters.is_simple,
@@ -445,7 +428,7 @@ impl Parser {
             self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
         }
         let id = self.static_function()?;
-        let arguments_binding = if self.arguments_referenced_since(arguments_snapshot) {
+        let arguments_binding = if uses_arguments {
             Some(self.implicit_arguments_binding()?)
         } else {
             None
@@ -459,6 +442,32 @@ impl Parser {
             parameter_prologue_count,
             arguments_binding,
         })
+    }
+
+    fn validate_class_member_parameters(
+        kind: ClassMemberKind,
+        parameters: &crate::parser::function::ParsedParameters,
+        member_offset: usize,
+    ) -> Result<()> {
+        match kind {
+            ClassMemberKind::Getter if !parameters.params.is_empty() => Err(Error::parse(
+                "getter must not declare parameters",
+                member_offset,
+            )),
+            ClassMemberKind::Setter if parameters.params.len() != 1 => Err(Error::parse(
+                "setter must declare exactly one parameter",
+                member_offset,
+            )),
+            ClassMemberKind::Setter
+                if parameters.params.first().is_some_and(|param| param.rest) =>
+            {
+                Err(Error::parse(
+                    "setter parameter cannot be a rest parameter",
+                    member_offset,
+                ))
+            }
+            ClassMemberKind::Method | ClassMemberKind::Getter | ClassMemberKind::Setter => Ok(()),
+        }
     }
 
     /// Consumes a `static` member prefix when it is not itself a member name.
