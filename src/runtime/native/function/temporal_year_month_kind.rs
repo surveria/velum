@@ -26,7 +26,7 @@ impl TemporalFunctionKind {
             Self::PlainYearMonthPrototypeToLocaleString => 163,
             Self::PlainYearMonthPrototypeToJson => 164,
             Self::PlainYearMonthPrototypeValueOf => 165,
-            _ => 45,
+            _ => self.instant_index(),
         }
     }
 
@@ -55,7 +55,8 @@ impl TemporalFunctionKind {
             Self::PlainYearMonthPrototypeToLocaleString => "toLocaleString",
             Self::PlainYearMonthPrototypeToJson => "toJSON",
             Self::PlainYearMonthPrototypeValueOf => "valueOf",
-            _ => "PlainYearMonth",
+            Self::PlainYearMonthConstructor => "PlainYearMonth",
+            _ => self.instant_name(),
         }
     }
 

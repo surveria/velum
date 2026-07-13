@@ -197,9 +197,9 @@ impl Context {
         self.temporal_calendar_constructor(
             TemporalFunctionKind::InstantConstructor,
             "Temporal.Instant",
-            &[],
-            &[],
-            &[],
+            super::instant::STATIC_METHODS,
+            super::instant::ACCESSORS,
+            super::instant::METHODS,
         )
     }
 
@@ -627,6 +627,9 @@ impl Context {
         if kind.is_plain_year_month() {
             return self.eval_plain_year_month_kind(kind, args, receiver);
         }
+        if kind.is_instant() {
+            return self.eval_instant_kind(kind, args, receiver);
+        }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(
                 "Temporal.PlainDate constructor requires 'new'",
@@ -699,9 +702,6 @@ impl Context {
             )),
             TemporalFunctionKind::PlainYearMonthConstructor => Err(Error::type_error(
                 "Temporal.PlainYearMonth constructor requires 'new'",
-            )),
-            TemporalFunctionKind::InstantConstructor => Err(Error::type_error(
-                "Temporal.Instant constructor requires 'new'",
             )),
             TemporalFunctionKind::PlainTimeConstructor => Err(Error::type_error(
                 "Temporal.PlainTime constructor requires 'new'",

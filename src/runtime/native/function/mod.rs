@@ -37,6 +37,7 @@ mod shadow_realm_kind;
 mod shared_array_buffer_kind;
 mod string_annexb_kind;
 mod string_kind;
+mod temporal_instant_kind;
 mod temporal_kind;
 mod temporal_year_month_kind;
 mod typed_array_kind;
