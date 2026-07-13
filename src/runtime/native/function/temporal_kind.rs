@@ -186,6 +186,49 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     InstantPrototypeToLocaleString,
     InstantPrototypeToJson,
     InstantPrototypeValueOf,
+    ZonedDateTimeCompare,
+    ZonedDateTimePrototypeEpochMilliseconds,
+    ZonedDateTimePrototypeYear,
+    ZonedDateTimePrototypeMonth,
+    ZonedDateTimePrototypeMonthCode,
+    ZonedDateTimePrototypeDay,
+    ZonedDateTimePrototypeHour,
+    ZonedDateTimePrototypeMinute,
+    ZonedDateTimePrototypeSecond,
+    ZonedDateTimePrototypeMillisecond,
+    ZonedDateTimePrototypeMicrosecond,
+    ZonedDateTimePrototypeNanosecond,
+    ZonedDateTimePrototypeEra,
+    ZonedDateTimePrototypeEraYear,
+    ZonedDateTimePrototypeDayOfWeek,
+    ZonedDateTimePrototypeDayOfYear,
+    ZonedDateTimePrototypeWeekOfYear,
+    ZonedDateTimePrototypeYearOfWeek,
+    ZonedDateTimePrototypeHoursInDay,
+    ZonedDateTimePrototypeDaysInWeek,
+    ZonedDateTimePrototypeDaysInMonth,
+    ZonedDateTimePrototypeDaysInYear,
+    ZonedDateTimePrototypeMonthsInYear,
+    ZonedDateTimePrototypeInLeapYear,
+    ZonedDateTimePrototypeOffset,
+    ZonedDateTimePrototypeOffsetNanoseconds,
+    ZonedDateTimePrototypeAdd,
+    ZonedDateTimePrototypeSubtract,
+    ZonedDateTimePrototypeWith,
+    ZonedDateTimePrototypeUntil,
+    ZonedDateTimePrototypeSince,
+    ZonedDateTimePrototypeRound,
+    ZonedDateTimePrototypeEquals,
+    ZonedDateTimePrototypeStartOfDay,
+    ZonedDateTimePrototypeGetTimeZoneTransition,
+    ZonedDateTimePrototypeWithPlainTime,
+    ZonedDateTimePrototypeWithTimeZone,
+    ZonedDateTimePrototypeWithCalendar,
+    ZonedDateTimePrototypeToInstant,
+    ZonedDateTimePrototypeToPlainDate,
+    ZonedDateTimePrototypeToPlainTime,
+    ZonedDateTimePrototypeToPlainDateTime,
+    ZonedDateTimePrototypeToLocaleString,
 }
 
 impl TemporalFunctionKind {
@@ -364,6 +407,7 @@ impl TemporalFunctionKind {
             | Self::PlainTimeCompare
             | Self::PlainYearMonthCompare
             | Self::InstantCompare
+            | Self::ZonedDateTimeCompare
             | Self::ZonedDateTimeConstructor
             | Self::PlainMonthDayConstructor
             | Self::PlainYearMonthConstructor => 2.0,
@@ -420,6 +464,16 @@ impl TemporalFunctionKind {
             | Self::InstantPrototypeEquals
             | Self::InstantPrototypeToZonedDateTimeIso
             | Self::ZonedDateTimeFrom
+            | Self::ZonedDateTimePrototypeAdd
+            | Self::ZonedDateTimePrototypeSubtract
+            | Self::ZonedDateTimePrototypeWith
+            | Self::ZonedDateTimePrototypeUntil
+            | Self::ZonedDateTimePrototypeSince
+            | Self::ZonedDateTimePrototypeRound
+            | Self::ZonedDateTimePrototypeEquals
+            | Self::ZonedDateTimePrototypeGetTimeZoneTransition
+            | Self::ZonedDateTimePrototypeWithTimeZone
+            | Self::ZonedDateTimePrototypeWithCalendar
             | Self::PrototypeWith
             | Self::PrototypeAdd
             | Self::PrototypeSubtract
