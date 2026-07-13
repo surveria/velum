@@ -12,6 +12,8 @@ pub(in crate::runtime) const DEFAULT_GLOBAL_BINDING_NAMES: &[&str] = &[
     "decodeURIComponent",
     "encodeURI",
     "encodeURIComponent",
+    "escape",
+    "unescape",
     "AggregateError",
     "Array",
     "ArrayBuffer",

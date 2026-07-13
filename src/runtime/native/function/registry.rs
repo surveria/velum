@@ -302,7 +302,8 @@ const STRING_PROTOTYPE_LOCALE_COMPARE_SLOT: NativeFunctionSlot = NativeFunctionS
 const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(630);
 const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
 const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 647;
+const ANNEX_B_GLOBAL_SLOT_BASE: usize = 647;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 649;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -744,6 +745,9 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 
 const fn utility_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
+        NativeFunctionKind::AnnexBGlobal(kind) => Some(NativeFunctionSlot::new(
+            ANNEX_B_GLOBAL_SLOT_BASE + kind.index(),
+        )),
         NativeFunctionKind::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_SLOT),
         NativeFunctionKind::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_SLOT),
         NativeFunctionKind::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_SLOT),

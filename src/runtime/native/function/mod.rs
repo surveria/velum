@@ -9,6 +9,7 @@ use crate::{
     value::Value,
 };
 
+mod annexb_global_kind;
 mod array;
 mod array_buffer_kind;
 mod array_kind;
@@ -47,6 +48,7 @@ mod typed_array_kind;
 
 use super::number_intrinsic_property;
 
+pub(in crate::runtime) use annexb_global_kind::AnnexBGlobalFunctionKind;
 pub(in crate::runtime) use array_buffer_kind::ArrayBufferFunctionKind;
 pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
 pub(in crate::runtime) use async_disposable_stack_kind::{

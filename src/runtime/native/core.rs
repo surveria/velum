@@ -11,16 +11,17 @@ use crate::{
 
 use super::{
     ARRAY_BUFFER_NAME, ARRAY_NAME, ASYNC_DISPOSABLE_STACK_NAME, ATOMICS_NAME,
-    AsyncDisposableStackFunctionKind, BIGINT_NAME, BOOLEAN_NAME, DATA_VIEW_NAME, DATE_NAME,
-    DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
-    EVAL_NAME, FINALIZATION_REGISTRY_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
-    GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
-    GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, INTL_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
-    NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
-    OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME,
-    SHADOW_REALM_NAME, SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind,
-    TEMPORAL_NAME, UNDEFINED_NAME, WEAK_MAP_NAME, WEAK_REF_NAME, WEAK_SET_NAME,
+    AnnexBGlobalFunctionKind, AsyncDisposableStackFunctionKind, BIGINT_NAME, BOOLEAN_NAME,
+    DATA_VIEW_NAME, DATE_NAME, DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind,
+    DisposableStackFunctionKind, EVAL_NAME, FINALIZATION_REGISTRY_NAME, FUNCTION_NAME,
+    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
+    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
+    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, INTL_NAME, ITERATOR_NAME, JSON_NAME,
+    MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME,
+    REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME, SHARED_ARRAY_BUFFER_NAME, STRING_NAME,
+    SYMBOL_NAME, ShadowRealmFunctionKind, TEMPORAL_NAME, UNDEFINED_NAME, WEAK_MAP_NAME,
+    WEAK_REF_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -34,6 +35,11 @@ impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         if let Some(element_kind) = typed_array_element_kind(name) {
             return self.typed_array_constructor_value(element_kind).map(Some);
+        }
+        if let Some(kind) = AnnexBGlobalFunctionKind::from_name(name) {
+            return self
+                .global_function_value(NativeFunctionKind::AnnexBGlobal(kind))
+                .map(Some);
         }
         match name {
             ATOMICS_NAME => self.atomics_object_value().map(Some),
@@ -122,6 +128,11 @@ impl Context {
     pub(crate) fn direct_builtin_callable_value(&mut self, name: &str) -> Result<Option<Value>> {
         if let Some(element_kind) = typed_array_element_kind(name) {
             return self.typed_array_constructor_value(element_kind).map(Some);
+        }
+        if let Some(kind) = AnnexBGlobalFunctionKind::from_name(name) {
+            return self
+                .global_function_value(NativeFunctionKind::AnnexBGlobal(kind))
+                .map(Some);
         }
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),

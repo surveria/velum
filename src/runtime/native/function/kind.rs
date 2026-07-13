@@ -344,6 +344,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     GeneratorNext,
     GeneratorReturn,
     GeneratorThrow,
+    AnnexBGlobal(super::annexb_global_kind::AnnexBGlobalFunctionKind),
     GlobalDecodeUri,
     GlobalDecodeUriComponent,
     GlobalEncodeUri,

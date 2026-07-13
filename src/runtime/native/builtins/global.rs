@@ -2,7 +2,9 @@ use std::{iter::Peekable, str::CharIndices};
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, numeric::number_to_i32},
+    runtime::{
+        Context, call::RuntimeCallArgs, native::AnnexBGlobalFunctionKind, numeric::number_to_i32,
+    },
     value::{ErrorName, Value},
 };
 
@@ -18,6 +20,134 @@ enum ParseIntRadix {
 }
 
 impl Context {
+    pub(in crate::runtime::native) fn eval_annex_b_global(
+        &mut self,
+        kind: AnnexBGlobalFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let input = self.global_string_argument(args.as_slice().first())?;
+        let output = match kind {
+            AnnexBGlobalFunctionKind::Escape => Self::escape_legacy_string(&input)?,
+            AnnexBGlobalFunctionKind::Unescape => Self::unescape_legacy_string(&input),
+        };
+        self.check_string_len(&output)?;
+        self.heap_string_value(&output)
+    }
+
+    fn escape_legacy_string(input: &str) -> Result<String> {
+        let mut output = String::new();
+        for unit in input.encode_utf16() {
+            if Self::is_legacy_escape_unmodified(unit) {
+                let ch = char::from_u32(u32::from(unit))
+                    .ok_or_else(|| Error::runtime("legacy escape character is invalid"))?;
+                output.push(ch);
+            } else if unit < 256 {
+                output.push('%');
+                output.push(Self::hex_unit_char((unit >> 4) & 0x0f));
+                output.push(Self::hex_unit_char(unit & 0x0f));
+            } else {
+                output.push_str("%u");
+                output.push(Self::hex_unit_char((unit >> 12) & 0x0f));
+                output.push(Self::hex_unit_char((unit >> 8) & 0x0f));
+                output.push(Self::hex_unit_char((unit >> 4) & 0x0f));
+                output.push(Self::hex_unit_char(unit & 0x0f));
+            }
+        }
+        Ok(output)
+    }
+
+    fn unescape_legacy_string(input: &str) -> String {
+        let units = input.encode_utf16().collect::<Vec<_>>();
+        let mut output = Vec::with_capacity(units.len());
+        let mut index = 0_usize;
+        while let Some(unit) = units.get(index).copied() {
+            if unit == u16::from(b'%')
+                && let Some((decoded, consumed)) = Self::legacy_escape_sequence(&units, index)
+            {
+                output.push(decoded);
+                index = index.saturating_add(consumed);
+                continue;
+            }
+            output.push(unit);
+            index = index.saturating_add(1);
+        }
+        String::from_utf16_lossy(&output)
+    }
+
+    fn legacy_escape_sequence(units: &[u16], index: usize) -> Option<(u16, usize)> {
+        let marker = units.get(index.checked_add(1)?)?;
+        if *marker == u16::from(b'u') {
+            let a = Self::legacy_hex_value(*units.get(index.checked_add(2)?)?)?;
+            let b = Self::legacy_hex_value(*units.get(index.checked_add(3)?)?)?;
+            let c = Self::legacy_hex_value(*units.get(index.checked_add(4)?)?)?;
+            let d = Self::legacy_hex_value(*units.get(index.checked_add(5)?)?)?;
+            let value = a
+                .checked_mul(16)?
+                .checked_add(b)?
+                .checked_mul(16)?
+                .checked_add(c)?
+                .checked_mul(16)?
+                .checked_add(d)?;
+            return Some((value, 6));
+        }
+        let high = Self::legacy_hex_value(*marker)?;
+        let low = Self::legacy_hex_value(*units.get(index.checked_add(2)?)?)?;
+        high.checked_mul(16)
+            .and_then(|value| value.checked_add(low))
+            .map(|value| (value, 3))
+    }
+
+    fn legacy_hex_value(unit: u16) -> Option<u16> {
+        match unit {
+            0x30..=0x39 => unit.checked_sub(0x30),
+            0x41..=0x46 => unit
+                .checked_sub(0x41)
+                .and_then(|value| value.checked_add(10)),
+            0x61..=0x66 => unit
+                .checked_sub(0x61)
+                .and_then(|value| value.checked_add(10)),
+            _ => None,
+        }
+    }
+
+    const fn is_legacy_escape_unmodified(unit: u16) -> bool {
+        matches!(
+            unit,
+            0x30..=0x39
+                | 0x41..=0x5a
+                | 0x61..=0x7a
+                | 0x40
+                | 0x2a
+                | 0x5f
+                | 0x2b
+                | 0x2d
+                | 0x2e
+                | 0x2f
+        )
+    }
+
+    const fn hex_unit_char(nibble: u16) -> char {
+        match nibble {
+            0 => '0',
+            1 => '1',
+            2 => '2',
+            3 => '3',
+            4 => '4',
+            5 => '5',
+            6 => '6',
+            7 => '7',
+            8 => '8',
+            9 => '9',
+            10 => 'A',
+            11 => 'B',
+            12 => 'C',
+            13 => 'D',
+            14 => 'E',
+            15 => 'F',
+            _ => '?',
+        }
+    }
+
     pub(in crate::runtime::native) fn eval_global_parse_int(
         &mut self,
         args: RuntimeCallArgs<'_>,
