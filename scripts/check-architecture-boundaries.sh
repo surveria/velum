@@ -138,6 +138,10 @@ check_retained_value_boundary() {
 }
 
 check_storage_accounting_boundary() {
+  local footprint_owners
+  local function_activation
+  local function_recount
+
   if ! grep -F -q 'pub enum VmStorageKind {' \
       "${repo_root}/src/runtime/accounting.rs" \
     || ! grep -F -q 'pub struct VmStorageSnapshot {' \
@@ -155,6 +159,32 @@ check_storage_accounting_boundary() {
     || ! grep -F -q 'pub(in crate::runtime) fn reserve_count(' \
       "${repo_root}/src/runtime/storage_ledger.rs"; then
     fail "storage accounting boundary changed; typed accounting, reconciliation, and public snapshots are required"
+  fi
+
+  footprint_owners="$(
+    function_owners 'fn[[:space:]]+storage_footprint[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "function storage footprint owner allowlist" \
+    "${footprint_owners}" \
+    'src/runtime/function/storage.rs:storage_footprint'
+
+  function_activation="$(
+    sed -n '/fn activate_function_storage(/,/^    }/p' \
+      "${repo_root}/src/runtime/function/storage.rs"
+  )"
+  function_recount="$(
+    sed -n '/fn record_callable_storage(/,/^    }/p' \
+      "${repo_root}/src/runtime/accounting.rs"
+  )"
+  if ! grep -F -q 'function.storage_footprint()?' <<<"${function_activation}" \
+    || ! grep -F -q 'function.storage_footprint()?' <<<"${function_recount}"; then
+    fail "function storage accounting boundary changed; activation and recount must share the owner footprint"
+  fi
+  if grep -E -q \
+      'function\.(param_binding_ids|param_atoms|param_frames|self_binding|arguments_binding|class_fields|class_private_slots|fast_path|scope_template|upvalues|with_environments|private_slots)' \
+      <<<"${function_recount}"; then
+    fail "function storage accounting boundary changed; recount duplicated Function field formulas"
   fi
 }
 
@@ -755,7 +785,6 @@ check_named_function_binding_boundary() {
     'self_binding: Option<StaticBinding>,' \
     'BindingCell::named_function' \
     'if init.bytecode.self_binding().is_some() {' \
-    'usize::from(function.self_binding.is_some()).saturating_mul(2)' \
     'self.set_generated_function_name(id, GENERATED_FUNCTION_NAME)?;' \
     'function_source(params, body, kind, None)' \
     'pub(crate) fn compile_eval(' \
@@ -1515,6 +1544,7 @@ run_checks() {
   require_file src/runtime/bytecode/control_continuation.rs
   require_file src/runtime/bytecode/control/structured_switch.rs
   require_file src/runtime/bytecode/destructure_continuation.rs
+  require_file src/runtime/function/storage.rs
   require_file src/runtime/function/suspended.rs
   require_file src/runtime/optimizer.rs
   require_file src/runtime/gc.rs
@@ -1711,6 +1741,12 @@ mutate_named_function_self_binding_owner() {
   local fixture_root="$1"
   portable_sed 's/BindingCell::named_function/BindingCell::renamed_function/' \
     "${fixture_root}/src/runtime/function/storage.rs"
+}
+
+mutate_function_storage_footprint_recount() {
+  local fixture_root="$1"
+  portable_sed '/fn record_callable_storage/,/^    }/ { /function.storage_footprint()?/d; }' \
+    "${fixture_root}/src/runtime/accounting.rs"
 }
 
 mutate_function_name_inference_owner() {
@@ -1936,6 +1972,8 @@ run_self_tests() {
     'Value representation reintroduced' mutate_value_variant
   expect_guard_failure "${temp_dir}" owned-value-representation \
     'OwnedValue boundary admitted' mutate_owned_value_variant
+  expect_guard_failure "${temp_dir}" function-storage-footprint \
+    'function storage accounting boundary changed' mutate_function_storage_footprint_recount
   expect_guard_failure "${temp_dir}" runtime-frontend \
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
   expect_guard_failure "${temp_dir}" frontend-source-span \

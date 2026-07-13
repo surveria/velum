@@ -358,16 +358,17 @@ impl Context {
     pub(crate) fn source_record_bytes(&self) -> Result<usize> {
         self.functions.iter().try_fold(0_usize, |total, function| {
             total
-                .checked_add(function.source.as_deref().map_or(0, str::len))
+                .checked_add(function.storage_footprint()?.source_record_bytes())
                 .ok_or_else(|| Error::limit("source record bytes overflowed"))
         })
     }
 
-    pub(crate) fn source_record_count(&self) -> usize {
-        self.functions
-            .iter()
-            .filter(|function| function.source.is_some())
-            .count()
+    pub(crate) fn source_record_count(&self) -> Result<usize> {
+        self.functions.iter().try_fold(0_usize, |total, function| {
+            total
+                .checked_add(function.storage_footprint()?.source_record_count())
+                .ok_or_else(|| Error::limit("source record count overflowed"))
+        })
     }
 
     pub(crate) fn ensure_storage_totals(
@@ -416,60 +417,18 @@ impl Context {
 
     fn record_callable_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         for function in &self.functions {
+            let footprint = function.storage_footprint()?;
             counter.record(
-                VmStorageKind::Binding,
-                function
-                    .upvalues
-                    .len()
-                    .saturating_add(function.with_environments.len()),
+                VmStorageKind::JavaScriptFunction,
+                footprint.function_count(),
             )?;
+            counter.record(VmStorageKind::Binding, footprint.binding_count())?;
             counter.record(
                 VmStorageKind::ObjectProperty,
-                function
-                    .properties
-                    .storage_property_count()?
-                    .saturating_add(function.private_slots.len()),
+                footprint.object_property_count(),
             )?;
-            counter.record(
-                VmStorageKind::SourceRecord,
-                usize::from(function.source.is_some()),
-            )?;
-            counter.record(VmStorageKind::CacheEntry, function.param_binding_ids.len())?;
-            counter.record(VmStorageKind::CacheEntry, function.param_atoms.len())?;
-            counter.record(VmStorageKind::CacheEntry, function.param_frames.len())?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                usize::from(function.self_binding.is_some()).saturating_mul(2),
-            )?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                usize::from(function.arguments_binding.is_some()).saturating_mul(2),
-            )?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                function
-                    .class_fields
-                    .as_ref()
-                    .map_or(0, |fields| fields.len()),
-            )?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                function
-                    .class_private_slots
-                    .as_ref()
-                    .map_or(0, |slots| slots.len()),
-            )?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                usize::from(function.fast_path.is_some()),
-            )?;
-            counter.record(
-                VmStorageKind::CacheEntry,
-                function.properties.storage_cache_entry_count(),
-            )?;
-            if let Some(template) = &function.scope_template {
-                counter.record(VmStorageKind::CacheEntry, template.storage_entry_count()?)?;
-            }
+            counter.record(VmStorageKind::SourceRecord, footprint.source_record_count())?;
+            counter.record(VmStorageKind::CacheEntry, footprint.cache_entry_count())?;
         }
         for function in &self.native_functions {
             counter.record(
@@ -492,7 +451,6 @@ impl Context {
             )?;
         }
 
-        counter.record(VmStorageKind::JavaScriptFunction, self.functions.len())?;
         counter.record(VmStorageKind::NativeFunction, self.native_functions.len())?;
         counter.record(VmStorageKind::BoundFunction, self.bound_functions.len())?;
         counter.record(VmStorageKind::HostCallback, self.host_functions.len())
