@@ -69,6 +69,29 @@ fn exposes_named_lexer_diagnostic_as_a_utf8_byte_span() -> TestResult {
 }
 
 #[test]
+fn advances_diagnostics_by_utf8_byte_boundaries() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "unicode-invalid-token.js";
+    let source = "let π = 'λ';\n§";
+    let Err(error) = runtime.compile_named(source_name, source) else {
+        return Err("expected invalid token after Unicode source to fail".into());
+    };
+    let Error::Lex { span, .. } = error else {
+        return Err(format!("expected lexer error, got {error}").into());
+    };
+    let expected_start = source
+        .len()
+        .checked_sub('§'.len_utf8())
+        .ok_or("Unicode diagnostic start underflowed")?;
+    ensure_source_id(
+        span.source_id(),
+        SourceId::for_named_source(source_name, source),
+    )?;
+    ensure_usize(span.start(), expected_start)?;
+    ensure_usize(span.end(), source.len())
+}
+
+#[test]
 fn exposes_named_parser_diagnostic_at_end_of_source() -> TestResult {
     let runtime = Runtime::new();
     let source = "let camera =";

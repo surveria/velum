@@ -9,18 +9,12 @@ pub struct StaticName {
 }
 
 impl StaticName {
-    pub fn new(id: StaticNameId, name: String) -> Self {
-        Self {
-            id,
-            text: Rc::from(name.into_boxed_str()),
-        }
+    pub fn borrowed(id: StaticNameId, name: &str) -> Self {
+        Self::from_shared(id, Rc::from(name))
     }
 
-    pub fn borrowed(id: StaticNameId, name: &str) -> Self {
-        Self {
-            id,
-            text: Rc::from(name),
-        }
+    pub(crate) const fn from_shared(id: StaticNameId, text: Rc<str>) -> Self {
+        Self { id, text }
     }
 
     pub const fn id(&self) -> StaticNameId {
@@ -57,10 +51,10 @@ pub struct StaticString {
 }
 
 impl StaticString {
-    pub fn new(value: Vec<u16>) -> Self {
-        let text = String::from_utf16_lossy(&value);
+    pub(crate) fn from_shared(units: Rc<[u16]>) -> Self {
+        let text = String::from_utf16_lossy(&units);
         Self {
-            units: Rc::from(value.into_boxed_slice()),
+            units,
             text: Rc::from(text.into_boxed_str()),
         }
     }

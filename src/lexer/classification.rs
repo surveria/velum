@@ -22,7 +22,7 @@ pub(super) fn identifier_position_allows(ch: char, position: IdentifierPosition)
 
 pub(super) fn identifier_kind(text: String, escaped: bool) -> TokenKind {
     if escaped && text == "async" {
-        return TokenKind::Identifier(text);
+        return TokenKind::Identifier(Rc::from(text.into_boxed_str()));
     }
     match text.as_str() {
         "let" => TokenKind::Let,
@@ -64,7 +64,7 @@ pub(super) fn identifier_kind(text: String, escaped: bool) -> TokenKind {
         "true" => TokenKind::True,
         "false" => TokenKind::False,
         "null" => TokenKind::Null,
-        _ => TokenKind::Identifier(text),
+        _ => TokenKind::Identifier(Rc::from(text.into_boxed_str())),
     }
 }
 
@@ -90,3 +90,4 @@ pub(super) const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
             | TokenKind::RBrace
     )
 }
+use std::rc::Rc;
