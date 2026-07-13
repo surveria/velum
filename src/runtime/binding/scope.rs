@@ -1,6 +1,7 @@
-use std::rc::Rc;
-
-use parking_lot::Mutex;
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
+};
 
 use crate::{
     binding_metadata::ScopeId,
@@ -533,59 +534,78 @@ impl BindingSlot {
 }
 
 #[derive(Debug, Clone)]
-pub struct BindingCell(Rc<Mutex<Binding>>);
+pub struct BindingCell(Rc<BindingCellInner>);
 
 impl BindingCell {
     pub fn new(value: Value, mutable: bool, kind: DeclKind) -> Self {
-        Self(Rc::new(Mutex::new(Binding {
-            state: BindingState::Initialized(value),
+        Self::from_binding(
+            BindingState::Initialized(value),
             mutable,
-            immutable_assignment: ImmutableAssignment::AlwaysThrow,
+            ImmutableAssignment::AlwaysThrow,
             kind,
-        })))
+        )
     }
 
     pub(in crate::runtime) fn named_function(value: Value) -> Self {
-        Self(Rc::new(Mutex::new(Binding {
-            state: BindingState::Initialized(value),
-            mutable: false,
-            immutable_assignment: ImmutableAssignment::ThrowIfStrict,
-            kind: DeclKind::Const,
-        })))
+        Self::from_binding(
+            BindingState::Initialized(value),
+            false,
+            ImmutableAssignment::ThrowIfStrict,
+            DeclKind::Const,
+        )
     }
 
     pub(in crate::runtime) fn immutable_global(value: Value) -> Self {
-        Self(Rc::new(Mutex::new(Binding {
-            state: BindingState::Initialized(value),
-            mutable: false,
-            immutable_assignment: ImmutableAssignment::ThrowIfStrict,
-            kind: DeclKind::Const,
-        })))
+        Self::from_binding(
+            BindingState::Initialized(value),
+            false,
+            ImmutableAssignment::ThrowIfStrict,
+            DeclKind::Const,
+        )
     }
 
     pub fn uninitialized(mutable: bool, kind: DeclKind) -> Self {
-        Self(Rc::new(Mutex::new(Binding {
-            state: BindingState::Uninitialized,
+        Self::from_binding(
+            BindingState::Uninitialized,
             mutable,
-            immutable_assignment: ImmutableAssignment::AlwaysThrow,
+            ImmutableAssignment::AlwaysThrow,
             kind,
-        })))
+        )
+    }
+
+    fn from_binding(
+        state: BindingState,
+        mutable: bool,
+        immutable_assignment: ImmutableAssignment,
+        kind: DeclKind,
+    ) -> Self {
+        Self(Rc::new(BindingCellInner {
+            binding: RefCell::new(Binding {
+                state,
+                mutable,
+                immutable_assignment,
+                is_terminal_alias_target: false,
+            }),
+            kind,
+        }))
     }
 
     pub fn value(&self, name: &str) -> Result<Value> {
-        let mut current = self.clone();
-        let mut visited = Vec::new();
-        loop {
-            if visited.iter().any(|cell: &Self| cell.same_cell(&current)) {
-                return Err(reference_error_uninitialized(name));
-            }
-            visited.push(current.clone());
-            let state = current.0.lock().state.clone();
-            match state {
-                BindingState::Initialized(value) => return Ok(value),
+        let target = {
+            let binding = self.borrow()?;
+            match &binding.state {
+                BindingState::Initialized(value) => return Ok(value.clone()),
                 BindingState::Uninitialized => return Err(reference_error_uninitialized(name)),
-                BindingState::Alias(target) => current = target,
+                BindingState::Alias(target) => target.clone(),
             }
+        };
+        let target_binding = target.borrow()?;
+        match &target_binding.state {
+            BindingState::Initialized(value) => Ok(value.clone()),
+            BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
+            BindingState::Alias(_) => Err(Error::runtime(
+                "import binding alias target is not terminal",
+            )),
         }
     }
 
@@ -595,11 +615,11 @@ impl BindingCell {
     }
 
     pub fn kind(&self) -> DeclKind {
-        self.0.lock().kind
+        self.0.kind
     }
 
     pub fn initialize(&self, value: Value) -> Result<()> {
-        let mut binding = self.0.lock();
+        let mut binding = self.borrow_mut()?;
         if !matches!(binding.state, BindingState::Uninitialized) {
             return Err(Error::runtime(
                 "function parameter binding is already initialized",
@@ -611,7 +631,7 @@ impl BindingCell {
     }
 
     pub fn assign(&self, name: &str, value: Value) -> Result<()> {
-        let mut binding = self.0.lock();
+        let mut binding = self.borrow_mut()?;
         if !binding.mutable {
             return Err(Error::runtime(format!("assignment to constant '{name}'")));
         }
@@ -629,7 +649,7 @@ impl BindingCell {
         value: Value,
         strict: bool,
     ) -> Result<()> {
-        let mut binding = self.0.lock();
+        let mut binding = self.borrow_mut()?;
         if !binding.mutable {
             if binding.immutable_assignment == ImmutableAssignment::ThrowIfStrict && !strict {
                 return Ok(());
@@ -650,10 +670,23 @@ impl BindingCell {
         if self.same_cell(&target) {
             return Err(Error::runtime("binding cannot alias itself"));
         }
-        let mut binding = self.0.lock();
+        let mut binding = self.borrow_mut()?;
         if !matches!(binding.state, BindingState::Uninitialized) {
             return Err(Error::runtime("import binding is already linked"));
         }
+        if binding.is_terminal_alias_target {
+            return Err(Error::runtime(
+                "terminal import binding cannot become an alias",
+            ));
+        }
+        let mut target_binding = target.borrow_mut()?;
+        if matches!(target_binding.state, BindingState::Alias(_)) {
+            return Err(Error::runtime(
+                "import binding alias target is not terminal",
+            ));
+        }
+        target_binding.is_terminal_alias_target = true;
+        drop(target_binding);
         binding.state = BindingState::Alias(target);
         binding.mutable = false;
         binding.immutable_assignment = ImmutableAssignment::AlwaysThrow;
@@ -664,6 +697,26 @@ impl BindingCell {
     pub(crate) fn same_cell(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
+
+    fn borrow(&self) -> Result<Ref<'_, Binding>> {
+        self.0
+            .binding
+            .try_borrow()
+            .map_err(|_| Error::runtime("binding is already mutably borrowed"))
+    }
+
+    fn borrow_mut(&self) -> Result<RefMut<'_, Binding>> {
+        self.0
+            .binding
+            .try_borrow_mut()
+            .map_err(|_| Error::runtime("binding is already borrowed"))
+    }
+}
+
+#[derive(Debug)]
+struct BindingCellInner {
+    binding: RefCell<Binding>,
+    kind: DeclKind,
 }
 
 #[derive(Debug, Clone)]
@@ -678,7 +731,7 @@ struct Binding {
     state: BindingState,
     mutable: bool,
     immutable_assignment: ImmutableAssignment,
-    kind: DeclKind,
+    is_terminal_alias_target: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
