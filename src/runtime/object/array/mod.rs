@@ -124,11 +124,6 @@ impl ObjectHeap {
         Ok(Value::Object(id))
     }
 
-    pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
-        self.array_length_for_method(id, ARRAY_JOIN_RECEIVER_ERROR)?
-            .to_usize()
-    }
-
     pub(crate) fn array_len_if_array(&self, id: ObjectId) -> Result<Option<usize>> {
         let Some(length) = self.array_length_if_array(id)? else {
             return Ok(None);

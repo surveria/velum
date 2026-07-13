@@ -233,7 +233,7 @@ impl ObjectHeap {
         Ok(self.object(id)?.holey_array_properties(length))
     }
 
-    pub(in crate::runtime::object) fn prototype_chain_has_array_index_in_range(
+    pub(crate) fn prototype_chain_has_array_index_in_range(
         &self,
         id: ObjectId,
         start: usize,

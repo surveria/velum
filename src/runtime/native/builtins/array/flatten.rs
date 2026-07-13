@@ -28,16 +28,20 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let depth = self.flat_depth_arg(args)?;
         Self::ensure_array_like_object(this_value)?;
-        if let Some(value) = self.eval_packed_array_flat(this_value, depth)? {
-            return Ok(value);
-        }
         let source_length = self.array_like_length(this_value)?;
-        let result = self.create_array_callback_result(0)?;
+        let depth = self.flat_depth_arg(args)?;
+        let result = self.array_species_create(this_value, 0)?;
         let mut target_index = 0;
-        self.flatten_array_like_into(this_value, source_length, &result, &mut target_index, depth)?;
-        self.finish_flatten_result_length(&result, target_index)?;
+        if !self.flatten_packed_array_into(this_value, &result, &mut target_index, depth)? {
+            self.flatten_array_like_into(
+                this_value,
+                source_length,
+                &result,
+                &mut target_index,
+                depth,
+            )?;
+        }
         Ok(result)
     }
 
@@ -54,15 +58,19 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
-        if let Some(value) =
-            self.eval_packed_numeric_array_flat_map(callback, &callback_this, this_value)?
-        {
-            return Ok(value);
-        }
         Self::ensure_array_like_object(this_value)?;
         let source_length = self.array_like_length(this_value)?;
-        let result = self.create_array_callback_result(0)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
+        let result = self.array_species_create(this_value, 0)?;
+        if let Some(values) =
+            self.eval_packed_numeric_array_flat_map(callback, &callback_this, this_value)?
+        {
+            let mut target_index = 0;
+            for value in values {
+                self.append_flattened_value(&result, &mut target_index, value)?;
+            }
+            return Ok(result);
+        }
         let mut target_index = 0;
         for source_index in 0..source_length {
             self.step()?;
@@ -79,7 +87,6 @@ impl Context {
             )?;
             self.flatten_value_into(mapped, &result, &mut target_index, FlattenDepth::Finite(1))?;
         }
-        self.finish_flatten_result_length(&result, target_index)?;
         Ok(result)
     }
 
@@ -88,7 +95,7 @@ impl Context {
         callback: &Value,
         callback_this: &Value,
         this_value: &Value,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Option<Vec<Value>>> {
         if !self.optional_optimizations_enabled() || !matches!(callback_this, Value::Undefined) {
             return Ok(None);
         }
@@ -126,8 +133,7 @@ impl Context {
                 values.push(value);
             }
         }
-        self.create_array_callback_result_from_values(values)
-            .map(Some)
+        Ok(Some(values))
     }
 
     fn flatten_array_like_into(
@@ -172,20 +178,6 @@ impl Context {
             );
         }
         self.append_flattened_value(result, target_index, value)
-    }
-
-    fn eval_packed_array_flat(
-        &mut self,
-        source: &Value,
-        depth: FlattenDepth,
-    ) -> Result<Option<Value>> {
-        let mut values = Vec::new();
-        let Some(steps) = self.collect_packed_flat_values(source, depth, &mut values)? else {
-            return Ok(None);
-        };
-        self.charge_runtime_steps(steps)?;
-        self.create_array_callback_result_from_values(values)
-            .map(Some)
     }
 
     fn flatten_packed_array_into(
@@ -244,7 +236,7 @@ impl Context {
         target_index: &mut usize,
         value: Value,
     ) -> Result<()> {
-        self.set_array_like_index(result, *target_index, value)?;
+        self.array_from_create_data_property(result, *target_index, value)?;
         *target_index = target_index
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_FLATTEN_INDEX_LIMIT_ERROR))?;
@@ -252,10 +244,7 @@ impl Context {
     }
 
     fn is_flattenable_array(&self, value: &Value) -> Result<bool> {
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(self.objects.array_len_if_array(*id)?.is_some())
+        self.semantic_is_array(value)
     }
 
     fn packed_value_is_flattenable_array(&self, value: &Value) -> Result<bool> {
@@ -402,15 +391,6 @@ impl Context {
             return Ok(Some(values));
         }
         Ok(None)
-    }
-
-    fn finish_flatten_result_length(&mut self, result: &Value, length: usize) -> Result<()> {
-        if let Value::Object(id) = result
-            && self.objects.array_len_if_array(*id)?.is_some()
-        {
-            return Ok(());
-        }
-        self.set_array_like_length(result, length)
     }
 
     fn flat_depth_arg(&mut self, args: &[Value]) -> Result<FlattenDepth> {

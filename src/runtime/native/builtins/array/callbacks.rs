@@ -683,27 +683,6 @@ impl Context {
         }
     }
 
-    pub(super) fn create_array_callback_result(&mut self, length: usize) -> Result<Value> {
-        let prototype = self.existing_array_constructor_prototype()?;
-        self.objects
-            .create_array_with_length(length, prototype, self.limits.max_objects)
-    }
-
-    pub(super) fn create_array_callback_result_from_values(
-        &mut self,
-        values: Vec<Value>,
-    ) -> Result<Value> {
-        let prototype = self.existing_array_constructor_prototype()?;
-        let value_count = values.len();
-        self.objects.create_array_from_iter(
-            values,
-            value_count,
-            prototype,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
-    }
-
     fn array_like_length_for_callback(&mut self, this_value: &Value) -> Result<usize> {
         Self::ensure_array_like_object(this_value)?;
         self.array_like_length(this_value)

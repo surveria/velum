@@ -11,6 +11,10 @@ use crate::{
 use super::ArrayLength;
 
 impl ObjectHeap {
+    pub(crate) fn array_length_is_writable(&self, id: ObjectId) -> Result<bool> {
+        Ok(self.object(id)?.array_length_writable.is_yes())
+    }
+
     /// Sets an array length while preserving element deletion and rollback semantics.
     pub(crate) fn set_array_length(&mut self, id: ObjectId, new_length: usize) -> Result<bool> {
         if !self.object(id)?.array_length_writable.is_yes() {

@@ -73,6 +73,47 @@ fn supports_array_flat_map_callbacks_and_generic_receivers() -> TestResult {
 }
 
 #[test]
+fn honors_flat_species_and_proxy_array_identity() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function Result(length) {
+            this.initialLength = length;
+        }
+        const source = [[1], [2]];
+        source.constructor = { [Symbol.species]: Result };
+        const flat = source.flat();
+        const mapped = source.flatMap(function (value) { return value; });
+
+        let constructorReads = 0;
+        const proxy = new Proxy([[3]], {
+            get: function (target, property, receiver) {
+                if (property === "constructor") {
+                    constructorReads++;
+                }
+                return Reflect.get(target, property, receiver);
+            }
+        });
+        const proxyFlat = proxy.flat();
+
+        flat instanceof Result &&
+            mapped instanceof Result &&
+            flat.initialLength === 0 &&
+            mapped.initialLength === 0 &&
+            !Object.prototype.hasOwnProperty.call(flat, "length") &&
+            !Object.prototype.hasOwnProperty.call(mapped, "length") &&
+            flat[0] === 1 && flat[1] === 2 &&
+            mapped[0] === 1 && mapped[1] === 2 &&
+            constructorReads === 1 && proxyFlat[0] === 3 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_missing_flat_map_callbacks_and_limits_steps() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_runtime_steps: 128,

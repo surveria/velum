@@ -16,6 +16,7 @@ const ARRAY_LIKE_INDEX_LIMIT_ERROR: &str = "array-like index exceeded supported 
 const ARRAY_CONCAT_LENGTH_ERROR: &str = "Array.prototype.concat result exceeds safe integer range";
 const ARRAY_SPECIES_ERROR: &str = "Array species value must be a constructor";
 const ARRAY_SPECIES_LENGTH_RANGE_ERROR: &str = "Invalid array length";
+const ARRAY_DELETE_PROPERTY_ERROR: &str = "Cannot delete non-configurable array-like property";
 const ARRAY_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const IS_CONCAT_SPREADABLE_PROPERTY: &str = "isConcatSpreadable";
 const IS_CONCAT_SPREADABLE_DISPLAY: &str = "[Symbol.isConcatSpreadable]";
@@ -24,6 +25,13 @@ const SPECIES_DISPLAY: &str = "[Symbol.species]";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
+    pub(super) fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
+        match value {
+            None | Some(Value::Undefined) => Ok(super::ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),
+            Some(value) => self.to_string(value),
+        }
+    }
+
     pub(super) fn generic_array_concat(
         &mut self,
         args: &[Value],
@@ -67,10 +75,7 @@ impl Context {
         original: &Value,
         length: usize,
     ) -> Result<Value> {
-        let is_array = match original {
-            Value::Object(id) => self.objects.array_len_if_array(*id)?.is_some(),
-            _ => false,
-        };
+        let is_array = self.semantic_is_array(original)?;
         if !is_array {
             return self.create_intrinsic_array_with_length(length);
         }
@@ -108,7 +113,7 @@ impl Context {
         )
     }
 
-    fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
+    pub(super) fn create_intrinsic_array_with_length(&mut self, length: usize) -> Result<Value> {
         if u64::try_from(length).map_or(true, |length| length > u64::from(u32::MAX)) {
             return Err(Error::exception(
                 ErrorName::RangeError,
@@ -151,10 +156,7 @@ impl Context {
         if !matches!(spreadable, Value::Undefined) {
             return Ok(to_boolean(&spreadable));
         }
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(self.objects.array_len_if_array(*id)?.is_some())
+        self.semantic_is_array(value)
     }
 
     pub(super) fn generic_array_push(
@@ -284,16 +286,6 @@ impl Context {
         Ok(result)
     }
 
-    pub(super) fn generic_array_join(
-        &mut self,
-        separator: &str,
-        this_value: &Value,
-    ) -> Result<Value> {
-        Self::ensure_array_like_object(this_value)?;
-        let length = self.array_like_length(this_value)?;
-        self.generic_array_join_with_length(separator, this_value, length)
-    }
-
     pub(super) fn generic_array_join_with_length(
         &mut self,
         separator: &str,
@@ -415,14 +407,12 @@ impl Context {
         lower: usize,
         upper: usize,
     ) -> Result<()> {
-        let lower_present = self.has_array_like_index(object, lower)?;
-        let upper_present = self.has_array_like_index(object, upper)?;
-        let lower_value = if lower_present {
+        let lower_value = if self.has_array_like_index(object, lower)? {
             Some(self.get_array_like_index(object, lower)?)
         } else {
             None
         };
-        let upper_value = if upper_present {
+        let upper_value = if self.has_array_like_index(object, upper)? {
             Some(self.get_array_like_index(object, upper)?)
         } else {
             None
@@ -493,14 +483,23 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = self.intern_property_key(property)?;
-        self.set_property_value_with_accessors(object, key, property, value)
+        if let Value::Object(id) = object
+            && self.objects.typed_array(*id)?.is_some()
+        {
+            return self.set_property_value_with_accessors(object, key, property, value);
+        }
+        let lookup = PropertyLookup::from_key(property, key);
+        self.set(object, lookup, value, object, SetFailureBehavior::Throw)
+            .map(|_| ())
     }
 
     pub(super) fn delete_array_like_index(&mut self, object: &Value, index: usize) -> Result<()> {
         let property = Self::array_like_index_name(index)?;
         let lookup = self.property_lookup(&property);
-        self.delete_property_value_with_lookup(object, lookup)
-            .map(|_| ())
+        if self.delete_property_value_with_lookup(object, lookup)? {
+            return Ok(());
+        }
+        Err(Error::type_error(ARRAY_DELETE_PROPERTY_ERROR))
     }
 
     pub(super) fn ensure_array_like_object(object: &Value) -> Result<()> {
@@ -535,10 +534,10 @@ impl Context {
     fn checked_array_like_length(length: usize, additional: usize) -> Result<usize> {
         let length = length
             .checked_add(additional)
-            .ok_or_else(|| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
+            .ok_or_else(|| Error::type_error(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
         let max = Self::max_array_like_length()?;
         if length > max {
-            return Err(Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR));
+            return Err(Error::type_error(ARRAY_LIKE_LENGTH_LIMIT_ERROR));
         }
         Ok(length)
     }

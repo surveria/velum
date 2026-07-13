@@ -2,7 +2,7 @@ use crate::{
     binding_metadata::BindingOperand,
     bytecode::{BytecodeBinding, BytecodeInstruction, BytecodeNumericBinaryOp},
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, control::Completion},
+    runtime::{Context, call::RuntimeCallArgs, control::Completion, roots::VmRootKind},
     value::{FunctionId, Value},
 };
 
@@ -84,13 +84,19 @@ impl Context {
             return Ok(value);
         }
         let length = self.array_like_length(this_value)?;
+        let result = self.create_intrinsic_array_with_length(length)?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         let mut items = Vec::new();
         for index in 0..length {
             self.step()?;
             items.push(self.get_array_like_index(this_value, index)?);
         }
         let sorted = self.array_sort_items(items, comparator.as_ref())?;
-        self.create_array_from_elements(sorted)
+        for (index, value) in sorted.into_iter().enumerate() {
+            self.array_from_create_data_property(&result, index, value)?;
+        }
+        Ok(result)
     }
 
     /// Collect the values at every present index in `[0, length)`.

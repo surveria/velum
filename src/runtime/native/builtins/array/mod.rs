@@ -114,7 +114,9 @@ impl Context {
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && let Some(end) = length.checked_add(args.len())
+            && u32::try_from(end).is_ok()
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, length, end)?
@@ -185,10 +187,16 @@ impl Context {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && !self.objects.array_index_range_has_accessor_in_chain(
                 *id,
                 length.saturating_sub(1),
                 length,
+            )?
+            && !self.objects.prototype_chain_has_array_index_in_range(
+                *id,
+                length.saturating_sub(1),
+                usize::from(length > 0),
             )?
         {
             return self.objects.array_pop(*id);
@@ -360,10 +368,17 @@ impl Context {
         this_value: &Value,
         fixed_length: Option<usize>,
     ) -> Result<Value> {
+        Self::ensure_array_like_object(this_value)?;
+        let length = if let Some(length) = fixed_length {
+            length
+        } else {
+            self.array_like_length(this_value)?
+        };
         let separator = Self::eval_array_unary_value(args);
         let separator = self.array_join_separator(separator)?;
         if let Value::Object(id) = this_value
             && let Some(array_length) = self.objects.array_len_if_array(*id)?
+            && array_length == length
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, array_length)?
@@ -375,7 +390,6 @@ impl Context {
                 return self.heap_string_value(&joined);
             }
 
-            let length = self.objects.array_len(*id)?;
             let mut joined = self.join_string_with_separator_capacity(length, separator.len())?;
             for index in 0..length {
                 if index > 0 {
@@ -386,10 +400,7 @@ impl Context {
             }
             return self.heap_string_value(&joined);
         }
-        if let Some(length) = fixed_length {
-            return self.generic_array_join_with_length(&separator, this_value, length);
-        }
-        self.generic_array_join(&separator, this_value)
+        self.generic_array_join_with_length(&separator, this_value, length)
     }
 
     pub(in crate::runtime::native) fn eval_array_shift(
@@ -408,6 +419,7 @@ impl Context {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -451,6 +463,7 @@ impl Context {
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && let Some(end) = length.checked_add(args.len())
             && !self
                 .objects
@@ -635,13 +648,6 @@ impl Context {
         format!("{value:.0}")
             .parse::<usize>()
             .map_err(|_| Error::limit("array length exceeded supported range"))
-    }
-
-    fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
-        match value {
-            None | Some(Value::Undefined) => Ok(ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),
-            Some(value) => self.to_string(value),
-        }
     }
 
     const fn eval_array_unary_value(args: &[Value]) -> Option<&Value> {

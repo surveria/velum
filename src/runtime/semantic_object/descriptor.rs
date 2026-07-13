@@ -80,23 +80,7 @@ impl Context {
             && property.name() == ARRAY_LENGTH_PROPERTY
             && self.objects.array_len_if_array(*id)?.is_some()
         {
-            let PropertyUpdate::Data(mut update) = update else {
-                return Err(Error::type_error(
-                    "array length cannot be defined as an accessor property",
-                ));
-            };
-            let new_length = if let Some(value) = update.value() {
-                let length = self.array_length_from_value(&value)?;
-                let normalized = u32::try_from(length)
-                    .map_err(|_| Error::limit("array length exceeded supported range"))?;
-                update.replace_value(Value::Number(f64::from(normalized)));
-                Some(length)
-            } else {
-                None
-            };
-            return self
-                .objects
-                .define_array_length_property(*id, update, new_length);
+            return self.define_array_length_update(*id, property, update);
         }
         if let Value::Object(id) = object_ref.value
             && self.is_global_object_id(*id)
@@ -175,6 +159,38 @@ impl Context {
             self.mark_global_object_property_authoritative(id, property.name())?;
         }
         Ok(true)
+    }
+
+    fn define_array_length_update(
+        &mut self,
+        id: ObjectId,
+        property: &DynamicPropertyKey,
+        update: PropertyUpdate,
+    ) -> Result<bool> {
+        let PropertyUpdate::Data(mut update) = update else {
+            return Ok(false);
+        };
+        let new_length = if let Some(value) = update.value() {
+            let length = self.array_length_from_value(&value)?;
+            let normalized = u32::try_from(length)
+                .map_err(|_| Error::limit("array length exceeded supported range"))?;
+            update.replace_value(Value::Number(f64::from(normalized)));
+            Some(length)
+        } else {
+            None
+        };
+        let current = self
+            .objects
+            .own_property_descriptor(id, property.lookup())?;
+        if !crate::runtime::object::is_compatible_property_update(
+            true,
+            &PropertyUpdate::Data(update.clone()),
+            current.as_ref(),
+        ) {
+            return Ok(false);
+        }
+        self.objects
+            .define_array_length_property(id, update, new_length)
     }
 
     fn semantic_define_typed_array_index(
