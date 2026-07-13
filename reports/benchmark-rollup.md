@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T052701Z.md`
-- Task: PR #564: bytecode: unify compiled usage metric traversal
-- Performance: 6.24x (4/5 >1.00x) (from `rsqjs-test-report-20260713T052701Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T052701Z.md`)
+- `rsqjs-test-report-20260713T053446Z.md`
+- Task: PR #563: runtime: complete Temporal Intl calendar semantics
+- Performance: 6.12x (4/5 >1.00x) (from `rsqjs-test-report-20260713T053446Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T053446Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 94876 passed / 7702 failed (92.49%) (from `rsqjs-test-report-20260713T052701Z.md`)
+- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T053446Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -524,3 +524,4 @@ Latest report:
 | `20260713T045058Z` `199623c` PR #560: runtime: implement Intl DateTimeFormat foundation | 6.17x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
 | `20260713T050318Z` `c02bdc2` PR #562: parser: remove frontend source and token copies | 6.11x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
 | `20260713T052701Z` `d72cf64` PR #564: bytecode: unify compiled usage metric traversal | 6.24x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
+| `20260713T053446Z` `ca90f28` PR #563: runtime: complete Temporal Intl calendar semantics | 6.12x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
