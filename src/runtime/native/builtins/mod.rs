@@ -5,6 +5,7 @@ mod bigint;
 mod boolean;
 mod data_view;
 mod date;
+mod error;
 mod eval;
 mod finalization_registry;
 mod function_constructor;

@@ -359,9 +359,8 @@ impl Context {
         if self.semantic_object_ref(receiver)?.is_none() {
             return Ok(false);
         }
-        let mut new_property = true;
-        if let Some(descriptor) = self.semantic_own_property_descriptor(receiver, property)? {
-            new_property = false;
+        let existing_descriptor = self.semantic_own_property_descriptor(receiver, property)?;
+        if let Some(descriptor) = existing_descriptor.as_ref() {
             match descriptor {
                 OwnPropertyDescriptor::Accessor(_) => return Ok(false),
                 OwnPropertyDescriptor::Data(descriptor) if !descriptor.writable().is_yes() => {
@@ -377,18 +376,35 @@ impl Context {
             let length = self.array_length_from_value(&value)?;
             return self.objects.set_array_length(*id, length);
         }
-        if new_property
+        if existing_descriptor.is_none()
             && let Value::Object(id) = receiver
             && !self.objects.is_proxy(*id)
             && !self.objects.is_extensible(*id)?
         {
             return Ok(false);
         }
+        let (writable, enumerable, configurable) = match existing_descriptor {
+            Some(OwnPropertyDescriptor::Data(descriptor)) => (
+                descriptor.writable(),
+                descriptor.enumerable(),
+                descriptor.configurable(),
+            ),
+            Some(OwnPropertyDescriptor::Accessor(_)) => {
+                return Err(crate::error::Error::runtime(
+                    "accessor receiver descriptor escaped validation",
+                ));
+            }
+            None => (
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::Yes,
+            ),
+        };
         let update = DataPropertyUpdate::new(
             Some(value.clone()),
-            new_property.then_some(PropertyWritable::Yes),
-            new_property.then_some(PropertyEnumerable::Yes),
-            new_property.then_some(PropertyConfigurable::Yes),
+            Some(writable),
+            Some(enumerable),
+            Some(configurable),
         );
         if let Value::Object(id) = receiver
             && self.objects.is_proxy(*id)

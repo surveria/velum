@@ -77,6 +77,49 @@ fn error_construction_honors_new_target_prototype() -> TestResult {
 }
 
 #[test]
+fn modern_error_brand_and_stack_surface_are_spec_shaped() -> TestResult {
+    eval_is_true(
+        r#"
+        let descriptor = Object.getOwnPropertyDescriptor(Error.prototype, "stack");
+        let error = new TypeError("bad");
+        Error.isError(error) && !Error.isError({ __proto__: Error.prototype }) &&
+            typeof error.stack === "string" && !Object.hasOwn(error, "stack") &&
+            descriptor.get.name === "get stack" && descriptor.get.length === 0 &&
+            descriptor.set.name === "set stack" && descriptor.set.length === 1 &&
+            descriptor.enumerable === false && descriptor.configurable === true
+        "#,
+    )
+}
+
+#[test]
+fn error_stack_setter_preserves_existing_property_semantics() -> TestResult {
+    eval_is_true(
+        r#"
+        let set = Object.getOwnPropertyDescriptor(Error.prototype, "stack").set;
+        let data = new Error();
+        Object.defineProperty(data, "stack", {
+            value: "before", writable: true, enumerable: false, configurable: false
+        });
+        set.call(data, "after");
+        let dataDescriptor = Object.getOwnPropertyDescriptor(data, "stack");
+
+        let observed = "before";
+        let accessor = new Error();
+        Object.defineProperty(accessor, "stack", {
+            get() { return observed; },
+            set(value) { observed = value; },
+            configurable: true
+        });
+        set.call(accessor, "after");
+
+        dataDescriptor.value === "after" && dataDescriptor.writable === true &&
+            dataDescriptor.enumerable === false && dataDescriptor.configurable === false &&
+            observed === "after"
+        "#,
+    )
+}
+
+#[test]
 fn public_errors_keep_typed_metadata_for_object_backed_instances() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
