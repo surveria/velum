@@ -388,7 +388,9 @@ impl BytecodeCompiler<'_> {
             self.emit(BytecodeInstruction::ConstructValueSpread);
             return Ok(());
         }
-        if let Some(binding) = constructor_binding_expr(constructor) {
+        if let Some(binding) = constructor_binding_expr(constructor)
+            && args.is_empty()
+        {
             self.compile_args(args)?;
             self.emit(BytecodeInstruction::Construct {
                 constructor: self.compile_binding(binding)?,

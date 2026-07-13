@@ -124,7 +124,7 @@ pub fn enumerable_property_keys(
     object: &Value,
 ) -> Result<Vec<String>> {
     match object {
-        Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
+        Value::Undefined | Value::Null => Err(Error::type_error(NULLISH_PROPERTY_DELETE_ERROR)),
         Value::Object(id) => objects.keys(*id, atoms),
         Value::String(value) => utf16_string_enumerable_keys(value.as_utf16()),
         Value::Bool(_)
@@ -161,7 +161,7 @@ pub fn delete_property(
 ) -> Result<bool> {
     match object {
         Value::Object(id) => objects.delete(*id, property),
-        Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
+        Value::Undefined | Value::Null => Err(Error::type_error(NULLISH_PROPERTY_DELETE_ERROR)),
         Value::Bool(_)
         | Value::Number(_)
         | Value::BigInt(_)

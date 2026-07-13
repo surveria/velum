@@ -306,6 +306,18 @@ impl Context {
             };
             return Ok(Value::Bool(to_boolean(&result)));
         }
+        if !self.semantic_is_callable(right)? {
+            return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));
+        }
+        if !matches!(
+            left,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
+            return Ok(Value::Bool(false));
+        }
         let target = self.instanceof_target_prototype(right)?;
         let matches = self.value_prototype_chain_has_object(left, target)?;
         Ok(Value::Bool(matches))

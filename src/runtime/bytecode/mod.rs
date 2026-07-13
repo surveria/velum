@@ -249,6 +249,7 @@ impl Context {
             } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
+                Self::require_bytecode_property_base(&object)?;
                 let property = self.dynamic_property_key(&property)?;
                 let deleted = self.delete_cached_dynamic_property_value(
                     &object,
@@ -349,6 +350,17 @@ impl Context {
         Ok(None)
     }
 
+    pub(in crate::runtime::bytecode) fn require_bytecode_property_base(
+        value: &Value,
+    ) -> Result<()> {
+        if matches!(value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "Cannot convert undefined or null to object",
+            ));
+        }
+        Ok(())
+    }
+
     fn eval_bytecode_binary_instruction(
         &mut self,
         state: &mut BytecodeState,
@@ -433,11 +445,7 @@ impl Context {
             state.pc = next;
             return Ok(None);
         }
-        if matches!(object, Value::Undefined | Value::Null) {
-            return Err(Error::type_error(
-                "Cannot read properties of undefined or null",
-            ));
-        }
+        Self::require_bytecode_property_base(&object)?;
         let key = self.dynamic_property_key(&key)?;
         state.stack.push(self.eval_bytecode_update_dynamic_property(
             &object,
@@ -508,6 +516,7 @@ impl Context {
             BytecodeInstruction::ComputedMember { property: operand } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
+                Self::require_bytecode_property_base(&object)?;
                 if let Some(value) = self.eval_dynamic_array_index_member(&object, &property)? {
                     state.stack.push(value);
                     state.pc = next;
