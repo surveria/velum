@@ -128,22 +128,22 @@ impl NumberFormatValue {
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) enum IntlValue {
-    DateTimeFormat(Box<DateTimeFormatValue>),
-    DurationFormat,
-    NumberFormat(Box<NumberFormatValue>),
+    DateTime(Box<DateTimeFormatValue>),
+    Duration,
+    Number(Box<NumberFormatValue>),
 }
 
 impl IntlValue {
     pub(super) fn storage_payload_bytes(&self) -> usize {
         match self {
-            Self::DateTimeFormat(value) => value
+            Self::DateTime(value) => value
                 .locale
                 .len()
                 .saturating_add(value.calendar.len())
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
-            Self::DurationFormat => 0,
-            Self::NumberFormat(value) => value.storage_payload_bytes(),
+            Self::Duration => 0,
+            Self::Number(value) => value.storage_payload_bytes(),
         }
     }
 
@@ -151,7 +151,7 @@ impl IntlValue {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        if let Self::NumberFormat(value) = self
+        if let Self::Number(value) = self
             && let Some(bound_format) = &value.bound_format
         {
             visitor.visit(

@@ -8,11 +8,8 @@ impl Context {
     pub(super) fn construct_intl_duration_format(&mut self) -> Result<Value> {
         let prototype =
             self.intl_constructor_prototype(IntlFunctionKind::DurationFormatConstructor)?;
-        self.objects.create_intl_object(
-            IntlValue::DurationFormat,
-            prototype,
-            self.limits.max_objects,
-        )
+        self.objects
+            .create_intl_object(IntlValue::Duration, prototype, self.limits.max_objects)
     }
 
     pub(super) fn eval_intl_duration_format(
@@ -25,7 +22,7 @@ impl Context {
         };
         if !matches!(
             self.objects.intl_value(*formatter_id)?,
-            Some(IntlValue::DurationFormat)
+            Some(IntlValue::Duration)
         ) {
             return Err(Error::type_error("Intl.DurationFormat receiver is invalid"));
         }

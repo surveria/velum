@@ -18,7 +18,7 @@ impl Context {
         let prototype =
             self.intl_constructor_prototype(IntlFunctionKind::DateTimeFormatConstructor)?;
         self.objects.create_intl_object(
-            IntlValue::DateTimeFormat(Box::new(value)),
+            IntlValue::DateTime(Box::new(value)),
             prototype,
             self.limits.max_objects,
         )
@@ -32,8 +32,8 @@ impl Context {
             return Err(Error::type_error("Intl.DateTimeFormat receiver is invalid"));
         };
         match self.objects.intl_value(*id)? {
-            Some(IntlValue::DateTimeFormat(value)) => Ok(value.as_ref().clone()),
-            Some(IntlValue::DurationFormat | IntlValue::NumberFormat(_)) | None => {
+            Some(IntlValue::DateTime(value)) => Ok(value.as_ref().clone()),
+            Some(IntlValue::Duration | IntlValue::Number(_)) | None => {
                 Err(Error::type_error("Intl.DateTimeFormat receiver is invalid"))
             }
         }

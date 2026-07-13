@@ -74,16 +74,16 @@ impl IntlFunctionKind {
         match self {
             Self::DateTimeFormatConstructor => "DateTimeFormat",
             Self::DateTimeFormatFormat | Self::DurationFormatFormat => "format",
-            Self::DateTimeFormatFormatToParts => "formatToParts",
-            Self::DateTimeFormatResolvedOptions => "resolvedOptions",
+            Self::DateTimeFormatFormatToParts | Self::NumberFormatFormatToParts => "formatToParts",
+            Self::DateTimeFormatResolvedOptions | Self::NumberFormatResolvedOptions => {
+                "resolvedOptions"
+            }
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
             Self::NumberFormatConstructor => "NumberFormat",
             Self::NumberFormatFormatGetter => "get format",
             Self::NumberFormatBoundFormat(_) => "",
-            Self::NumberFormatFormatToParts => "formatToParts",
-            Self::NumberFormatResolvedOptions => "resolvedOptions",
             Self::NumberFormatFormatRange => "formatRange",
             Self::NumberFormatFormatRangeToParts => "formatRangeToParts",
             Self::NumberFormatSupportedLocalesOf => "supportedLocalesOf",

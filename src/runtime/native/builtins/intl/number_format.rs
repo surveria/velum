@@ -60,7 +60,7 @@ impl Context {
         let prototype =
             self.intl_constructor_prototype(IntlFunctionKind::NumberFormatConstructor)?;
         self.objects.create_intl_object(
-            IntlValue::NumberFormat(Box::new(value)),
+            IntlValue::Number(Box::new(value)),
             prototype,
             self.limits.max_objects,
         )
@@ -108,7 +108,7 @@ impl Context {
     pub(super) fn eval_intl_number_format_getter(&mut self, this_value: &Value) -> Result<Value> {
         let formatter_id = self.number_format_receiver_id(this_value)?;
         let cached = match self.objects.intl_value(formatter_id)? {
-            Some(IntlValue::NumberFormat(value)) => value.bound_format.clone(),
+            Some(IntlValue::Number(value)) => value.bound_format.clone(),
             _ => return Err(Error::type_error("Intl.NumberFormat receiver is invalid")),
         };
         if let Some(cached) = cached {
@@ -118,8 +118,7 @@ impl Context {
             super::intl_kind(IntlFunctionKind::NumberFormatBoundFormat(formatter_id)),
             Value::Undefined,
         )?;
-        let Some(IntlValue::NumberFormat(value)) = self.objects.intl_value_mut(formatter_id)?
-        else {
+        let Some(IntlValue::Number(value)) = self.objects.intl_value_mut(formatter_id)? else {
             return Err(Error::runtime("Intl.NumberFormat receiver disappeared"));
         };
         value.bound_format = Some(bound.clone());
@@ -132,17 +131,14 @@ impl Context {
     ) -> Result<NumberFormatValue> {
         let id = self.number_format_receiver_id(this_value)?;
         match self.objects.intl_value(id)? {
-            Some(IntlValue::NumberFormat(value)) => Ok(value.as_ref().clone()),
+            Some(IntlValue::Number(value)) => Ok(value.as_ref().clone()),
             _ => Err(Error::type_error("Intl.NumberFormat receiver is invalid")),
         }
     }
 
     fn number_format_receiver_id(&mut self, this_value: &Value) -> Result<ObjectId> {
         if let Value::Object(id) = this_value
-            && matches!(
-                self.objects.intl_value(*id)?,
-                Some(IntlValue::NumberFormat(_))
-            )
+            && matches!(self.objects.intl_value(*id)?, Some(IntlValue::Number(_)))
         {
             return Ok(*id);
         }
@@ -157,14 +153,11 @@ impl Context {
                 LEGACY_CONSTRUCTED_SYMBOL,
                 PropertyKey::symbol(symbol.id()),
             );
-            let fallback = self.get(this_value, lookup)?;
-            let Value::Object(id) = fallback else {
+            let legacy_target = self.get(this_value, lookup)?;
+            let Value::Object(id) = legacy_target else {
                 continue;
             };
-            if matches!(
-                self.objects.intl_value(id)?,
-                Some(IntlValue::NumberFormat(_))
-            ) {
+            if matches!(self.objects.intl_value(id)?, Some(IntlValue::Number(_))) {
                 return Ok(id);
             }
         }

@@ -10,6 +10,33 @@ const ROUNDING_INCREMENTS: &[u16] = &[
     1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000,
 ];
 
+struct NumberUnitOptions {
+    style: String,
+    currency: Option<String>,
+    currency_display: String,
+    currency_sign: String,
+    unit: Option<String>,
+    unit_display: String,
+}
+
+struct NumberFractionOptions {
+    minimum_integer: u8,
+    minimum_fraction: u8,
+    maximum_fraction: u8,
+}
+
+struct NumberSignificantOptions {
+    minimum: Option<u8>,
+    maximum: Option<u8>,
+}
+
+struct NumberRoundingOptions {
+    increment: u16,
+    mode: String,
+    priority: String,
+    trailing_zero_display: String,
+}
+
 impl Context {
     pub(super) fn parse_number_format(
         &mut self,
@@ -22,42 +49,93 @@ impl Context {
                 "Intl.NumberFormat options cannot be null",
             ));
         }
-
-        let _locale_matcher = self.number_string_option(
+        let (locale, numbering_system) = self.parse_number_locale_options(&options, &locale)?;
+        let units = self.parse_number_unit_options(&options)?;
+        let notation = self.number_string_option(
             &options,
+            "notation",
+            &["standard", "scientific", "engineering", "compact"],
+            "standard",
+        )?;
+        let fraction = self.parse_number_fraction_options(&options, &units, &notation)?;
+        let significant = self.parse_number_significant_options(&options)?;
+        let rounding = self.parse_number_rounding_options(&options, &fraction, &significant)?;
+        let compact_display =
+            self.number_string_option(&options, "compactDisplay", &["short", "long"], "short")?;
+        let use_grouping = self.number_use_grouping(&options, &notation)?;
+        let sign_display = self.number_string_option(
+            &options,
+            "signDisplay",
+            &["auto", "never", "always", "exceptZero", "negative"],
+            "auto",
+        )?;
+        Ok(NumberFormatValue {
+            locale,
+            numbering_system,
+            style: units.style,
+            currency: units.currency,
+            currency_display: units.currency_display,
+            currency_sign: units.currency_sign,
+            unit: units.unit,
+            unit_display: units.unit_display,
+            minimum_integer_digits: fraction.minimum_integer,
+            minimum_fraction_digits: fraction.minimum_fraction,
+            maximum_fraction_digits: fraction.maximum_fraction,
+            minimum_significant_digits: significant.minimum,
+            maximum_significant_digits: significant.maximum,
+            use_grouping,
+            notation,
+            compact_display,
+            sign_display,
+            rounding_increment: rounding.increment,
+            rounding_mode: rounding.mode,
+            rounding_priority: rounding.priority,
+            trailing_zero_display: rounding.trailing_zero_display,
+            bound_format: None,
+        })
+    }
+
+    fn parse_number_locale_options(
+        &mut self,
+        options: &Value,
+        locale: &str,
+    ) -> Result<(String, String)> {
+        let _locale_matcher = self.number_string_option(
+            options,
             "localeMatcher",
             &["lookup", "best fit"],
             "best fit",
         )?;
-        let numbering_system_option = self.number_optional_string(&options, "numberingSystem")?;
+        let numbering_system_option = self.number_optional_string(options, "numberingSystem")?;
         if let Some(numbering_system) = &numbering_system_option
             && !is_unicode_type(numbering_system)
         {
             return Err(range_error("numberingSystem has an invalid value"));
         }
-        let (locale, numbering_system) =
-            resolved_numbering_system(&locale, numbering_system_option);
+        Ok(resolved_numbering_system(locale, numbering_system_option))
+    }
 
+    fn parse_number_unit_options(&mut self, options: &Value) -> Result<NumberUnitOptions> {
         let style = self.number_string_option(
-            &options,
+            options,
             "style",
             &["decimal", "percent", "currency", "unit"],
             "decimal",
         )?;
-        let currency_option = self.number_optional_string(&options, "currency")?;
+        let currency_option = self.number_optional_string(options, "currency")?;
         if let Some(currency) = &currency_option
             && !is_currency_code(currency)
         {
             return Err(range_error("currency has an invalid value"));
         }
         let currency_display = self.number_string_option(
-            &options,
+            options,
             "currencyDisplay",
             &["code", "symbol", "narrowSymbol", "name"],
             "symbol",
         )?;
         let currency_sign = self.number_string_option(
-            &options,
+            options,
             "currencySign",
             &["standard", "accounting"],
             "standard",
@@ -65,14 +143,14 @@ impl Context {
         if style == "currency" && currency_option.is_none() {
             return Err(Error::type_error("currency style requires currency"));
         }
-        let unit_option = self.number_optional_string(&options, "unit")?;
+        let unit_option = self.number_optional_string(options, "unit")?;
         if let Some(unit) = &unit_option
             && !is_sanctioned_unit(unit)
         {
             return Err(range_error("unit has an invalid value"));
         }
         let unit_display = self.number_string_option(
-            &options,
+            options,
             "unitDisplay",
             &["short", "narrow", "long"],
             "short",
@@ -87,101 +165,114 @@ impl Context {
             }
             _ => None,
         };
+        Ok(NumberUnitOptions {
+            style,
+            currency,
+            currency_display,
+            currency_sign,
+            unit,
+            unit_display,
+        })
+    }
 
-        let notation = self.number_string_option(
-            &options,
-            "notation",
-            &["standard", "scientific", "engineering", "compact"],
-            "standard",
-        )?;
-        let minimum_integer_digits =
-            self.number_u8_option(&options, "minimumIntegerDigits", 1, 21, 1)?;
-
-        let currency_digits = currency.as_deref().map_or(2, currency_minor_digits);
-        let standard_notation = notation == "standard";
-        let default_minimum_fraction = if style == "currency" && standard_notation {
+    fn parse_number_fraction_options(
+        &mut self,
+        options: &Value,
+        units: &NumberUnitOptions,
+        notation: &str,
+    ) -> Result<NumberFractionOptions> {
+        let minimum_integer = self.number_u8_option(options, "minimumIntegerDigits", 1, 21, 1)?;
+        let currency_digits = units.currency.as_deref().map_or(2, currency_minor_digits);
+        let default_minimum = if units.style == "currency" && notation == "standard" {
             currency_digits
         } else {
             0
         };
-        let default_maximum_fraction = if style == "currency" && standard_notation {
+        let default_maximum = if units.style == "currency" && notation == "standard" {
             currency_digits
-        } else if style == "percent" || notation == "compact" {
+        } else if units.style == "percent" || notation == "compact" {
             0
         } else {
             3
         };
-        let minimum_fraction_value = self.number_option_value(&options, "minimumFractionDigits")?;
-        let maximum_fraction_value = self.number_option_value(&options, "maximumFractionDigits")?;
-        let minimum_present = !matches!(minimum_fraction_value, Value::Undefined);
-        let maximum_present = !matches!(maximum_fraction_value, Value::Undefined);
-        let (minimum_fraction_digits, maximum_fraction_digits) =
-            match (minimum_present, maximum_present) {
-                (true, _) => {
-                    let minimum = self.number_u8_value(
-                        &minimum_fraction_value,
-                        "minimumFractionDigits",
-                        0,
-                        100,
-                        default_minimum_fraction,
-                    )?;
-                    let maximum = self.number_u8_value(
-                        &maximum_fraction_value,
-                        "maximumFractionDigits",
-                        minimum,
-                        100,
-                        default_maximum_fraction.max(minimum),
-                    )?;
-                    (minimum, maximum)
-                }
-                (false, true) => {
-                    let maximum = self.number_u8_value(
-                        &maximum_fraction_value,
-                        "maximumFractionDigits",
-                        0,
-                        100,
-                        default_maximum_fraction,
-                    )?;
-                    (default_minimum_fraction.min(maximum), maximum)
-                }
-                (false, false) => (default_minimum_fraction, default_maximum_fraction),
-            };
+        let minimum_value = self.number_option_value(options, "minimumFractionDigits")?;
+        let maximum_value = self.number_option_value(options, "maximumFractionDigits")?;
+        let minimum_present = !matches!(minimum_value, Value::Undefined);
+        let maximum_present = !matches!(maximum_value, Value::Undefined);
+        let (minimum_fraction, maximum_fraction) = match (minimum_present, maximum_present) {
+            (true, _) => {
+                let minimum = self.number_u8_value(
+                    &minimum_value,
+                    "minimumFractionDigits",
+                    0,
+                    100,
+                    default_minimum,
+                )?;
+                let maximum = self.number_u8_value(
+                    &maximum_value,
+                    "maximumFractionDigits",
+                    minimum,
+                    100,
+                    default_maximum.max(minimum),
+                )?;
+                (minimum, maximum)
+            }
+            (false, true) => {
+                let maximum = self.number_u8_value(
+                    &maximum_value,
+                    "maximumFractionDigits",
+                    0,
+                    100,
+                    default_maximum,
+                )?;
+                (default_minimum.min(maximum), maximum)
+            }
+            (false, false) => (default_minimum, default_maximum),
+        };
+        Ok(NumberFractionOptions {
+            minimum_integer,
+            minimum_fraction,
+            maximum_fraction,
+        })
+    }
 
-        let minimum_significant_value =
-            self.number_option_value(&options, "minimumSignificantDigits")?;
-        let maximum_significant_value =
-            self.number_option_value(&options, "maximumSignificantDigits")?;
-        let has_significant = !matches!(minimum_significant_value, Value::Undefined)
-            || !matches!(maximum_significant_value, Value::Undefined);
-        let minimum_significant_digits = has_significant
-            .then(|| {
-                self.number_u8_value(
-                    &minimum_significant_value,
-                    "minimumSignificantDigits",
-                    1,
-                    21,
-                    1,
-                )
-            })
+    fn parse_number_significant_options(
+        &mut self,
+        options: &Value,
+    ) -> Result<NumberSignificantOptions> {
+        let minimum_value = self.number_option_value(options, "minimumSignificantDigits")?;
+        let maximum_value = self.number_option_value(options, "maximumSignificantDigits")?;
+        let present = !matches!(minimum_value, Value::Undefined)
+            || !matches!(maximum_value, Value::Undefined);
+        let minimum = present
+            .then(|| self.number_u8_value(&minimum_value, "minimumSignificantDigits", 1, 21, 1))
             .transpose()?;
-        let maximum_significant_digits = has_significant
+        let maximum = present
             .then(|| {
                 self.number_u8_value(
-                    &maximum_significant_value,
+                    &maximum_value,
                     "maximumSignificantDigits",
-                    minimum_significant_digits.unwrap_or(1),
+                    minimum.unwrap_or(1),
                     21,
                     21,
                 )
             })
             .transpose()?;
+        Ok(NumberSignificantOptions { minimum, maximum })
+    }
 
-        let rounding_increment = self.number_u16_option(&options, "roundingIncrement", 1)?;
-        if !ROUNDING_INCREMENTS.contains(&rounding_increment) {
+    fn parse_number_rounding_options(
+        &mut self,
+        options: &Value,
+        fraction: &NumberFractionOptions,
+        significant: &NumberSignificantOptions,
+    ) -> Result<NumberRoundingOptions> {
+        let increment = self.number_u16_option(options, "roundingIncrement", 1)?;
+        if !ROUNDING_INCREMENTS.contains(&increment) {
             return Err(range_error("roundingIncrement has an invalid value"));
         }
-        let rounding_mode = self.number_string_option(
-            &options,
+        let mode = self.number_string_option(
+            options,
             "roundingMode",
             &[
                 "ceil",
@@ -196,62 +287,33 @@ impl Context {
             ],
             "halfExpand",
         )?;
-        let rounding_priority = self.number_string_option(
-            &options,
+        let priority = self.number_string_option(
+            options,
             "roundingPriority",
             &["auto", "morePrecision", "lessPrecision"],
             "auto",
         )?;
         let trailing_zero_display = self.number_string_option(
-            &options,
+            options,
             "trailingZeroDisplay",
             &["auto", "stripIfInteger"],
             "auto",
         )?;
-        if rounding_increment != 1 && (rounding_priority != "auto" || has_significant) {
+        if increment != 1 && (priority != "auto" || significant.minimum.is_some()) {
             return Err(Error::type_error(
                 "roundingIncrement is incompatible with digit options",
             ));
         }
-        if rounding_increment != 1 && minimum_fraction_digits != maximum_fraction_digits {
+        if increment != 1 && fraction.minimum_fraction != fraction.maximum_fraction {
             return Err(range_error(
                 "roundingIncrement requires equal fraction digit limits",
             ));
         }
-
-        let compact_display =
-            self.number_string_option(&options, "compactDisplay", &["short", "long"], "short")?;
-        let use_grouping = self.number_use_grouping(&options, &notation)?;
-        let sign_display = self.number_string_option(
-            &options,
-            "signDisplay",
-            &["auto", "never", "always", "exceptZero", "negative"],
-            "auto",
-        )?;
-
-        Ok(NumberFormatValue {
-            locale,
-            numbering_system,
-            style,
-            currency,
-            currency_display,
-            currency_sign,
-            unit,
-            unit_display,
-            minimum_integer_digits,
-            minimum_fraction_digits,
-            maximum_fraction_digits,
-            minimum_significant_digits,
-            maximum_significant_digits,
-            use_grouping,
-            notation,
-            compact_display,
-            sign_display,
-            rounding_increment,
-            rounding_mode,
-            rounding_priority,
+        Ok(NumberRoundingOptions {
+            increment,
+            mode,
+            priority,
             trailing_zero_display,
-            bound_format: None,
         })
     }
 
@@ -317,7 +379,7 @@ impl Context {
     ) -> Result<String> {
         Ok(self
             .number_optional_string(options, name)?
-            .map_or_else(|| default.to_owned(), |value| value))
+            .unwrap_or_else(|| default.to_owned()))
         .and_then(|value| {
             if allowed.contains(&value.as_str()) {
                 Ok(value)
@@ -449,9 +511,10 @@ fn resolve_number_format_locale(locale: &str) -> Result<String> {
     };
     let extension = super::options::unicode_extension(&canonical, "nu")
         .filter(|value| super::number_digits::digits(value).is_some());
-    Ok(extension.map_or(resolved_base.clone(), |extension| {
-        format!("{resolved_base}-u-nu-{extension}")
-    }))
+    Ok(extension.map_or_else(
+        || resolved_base.clone(),
+        |extension| format!("{resolved_base}-u-nu-{extension}"),
+    ))
 }
 
 fn is_currency_code(value: &str) -> bool {

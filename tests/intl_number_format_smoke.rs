@@ -8,8 +8,8 @@ fn eval(source: &str) -> rs_quickjs::Result<Value> {
     context.eval(source)
 }
 
-fn ensure_true(value: Value) -> TestResult {
-    if value == Value::Bool(true) {
+fn ensure_true(value: &Value) -> TestResult {
+    if value == &Value::Bool(true) {
         return Ok(());
     }
     Err(format!("expected true, got {value:?}").into())
@@ -17,7 +17,7 @@ fn ensure_true(value: Value) -> TestResult {
 
 #[test]
 fn exposes_number_format_state_and_methods() -> TestResult {
-    ensure_true(eval(
+    ensure_true(&eval(
         r#"
         const formatter = new Intl.NumberFormat("en-US", {
             style: "currency",
@@ -46,7 +46,7 @@ fn exposes_number_format_state_and_methods() -> TestResult {
 
 #[test]
 fn formats_parts_and_percent_values() -> TestResult {
-    ensure_true(eval(
+    ensure_true(&eval(
         r#"
         const formatter = new Intl.NumberFormat("en-US", {
             style: "percent",

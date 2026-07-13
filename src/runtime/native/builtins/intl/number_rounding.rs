@@ -268,7 +268,6 @@ fn rounded_quotient(
         "trunc" => false,
         "halfCeil" => above_half || (tie && !negative),
         "halfFloor" => above_half || (tie && negative),
-        "halfExpand" => above_half || tie,
         "halfTrunc" => above_half,
         "halfEven" => above_half || (tie && odd),
         _ => above_half || tie,
@@ -351,7 +350,7 @@ fn ensure_fraction(text: &mut String, minimum: usize) {
 fn significant_count(text: &str) -> usize {
     let mut nonzero_seen = false;
     let mut count = 0_usize;
-    for digit in text.bytes().filter(|byte| byte.is_ascii_digit()) {
+    for digit in text.bytes().filter(u8::is_ascii_digit) {
         if digit != b'0' {
             nonzero_seen = true;
         }

@@ -46,11 +46,11 @@ impl Context {
         let formatter = self.number_format_receiver(&Value::Object(formatter_id))?;
         let value = args.as_slice().first().unwrap_or(&Value::Undefined);
         let input = self.number_format_input(value)?;
-        let formatted = format_number(&formatter, input)?;
+        let output = format_number(&formatter, input)?;
         if parts {
-            return self.number_parts_value(formatted.parts, None);
+            return self.number_parts_value(output.parts, None);
         }
-        self.heap_string_value(&formatted.text)
+        self.heap_string_value(&output.text)
     }
 
     pub(super) fn eval_intl_number_format_range(
@@ -96,17 +96,17 @@ impl Context {
         }
         let mut values = Vec::new();
         for part in start.parts {
-            values.push(self.number_part_value(part, Some("startRange"))?);
+            values.push(self.number_part_value(&part, Some("startRange"))?);
         }
         values.push(self.number_part_value(
-            NumberPart {
+            &NumberPart {
                 kind: "literal",
                 value: separator.to_owned(),
             },
             Some("shared"),
         )?);
         for part in end.parts {
-            values.push(self.number_part_value(part, Some("endRange"))?);
+            values.push(self.number_part_value(&part, Some("endRange"))?);
         }
         self.create_array_from_elements(values)
     }
@@ -132,8 +132,8 @@ impl Context {
     ) -> Result<Value> {
         let formatter = self.parse_number_format(args)?;
         let input = self.number_format_input(this_value)?;
-        let formatted = format_number(&formatter, input)?;
-        self.heap_string_value(&formatted.text)
+        let output = format_number(&formatter, input)?;
+        self.heap_string_value(&output.text)
     }
 
     fn number_parts_value(
@@ -143,14 +143,14 @@ impl Context {
     ) -> Result<Value> {
         let mut values = Vec::with_capacity(parts.len());
         for part in parts {
-            values.push(self.number_part_value(part, source)?);
+            values.push(self.number_part_value(&part, source)?);
         }
         self.create_array_from_elements(values)
     }
 
     fn number_part_value(
         &mut self,
-        part: NumberPart,
+        part: &NumberPart,
         source: Option<&'static str>,
     ) -> Result<Value> {
         let kind = self.heap_string_value(part.kind)?;
@@ -165,7 +165,7 @@ impl Context {
 
 fn format_number(formatter: &NumberFormatValue, input: NumberInput) -> Result<FormattedNumber> {
     match input {
-        NumberInput::Nan => special_number(
+        NumberInput::Nan => Ok(special_number(
             formatter,
             false,
             true,
@@ -175,9 +175,9 @@ fn format_number(formatter: &NumberFormatValue, input: NumberInput) -> Result<Fo
             } else {
                 "NaN"
             },
-        ),
+        )),
         NumberInput::Infinity { negative } => {
-            special_number(formatter, negative, false, "infinity", "∞")
+            Ok(special_number(formatter, negative, false, "infinity", "∞"))
         }
         NumberInput::Finite(mut input) => {
             if formatter.style == "percent" {
@@ -190,15 +190,15 @@ fn format_number(formatter: &NumberFormatValue, input: NumberInput) -> Result<Fo
                 return format_compact(formatter, input);
             }
             let rounded = round_standard(&input, formatter)?;
-            format_rounded_number(formatter, rounded)
+            Ok(format_rounded_number(formatter, &rounded))
         }
     }
 }
 
 fn format_rounded_number(
     formatter: &NumberFormatValue,
-    rounded: RoundedNumber,
-) -> Result<FormattedNumber> {
+    rounded: &RoundedNumber,
+) -> FormattedNumber {
     format_decimal_text(formatter, &rounded.text, rounded.negative, rounded.zero)
 }
 
@@ -221,26 +221,26 @@ fn format_exponential(
         &formatter.rounding_mode,
         &formatter.trailing_zero_display,
     )?;
-    let mut formatted = format_rounded_number(formatter, rounded)?;
-    formatted.parts.push(NumberPart {
+    let mut output = format_rounded_number(formatter, &rounded);
+    output.parts.push(NumberPart {
         kind: "exponentSeparator",
         value: "E".to_owned(),
     });
     if exponent < 0 {
-        formatted.parts.push(NumberPart {
+        output.parts.push(NumberPart {
             kind: "exponentMinusSign",
             value: "-".to_owned(),
         });
     }
-    formatted.parts.push(NumberPart {
+    output.parts.push(NumberPart {
         kind: "exponentInteger",
         value: localize_digits(
             &exponent.unsigned_abs().to_string(),
             &formatter.numbering_system,
         ),
     });
-    refresh_formatted_text(&mut formatted);
-    Ok(formatted)
+    refresh_formatted_text(&mut output);
+    Ok(output)
 }
 
 fn format_compact(
@@ -261,21 +261,21 @@ fn format_compact(
         &formatter.rounding_mode,
         &formatter.trailing_zero_display,
     )?;
-    let mut formatted = format_rounded_number(formatter, rounded)?;
+    let mut output = format_rounded_number(formatter, &rounded);
     if let Some(suffix) = compact.suffix {
         if compact.separator {
-            formatted.parts.push(NumberPart {
+            output.parts.push(NumberPart {
                 kind: "literal",
                 value: compact_separator(formatter).to_owned(),
             });
         }
-        formatted.parts.push(NumberPart {
+        output.parts.push(NumberPart {
             kind: "compact",
             value: suffix.to_owned(),
         });
     }
-    refresh_formatted_text(&mut formatted);
-    Ok(formatted)
+    refresh_formatted_text(&mut output);
+    Ok(output)
 }
 
 struct CompactPattern {
@@ -289,11 +289,7 @@ fn compact_pattern(formatter: &NumberFormatValue, magnitude: i32) -> CompactPatt
         if magnitude >= 8 {
             return CompactPattern {
                 exponent: 8,
-                suffix: Some(if locale_starts_with(formatter, "zh") {
-                    "億"
-                } else {
-                    "億"
-                }),
+                suffix: Some("億"),
                 separator: false,
             };
         }
@@ -407,7 +403,7 @@ fn format_decimal_text(
     rounded: &str,
     negative: bool,
     zero: bool,
-) -> Result<FormattedNumber> {
+) -> FormattedNumber {
     let mut split = rounded.split('.');
     let integer = split.next().unwrap_or("0");
     let fraction = split.next();
@@ -455,7 +451,7 @@ fn format_decimal_text(
         });
     }
     let text = parts.iter().map(|part| part.value.as_str()).collect();
-    Ok(FormattedNumber { text, parts })
+    FormattedNumber { text, parts }
 }
 
 fn special_number(
@@ -464,7 +460,7 @@ fn special_number(
     zero_like: bool,
     kind: &'static str,
     value: &str,
-) -> Result<FormattedNumber> {
+) -> FormattedNumber {
     let mut parts = Vec::new();
     push_sign(&mut parts, formatter, negative, zero_like);
     push_style_prefix(&mut parts, formatter);
@@ -474,7 +470,7 @@ fn special_number(
     });
     push_style_suffix(&mut parts, formatter);
     let text = parts.iter().map(|part| part.value.as_str()).collect();
-    Ok(FormattedNumber { text, parts })
+    FormattedNumber { text, parts }
 }
 
 fn push_sign(
@@ -484,20 +480,14 @@ fn push_sign(
     zero: bool,
 ) {
     let sign = match formatter.sign_display.as_str() {
-        "never" => None,
-        "always" => Some(if negative {
-            ("minusSign", "-")
-        } else {
-            ("plusSign", "+")
-        }),
         "exceptZero" if zero => None,
-        "exceptZero" => Some(if negative {
+        "always" | "exceptZero" => Some(if negative {
             ("minusSign", "-")
         } else {
             ("plusSign", "+")
         }),
         "negative" if negative && !zero => Some(("minusSign", "-")),
-        "negative" => None,
+        "never" | "negative" => None,
         _ if negative => Some(("minusSign", "-")),
         _ => None,
     };
@@ -518,8 +508,7 @@ fn push_style_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue)
     }
     let currency = formatter.currency.as_deref().unwrap_or("");
     let value = match formatter.currency_display.as_str() {
-        "code" => currency,
-        "name" => currency,
+        "code" | "name" => currency,
         _ => currency_symbol(formatter, currency),
     };
     parts.push(NumberPart {
