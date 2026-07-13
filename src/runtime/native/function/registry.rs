@@ -15,7 +15,7 @@ mod string_prototype_slot;
 
 use data_view_slot::data_view_slot;
 use object_slot::object_slot;
-use string_prototype_slot::string_prototype_slot;
+use string_prototype_slot::{string_prototype_slot, string_static_slot};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -790,15 +790,6 @@ const fn primitive_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunc
         NativeFunctionKind::SymbolPrototypeValueOf => Some(SYMBOL_PROTOTYPE_VALUE_OF_SLOT),
         NativeFunctionKind::SymbolFor => Some(SYMBOL_FOR_SLOT),
         NativeFunctionKind::SymbolKeyFor => Some(SYMBOL_KEY_FOR_SLOT),
-        _ => None,
-    }
-}
-
-const fn string_static_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
-    match kind {
-        NativeFunctionKind::StringFromCharCode => Some(STRING_FROM_CHAR_CODE_SLOT),
-        NativeFunctionKind::StringFromCodePoint => Some(STRING_FROM_CODE_POINT_SLOT),
-        NativeFunctionKind::StringRaw => Some(STRING_RAW_SLOT),
         _ => None,
     }
 }
