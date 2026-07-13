@@ -12,6 +12,7 @@ use crate::{
             PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
             TypedArrayContentType, TypedArrayElementKind,
         },
+        promise::PromiseJob,
     },
     value::{ErrorName, JsBigInt, ObjectId, Value},
 };
@@ -28,6 +29,23 @@ enum AtomicUpdate {
     Or,
     Sub,
     Xor,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AtomicViewRequirement {
+    Integer,
+    Waitable,
+    SharedWaitable,
+}
+
+impl AtomicViewRequirement {
+    const fn is_waitable(self) -> bool {
+        matches!(self, Self::Waitable | Self::SharedWaitable)
+    }
+
+    const fn requires_shared(self) -> bool {
+        matches!(self, Self::SharedWaitable)
+    }
 }
 
 struct AtomicOperand {
@@ -89,7 +107,7 @@ impl Context {
     }
 
     fn eval_atomic_load(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), false)?;
+        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
         let raw = location.buffer.with_exclusive_bytes_mut(|bytes| {
             read_atomic_word(bytes, location.offset, location.kind)
         })?;
@@ -97,7 +115,7 @@ impl Context {
     }
 
     fn eval_atomic_store(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), false)?;
+        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
         let value = args.as_slice().get(2).unwrap_or(&Value::Undefined);
         let operand = self.atomic_operand(location.kind, value)?;
         location.buffer.with_exclusive_bytes_mut(|bytes| {
@@ -111,7 +129,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         update: AtomicUpdate,
     ) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), false)?;
+        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
         let operand = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -134,7 +152,7 @@ impl Context {
     }
 
     fn eval_atomic_compare_exchange(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), false)?;
+        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Integer)?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -160,7 +178,7 @@ impl Context {
     }
 
     fn eval_atomic_notify(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), true)?;
+        let location = self.atomic_location(args.as_slice(), AtomicViewRequirement::Waitable)?;
         if !location.buffer.is_shared() {
             return Ok(Value::Number(0.0));
         }
@@ -170,10 +188,8 @@ impl Context {
     }
 
     fn eval_atomic_wait(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), true)?;
-        if !location.buffer.is_shared() {
-            return Err(Error::type_error("Atomics.wait requires shared storage"));
-        }
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::SharedWaitable)?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -196,12 +212,8 @@ impl Context {
     }
 
     fn eval_atomic_wait_async(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let location = self.atomic_location(args.as_slice(), true)?;
-        if !location.buffer.is_shared() {
-            return Err(Error::type_error(
-                "Atomics.waitAsync requires shared storage",
-            ));
-        }
+        let location =
+            self.atomic_location(args.as_slice(), AtomicViewRequirement::SharedWaitable)?;
         let expected = self.atomic_operand(
             location.kind,
             args.as_slice().get(2).unwrap_or(&Value::Undefined),
@@ -209,19 +221,23 @@ impl Context {
         let current = location.buffer.with_exclusive_bytes_mut(|bytes| {
             read_atomic_word(bytes, location.offset, location.kind)
         })?;
-        let timeout = if let Some(value) = args.as_slice().get(3) {
-            self.to_number(value)?
-        } else {
-            f64::INFINITY
-        };
+        let timeout = self.atomic_wait_timeout(args.as_slice().get(3))?;
         let result = if current != expected.raw {
             self.heap_string_value("not-equal")?
-        } else if timeout <= 0.0 {
+        } else if timeout.is_some_and(|duration| duration.is_zero()) {
             self.heap_string_value("timed-out")?
         } else {
-            return Err(Error::type_error(
-                "asynchronous Atomics waiting requires an embedder agent coordinator",
-            ));
+            let registration = location.buffer.register_waiter_at(location.offset)?;
+            let (promise, promise_value) = self.create_pending_promise()?;
+            let object = self.create_atomics_result_object()?;
+            self.define_enumerable_data_property(object, "async", Value::Bool(true))?;
+            self.define_enumerable_data_property(object, "value", promise_value)?;
+            self.enqueue_promise_job(PromiseJob::AtomicsWait {
+                promise,
+                registration,
+                timeout,
+            })?;
+            return Ok(Value::Object(object));
         };
         let object = self.create_atomics_result_object()?;
         self.define_enumerable_data_property(object, "async", Value::Bool(false))?;
@@ -246,14 +262,21 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    fn atomic_location(&mut self, args: &[Value], waitable: bool) -> Result<AtomicLocation> {
+    fn atomic_location(
+        &mut self,
+        args: &[Value],
+        requirement: AtomicViewRequirement,
+    ) -> Result<AtomicLocation> {
         let Value::Object(id) = args.first().unwrap_or(&Value::Undefined) else {
             return Err(Error::type_error(RECEIVER_ERROR));
         };
         let Some(view) = self.objects.typed_array(*id)? else {
             return Err(Error::type_error(RECEIVER_ERROR));
         };
-        if view.is_out_of_bounds() || !is_atomic_element_kind(view.element_kind(), waitable) {
+        if view.is_out_of_bounds()
+            || !is_atomic_element_kind(view.element_kind(), requirement.is_waitable())
+            || (requirement.requires_shared() && !view.buffer().is_shared())
+        {
             return Err(Error::type_error(RECEIVER_ERROR));
         }
         let length = view.length();

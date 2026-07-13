@@ -22,6 +22,13 @@ struct AtomicWaiter {
     signal: Condvar,
 }
 
+#[derive(Debug)]
+pub(in crate::runtime) struct AtomicWaitRegistration {
+    shared: Arc<SharedByteBuffer>,
+    byte_offset: usize,
+    waiter: Arc<AtomicWaiter>,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum AtomicWaitOutcome {
     Notified,
@@ -36,47 +43,36 @@ impl SharedByteBuffer {
         }
     }
 
-    pub(super) fn wait_at(
-        &self,
+    pub(super) fn register_waiter(
+        shared: &Arc<Self>,
         byte_offset: usize,
-        timeout: Option<Duration>,
-    ) -> AtomicWaitOutcome {
+    ) -> AtomicWaitRegistration {
         let waiter = Arc::new(AtomicWaiter {
             notified: Mutex::new(false),
             signal: Condvar::new(),
         });
-        self.waiters
+        shared
+            .waiters
             .lock()
             .entry(byte_offset)
             .or_default()
             .push_back(waiter.clone());
-
-        let mut notified = waiter.notified.lock();
-        if let Some(duration) = timeout {
-            waiter.signal.wait_for(&mut notified, duration);
-        } else {
-            while !*notified {
-                waiter.signal.wait(&mut notified);
-            }
+        AtomicWaitRegistration {
+            shared: shared.clone(),
+            byte_offset,
+            waiter,
         }
-        if *notified {
-            return AtomicWaitOutcome::Notified;
-        }
-        drop(notified);
+    }
 
+    fn remove_waiter(&self, byte_offset: usize, waiter: &Arc<AtomicWaiter>) {
         let mut waiters = self.waiters.lock();
-        if *waiter.notified.lock() {
-            return AtomicWaitOutcome::Notified;
-        }
         let Some(queue) = waiters.get_mut(&byte_offset) else {
-            return AtomicWaitOutcome::TimedOut;
+            return;
         };
-        queue.retain(|candidate| !Arc::ptr_eq(candidate, &waiter));
+        queue.retain(|candidate| !Arc::ptr_eq(candidate, waiter));
         if queue.is_empty() {
             waiters.remove(&byte_offset);
         }
-        drop(waiters);
-        AtomicWaitOutcome::TimedOut
     }
 
     pub(super) fn notify_at(&self, byte_offset: usize, count: usize) -> Result<usize> {
@@ -97,5 +93,41 @@ impl SharedByteBuffer {
         }
         drop(waiters);
         Ok(notify_count)
+    }
+}
+
+impl AtomicWaitRegistration {
+    pub(in crate::runtime) fn wait(&self, timeout: Option<Duration>) -> AtomicWaitOutcome {
+        let mut notified = self.waiter.notified.lock();
+        if let Some(duration) = timeout {
+            self.waiter.signal.wait_for(&mut notified, duration);
+        } else {
+            while !*notified {
+                self.waiter.signal.wait(&mut notified);
+            }
+        }
+        if *notified {
+            return AtomicWaitOutcome::Notified;
+        }
+        drop(notified);
+
+        let mut waiters = self.shared.waiters.lock();
+        if *self.waiter.notified.lock() {
+            return AtomicWaitOutcome::Notified;
+        }
+        if let Some(queue) = waiters.get_mut(&self.byte_offset) {
+            queue.retain(|candidate| !Arc::ptr_eq(candidate, &self.waiter));
+            if queue.is_empty() {
+                waiters.remove(&self.byte_offset);
+            }
+        }
+        drop(waiters);
+        AtomicWaitOutcome::TimedOut
+    }
+}
+
+impl Drop for AtomicWaitRegistration {
+    fn drop(&mut self) {
+        self.shared.remove_waiter(self.byte_offset, &self.waiter);
     }
 }

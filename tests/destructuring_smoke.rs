@@ -46,6 +46,19 @@ fn destructures_object_declarations() -> TestResult {
 }
 
 #[test]
+fn supports_contextual_keyword_shorthand_properties() -> TestResult {
+    ensure_string(
+        r#"
+        const source = {async: "ready"};
+        const {async} = source;
+        const object = {async};
+        object.async + ":" + async
+        "#,
+        "ready:ready",
+    )
+}
+
+#[test]
 fn destructures_array_declarations_with_elisions_and_defaults() -> TestResult {
     ensure_string(
         r#"

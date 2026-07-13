@@ -5,8 +5,10 @@ use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
 
 use super::{
-    test262_agent::Test262AgentCoordinator, test262_compat_harness,
-    test262_module_loader::Test262ModuleLoader, timing,
+    test262_agent::{Test262AgentCoordinator, install_async_report},
+    test262_compat_harness,
+    test262_module_loader::Test262ModuleLoader,
+    timing,
 };
 
 const FRONTMATTER_START: &str = "/*---";
@@ -234,6 +236,8 @@ fn execute_variant_result(
             })?;
         }
     }
+    install_async_report(&mut context)
+        .map_err(|error| anyhow::anyhow!("failed to install async agent reports: {error}"))?;
 
     let mut loader = Test262ModuleLoader::new(test262_dir);
     context.set_dynamic_module_loader(loader.clone());

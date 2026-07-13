@@ -11,8 +11,8 @@ use super::{Object, ObjectHeap};
 mod bulk;
 pub(super) mod waiters;
 
-pub(in crate::runtime) use waiters::AtomicWaitOutcome;
 use waiters::SharedByteBuffer;
+pub(in crate::runtime) use waiters::{AtomicWaitOutcome, AtomicWaitRegistration};
 
 const TYPED_ARRAY_INDEX_ERROR: &str = "typed array byte index is out of bounds";
 const TYPED_ARRAY_RANGE_ERROR: &str = "typed array byte range exceeded supported range";
@@ -117,7 +117,17 @@ impl ByteBuffer {
         let ByteBufferStorage::Shared(shared) = &self.storage else {
             return Err(Error::type_error("Atomics.wait requires shared storage"));
         };
-        Ok(shared.wait_at(byte_offset, timeout))
+        Ok(SharedByteBuffer::register_waiter(shared, byte_offset).wait(timeout))
+    }
+
+    pub(in crate::runtime) fn register_waiter_at(
+        &self,
+        byte_offset: usize,
+    ) -> Result<AtomicWaitRegistration> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Err(Error::type_error("Atomics.wait requires shared storage"));
+        };
+        Ok(SharedByteBuffer::register_waiter(shared, byte_offset))
     }
 
     pub(in crate::runtime) fn notify_at(&self, byte_offset: usize, count: usize) -> Result<usize> {

@@ -50,8 +50,8 @@ pub(in crate::runtime) use temporal::TemporalValue;
 use typed_array::typed_array_property_index;
 pub use typed_array::waiters::SharedByteBuffer;
 pub(in crate::runtime) use typed_array::{
-    AtomicWaitOutcome, TypedArrayContentType, TypedArrayElementKind, TypedArrayPropertyIndex,
-    TypedArrayView,
+    AtomicWaitOutcome, AtomicWaitRegistration, TypedArrayContentType, TypedArrayElementKind,
+    TypedArrayPropertyIndex, TypedArrayView,
 };
 pub use typed_array::{ByteBuffer, ByteBufferOrigin};
 

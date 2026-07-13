@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use rs_quickjs::{Context, Error, Runtime, SharedArrayBufferHandle, Value};
 
 use crate::{test262_compat_harness, test262_metadata::test262_limits};
@@ -14,6 +14,7 @@ use crate::{test262_compat_harness, test262_metadata::test262_limits};
 pub const START_HOST_NAME: &str = "__rsqjsTest262AgentStart";
 pub const BROADCAST_HOST_NAME: &str = "__rsqjsTest262AgentBroadcast";
 pub const GET_REPORT_HOST_NAME: &str = "__rsqjsTest262AgentGetReport";
+pub const WAIT_REPORT_HOST_NAME: &str = "__rsqjsTest262AgentWaitReport";
 pub const REPORT_HOST_NAME: &str = "__rsqjsTest262AgentReport";
 pub const SLEEP_HOST_NAME: &str = "__rsqjsTest262AgentSleep";
 pub const MONOTONIC_NOW_HOST_NAME: &str = "__rsqjsTest262AgentMonotonicNow";
@@ -21,6 +22,13 @@ const BROADCAST_BINDING_NAME: &str = "__rsqjsTest262AgentBroadcastValue";
 const AGENT_FAILURE_PREFIX: &str = "Test262AgentFailure:";
 const RECEIVE_BROADCAST_MARKER: &str = "$262.agent.receiveBroadcast";
 const MILLISECONDS_PER_SECOND: f64 = 1_000.0;
+const REPORT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+const ASYNC_REPORT_SOURCE: &str = r"
+$262.agent.getReportAsync = function getReportAsync() {
+    return Promise.resolve(__rsqjsTest262AgentWaitReport());
+};
+";
 
 const WORKER_HOST_SOURCE: &str = r"
 var $262 = {
@@ -45,6 +53,7 @@ type WorkerResult = Result<(), String>;
 pub struct Test262AgentCoordinator {
     sources: Mutex<Vec<String>>,
     reports: Mutex<VecDeque<String>>,
+    report_ready: Condvar,
     workers: Mutex<Vec<JoinHandle<WorkerResult>>>,
     started_at: Instant,
 }
@@ -54,12 +63,14 @@ impl Test262AgentCoordinator {
         let coordinator = Arc::new(Self {
             sources: Mutex::new(Vec::new()),
             reports: Mutex::new(VecDeque::new()),
+            report_ready: Condvar::new(),
             workers: Mutex::new(Vec::new()),
             started_at: Instant::now(),
         });
         install_start(context, &coordinator)?;
         install_broadcast(context, &coordinator)?;
         install_get_report(context, &coordinator)?;
+        install_wait_report(context, &coordinator)?;
         install_sleep(context)?;
         install_monotonic_now(context, &coordinator)?;
         Ok(coordinator)
@@ -109,10 +120,7 @@ impl Test262AgentCoordinator {
             .spawn(move || {
                 let result = run_worker(&source, handle.as_ref(), &worker_coordinator);
                 if let Err(error) = &result {
-                    worker_coordinator
-                        .reports
-                        .lock()
-                        .push_back(format!("{AGENT_FAILURE_PREFIX}{error}"));
+                    worker_coordinator.report(format!("{AGENT_FAILURE_PREFIX}{error}"));
                 }
                 result
             })
@@ -127,11 +135,25 @@ impl Test262AgentCoordinator {
 
     fn report(&self, report: String) {
         self.reports.lock().push_back(report);
+        self.report_ready.notify_one();
+    }
+
+    fn wait_report(&self) -> Option<String> {
+        let mut reports = self.reports.lock();
+        if reports.is_empty() {
+            self.report_ready
+                .wait_for(&mut reports, REPORT_WAIT_TIMEOUT);
+        }
+        reports.pop_front()
     }
 
     fn monotonic_milliseconds(&self) -> f64 {
         self.started_at.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND
     }
+}
+
+pub fn install_async_report(context: &mut Context) -> rs_quickjs::Result<()> {
+    context.eval(ASYNC_REPORT_SOURCE).map(|_value| ())
 }
 
 fn install_start(
@@ -164,6 +186,16 @@ fn install_get_report(
     let state = coordinator.clone();
     context.register_host_function(GET_REPORT_HOST_NAME, move |_call| {
         Ok(state.get_report().map_or(Value::Null, Value::from))
+    })
+}
+
+fn install_wait_report(
+    context: &mut Context,
+    coordinator: &Arc<Test262AgentCoordinator>,
+) -> rs_quickjs::Result<()> {
+    let state = coordinator.clone();
+    context.register_host_function(WAIT_REPORT_HOST_NAME, move |_call| {
+        Ok(state.wait_report().map_or(Value::Null, Value::from))
     })
 }
 
