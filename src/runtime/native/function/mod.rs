@@ -74,7 +74,6 @@ pub(in crate::runtime::native) use iterator_kind::{
     ITERATOR_ZIP_NAME,
 };
 pub(in crate::runtime) use iterator_kind::{ITERATOR_NAME, IteratorFunctionKind};
-pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
     ARRAY_BUFFER_NAME, BIGINT_AS_INT_N_NAME, BIGINT_AS_UINT_N_NAME, BIGINT_NAME, BOOLEAN_NAME,
     EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_APPLY_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
@@ -126,6 +125,7 @@ pub(in crate::runtime) use kind::{
     OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_TO_STRING_NAME,
     OBJECT_PROTOTYPE_VALUE_OF_NAME, UNDEFINED_NAME,
 };
+pub(in crate::runtime) use kind::{LegacyRegExpStaticKind, NativeFunctionKind};
 pub(in crate::runtime::native) use performance_kind::{PERFORMANCE_NAME, PERFORMANCE_NOW_NAME};
 pub(in crate::runtime::native) use primitive_kind::{
     BIGINT_PROTOTYPE_TO_LOCALE_STRING_NAME, BIGINT_PROTOTYPE_TO_STRING_NAME,

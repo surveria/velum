@@ -48,6 +48,78 @@ fn supports_minimal_regexp_literals_and_test_method() -> TestResult {
 }
 
 #[test]
+fn supports_regexp_prototype_getter_defaults() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const names = [
+            "dotAll",
+            "global",
+            "hasIndices",
+            "ignoreCase",
+            "multiline",
+            "sticky",
+            "unicode",
+            "unicodeSets"
+        ];
+        const defaults = names.every((name) => {
+            const getter = Object.getOwnPropertyDescriptor(RegExp.prototype, name).get;
+            return getter.call(RegExp.prototype) === undefined;
+        });
+        const source = Object.getOwnPropertyDescriptor(RegExp.prototype, "source")
+            .get.call(RegExp.prototype);
+        const flags = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags")
+            .get.call(RegExp.prototype);
+
+        defaults && source === "(?:)" && flags === "" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn exposes_legacy_regexp_static_accessors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const readOnly = [
+            "lastMatch", "$&", "lastParen", "$+",
+            "leftContext", "$`", "rightContext", "$'",
+            "$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9"
+        ];
+        const descriptors = readOnly.every((name) => {
+            const descriptor = Object.getOwnPropertyDescriptor(RegExp, name);
+            return typeof descriptor.get === "function" &&
+                descriptor.set === undefined &&
+                descriptor.enumerable === false &&
+                descriptor.configurable === true;
+        });
+        const inputDescriptor = Object.getOwnPropertyDescriptor(RegExp, "input");
+        const inputAliasDescriptor = Object.getOwnPropertyDescriptor(RegExp, "$_");
+        const input = typeof inputDescriptor.get === "function" &&
+            typeof inputDescriptor.set === "function" &&
+            typeof inputAliasDescriptor.get === "function" &&
+            typeof inputAliasDescriptor.set === "function";
+        let rejected = false;
+        try {
+            inputDescriptor.get.call(RegExp.prototype);
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+
+        descriptors && input && rejected && RegExp.lastMatch === "" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_regexp_constructor_and_preserves_slash_operator() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

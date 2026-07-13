@@ -37,6 +37,12 @@ impl Context {
         match kind {
             NativeFunctionKind::RegExp => Some(self.eval_regexp_constructor(args)),
             NativeFunctionKind::RegExpEscape => Some(self.eval_regexp_escape(args)),
+            NativeFunctionKind::RegExpLegacyGetter(kind) => {
+                Some(self.eval_legacy_regexp_static_getter(kind, this_value))
+            }
+            NativeFunctionKind::RegExpLegacyInputSetter => {
+                Some(self.eval_legacy_regexp_input_setter(args, this_value))
+            }
             NativeFunctionKind::RegExpPrototypeCompile => {
                 Some(self.eval_regexp_prototype_compile(args, this_value))
             }

@@ -23,6 +23,7 @@ pub(in crate::runtime::native) use promise::{
     PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
 };
 
+pub(in crate::runtime) use regexp::LegacyRegExpStaticKind;
 pub(in crate::runtime::native) use regexp::{
     REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME, REGEXP_PROTOTYPE_TEST_NAME,
     REGEXP_PROTOTYPE_TO_STRING_NAME,
@@ -496,6 +497,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ReflectSetPrototypeOf,
     RegExp,
     RegExpEscape,
+    RegExpLegacyGetter(LegacyRegExpStaticKind),
+    RegExpLegacyInputSetter,
     RegExpPrototypeCompile,
     RegExpPrototypeDotAllGetter,
     RegExpPrototypeExec,
