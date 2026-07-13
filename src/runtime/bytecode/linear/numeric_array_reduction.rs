@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeInstruction,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericArrayReductionRole, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
     },
     error::Result,
     runtime::{Context, binding::scope::BindingCell, numeric::number_to_i32},
@@ -25,7 +25,7 @@ pub(in crate::runtime::bytecode) struct NumericArrayReductionPlan<'a> {
 }
 
 impl Context {
-    pub(in crate::runtime::bytecode) fn compile_numeric_array_reduction_plan<'a>(
+    pub(in crate::runtime::bytecode) fn bind_numeric_array_reduction_plan<'a>(
         &mut self,
         condition: Option<&'a BytecodeBlock>,
         update: Option<&'a BytecodeBlock>,
@@ -37,6 +37,15 @@ impl Context {
         let (Some(condition), Some(update)) = (condition, update) else {
             return Ok(None);
         };
+        if condition.linear_template().reduction_role()
+            != Some(BytecodeNumericArrayReductionRole::Condition)
+            || update.linear_template().reduction_role()
+                != Some(BytecodeNumericArrayReductionRole::Update)
+            || body.linear_template().reduction_role()
+                != Some(BytecodeNumericArrayReductionRole::Body)
+        {
+            return Ok(None);
+        }
         let [
             BytecodeInstruction::LoadBinding(condition_index),
             BytecodeInstruction::LoadBinding(condition_array),

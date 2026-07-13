@@ -17,6 +17,17 @@ fn numeric_array_reduction_matches_generic_execution() -> TestResult {
     let mut disabled =
         Vm::with_config(VmConfig::default().with_optimization_mode(OptimizationMode::Disabled));
     let script = enabled.compile(REDUCTION_SOURCE)?;
+    let usage = script.usage();
+    ensure_at_least(
+        usage.bytecode_linear_peephole_candidate_count(),
+        2,
+        "compiled linear peephole candidates",
+    )?;
+    ensure_at_least(
+        usage.bytecode_numeric_array_reduction_role_count(),
+        3,
+        "compiled numeric-array reduction roles",
+    )?;
     let enabled_value = enabled.eval_compiled_owned(&script)?;
     let disabled_value = disabled.eval_compiled_owned(&script)?;
 
@@ -102,4 +113,11 @@ fn ensure_equal(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_at_least(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual >= minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} >= {minimum}, got {actual}").into())
 }

@@ -9,8 +9,8 @@ mod segment;
 use crate::{
     bytecode::{
         BytecodeArrayIndex, BytecodeBinding, BytecodeDynamicProperty, BytecodeInstruction,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeProperty,
+        BytecodeLinearPeepholeKind, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericEqualityOp, BytecodeProperty,
     },
     error::{Error, Result},
     runtime::{Context, binding::scope::BindingCell},
@@ -122,64 +122,74 @@ enum BytecodeLinearOp<'a> {
 }
 
 impl Context {
-    fn compile_bytecode_linear_peephole<'a>(
+    fn bind_bytecode_linear_peephole<'a>(
         &mut self,
         instructions: &'a [BytecodeInstruction],
         index: usize,
+        candidates: &[BytecodeLinearPeepholeKind],
     ) -> Result<Option<(BytecodeLinearOp<'a>, usize)>> {
-        if let Some(op) = self.compile_compare_binding_number(instructions, index)? {
-            return Ok(Some((op, 4)));
-        }
-        if let Some(op) =
-            self.compile_declare_var_from_binding_number_binary(instructions, index)?
-        {
-            return Ok(Some((op, 4)));
-        }
-        if let Some(op) =
-            self.compile_store_binding_from_binding_number_binary(instructions, index)?
-        {
-            return Ok(Some((op, 5)));
-        }
-        if let Some(chain) = self.compile_numeric_binding_chain(instructions, index)? {
-            return Ok(Some((
-                BytecodeLinearOp::NumericBindingChain(chain.op),
-                chain.consumed,
-            )));
-        }
-        if let Some(chain) = self.compile_numeric_compound_chain(instructions, index)? {
-            return Ok(Some((
-                BytecodeLinearOp::NumericCompoundChain(chain.op),
-                chain.consumed,
-            )));
-        }
-        if let Some(compound) = self.compile_numeric_compound_binding(instructions, index)? {
-            return Ok(Some((
-                BytecodeLinearOp::NumericCompoundBinding(compound.op),
-                compound.consumed,
-            )));
-        }
-        if let Some(mutation) = self.compile_property_mutation(instructions, index)? {
-            return Ok(Some((
-                BytecodeLinearOp::PropertyMutation(mutation.op),
-                mutation.consumed,
-            )));
-        }
-        if let Some(op) = self.compile_update_binding_store_last(instructions, index)? {
-            return Ok(Some((op, 2)));
-        }
-        if let Some(op) =
-            self.compile_add_array_element_to_binding_with_mask(instructions, index)?
-        {
-            return Ok(Some((op, 9)));
-        }
-        if let Some(op) = self.compile_in_static_property_binding(instructions, index)? {
-            return Ok(Some(op));
-        }
-        if let Some(op) = self.compile_in_array_index_mask_binding(instructions, index)? {
-            return Ok(Some((op, 5)));
-        }
-        if let Some(op) = self.compile_add_array_element_to_binding(instructions, index)? {
-            return Ok(Some((op, 7)));
+        for candidate in candidates {
+            let compiled = match candidate {
+                BytecodeLinearPeepholeKind::CompareBindingNumber => self
+                    .compile_compare_binding_number(instructions, index)?
+                    .map(|op| (op, 4)),
+                BytecodeLinearPeepholeKind::DeclareVarFromBindingNumberBinary => self
+                    .compile_declare_var_from_binding_number_binary(instructions, index)?
+                    .map(|op| (op, 4)),
+                BytecodeLinearPeepholeKind::StoreBindingFromBindingNumberBinary => self
+                    .compile_store_binding_from_binding_number_binary(instructions, index)?
+                    .map(|op| (op, 5)),
+                BytecodeLinearPeepholeKind::NumericBindingChain => self
+                    .compile_numeric_binding_chain(instructions, index)?
+                    .map(|chain| {
+                        (
+                            BytecodeLinearOp::NumericBindingChain(chain.op),
+                            chain.consumed,
+                        )
+                    }),
+                BytecodeLinearPeepholeKind::NumericCompoundChain => self
+                    .compile_numeric_compound_chain(instructions, index)?
+                    .map(|chain| {
+                        (
+                            BytecodeLinearOp::NumericCompoundChain(chain.op),
+                            chain.consumed,
+                        )
+                    }),
+                BytecodeLinearPeepholeKind::NumericCompoundBinding => self
+                    .compile_numeric_compound_binding(instructions, index)?
+                    .map(|compound| {
+                        (
+                            BytecodeLinearOp::NumericCompoundBinding(compound.op),
+                            compound.consumed,
+                        )
+                    }),
+                BytecodeLinearPeepholeKind::PropertyMutation => self
+                    .compile_property_mutation(instructions, index)?
+                    .map(|mutation| {
+                        (
+                            BytecodeLinearOp::PropertyMutation(mutation.op),
+                            mutation.consumed,
+                        )
+                    }),
+                BytecodeLinearPeepholeKind::UpdateBindingStoreLast => self
+                    .compile_update_binding_store_last(instructions, index)?
+                    .map(|op| (op, 2)),
+                BytecodeLinearPeepholeKind::AddArrayElementToBindingWithMask => self
+                    .compile_add_array_element_to_binding_with_mask(instructions, index)?
+                    .map(|op| (op, 9)),
+                BytecodeLinearPeepholeKind::InStaticPropertyBinding => {
+                    self.compile_in_static_property_binding(instructions, index)?
+                }
+                BytecodeLinearPeepholeKind::InArrayIndexMaskBinding => self
+                    .compile_in_array_index_mask_binding(instructions, index)?
+                    .map(|op| (op, 5)),
+                BytecodeLinearPeepholeKind::AddArrayElementToBinding => self
+                    .compile_add_array_element_to_binding(instructions, index)?
+                    .map(|op| (op, 7)),
+            };
+            if compiled.is_some() {
+                return Ok(compiled);
+            }
         }
         Ok(None)
     }

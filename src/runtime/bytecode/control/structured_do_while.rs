@@ -25,8 +25,8 @@ impl Context {
         condition: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let body_plan = self.compile_bytecode_linear_plan(body)?;
-        let condition_plan = self.compile_bytecode_linear_plan(condition)?;
+        let body_plan = self.bind_bytecode_linear_plan(body)?;
+        let condition_plan = self.bind_bytecode_linear_plan(condition)?;
         let handle = self.push_bytecode_control(BytecodeControlRecord::loop_record(
             BytecodeLoopKind::DoWhile,
         ))?;

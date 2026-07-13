@@ -291,6 +291,10 @@ impl CompiledScript {
                 bytecode_direct_native_call_count: bytecode_metrics.direct_native_call_count(),
                 bytecode_array_native_call_count: bytecode_metrics.array_native_call_count(),
                 bytecode_numeric_instruction_count: bytecode_metrics.numeric_instruction_count(),
+                bytecode_linear_peephole_candidate_count: bytecode_metrics
+                    .linear_peephole_candidate_count(),
+                bytecode_numeric_array_reduction_role_count: bytecode_metrics
+                    .numeric_array_reduction_role_count(),
                 bytecode_hoisted_var_count,
                 bytecode_hoisted_function_count,
             },

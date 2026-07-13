@@ -6,6 +6,7 @@ mod fast_path;
 mod function;
 mod function_mode;
 mod hoist;
+mod linear_template;
 mod metrics;
 mod numeric;
 mod private;
@@ -21,6 +22,8 @@ pub struct BytecodeMetrics {
     direct_native_calls: usize,
     array_native_calls: usize,
     numeric_instructions: usize,
+    linear_peephole_candidates: usize,
+    numeric_array_reduction_roles: usize,
 }
 
 pub use address::BytecodeAddress;
@@ -33,6 +36,9 @@ pub use function::{
 };
 pub use function_mode::BytecodeNewTargetMode;
 pub use hoist::BytecodeHoistPlan;
+pub use linear_template::{
+    BytecodeLinearPeepholeKind, BytecodeLinearTemplate, BytecodeNumericArrayReductionRole,
+};
 pub use numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,

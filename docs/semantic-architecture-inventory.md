@@ -641,9 +641,9 @@ that several optimization owners can perform semantic work directly.
 | optimizer policy and counters | `runtime/optimizer.rs` | one VM-local mode and stable snapshot own linear and call-cache counters | AS-08a boundary installed; guard rejects another direct state owner |
 | static property/name caches | `runtime/property/static_names` and object cacheable lookups | disabled mode leaves caches cold; guarded misses return to semantic value/object helpers | AS-08a mode gate installed; AS-08b audits invalidation evidence |
 | call caches/direct native calls | `CallValueCache`, `CallReference`, `NativeCallTarget`, `runtime/native/function/direct.rs` | disabled mode delegates to common `Call`; enabled guard misses use the same path | AS-08a mode gate installed |
-| linear plans/superinstructions | eight files under `runtime/bytecode/linear`, including one guarded numeric-array reduction | optional compilation/execution declines in disabled mode; reduction guard misses execute the structured loop | AS-08b retained only reusable bytecode operations |
+| linear plans/superinstructions | immutable structural templates in `bytecode/linear_template.rs` plus activation binding in `runtime/bytecode/linear` | each `BytecodeBlock` recognizes candidates once; loop entry resolves VM-local binding cells; disabled mode and guard misses execute the generic structured path | AS-08b retained only reusable bytecode operations |
 | function fast paths | `bytecode/fast_path.rs` and `runtime/function/fast_path.rs` | disabled mode omits the optional plan and callback shortcut | AS-08a mode gate installed |
-| structured control | four files under `runtime/bytecode/control` plus the central dispatcher | `for`, `while`, `do-while`, `for-in`, `switch`, and `try` use continuation-owned execution and reusable linear plans | AS-08b removed all named whole-loop recognizers and guards zero regrowth |
+| structured control | four files under `runtime/bytecode/control` plus the central dispatcher | `for`, `while`, `do-while`, `for-in`, `switch`, and `try` use continuation-owned execution and bytecode-owned linear templates | AS-08b removed all named whole-loop recognizers and guards zero regrowth |
 | dense array/native built-in paths | bytecode array helpers, `runtime/object/array`, `runtime/native/function`, and array built-ins | bytecode/direct-native shortcuts decline in disabled mode; packed algorithms require storage/descriptor guards and otherwise use the same generic abstract operations | AS-08b classified these as operation-shaped rather than source-shaped |
 | test harness | ordinary lazy `print` native binding plus JavaScript `assert.throws` harness | normal binding/property/call semantics; no harness bytecode or compiler name recognition | AS-08a removed the legacy opcodes |
 
@@ -681,7 +681,10 @@ reduction plan, not a control executor. It accepts arbitrary binding names and
 both common unit-increment spellings, charges runtime steps, handles partial
 limit failure, and declines for holes, indexed prototype behavior, non-numeric
 values, or non-default storage. Optimizer-on/off and focused fallback tests
-prove the common semantic path.
+prove the common semantic path. Its condition, update, and body roles, together
+with ordinary linear peephole candidates, are recognized once into the
+immutable `BytecodeBlock`. Per-activation plan binding retains current
+`BindingCell` resolution without repeating the structural candidate scan.
 
 ## Canonical-Path Decision For New Work
 
@@ -813,7 +816,7 @@ without pinning implementation statements.
 | `with` object environments | binding layout records the applicable lexical `with` suffix per reference; call, bytecode, and eval-boundary activation frames own and trace captured object chains, with eval boundaries starting from an isolated empty chain; one semantic reference path performs `HasProperty`, `@@unscopables`, `Get`, `Set`, delete, and call receiver behavior while static inner lexical bindings retain direct slots | runtime source-name heuristics, caller-dynamic scope leakage, an unrooted closure environment, assignment reference resolution after RHS evaluation, or property operations that bypass Proxy and accessor semantics |
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
-| optimization owners | one direct optimizer-state owner and zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere or a compiler/runtime workload-shaped recognizer without reusable plan evidence; splitting or consolidating optimization modules is allowed |
+| optimization owners | one direct optimizer-state owner, zero loop/catch/try source-shape recognizers, and bytecode-owned structural linear templates separated from activation binding | direct optimizer state access elsewhere, repeated runtime structural recognition, or a compiler/runtime workload-shaped recognizer without reusable plan evidence; splitting, consolidating, replacing, or removing optimization modules and guards is allowed when the invariant and behavioral evidence are updated |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, SymbolTable, and JsSymbol plus owner metadata on every heap-admitted JsString and central admission/checked-value validation | removing an admitted primitive owner stamp/check, retaining a detached string, or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |

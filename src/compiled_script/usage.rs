@@ -19,6 +19,8 @@ pub struct CompiledScriptUsage {
     pub(super) bytecode_direct_native_call_count: usize,
     pub(super) bytecode_array_native_call_count: usize,
     pub(super) bytecode_numeric_instruction_count: usize,
+    pub(super) bytecode_linear_peephole_candidate_count: usize,
+    pub(super) bytecode_numeric_array_reduction_role_count: usize,
     pub(super) bytecode_hoisted_var_count: usize,
     pub(super) bytecode_hoisted_function_count: usize,
 }
@@ -117,6 +119,16 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn bytecode_numeric_instruction_count(self) -> usize {
         self.bytecode_numeric_instruction_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_linear_peephole_candidate_count(self) -> usize {
+        self.bytecode_linear_peephole_candidate_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_numeric_array_reduction_role_count(self) -> usize {
+        self.bytecode_numeric_array_reduction_role_count
     }
 
     #[must_use]
