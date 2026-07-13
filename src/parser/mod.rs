@@ -27,12 +27,14 @@ mod sequence;
 mod statement;
 mod static_tables;
 mod strict;
+mod super_context;
 mod template;
 mod yield_context;
 
 use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
 use class_private::ClassPrivateScope;
 use static_tables::{StaticBindingTable, StaticFunctionTable, StaticNameTable, StaticStringTable};
+use super_context::SuperContext;
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 
 pub use module::{ModuleExportEntry, ModuleImportName, ModuleSyntax};
@@ -77,8 +79,7 @@ pub fn parse_eval_with_usage_in_context(
     allow_super_call: bool,
 ) -> Result<ParsedProgram> {
     let mut parser = Parser::new(tokens, limits, strict_mode);
-    parser.allow_super_property = allow_super_property;
-    parser.allow_super_call = allow_super_call;
+    parser.super_context = SuperContext::new(allow_super_property, allow_super_call);
     parser.parse()
 }
 
@@ -117,8 +118,7 @@ struct Parser {
     static_bindings: StaticBindingTable,
     static_functions: StaticFunctionTable,
     static_property_access_count: usize,
-    allow_super_property: bool,
-    allow_super_call: bool,
+    super_context: SuperContext,
     static_call_site_count: usize,
     arguments_reference: ArgumentsReference,
     strict_mode: bool,
@@ -177,8 +177,7 @@ impl Parser {
             static_bindings: StaticBindingTable::new(),
             static_functions: StaticFunctionTable::new(),
             static_property_access_count: 0,
-            allow_super_property: false,
-            allow_super_call: false,
+            super_context: SuperContext::Forbidden,
             static_call_site_count: 0,
             arguments_reference: ArgumentsReference::Unreferenced,
             strict_mode,
@@ -360,12 +359,10 @@ impl Parser {
         allow_call: bool,
         parse: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
-        let previous = (self.allow_super_property, self.allow_super_call);
-        self.allow_super_property = allow_property;
-        self.allow_super_call = allow_call;
+        let previous = self.super_context;
+        self.super_context = SuperContext::new(allow_property, allow_call);
         let result = parse(self);
-        self.allow_super_property = previous.0;
-        self.allow_super_call = previous.1;
+        self.super_context = previous;
         result
     }
 

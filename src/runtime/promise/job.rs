@@ -287,24 +287,21 @@ impl PromiseJob {
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
-            Self::ResolveThenable { .. } => Ok(0),
-            Self::DynamicImport(_) => Ok(0),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.cache_entry_count(),
-            Self::ResolveThenable { .. } => Ok(0),
-            Self::DynamicImport(_) => Ok(0),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn into_cancellation(self) -> Option<PromiseContinuationCancellation> {
         match self {
             Self::Reaction { reaction, .. } => reaction.into_cancellation(),
-            Self::ResolveThenable { .. } => None,
-            Self::DynamicImport(_) => None,
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => None,
         }
     }
 }

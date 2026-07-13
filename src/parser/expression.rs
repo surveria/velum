@@ -329,7 +329,7 @@ impl Parser {
 
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
         if self.check(&TokenKind::LParen) {
-            if !self.allow_super_call {
+            if !self.super_context.allows_call() {
                 return Err(Error::parse_at(
                     "super call is only valid inside derived class constructors",
                     start,
@@ -345,7 +345,7 @@ impl Parser {
             return Ok(self.expression_node(start, Expr::SuperCall { args }));
         }
         if self.match_kind(&TokenKind::Dot) {
-            if !self.allow_super_property {
+            if !self.super_context.allows_property() {
                 return Err(Error::parse_at(
                     "super property access is only valid inside class methods",
                     start,
@@ -356,7 +356,7 @@ impl Parser {
             return Ok(self.expression_node(start, Expr::SuperMember { property, access }));
         }
         if self.match_kind(&TokenKind::LBracket) {
-            if !self.allow_super_property {
+            if !self.super_context.allows_property() {
                 return Err(Error::parse_at(
                     "super property access is only valid inside methods",
                     start,
@@ -471,13 +471,9 @@ impl Parser {
                 self.no_substitution_template(part, token_span)?
             }
             TokenKind::TemplateHead(head) => self.template_literal(head, token_span)?,
-            TokenKind::RegExp { pattern, flags } => Expression::new(
-                Expr::RegExpLiteral {
-                    pattern: self.static_string(pattern.encode_utf16().collect())?,
-                    flags: self.static_string(flags.encode_utf16().collect())?,
-                },
-                token_span,
-            ),
+            TokenKind::RegExp { pattern, flags } => {
+                self.regexp_literal(&pattern, &flags, token_span)?
+            }
             TokenKind::True => Expression::new(Expr::Literal(Value::Bool(true)), token_span),
             TokenKind::False => Expression::new(Expr::Literal(Value::Bool(false)), token_span),
             TokenKind::Null => Expression::new(Expr::Literal(Value::Null), token_span),
@@ -557,6 +553,21 @@ impl Parser {
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         })
+    }
+
+    fn regexp_literal(
+        &mut self,
+        pattern: &str,
+        flags: &str,
+        span: crate::SourceSpan,
+    ) -> Result<Expression> {
+        Ok(Expression::new(
+            Expr::RegExpLiteral {
+                pattern: self.static_string(pattern.encode_utf16().collect())?,
+                flags: self.static_string(flags.encode_utf16().collect())?,
+            },
+            span,
+        ))
     }
 
     fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {

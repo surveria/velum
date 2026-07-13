@@ -281,7 +281,9 @@ impl Context {
         let PropertyUpdate::Data(update) = update else {
             return Ok(false);
         };
-        if update.configurable().is_some_and(|value| value.is_yes())
+        if update
+            .configurable()
+            .is_some_and(PropertyConfigurable::is_yes)
             || update.enumerable().is_some_and(|value| !value.is_yes())
             || update.writable().is_some_and(|value| !value.is_yes())
         {

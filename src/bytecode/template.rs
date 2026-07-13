@@ -1,6 +1,6 @@
 use crate::syntax::StaticString;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BytecodeTemplateElement {
     cooked: Option<StaticString>,
     raw: StaticString,

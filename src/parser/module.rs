@@ -178,92 +178,7 @@ impl Parser {
         }
         self.validate_default_export_keyword()?;
         if self.match_kind(&TokenKind::Default) {
-            let start = self.current_span();
-            let async_function = self.check(&TokenKind::Async)
-                && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function);
-            let declaration_like =
-                self.check(&TokenKind::Function) || self.check(&TokenKind::Class) || async_function;
-            let expression = self.assignment_expression()?;
-            if declaration_like
-                && !matches!(expression.kind(), Expr::Function { .. } | Expr::Class(_))
-            {
-                return Err(
-                    self.parse_error("default function or class export must be a declaration")
-                );
-            }
-            let expression_span = expression.span();
-            let (local_name, default_expression) = match expression.into_kind() {
-                Expr::Function {
-                    id,
-                    name: Some(name),
-                    arguments_binding,
-                    params,
-                    body,
-                    parameter_prologue_count,
-                    kind,
-                    strict,
-                } if declaration_like => {
-                    let local_name = name.name().as_str().to_owned();
-                    statements.push(self.statement_node(
-                        start,
-                        Stmt::FunctionDecl {
-                            name,
-                            block_scoped: false,
-                            annex_b_var_binding: None,
-                            arguments_binding,
-                            id,
-                            params,
-                            body,
-                            parameter_prologue_count,
-                            kind,
-                            strict,
-                        },
-                    ));
-                    (local_name, None)
-                }
-                Expr::Class(class) if declaration_like && class.name.is_some() => {
-                    let name = class
-                        .name
-                        .clone()
-                        .ok_or_else(|| self.parse_error("default class name disappeared"))?;
-                    let local_name = name.as_str().to_owned();
-                    let binding = self.static_binding(name)?;
-                    statements.push(self.statement_node(
-                        start,
-                        Stmt::ClassDecl {
-                            name: binding,
-                            class,
-                        },
-                    ));
-                    (local_name, None)
-                }
-                kind => (
-                    "default".to_owned(),
-                    Some(crate::ast::Expression::new(kind, expression_span)),
-                ),
-            };
-            if let Some(expression) = default_expression {
-                let binding = self.static_binding_name(local_name.clone())?;
-                statements.push(self.statement_node(
-                    start,
-                    Stmt::VarDecl {
-                        name: binding,
-                        kind: DeclKind::Const,
-                        init: Some(expression),
-                    },
-                ));
-            }
-            module.exports.push(ModuleExportEntry::Local {
-                export_name: "default".to_owned(),
-                local_name,
-            });
-            if declaration_like {
-                self.consume_optional_semicolon();
-                return Ok(());
-            }
-            return self.consume_statement_terminator(
-                "expected terminator after default export expression",
-            );
+            return self.module_default_export(module, statements);
         }
 
         let start = self.current_span();
@@ -281,6 +196,94 @@ impl Parser {
         }
         statements.push(self.statement_node(start, statement));
         Ok(())
+    }
+
+    fn module_default_export(
+        &mut self,
+        module: &mut ModuleSyntax,
+        statements: &mut Vec<Statement>,
+    ) -> Result<()> {
+        let start = self.current_span();
+        let async_function = self.check(&TokenKind::Async)
+            && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function);
+        let declaration_like =
+            self.check(&TokenKind::Function) || self.check(&TokenKind::Class) || async_function;
+        let expression = self.assignment_expression()?;
+        if declaration_like && !matches!(expression.kind(), Expr::Function { .. } | Expr::Class(_))
+        {
+            return Err(self.parse_error("default function or class export must be a declaration"));
+        }
+        let expression_span = expression.span();
+        let (local_name, default_expression) = match expression.into_kind() {
+            Expr::Function {
+                id,
+                name: Some(name),
+                arguments_binding,
+                params,
+                body,
+                parameter_prologue_count,
+                kind,
+                strict,
+            } if declaration_like => {
+                let local_name = name.name().as_str().to_owned();
+                statements.push(self.statement_node(
+                    start,
+                    Stmt::FunctionDecl {
+                        name,
+                        block_scoped: false,
+                        annex_b_var_binding: None,
+                        arguments_binding,
+                        id,
+                        params,
+                        body,
+                        parameter_prologue_count,
+                        kind,
+                        strict,
+                    },
+                ));
+                (local_name, None)
+            }
+            Expr::Class(class) if declaration_like && class.name.is_some() => {
+                let name = class
+                    .name
+                    .clone()
+                    .ok_or_else(|| self.parse_error("default class name disappeared"))?;
+                let local_name = name.as_str().to_owned();
+                let binding = self.static_binding(name)?;
+                statements.push(self.statement_node(
+                    start,
+                    Stmt::ClassDecl {
+                        name: binding,
+                        class,
+                    },
+                ));
+                (local_name, None)
+            }
+            kind => (
+                "default".to_owned(),
+                Some(crate::ast::Expression::new(kind, expression_span)),
+            ),
+        };
+        if let Some(expression) = default_expression {
+            let binding = self.static_binding_name(local_name.clone())?;
+            statements.push(self.statement_node(
+                start,
+                Stmt::VarDecl {
+                    name: binding,
+                    kind: DeclKind::Const,
+                    init: Some(expression),
+                },
+            ));
+        }
+        module.exports.push(ModuleExportEntry::Local {
+            export_name: "default".to_owned(),
+            local_name,
+        });
+        if declaration_like {
+            self.consume_optional_semicolon();
+            return Ok(());
+        }
+        self.consume_statement_terminator("expected terminator after default export expression")
     }
 
     fn validate_default_export_keyword(&mut self) -> Result<()> {

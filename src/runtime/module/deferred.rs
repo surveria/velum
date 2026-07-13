@@ -254,7 +254,7 @@ impl Context {
         Ok(())
     }
 
-    pub(in crate::runtime) fn import_meta_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn import_meta_value(&self) -> Result<Value> {
         if let Some(import_meta) = &self.active_import_meta {
             return Ok(import_meta.clone());
         }

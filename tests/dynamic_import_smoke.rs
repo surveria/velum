@@ -51,14 +51,14 @@ fn converts_abrupt_specifier_coercion_into_promise_rejection() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(
-        r#"
+        r"
         var marker = {};
         var rejected = false;
         var returned = false;
         const promise = import({ toString() { throw marker; } });
         returned = promise instanceof Promise;
         promise.catch(error => { rejected = error === marker; });
-        "#,
+        ",
     )?;
     let value = context.eval("returned && rejected")?;
     ensure(
@@ -296,10 +296,10 @@ fn exposes_stable_null_prototype_import_meta() -> TestResult {
     let (mut loader, _requests) = RecordingLoader::new([]);
     context.eval_module_named(
         "meta.js",
-        r#"
+        r"
         globalThis.importMetaWorked = import.meta === import.meta
             && Object.getPrototypeOf(import.meta) === null;
-        "#,
+        ",
         &mut loader,
     )?;
     let result = context.eval("globalThis.importMetaWorked")?;
@@ -352,11 +352,11 @@ impl ModuleLoader for RecordingLoader {
         referrer: &str,
         request: &DynamicModuleRequest,
     ) -> rs_quickjs::Result<ModuleSource> {
-        let specifier = if let Some(parent) = referrer.rsplit_once('/').map(|(parent, _)| parent) {
-            format!("{parent}/{}", request.specifier().trim_start_matches("./"))
-        } else {
-            request.specifier().trim_start_matches("./").to_owned()
-        };
+        let requested = request.specifier().trim_start_matches("./");
+        let specifier = referrer.rsplit_once('/').map_or_else(
+            || requested.to_owned(),
+            |(parent, _)| format!("{parent}/{requested}"),
+        );
         self.requests.borrow_mut().push(RecordedRequest {
             referrer: referrer.to_owned(),
             phase: request.phase(),

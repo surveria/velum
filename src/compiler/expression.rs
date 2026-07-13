@@ -42,23 +42,9 @@ impl BytecodeCompiler<'_> {
                 quasis,
                 expressions,
             } => return self.compile_template_literal(quasis, expressions),
-            Expr::TemplateObject { site, quasis } => {
-                let quasis = quasis
-                    .iter()
-                    .map(|quasi| {
-                        BytecodeTemplateElement::new(quasi.cooked.clone(), quasi.raw.clone())
-                    })
-                    .collect::<Vec<_>>();
-                self.emit(BytecodeInstruction::GetTemplateObject {
-                    site: BytecodeCallSite::new(*site),
-                    quasis: quasis.into(),
-                });
-            }
+            Expr::TemplateObject { site, quasis } => self.compile_template_object(*site, quasis),
             Expr::RegExpLiteral { pattern, flags } => {
-                self.emit(BytecodeInstruction::CreateRegExp {
-                    pattern: pattern.clone(),
-                    flags: flags.clone(),
-                });
+                self.compile_regexp_literal(pattern, flags);
             }
             Expr::This => {
                 self.emit(BytecodeInstruction::LoadThis);
@@ -137,21 +123,50 @@ impl BytecodeCompiler<'_> {
                 phase,
                 specifier,
                 options,
-            } => {
-                self.emit(BytecodeInstruction::DynamicImport {
-                    phase: *phase,
-                    specifier: BytecodeBlock::compile_expression(specifier, self.layout)?,
-                    options: options
-                        .as_deref()
-                        .map(|options| BytecodeBlock::compile_expression(options, self.layout))
-                        .transpose()?,
-                });
-            }
+            } => self.compile_dynamic_import(*phase, specifier, options.as_deref())?,
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 return self.compile_function_literal(expr);
             }
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
+        Ok(())
+    }
+
+    fn compile_template_object(
+        &mut self,
+        site: crate::syntax::StaticCallSiteId,
+        quasis: &[TemplateElement],
+    ) {
+        let quasis = quasis
+            .iter()
+            .map(|quasi| BytecodeTemplateElement::new(quasi.cooked.clone(), quasi.raw.clone()))
+            .collect::<Vec<_>>();
+        self.emit(BytecodeInstruction::GetTemplateObject {
+            site: BytecodeCallSite::new(site),
+            quasis: quasis.into(),
+        });
+    }
+
+    fn compile_regexp_literal(&mut self, pattern: &StaticString, flags: &StaticString) {
+        self.emit(BytecodeInstruction::CreateRegExp {
+            pattern: pattern.clone(),
+            flags: flags.clone(),
+        });
+    }
+
+    fn compile_dynamic_import(
+        &mut self,
+        phase: crate::syntax::ImportPhase,
+        specifier: &Expression,
+        options: Option<&Expression>,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::DynamicImport {
+            phase,
+            specifier: BytecodeBlock::compile_expression(specifier, self.layout)?,
+            options: options
+                .map(|options| BytecodeBlock::compile_expression(options, self.layout))
+                .transpose()?,
+        });
         Ok(())
     }
 

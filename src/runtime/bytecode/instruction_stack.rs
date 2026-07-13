@@ -21,15 +21,10 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::PushLiteral(value) => {
-                state.stack.push(self.runtime_value(value.clone())?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::PushString(value) => {
-                state.stack.push(self.static_string_value(value)?);
-                state.pc = next;
-                Ok(None)
+            BytecodeInstruction::PushLiteral(_)
+            | BytecodeInstruction::PushString(_)
+            | BytecodeInstruction::PushUndefined => {
+                self.eval_bytecode_push_instruction(state, instruction, next)
             }
             BytecodeInstruction::TemplateConcat { part_count } => {
                 self.eval_bytecode_template_concat(state, *part_count, next)
@@ -43,11 +38,6 @@ impl Context {
             }
             BytecodeInstruction::CreateRegExp { pattern, flags } => {
                 self.eval_bytecode_create_regexp(state, pattern, flags, next)
-            }
-            BytecodeInstruction::PushUndefined => {
-                state.stack.push(Value::Undefined);
-                state.pc = next;
-                Ok(None)
             }
             BytecodeInstruction::LoadThis => {
                 state.stack.push(self.current_this()?);
@@ -123,6 +113,23 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_push_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let value = match instruction {
+            BytecodeInstruction::PushLiteral(value) => self.runtime_value(value.clone())?,
+            BytecodeInstruction::PushString(value) => self.static_string_value(value)?,
+            BytecodeInstruction::PushUndefined => Value::Undefined,
+            _ => return Err(Error::runtime("bytecode push instruction mismatch")),
+        };
+        state.stack.push(value);
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_lexical_hoist(

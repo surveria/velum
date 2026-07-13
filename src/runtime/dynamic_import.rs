@@ -76,12 +76,17 @@ impl Context {
         &mut self,
         job: DynamicImportJob,
     ) -> Result<()> {
-        let result = self.load_dynamic_module_namespace(&job.referrer, &job.request);
+        let DynamicImportJob {
+            promise,
+            referrer,
+            request,
+        } = job;
+        let result = self.load_dynamic_module_namespace(&referrer, &request);
         match result {
-            Ok(namespace) => self.resolve_promise(job.promise, namespace),
+            Ok(namespace) => self.resolve_promise(promise, namespace),
             Err(error) => {
                 let reason = self.dynamic_import_error_value(&error)?;
-                self.reject_promise(job.promise, reason)
+                self.reject_promise(promise, reason)
             }
         }
     }

@@ -81,11 +81,7 @@ impl LayoutBuilder {
                 property,
                 expr,
                 ..
-            } => {
-                self.analyze_expr(object, scope, function)?;
-                self.analyze_expr(property, scope, function)?;
-                self.analyze_expr(expr, scope, function)
-            }
+            } => self.analyze_computed_property_assignment(object, property, expr, scope, function),
             Expr::SuperComputedPropertyAssignment { property, expr, .. } => {
                 self.analyze_expr(property, scope, function)?;
                 self.analyze_expr(expr, scope, function)
@@ -105,10 +101,7 @@ impl LayoutBuilder {
             }
             Expr::DynamicImport {
                 specifier, options, ..
-            } => {
-                self.analyze_expr(specifier, scope, function)?;
-                self.analyze_optional_expr(options.as_deref(), scope, function)
-            }
+            } => self.analyze_dynamic_import(specifier, options.as_deref(), scope, function),
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 self.analyze_nested_function(expr.kind(), scope, function)
             }
@@ -119,6 +112,30 @@ impl LayoutBuilder {
                 self.analyze_exprs(args, scope, function)
             }
         }
+    }
+
+    fn analyze_computed_property_assignment(
+        &mut self,
+        object: &Expression,
+        property: &Expression,
+        expr: &Expression,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        self.analyze_expr(object, scope, function)?;
+        self.analyze_expr(property, scope, function)?;
+        self.analyze_expr(expr, scope, function)
+    }
+
+    fn analyze_dynamic_import(
+        &mut self,
+        specifier: &Expression,
+        options: Option<&Expression>,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        self.analyze_expr(specifier, scope, function)?;
+        self.analyze_optional_expr(options, scope, function)
     }
 
     fn analyze_web_compat(
