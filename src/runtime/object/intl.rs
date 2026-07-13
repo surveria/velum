@@ -126,6 +126,23 @@ pub(in crate::runtime) struct DisplayNamesValue {
 }
 
 #[derive(Debug, Clone)]
+pub(in crate::runtime) struct PluralRulesValue {
+    pub locale: String,
+    pub rule_type: String,
+    pub notation: String,
+    pub compact_display: Option<String>,
+    pub minimum_integer_digits: u8,
+    pub minimum_fraction_digits: u8,
+    pub maximum_fraction_digits: u8,
+    pub minimum_significant_digits: Option<u8>,
+    pub maximum_significant_digits: Option<u8>,
+    pub rounding_increment: u16,
+    pub rounding_mode: String,
+    pub rounding_priority: String,
+    pub trailing_zero_display: String,
+}
+
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct SegmenterValue {
     pub locale: String,
     pub granularity: String,
@@ -185,6 +202,7 @@ pub(in crate::runtime) enum IntlValue {
     List(Box<ListFormatValue>),
     Locale(Box<LocaleValue>),
     Number(Box<NumberFormatValue>),
+    PluralRules(Box<PluralRulesValue>),
     Segmenter(Box<SegmenterValue>),
     Segments(Box<SegmentsValue>),
     SegmentIterator(Box<SegmentIteratorValue>),
@@ -219,6 +237,19 @@ impl IntlValue {
                 .saturating_add(value.style.len()),
             Self::Locale(value) => value.tag.len(),
             Self::Number(value) => value.storage_payload_bytes(),
+            Self::PluralRules(value) => [
+                Some(&value.locale),
+                Some(&value.rule_type),
+                Some(&value.notation),
+                value.compact_display.as_ref(),
+                Some(&value.rounding_mode),
+                Some(&value.rounding_priority),
+                Some(&value.trailing_zero_display),
+            ]
+            .into_iter()
+            .flatten()
+            .map(String::len)
+            .sum(),
             Self::Segmenter(value) => value.locale.len().saturating_add(value.granularity.len()),
             Self::Segments(value) => value
                 .input
@@ -252,6 +283,7 @@ impl IntlValue {
             | Self::DisplayNames(_)
             | Self::List(_)
             | Self::Locale(_)
+            | Self::PluralRules(_)
             | Self::Segmenter(_)
             | Self::Segments(_) => None,
         };

@@ -263,8 +263,8 @@ impl IntlFunctionKind {
             | Self::ListFormatSupportedLocalesOf
             | Self::SegmenterSegment
             | Self::SegmenterSupportedLocalesOf
-            | Self::SegmentsContaining => 1.0,
-            Self::DisplayNamesOf
+            | Self::SegmentsContaining
+            | Self::DisplayNamesOf
             | Self::PluralRulesSelect
             | Self::PluralRulesSupportedLocalesOf
             | Self::RelativeTimeFormatSupportedLocalesOf => 1.0,
@@ -282,16 +282,18 @@ impl IntlFunctionKind {
     pub(in crate::runtime) const fn name(self) -> &'static str {
         match self {
             Self::DateTimeFormatConstructor => "DateTimeFormat",
-            Self::DurationFormatFormat | Self::ListFormatFormat => "format",
+            Self::DurationFormatFormat
+            | Self::ListFormatFormat
+            | Self::RelativeTimeFormatFormat => "format",
             Self::DateTimeFormatFormatToParts
             | Self::NumberFormatFormatToParts
-            | Self::ListFormatFormatToParts => "formatToParts",
-            Self::RelativeTimeFormatFormatToParts => "formatToParts",
+            | Self::ListFormatFormatToParts
+            | Self::RelativeTimeFormatFormatToParts => "formatToParts",
             Self::DateTimeFormatResolvedOptions
             | Self::NumberFormatResolvedOptions
             | Self::ListFormatResolvedOptions
-            | Self::SegmenterResolvedOptions => "resolvedOptions",
-            Self::DisplayNamesResolvedOptions
+            | Self::SegmenterResolvedOptions
+            | Self::DisplayNamesResolvedOptions
             | Self::PluralRulesResolvedOptions
             | Self::RelativeTimeFormatResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
@@ -307,10 +309,9 @@ impl IntlFunctionKind {
             Self::NumberFormatSupportedLocalesOf
             | Self::DateTimeFormatSupportedLocalesOf
             | Self::ListFormatSupportedLocalesOf
-            | Self::SegmenterSupportedLocalesOf => "supportedLocalesOf",
-            Self::PluralRulesSupportedLocalesOf | Self::RelativeTimeFormatSupportedLocalesOf => {
-                "supportedLocalesOf"
-            }
+            | Self::SegmenterSupportedLocalesOf
+            | Self::PluralRulesSupportedLocalesOf
+            | Self::RelativeTimeFormatSupportedLocalesOf => "supportedLocalesOf",
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
             Self::LocaleConstructor => "Locale",
@@ -327,7 +328,6 @@ impl IntlFunctionKind {
             Self::DisplayNamesOf => "of",
             Self::PluralRulesSelect => "select",
             Self::PluralRulesSelectRange => "selectRange",
-            Self::RelativeTimeFormatFormat => "format",
         }
     }
 }

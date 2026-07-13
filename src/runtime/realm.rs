@@ -345,6 +345,9 @@ impl Context {
             NativeFunctionKind::Intl(IntlFunctionKind::DisplayNamesConstructor) => {
                 self.intl_display_names_constructor_value()?
             }
+            NativeFunctionKind::Intl(IntlFunctionKind::PluralRulesConstructor) => {
+                self.intl_plural_rules_constructor_value()?
+            }
             _ => self
                 .builtin_value(kind.name())?
                 .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,
