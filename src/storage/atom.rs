@@ -1,3 +1,5 @@
+use std::{collections::HashMap, rc::Rc};
+
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Ord, PartialOrd)]
@@ -17,18 +19,18 @@ impl AtomId {
 
 #[derive(Debug, Clone, Default)]
 pub struct AtomTable {
-    entries: Vec<AtomEntry>,
-    names: Vec<String>,
+    names: Vec<Rc<str>>,
+    index: HashMap<Rc<str>, AtomId>,
     bytes: usize,
     max_count: usize,
     max_bytes: usize,
 }
 
 impl AtomTable {
-    pub const fn new(max_count: usize, max_bytes: usize) -> Self {
+    pub fn new(max_count: usize, max_bytes: usize) -> Self {
         Self {
-            entries: Vec::new(),
             names: Vec::new(),
+            index: HashMap::new(),
             bytes: 0,
             max_count,
             max_bytes,
@@ -43,22 +45,14 @@ impl AtomTable {
         self.bytes
     }
 
-    pub(crate) const fn index_entry_count(&self) -> usize {
-        self.entries.len()
+    pub(crate) fn index_entry_count(&self) -> usize {
+        self.index.len()
     }
 
     pub fn intern(&mut self, name: &str) -> Result<AtomId> {
-        let position = self.atom_position(name);
-        let position = match position {
-            Ok(position) => {
-                return self
-                    .entries
-                    .get(position)
-                    .map(AtomEntry::id)
-                    .ok_or_else(|| Error::runtime("atom index entry is not available"));
-            }
-            Err(position) => position,
-        };
+        if let Some(id) = self.index.get(name) {
+            return Ok(*id);
+        }
 
         let id = AtomId::from_index(self.names.len())?;
         if self.names.len() >= self.max_count {
@@ -66,9 +60,6 @@ impl AtomTable {
                 "Atom record count exceeded {}",
                 self.max_count
             )));
-        }
-        if position > self.entries.len() {
-            return Err(Error::runtime("atom index insert position is out of range"));
         }
         let updated_bytes = self
             .bytes
@@ -80,47 +71,27 @@ impl AtomTable {
                 self.max_bytes
             )));
         }
-        let name = name.to_owned();
-        self.names.push(name.clone());
-        self.entries.insert(position, AtomEntry::new(name, id));
+        self.names
+            .try_reserve(1)
+            .map_err(|error| Error::limit(format!("atom name allocation failed: {error}")))?;
+        self.index
+            .try_reserve(1)
+            .map_err(|error| Error::limit(format!("atom index allocation failed: {error}")))?;
+        let name: Rc<str> = Rc::from(name);
+        self.names.push(Rc::clone(&name));
+        self.index.insert(name, id);
         self.bytes = updated_bytes;
         Ok(id)
     }
 
     pub fn get(&self, name: &str) -> Option<AtomId> {
-        let position = self.atom_position(name).ok()?;
-        self.entries.get(position).map(AtomEntry::id)
+        self.index.get(name).copied()
     }
 
     pub fn name(&self, id: AtomId) -> Result<&str> {
         self.names
             .get(id.index()?)
-            .map(String::as_str)
+            .map(Rc::as_ref)
             .ok_or_else(|| Error::runtime("atom id is not defined"))
-    }
-
-    fn atom_position(&self, name: &str) -> std::result::Result<usize, usize> {
-        self.entries
-            .binary_search_by(|entry| entry.name().cmp(name))
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct AtomEntry {
-    name: String,
-    id: AtomId,
-}
-
-impl AtomEntry {
-    const fn new(name: String, id: AtomId) -> Self {
-        Self { name, id }
-    }
-
-    const fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    const fn id(&self) -> AtomId {
-        self.id
     }
 }

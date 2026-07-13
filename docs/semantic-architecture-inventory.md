@@ -472,6 +472,14 @@ one marker and a safe non-moving sweep over sparse indexed arenas.
 | embedder-visible state | output, host callbacks, VM-owned dynamic module loader, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; the loader is an embedder-owned source capability with no JavaScript `Value` edge; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
 
+Runtime atoms keep source-order `AtomId` values in one append-only name owner;
+the current hash index shares each immutable name payload with that owner and
+adds no second string copy. Atom count and UTF-8 payload-byte limits are
+checked before insertion, and the index contributes one logical CacheEntry per
+atom. Hashing is an implementation choice: another index may replace it while
+preserving stable ids, exact string equality, single payload ownership,
+transactional limits, and snapshot reconciliation.
+
 Shape metadata is an optimization index, not an object-layout authority.
 Stable `ShapeId` values describe ordered property keys and descriptor
 attributes, while semantic property operations remain owned by `Object` and
