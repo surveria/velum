@@ -194,7 +194,7 @@ impl Context {
         if let Some(binding) = self.get_or_materialize_binding_bytecode(name)? {
             return Ok(Some(binding.value(name.name())?));
         }
-        Ok(None)
+        self.unresolved_global_property_value(name.name())
     }
 
     pub(in crate::runtime) fn construct_native_function_kind(

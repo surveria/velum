@@ -157,6 +157,45 @@ fn reflect_rejects_invalid_targets_with_type_errors() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn global_object_access_materializes_shadowed_reflect_binding() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        (function (global) {
+            const {Reflect} = global;
+            return Reflect.get({answer: 42}, "answer");
+        })(this)
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn global_object_assignment_exports_harness_binding_across_scripts() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        (function (global) {
+            const {Reflect} = global;
+            global.ExportedFromHarness = Reflect.get(
+                {value: class ExportedFromHarness {}},
+                "value"
+            );
+        })(this);
+        "#,
+    )?;
+    let value =
+        context.eval("new ExportedFromHarness() instanceof ExportedFromHarness ? 42 : 0")?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 // The active Test262 fixtures are executed by the runner with a raw
 // `context.eval(source)` (no Test262 harness) and must evaluate to 42 while
 // producing no output. Mirror that execution here so the fixtures stay
