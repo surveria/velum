@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T155934Z.md`
-- Task: PR #601: runtime: complete compact Array and String locale tranche
-- Performance: 5.34x (4/5 >1.00x) (from `rsqjs-test-report-20260713T155934Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T155934Z.md`)
+- `rsqjs-test-report-20260713T162654Z.md`
+- Task: PR #604: runtime: complete compact String and Promise Test262 residuals
+- Performance: 5.42x (4/5 >1.00x) (from `rsqjs-test-report-20260713T162654Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T162654Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 99085 passed / 3493 failed (96.59%) (from `rsqjs-test-report-20260713T155934Z.md`)
+- Full Test262: 99233 passed / 3345 failed (96.74%) (from `rsqjs-test-report-20260713T162654Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -548,3 +548,4 @@ Latest report:
 | `20260713T152619Z` `b583757` PR #600: parser: accept trailing commas after call spread | 5.37x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 98854 passed / 3724 failed (96.37%) |
 | `20260713T154150Z` `dc58031` PR #599: runtime: complete Intl.Segmenter semantics | 5.43x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99008 passed / 3570 failed (96.52%) |
 | `20260713T155934Z` `5d370f4` PR #601: runtime: complete compact Array and String locale tranche | 5.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99085 passed / 3493 failed (96.59%) |
+| `20260713T162654Z` `e5e274b` PR #604: runtime: complete compact String and Promise Test262 residuals | 5.42x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99233 passed / 3345 failed (96.74%) |
