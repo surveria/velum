@@ -6,6 +6,8 @@ mod date_time_text;
 mod date_time_types;
 mod display_names;
 mod duration_format;
+mod duration_formatting;
+mod duration_units;
 mod formatting;
 mod list_format;
 mod locale;
@@ -33,8 +35,6 @@ use crate::{
     },
     value::{ObjectId, Value},
 };
-
-const DURATION_FORMAT_TAG: &str = "Intl.DurationFormat";
 
 impl Context {
     pub(in crate::runtime::native) fn intl_namespace_value(&mut self) -> Result<Value> {
@@ -102,7 +102,9 @@ impl Context {
             IntlFunctionKind::DateTimeFormatConstructor => {
                 self.construct_intl_date_time_format(args)
             }
-            IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::DurationFormatConstructor => {
+                self.construct_intl_duration_format(args)
+            }
             IntlFunctionKind::LocaleConstructor => self.construct_intl_locale(args),
             IntlFunctionKind::ListFormatConstructor => self.construct_intl_list_format(args),
             IntlFunctionKind::SegmenterConstructor => self.construct_intl_segmenter(args),
@@ -162,9 +164,11 @@ impl Context {
             IntlFunctionKind::DateTimeFormatFormatRangeToParts => {
                 self.eval_intl_date_time_format_range(args, this_value, true)
             }
-            IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::DurationFormatConstructor => {
+                Err(Error::type_error("Intl.DurationFormat requires new"))
+            }
             IntlFunctionKind::DurationFormatFormat => {
-                self.eval_intl_duration_format(args, this_value)
+                self.eval_intl_duration_format(args, this_value, false)
             }
             IntlFunctionKind::LocaleConstructor => {
                 Err(Error::type_error("Intl.Locale requires new"))
@@ -298,6 +302,15 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatSupportedLocalesOf => {
                 self.eval_intl_relative_time_format_supported_locales(args)
             }
+            IntlFunctionKind::DurationFormatFormatToParts => {
+                self.eval_intl_duration_format(args, this_value, true)
+            }
+            IntlFunctionKind::DurationFormatResolvedOptions => {
+                self.eval_intl_duration_format_resolved_options(this_value)
+            }
+            IntlFunctionKind::DurationFormatSupportedLocalesOf => {
+                self.eval_intl_duration_format_supported_locales(args)
+            }
             IntlFunctionKind::CollatorCompareGetter => {
                 self.eval_intl_collator_compare_getter(this_value)
             }
@@ -312,14 +325,6 @@ impl Context {
             }
             _ => Err(Error::runtime("Intl text formatter kind is invalid")),
         }
-    }
-
-    fn intl_duration_format_constructor_value(&mut self) -> Result<Value> {
-        self.intl_constructor_value(
-            IntlFunctionKind::DurationFormatConstructor,
-            DURATION_FORMAT_TAG,
-            &[("format", IntlFunctionKind::DurationFormatFormat)],
-        )
     }
 
     fn intl_constructor_value(

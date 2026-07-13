@@ -91,6 +91,21 @@ pub(in crate::runtime) struct CollatorValue {
 }
 
 #[derive(Debug, Clone)]
+pub(in crate::runtime) struct DurationUnitOptions {
+    pub style: String,
+    pub display: String,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct DurationFormatValue {
+    pub locale: String,
+    pub numbering_system: String,
+    pub style: String,
+    pub units: [DurationUnitOptions; 10],
+    pub fractional_digits: Option<u8>,
+}
+
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct NumberFormatValue {
     pub locale: String,
     pub numbering_system: String,
@@ -218,7 +233,7 @@ impl NumberFormatValue {
 pub(in crate::runtime) enum IntlValue {
     Collator(Box<CollatorValue>),
     DateTime(Box<DateTimeFormatValue>),
-    Duration,
+    Duration(Box<DurationFormatValue>),
     DisplayNames(Box<DisplayNamesValue>),
     List(Box<ListFormatValue>),
     Locale(Box<LocaleValue>),
@@ -250,7 +265,19 @@ impl IntlValue {
                 .saturating_add(value.numbering_system.len())
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
-            Self::Duration | Self::SegmentIterator(_) => 0,
+            Self::Duration(value) => value
+                .locale
+                .len()
+                .saturating_add(value.numbering_system.len())
+                .saturating_add(value.style.len())
+                .saturating_add(
+                    value
+                        .units
+                        .iter()
+                        .map(|unit| unit.style.len().saturating_add(unit.display.len()))
+                        .sum::<usize>(),
+                ),
+            Self::SegmentIterator(_) => 0,
             Self::DisplayNames(value) => [
                 Some(&value.locale),
                 Some(&value.style),
@@ -318,7 +345,7 @@ impl IntlValue {
                 )?;
                 None
             }
-            Self::Duration
+            Self::Duration(_)
             | Self::DisplayNames(_)
             | Self::List(_)
             | Self::Locale(_)

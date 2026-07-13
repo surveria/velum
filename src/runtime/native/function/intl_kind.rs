@@ -172,6 +172,9 @@ pub(in crate::runtime) enum IntlFunctionKind {
     CollatorBoundCompare(ObjectId),
     CollatorResolvedOptions,
     CollatorSupportedLocalesOf,
+    DurationFormatFormatToParts,
+    DurationFormatResolvedOptions,
+    DurationFormatSupportedLocalesOf,
 }
 
 impl IntlFunctionKind {
@@ -230,6 +233,9 @@ impl IntlFunctionKind {
             Self::CollatorBoundCompare(_) => 81,
             Self::CollatorResolvedOptions => 82,
             Self::CollatorSupportedLocalesOf => 83,
+            Self::DurationFormatFormatToParts => 84,
+            Self::DurationFormatResolvedOptions => 85,
+            Self::DurationFormatSupportedLocalesOf => 86,
         }
     }
 
@@ -238,6 +244,7 @@ impl IntlFunctionKind {
             Self::DateTimeFormatConstructor
             | Self::DurationFormatConstructor
             | Self::DateTimeFormatResolvedOptions
+            | Self::DurationFormatResolvedOptions
             | Self::CollatorConstructor
             | Self::NumberFormatConstructor
             | Self::NumberFormatFormatGetter
@@ -261,6 +268,8 @@ impl IntlFunctionKind {
             Self::LocaleConstructor
             | Self::DateTimeFormatFormatToParts
             | Self::DurationFormatFormat
+            | Self::DurationFormatFormatToParts
+            | Self::DurationFormatSupportedLocalesOf
             | Self::SupportedValuesOf
             | Self::NumberFormatBoundFormat(_)
             | Self::NumberFormatFormatToParts
@@ -298,10 +307,12 @@ impl IntlFunctionKind {
             | Self::ListFormatFormat
             | Self::RelativeTimeFormatFormat => "format",
             Self::DateTimeFormatFormatToParts
+            | Self::DurationFormatFormatToParts
             | Self::NumberFormatFormatToParts
             | Self::ListFormatFormatToParts
             | Self::RelativeTimeFormatFormatToParts => "formatToParts",
             Self::DateTimeFormatResolvedOptions
+            | Self::DurationFormatResolvedOptions
             | Self::NumberFormatResolvedOptions
             | Self::ListFormatResolvedOptions
             | Self::SegmenterResolvedOptions
@@ -323,6 +334,7 @@ impl IntlFunctionKind {
                 "formatRangeToParts"
             }
             Self::NumberFormatSupportedLocalesOf
+            | Self::DurationFormatSupportedLocalesOf
             | Self::DateTimeFormatSupportedLocalesOf
             | Self::ListFormatSupportedLocalesOf
             | Self::SegmenterSupportedLocalesOf
