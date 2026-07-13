@@ -14,6 +14,7 @@ mod number_options;
 mod number_range;
 mod number_rounding;
 mod options;
+mod segmenter;
 
 pub(in crate::runtime::native) use date_time_locale::DateLocaleDefaults;
 
@@ -55,6 +56,8 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "Locale", locale)?;
         let list_format = self.intl_list_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "ListFormat", list_format)?;
+        let segmenter = self.intl_segmenter_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "Segmenter", segmenter)?;
         let number_format = self.intl_number_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "NumberFormat", number_format)?;
         for (name, kind, tag) in [
@@ -109,6 +112,7 @@ impl Context {
             IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
             IntlFunctionKind::LocaleConstructor => self.construct_intl_locale(args),
             IntlFunctionKind::ListFormatConstructor => self.construct_intl_list_format(args),
+            IntlFunctionKind::SegmenterConstructor => self.construct_intl_segmenter(args),
             IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
             IntlFunctionKind::CollatorConstructor
             | IntlFunctionKind::PluralRulesConstructor
@@ -170,6 +174,25 @@ impl Context {
             }
             IntlFunctionKind::ListFormatSupportedLocalesOf => {
                 self.eval_intl_list_format_supported_locales(args)
+            }
+            IntlFunctionKind::SegmenterConstructor => {
+                Err(Error::type_error("Intl.Segmenter requires new"))
+            }
+            IntlFunctionKind::SegmenterSegment => {
+                self.eval_intl_segmenter_segment(args, this_value)
+            }
+            IntlFunctionKind::SegmenterResolvedOptions => {
+                self.eval_intl_segmenter_resolved_options(this_value)
+            }
+            IntlFunctionKind::SegmenterSupportedLocalesOf => {
+                self.eval_intl_segmenter_supported_locales(args)
+            }
+            IntlFunctionKind::SegmentsIterator => self.eval_intl_segments_iterator(this_value),
+            IntlFunctionKind::SegmentsContaining => {
+                self.eval_intl_segments_containing(args, this_value)
+            }
+            IntlFunctionKind::SegmentIteratorNext => {
+                self.eval_intl_segment_iterator_next(this_value)
             }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
             IntlFunctionKind::GetCanonicalLocales => self.eval_intl_get_canonical_locales(args),
@@ -263,6 +286,7 @@ impl Context {
             }
             IntlFunctionKind::LocaleConstructor => self.intl_locale_constructor_value()?,
             IntlFunctionKind::ListFormatConstructor => self.intl_list_format_constructor_value()?,
+            IntlFunctionKind::SegmenterConstructor => self.intl_segmenter_constructor_value()?,
             IntlFunctionKind::CollatorConstructor => {
                 self.intl_constructor_value(kind, "Intl.Collator", &[])?
             }

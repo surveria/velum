@@ -60,7 +60,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
-        let locales = self.list_format_locale_list(&requested)?;
+        let locales = self.intl_locale_list(&requested)?;
         let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         if !matches!(options, Value::Undefined) && !is_object_value(&options) {
             return Err(Error::type_error(
@@ -139,7 +139,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
-        let locales = self.list_format_locale_list(&requested)?;
+        let locales = self.intl_locale_list(&requested)?;
         let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         if matches!(options, Value::Null) {
             return Err(Error::type_error("locale options cannot be null"));
@@ -194,7 +194,7 @@ impl Context {
         }
     }
 
-    fn list_format_locale_list(&mut self, value: &Value) -> Result<Vec<String>> {
+    pub(super) fn intl_locale_list(&mut self, value: &Value) -> Result<Vec<String>> {
         if matches!(value, Value::Undefined) {
             return Ok(Vec::new());
         }

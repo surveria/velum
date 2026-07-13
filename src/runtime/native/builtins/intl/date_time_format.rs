@@ -153,7 +153,10 @@ impl Context {
                 IntlValue::Duration
                 | IntlValue::List(_)
                 | IntlValue::Locale(_)
-                | IntlValue::Number(_),
+                | IntlValue::Number(_)
+                | IntlValue::Segmenter(_)
+                | IntlValue::Segments(_)
+                | IntlValue::SegmentIterator(_),
             )
             | None => Err(Error::type_error("Intl.DateTimeFormat receiver is invalid")),
         }

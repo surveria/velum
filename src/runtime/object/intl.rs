@@ -3,6 +3,7 @@ use crate::{
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmObjectEdgeKind},
     value::{ObjectId, Value},
 };
+use std::mem::size_of;
 
 use super::{Object, ObjectHeap};
 
@@ -115,6 +116,32 @@ pub(in crate::runtime) struct ListFormatValue {
     pub style: String,
 }
 
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct SegmenterValue {
+    pub locale: String,
+    pub granularity: String,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct SegmentBoundary {
+    pub start: usize,
+    pub end: usize,
+    pub is_word_like: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct SegmentsValue {
+    pub input: Vec<u16>,
+    pub granularity: String,
+    pub boundaries: Vec<SegmentBoundary>,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct SegmentIteratorValue {
+    pub segments: ObjectId,
+    pub next_index: usize,
+}
+
 impl NumberFormatValue {
     fn storage_payload_bytes(&self) -> usize {
         [
@@ -148,6 +175,9 @@ pub(in crate::runtime) enum IntlValue {
     List(Box<ListFormatValue>),
     Locale(Box<LocaleValue>),
     Number(Box<NumberFormatValue>),
+    Segmenter(Box<SegmenterValue>),
+    Segments(Box<SegmentsValue>),
+    SegmentIterator(Box<SegmentIteratorValue>),
 }
 
 impl IntlValue {
@@ -160,7 +190,7 @@ impl IntlValue {
                 .saturating_add(value.numbering_system.len())
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
-            Self::Duration => 0,
+            Self::Duration | Self::SegmentIterator(_) => 0,
             Self::List(value) => value
                 .locale
                 .len()
@@ -168,6 +198,18 @@ impl IntlValue {
                 .saturating_add(value.style.len()),
             Self::Locale(value) => value.tag.len(),
             Self::Number(value) => value.storage_payload_bytes(),
+            Self::Segmenter(value) => value.locale.len().saturating_add(value.granularity.len()),
+            Self::Segments(value) => value
+                .input
+                .len()
+                .saturating_mul(size_of::<u16>())
+                .saturating_add(value.granularity.len())
+                .saturating_add(
+                    value
+                        .boundaries
+                        .len()
+                        .saturating_mul(size_of::<SegmentBoundary>()),
+                ),
         }
     }
 
@@ -178,7 +220,18 @@ impl IntlValue {
         let bound_format = match self {
             Self::DateTime(value) => value.bound_format.as_ref(),
             Self::Number(value) => value.bound_format.as_ref(),
-            Self::Duration | Self::List(_) | Self::Locale(_) => None,
+            Self::SegmentIterator(value) => {
+                visitor.visit(
+                    VmObjectEdgeKind::InternalSlot,
+                    StrongEdgeReference::Object(value.segments),
+                )?;
+                None
+            }
+            Self::Duration
+            | Self::List(_)
+            | Self::Locale(_)
+            | Self::Segmenter(_)
+            | Self::Segments(_) => None,
         };
         if let Some(bound_format) = bound_format {
             visitor.visit(

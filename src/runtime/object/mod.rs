@@ -29,7 +29,7 @@ pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
 pub(in crate::runtime) use intl::{
     DateTimeFormatOptions, DateTimeFormatValue, IntlValue, ListFormatValue, LocaleValue,
-    NumberFormatValue,
+    NumberFormatValue, SegmentBoundary, SegmentIteratorValue, SegmenterValue, SegmentsValue,
 };
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;
