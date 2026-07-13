@@ -150,7 +150,8 @@ impl Context {
         match self.objects.intl_value(id)? {
             Some(IntlValue::DateTime(value)) => Ok(value.as_ref().clone()),
             Some(
-                IntlValue::Duration
+                IntlValue::Collator(_)
+                | IntlValue::Duration(_)
                 | IntlValue::DisplayNames(_)
                 | IntlValue::List(_)
                 | IntlValue::Locale(_)

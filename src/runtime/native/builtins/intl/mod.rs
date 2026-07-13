@@ -1,3 +1,4 @@
+mod collator;
 mod date_time_format;
 mod date_time_locale;
 mod date_time_range;
@@ -5,6 +6,8 @@ mod date_time_text;
 mod date_time_types;
 mod display_names;
 mod duration_format;
+mod duration_formatting;
+mod duration_units;
 mod formatting;
 mod list_format;
 mod locale;
@@ -32,8 +35,6 @@ use crate::{
     },
     value::{ObjectId, Value},
 };
-
-const DURATION_FORMAT_TAG: &str = "Intl.DurationFormat";
 
 impl Context {
     pub(in crate::runtime::native) fn intl_namespace_value(&mut self) -> Result<Value> {
@@ -70,11 +71,7 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "PluralRules", plural_rules)?;
         let relative_time = self.intl_relative_time_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "RelativeTimeFormat", relative_time)?;
-        let collator = self.intl_constructor_value(
-            IntlFunctionKind::CollatorConstructor,
-            "Intl.Collator",
-            &[],
-        )?;
+        let collator = self.intl_collator_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Collator", collator)?;
         let supported = self.create_native_function(
             intl_kind(IntlFunctionKind::SupportedValuesOf),
@@ -105,7 +102,9 @@ impl Context {
             IntlFunctionKind::DateTimeFormatConstructor => {
                 self.construct_intl_date_time_format(args)
             }
-            IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::DurationFormatConstructor => {
+                self.construct_intl_duration_format(args)
+            }
             IntlFunctionKind::LocaleConstructor => self.construct_intl_locale(args),
             IntlFunctionKind::ListFormatConstructor => self.construct_intl_list_format(args),
             IntlFunctionKind::SegmenterConstructor => self.construct_intl_segmenter(args),
@@ -115,7 +114,7 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatConstructor => {
                 self.construct_intl_relative_time_format(args)
             }
-            IntlFunctionKind::CollatorConstructor => self.construct_intl_stub(kind),
+            IntlFunctionKind::CollatorConstructor => self.construct_intl_collator(args),
             _ => Err(Error::type_error("Intl method is not a constructor")),
         }
     }
@@ -165,9 +164,11 @@ impl Context {
             IntlFunctionKind::DateTimeFormatFormatRangeToParts => {
                 self.eval_intl_date_time_format_range(args, this_value, true)
             }
-            IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::DurationFormatConstructor => {
+                Err(Error::type_error("Intl.DurationFormat requires new"))
+            }
             IntlFunctionKind::DurationFormatFormat => {
-                self.eval_intl_duration_format(args, this_value)
+                self.eval_intl_duration_format(args, this_value, false)
             }
             IntlFunctionKind::LocaleConstructor => {
                 Err(Error::type_error("Intl.Locale requires new"))
@@ -218,7 +219,7 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatConstructor => {
                 Err(Error::type_error("Intl.RelativeTimeFormat requires new"))
             }
-            IntlFunctionKind::CollatorConstructor => self.construct_intl_stub(kind),
+            IntlFunctionKind::CollatorConstructor => self.construct_intl_collator(args),
             _ => Err(Error::runtime("Intl formatter dispatch is inconsistent")),
         }
     }
@@ -301,16 +302,29 @@ impl Context {
             IntlFunctionKind::RelativeTimeFormatSupportedLocalesOf => {
                 self.eval_intl_relative_time_format_supported_locales(args)
             }
+            IntlFunctionKind::DurationFormatFormatToParts => {
+                self.eval_intl_duration_format(args, this_value, true)
+            }
+            IntlFunctionKind::DurationFormatResolvedOptions => {
+                self.eval_intl_duration_format_resolved_options(this_value)
+            }
+            IntlFunctionKind::DurationFormatSupportedLocalesOf => {
+                self.eval_intl_duration_format_supported_locales(args)
+            }
+            IntlFunctionKind::CollatorCompareGetter => {
+                self.eval_intl_collator_compare_getter(this_value)
+            }
+            IntlFunctionKind::CollatorBoundCompare(collator) => {
+                self.eval_intl_collator_compare(args, collator)
+            }
+            IntlFunctionKind::CollatorResolvedOptions => {
+                self.eval_intl_collator_resolved_options(this_value)
+            }
+            IntlFunctionKind::CollatorSupportedLocalesOf => {
+                self.eval_intl_collator_supported_locales(args)
+            }
             _ => Err(Error::runtime("Intl text formatter kind is invalid")),
         }
-    }
-
-    fn intl_duration_format_constructor_value(&mut self) -> Result<Value> {
-        self.intl_constructor_value(
-            IntlFunctionKind::DurationFormatConstructor,
-            DURATION_FORMAT_TAG,
-            &[("format", IntlFunctionKind::DurationFormatFormat)],
-        )
     }
 
     fn intl_constructor_value(
@@ -368,9 +382,7 @@ impl Context {
             IntlFunctionKind::DisplayNamesConstructor => {
                 self.intl_display_names_constructor_value()?
             }
-            IntlFunctionKind::CollatorConstructor => {
-                self.intl_constructor_value(kind, "Intl.Collator", &[])?
-            }
+            IntlFunctionKind::CollatorConstructor => self.intl_collator_constructor_value()?,
             IntlFunctionKind::NumberFormatConstructor => {
                 self.intl_number_format_constructor_value()?
             }
@@ -391,17 +403,6 @@ impl Context {
                 "Intl constructor prototype is not an object",
             )),
         }
-    }
-
-    fn construct_intl_stub(&mut self, kind: IntlFunctionKind) -> Result<Value> {
-        let prototype = self.intl_constructor_prototype(kind)?;
-        let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype(
-            Some(prototype),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
     }
 
     fn define_intl_to_string_tag(&mut self, object: ObjectId, tag: &str) -> Result<()> {

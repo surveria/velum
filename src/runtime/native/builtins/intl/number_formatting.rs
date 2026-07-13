@@ -444,7 +444,7 @@ fn format_decimal_text(
             value: localize_digits(fraction, &formatter.numbering_system),
         });
     }
-    push_style_suffix(&mut parts, formatter);
+    push_style_suffix(&mut parts, formatter, Some(rounded));
     if accounting {
         parts.push(NumberPart {
             kind: "literal",
@@ -469,7 +469,7 @@ fn special_number(
         kind,
         value: value.to_owned(),
     });
-    push_style_suffix(&mut parts, formatter);
+    push_style_suffix(&mut parts, formatter, None);
     let text = parts.iter().map(|part| part.value.as_str()).collect();
     FormattedNumber { text, parts }
 }
@@ -518,7 +518,11 @@ fn push_style_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue)
     });
 }
 
-fn push_style_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
+fn push_style_suffix(
+    parts: &mut Vec<NumberPart>,
+    formatter: &NumberFormatValue,
+    rounded: Option<&str>,
+) {
     match formatter.style.as_str() {
         "currency"
             if locale_starts_with(formatter, "de") || locale_starts_with(formatter, "pt") =>
@@ -545,7 +549,7 @@ fn push_style_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue)
             kind: "unit",
             value: "%".to_owned(),
         }),
-        "unit" => push_unit_suffix(parts, formatter),
+        "unit" => push_unit_suffix(parts, formatter, rounded),
         _ => {}
     }
 }
@@ -578,10 +582,27 @@ fn push_unit_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) 
     }
 }
 
-fn push_unit_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
+fn push_unit_suffix(
+    parts: &mut Vec<NumberPart>,
+    formatter: &NumberFormatValue,
+    rounded: Option<&str>,
+) {
     let unit = formatter.unit.as_deref().unwrap_or("");
     if unit != "kilometer-per-hour" {
-        push_spaced_unit(parts, unit);
+        let singular = rounded.is_some_and(|value| value == "1");
+        let (separator, label) =
+            super::duration_units::duration_unit_pattern(unit, &formatter.unit_display, singular)
+                .unwrap_or((" ", unit));
+        if !separator.is_empty() {
+            parts.push(NumberPart {
+                kind: "literal",
+                value: separator.to_owned(),
+            });
+        }
+        parts.push(NumberPart {
+            kind: "unit",
+            value: label.to_owned(),
+        });
         return;
     }
     let (separator, value) = if locale_starts_with(formatter, "de") {
@@ -637,17 +658,6 @@ fn push_unit_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) 
     parts.push(NumberPart {
         kind: "unit",
         value: value.to_owned(),
-    });
-}
-
-fn push_spaced_unit(parts: &mut Vec<NumberPart>, unit: &str) {
-    parts.push(NumberPart {
-        kind: "literal",
-        value: " ".to_owned(),
-    });
-    parts.push(NumberPart {
-        kind: "unit",
-        value: unit.to_owned(),
     });
 }
 

@@ -28,8 +28,9 @@ pub use base::ObjectHeap;
 pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
 pub(in crate::runtime) use intl::{
-    DateTimeFormatOptions, DateTimeFormatValue, DisplayNamesValue, IntlValue, ListFormatValue,
-    LocaleValue, NumberFormatValue, PluralRulesValue, RelativeTimeFormatValue, SegmentBoundary,
+    CollatorValue, DateTimeFormatOptions, DateTimeFormatValue, DisplayNamesValue,
+    DurationFormatValue, DurationUnitOptions, IntlValue, ListFormatValue, LocaleValue,
+    NumberFormatValue, PluralRulesValue, RelativeTimeFormatValue, SegmentBoundary,
     SegmentIteratorValue, SegmenterValue, SegmentsValue,
 };
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;

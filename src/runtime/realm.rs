@@ -345,6 +345,12 @@ impl Context {
             NativeFunctionKind::Intl(IntlFunctionKind::DisplayNamesConstructor) => {
                 self.intl_display_names_constructor_value()?
             }
+            NativeFunctionKind::Intl(IntlFunctionKind::CollatorConstructor) => {
+                self.intl_collator_constructor_value()?
+            }
+            NativeFunctionKind::Intl(IntlFunctionKind::DurationFormatConstructor) => {
+                self.intl_duration_format_constructor_value()?
+            }
             NativeFunctionKind::Intl(IntlFunctionKind::PluralRulesConstructor) => {
                 self.intl_plural_rules_constructor_value()?
             }
