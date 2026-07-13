@@ -650,13 +650,6 @@ impl Context {
             .map_err(|_| Error::limit("array length exceeded supported range"))
     }
 
-    fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
-        match value {
-            None | Some(Value::Undefined) => Ok(ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),
-            Some(value) => self.to_string(value),
-        }
-    }
-
     const fn eval_array_unary_value(args: &[Value]) -> Option<&Value> {
         args.first()
     }

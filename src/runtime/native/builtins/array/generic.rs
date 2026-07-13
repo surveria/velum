@@ -25,6 +25,13 @@ const SPECIES_DISPLAY: &str = "[Symbol.species]";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
+    pub(super) fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
+        match value {
+            None | Some(Value::Undefined) => Ok(super::ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),
+            Some(value) => self.to_string(value),
+        }
+    }
+
     pub(super) fn generic_array_concat(
         &mut self,
         args: &[Value],
