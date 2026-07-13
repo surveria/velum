@@ -44,6 +44,24 @@ fn slices_to_independent_immutable_storage() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_same_buffer_slice_species_aliasing() -> TestResult {
+    ensure_eval(
+        r#"
+        let source = new Uint8Array([10, 20, 30, 40, 50, 60]);
+        let immutable = source.buffer.transferToImmutable();
+        let view = new Uint8Array(immutable);
+        view.constructor = {
+            [Symbol.species]: function() {
+                return new Uint8Array(view.buffer, 2);
+            }
+        };
+        view.slice(1, 4).join(",") === "20,20,20,60" ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

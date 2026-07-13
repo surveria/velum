@@ -97,6 +97,18 @@ impl ByteBuffer {
             operation(bytes)
         })
     }
+
+    pub(in crate::runtime) fn with_slice_alias_bytes_mut<T>(
+        &self,
+        operation: impl FnOnce(&mut [u8]) -> Result<T>,
+    ) -> Result<T> {
+        self.with_state_mut(|state| {
+            let Some(bytes) = state.bytes.as_mut() else {
+                return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+            };
+            operation(bytes)
+        })
+    }
 }
 
 impl TypedArrayElementKind {

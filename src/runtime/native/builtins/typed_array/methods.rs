@@ -535,6 +535,7 @@ impl Context {
         &mut self,
         source: &Value,
         length: usize,
+        require_mutable: bool,
     ) -> Result<(Value, ObjectId, TypedArrayView)> {
         let (_, source_view) = self.typed_array_branded_receiver(source)?;
         let constructor =
@@ -543,6 +544,7 @@ impl Context {
             &constructor,
             length,
             Some(source_view.element_kind().content_type()),
+            require_mutable,
         )
     }
 
@@ -622,6 +624,7 @@ impl Context {
             constructor,
             values.len(),
             expected_content_type,
+            true,
         )?;
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
@@ -643,6 +646,7 @@ impl Context {
         constructor: &Value,
         length: usize,
         expected_content_type: Option<TypedArrayContentType>,
+        require_mutable: bool,
     ) -> Result<(Value, ObjectId, TypedArrayView)> {
         let length_value = Self::typed_array_usize_value(length)?;
         let result = self.semantic_construct(
@@ -661,7 +665,9 @@ impl Context {
         {
             return Err(Error::type_error(TYPED_ARRAY_CONTENT_TYPE_ERROR));
         }
-        view.ensure_mutable()?;
+        if require_mutable {
+            view.ensure_mutable()?;
+        }
         Ok((result, id, view))
     }
 
@@ -674,7 +680,7 @@ impl Context {
         callback_this: &Value,
     ) -> Result<Value> {
         let (result, id, view) =
-            self.typed_array_create_with_constructor_length(constructor, length, None)?;
+            self.typed_array_create_with_constructor_length(constructor, length, None, true)?;
         let _scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, [source, &result])?;
         for index in 0..length {
