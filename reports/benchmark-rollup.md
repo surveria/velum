@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T100534Z.md`
-- Task: PR #576: runtime: normalize legacy proto accessor semantics
-- Performance: 6.23x (4/5 >1.00x) (from `rsqjs-test-report-20260713T100534Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T100534Z.md`)
+- `rsqjs-test-report-20260713T102514Z.md`
+- Task: PR #577: runtime: support callable weak collection keys
+- Performance: 6.68x (4/5 >1.00x) (from `rsqjs-test-report-20260713T102514Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T102514Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 96640 passed / 5938 failed (94.21%) (from `rsqjs-test-report-20260713T100534Z.md`)
+- Full Test262: 96640 passed / 5938 failed (94.21%) (from `rsqjs-test-report-20260713T102514Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -533,3 +533,4 @@ Latest report:
 | `20260713T082206Z` `7e8e68e` PR #572: runtime: batch TypedArray backing-store access | 5.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
 | `20260713T085705Z` `394fe63` PR #573: architecture: initialize destructured parameters in order | 5.87x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95270 passed / 7308 failed (92.88%) |
 | `20260713T100534Z` `801afba` PR #576: runtime: normalize legacy proto accessor semantics | 6.23x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96640 passed / 5938 failed (94.21%) |
+| `20260713T102514Z` `fe5d1d7` PR #577: runtime: support callable weak collection keys | 6.68x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96640 passed / 5938 failed (94.21%) |
