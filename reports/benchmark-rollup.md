@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T063747Z.md`
-- Task: PR #567: runtime: index canonical object shape transitions
-- Performance: 6.10x (4/5 >1.00x) (from `rsqjs-test-report-20260713T063747Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T063747Z.md`)
+- `rsqjs-test-report-20260713T065535Z.md`
+- Task: PR #568: runtime: index canonical atom storage
+- Performance: 5.82x (4/5 >1.00x) (from `rsqjs-test-report-20260713T065535Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T065535Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T063747Z.md`)
+- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T065535Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -527,3 +527,4 @@ Latest report:
 | `20260713T053446Z` `ca90f28` PR #563: runtime: complete Temporal Intl calendar semantics | 6.12x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
 | `20260713T061027Z` `a39d436` PR #565: runtime: index keyed collections by SameValueZero | 6.07x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
 | `20260713T063747Z` `416f92b` PR #567: runtime: index canonical object shape transitions | 6.10x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
+| `20260713T065535Z` `cb6ae7f` PR #568: runtime: index canonical atom storage | 5.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
