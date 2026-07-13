@@ -588,6 +588,7 @@ impl CaptureBindingCollector {
             | Expr::StringLiteral { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::ImportMeta
             | Expr::SuperMember { .. }
             | Expr::NewTarget
             | Expr::ArrayHole => {}

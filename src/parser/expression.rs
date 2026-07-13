@@ -12,6 +12,7 @@ use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_DEFER_PROPERTY_NAME: &str = "defer";
+const IMPORT_META_PROPERTY_NAME: &str = "meta";
 const IMPORT_SOURCE_PROPERTY_NAME: &str = "source";
 
 #[derive(Debug, Clone, Copy)]
@@ -33,6 +34,9 @@ impl Parser {
             && !self.await_starts_identifier_assignment()
             && self.match_kind(&TokenKind::Await)
         {
+            if self.is_module_goal() && self.function_body_depth == 0 {
+                self.top_level_await = true;
+            }
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -457,7 +461,15 @@ impl Parser {
     fn dynamic_import(&mut self, start: crate::SourceSpan) -> Result<Expression> {
         let phase = if self.match_kind(&TokenKind::Dot) {
             let token = self.advance_token("expected import phase after 'import.'")?;
-            if token.is_unescaped_identifier_named(IMPORT_SOURCE_PROPERTY_NAME) {
+            if token.is_unescaped_identifier_named(IMPORT_META_PROPERTY_NAME) {
+                if !self.is_module_goal() {
+                    return Err(Error::parse_at(
+                        "import.meta is only valid in modules",
+                        token.span,
+                    ));
+                }
+                return Ok(self.expression_node(start, Expr::ImportMeta));
+            } else if token.is_unescaped_identifier_named(IMPORT_SOURCE_PROPERTY_NAME) {
                 ImportPhase::Source
             } else if token.is_unescaped_identifier_named(IMPORT_DEFER_PROPERTY_NAME) {
                 ImportPhase::Defer
@@ -705,7 +717,13 @@ impl Parser {
                 if parser.match_kind(&TokenKind::LBrace) {
                     return parser.function_body(inherited_strict);
                 }
-                let value = parser.assignment()?;
+                parser.function_body_depth = parser
+                    .function_body_depth
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("function body nesting overflowed"))?;
+                let value = parser.assignment();
+                parser.function_body_depth = parser.function_body_depth.saturating_sub(1);
+                let value = value?;
                 let span = value.span();
                 Ok(super::ParsedFunctionBody {
                     statements: vec![Statement::new(Stmt::Return(Some(value)), span)],

@@ -411,6 +411,7 @@ pub enum BytecodeInstruction {
     },
     PushUndefined,
     LoadThis,
+    ImportMeta,
     LoadNewTarget,
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),

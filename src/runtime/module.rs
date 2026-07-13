@@ -13,7 +13,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::{
-        Context, VmStorageKind,
+        Context,
         binding::{
             scope::{BindingCell, BindingScope},
             static_bindings::StaticBindingCacheHandle,
@@ -29,6 +29,8 @@ use crate::{
     },
     value::Value,
 };
+
+mod deferred;
 
 #[derive(Clone)]
 pub(super) struct DynamicModuleLoader {
@@ -66,17 +68,25 @@ impl ModuleLoader for DynamicModuleLoader {
 #[derive(Debug)]
 pub(super) struct ModuleRecord {
     name: String,
-    scope: BindingScope,
+    script: crate::CompiledScript,
+    dependencies: Box<[usize]>,
+    scope: Option<BindingScope>,
     namespace: Value,
+    import_meta: Option<Value>,
+    state: EvaluationState,
 }
 
 impl ModuleRecord {
-    pub(super) const fn scope(&self) -> &BindingScope {
-        &self.scope
+    pub(super) const fn scope(&self) -> Option<&BindingScope> {
+        self.scope.as_ref()
     }
 
     pub(super) const fn namespace(&self) -> &Value {
         &self.namespace
+    }
+
+    pub(super) const fn import_meta(&self) -> Option<&Value> {
+        self.import_meta.as_ref()
     }
 }
 
@@ -102,6 +112,7 @@ struct PendingModule {
     scope: Option<BindingScope>,
     namespace: Option<Value>,
     namespace_binding: Option<BindingCell>,
+    import_meta: Option<Value>,
     state: EvaluationState,
 }
 
@@ -114,6 +125,7 @@ impl PendingModule {
             scope: None,
             namespace: None,
             namespace_binding: None,
+            import_meta: None,
             state: EvaluationState::Pending,
         }
     }
@@ -210,12 +222,13 @@ impl Context {
         {
             return Ok(namespace);
         }
-        self.eval_module_named(&specifier, source.source(), &mut loader)?;
-        self.modules
-            .iter()
-            .find(|module| module.name == specifier)
-            .map(|module| module.namespace.clone())
-            .ok_or_else(|| Error::runtime("dynamic module namespace was not persisted"))
+        let root = CompiledModule::compile_named(&specifier, source.source(), self.limits.clone())?;
+        let mut graph = vec![PendingModule::new(specifier.clone(), root)];
+        let mut indices = BTreeMap::from([(specifier, 0_usize)]);
+        self.load_module_dependencies(0, &mut graph, &mut indices, &mut loader)?;
+        self.instantiate_module_graph(&mut graph)?;
+        self.link_module_graph(&mut graph)?;
+        self.evaluate_dynamic_module_graph(0, graph, request.phase())
     }
 
     fn with_module_evaluation<T>(
@@ -376,6 +389,7 @@ impl Context {
             };
             self.objects
                 .set_prototype_value(namespace_id, &Value::Null)?;
+            self.objects.mark_module_namespace(namespace_id)?;
             let namespace = Value::Object(namespace_id);
             pending.namespace_binding = Some(BindingCell::new(
                 namespace.clone(),
@@ -641,6 +655,20 @@ impl Context {
             self.evaluate_module(dependency, graph)?;
         }
 
+        let import_meta = if let Some(import_meta) = graph
+            .get(module_index)
+            .and_then(|module| module.import_meta.clone())
+        {
+            import_meta
+        } else {
+            let import_meta = self.create_import_meta()?;
+            graph
+                .get_mut(module_index)
+                .ok_or_else(|| Error::runtime("module evaluation index disappeared"))?
+                .import_meta = Some(import_meta.clone());
+            import_meta
+        };
+
         let (name, script, scope) = {
             let module = graph
                 .get_mut(module_index)
@@ -653,7 +681,9 @@ impl Context {
         };
         self.push_lexical_scope_with(scope)?;
         let previous_module = self.active_module_name.replace(name);
+        let previous_import_meta = self.active_import_meta.replace(import_meta);
         let outcome = self.evaluate_module_script(&script);
+        self.active_import_meta = previous_import_meta;
         self.active_module_name = previous_module;
         let scope = self
             .pop_lexical_scope()?
@@ -717,44 +747,5 @@ impl Context {
                 Err(Error::runtime("generator completion escaped module"))
             }
         }
-    }
-
-    fn persist_module_graph(&mut self, graph: Vec<PendingModule>) -> Result<()> {
-        let reservation = self
-            .storage_ledger
-            .reserve_count(VmStorageKind::Module, graph.len())?;
-        let mut records = Vec::with_capacity(graph.len());
-        for mut pending in graph {
-            let Some(mut scope) = pending.scope.take() else {
-                Self::deactivate_module_records(&mut records)?;
-                return Err(Error::runtime("persisted module scope is missing"));
-            };
-            let Some(namespace) = pending.namespace.take() else {
-                Self::deactivate_module_records(&mut records)?;
-                return Err(Error::runtime("persisted module namespace is missing"));
-            };
-            if let Err(error) = scope.activate_storage(self.storage_ledger.clone()) {
-                Self::deactivate_module_records(&mut records)?;
-                return Err(error);
-            }
-            records.push(ModuleRecord {
-                name: pending.name,
-                scope,
-                namespace,
-            });
-        }
-        if let Err(error) = reservation.commit() {
-            Self::deactivate_module_records(&mut records)?;
-            return Err(error);
-        }
-        self.modules.extend(records);
-        Ok(())
-    }
-
-    fn deactivate_module_records(records: &mut [ModuleRecord]) -> Result<()> {
-        for record in records.iter_mut().rev() {
-            record.scope.deactivate_storage()?;
-        }
-        Ok(())
     }
 }

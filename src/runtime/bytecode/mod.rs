@@ -77,6 +77,7 @@ impl Context {
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
+            | BytecodeInstruction::ImportMeta
             | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)

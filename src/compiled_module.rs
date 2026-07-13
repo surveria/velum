@@ -210,4 +210,8 @@ impl CompiledModule {
     pub(crate) const fn script(&self) -> &CompiledScript {
         &self.script
     }
+
+    pub(crate) const fn has_top_level_await(&self) -> bool {
+        self.script.has_top_level_await()
+    }
 }

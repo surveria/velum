@@ -220,6 +220,7 @@ impl Parser {
             | Expr::TemplateLiteral { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::ImportMeta
             | Expr::NewTarget
             | Expr::Parenthesized(_)
             | Expr::Sequence(_)

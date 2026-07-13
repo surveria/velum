@@ -90,6 +90,7 @@ pub struct ParsedProgram {
 
 pub struct ParseUsage {
     pub top_level_statement_count: usize,
+    pub top_level_await: bool,
     pub max_expression_depth: usize,
     pub static_name_count: usize,
     pub static_string_count: usize,
@@ -107,6 +108,7 @@ struct Parser {
     statement_depth: usize,
     new_target_scope_depth: usize,
     function_body_depth: usize,
+    top_level_await: bool,
     control_context: ControlContext,
     max_expression_depth: usize,
     static_names: StaticNameTable,
@@ -166,6 +168,7 @@ impl Parser {
             statement_depth: 0,
             new_target_scope_depth: 0,
             function_body_depth: 0,
+            top_level_await: false,
             control_context: ControlContext::new(),
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
@@ -225,6 +228,7 @@ impl Parser {
         }
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),
+            top_level_await: self.top_level_await,
             max_expression_depth: self.max_expression_depth,
             static_name_count: self.static_names.len(),
             static_string_count: self.static_strings.len(),

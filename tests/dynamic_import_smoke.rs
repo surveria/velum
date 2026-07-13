@@ -194,6 +194,121 @@ fn keeps_named_default_function_exports_mutable() -> TestResult {
     )
 }
 
+#[test]
+fn exposes_module_namespace_exotic_descriptors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let (loader, _requests) = RecordingLoader::new([(
+        "dependency.js",
+        "export let answer = 42; export function update() { answer = 43; }",
+    )]);
+    context.set_dynamic_module_loader(loader);
+    context.eval_named(
+        "main.js",
+        r#"
+        var namespaceDescriptorsWorked = false;
+        import("./dependency.js").then(namespace => {
+            const before = Object.getOwnPropertyDescriptor(namespace, "answer");
+            namespace.update();
+            const after = Object.getOwnPropertyDescriptor(namespace, "answer");
+            namespaceDescriptorsWorked = before.value === 42
+                && before.writable === true
+                && before.enumerable === true
+                && before.configurable === false
+                && after.value === 43
+                && Reflect.defineProperty(namespace, "answer", { value: 43 })
+                && !Reflect.defineProperty(namespace, "answer", { value: 44 })
+                && !Reflect.defineProperty(namespace, "missing", {})
+                && !Reflect.set(namespace, "answer", 43)
+                && Object.isSealed(namespace)
+                && !Object.isFrozen(namespace);
+        });
+        "#,
+    )?;
+    let result = context.eval("namespaceDescriptorsWorked")?;
+    ensure(
+        result == Value::Bool(true),
+        "module namespace exotic descriptor semantics did not match",
+    )
+}
+
+#[test]
+fn defers_sync_roots_but_evaluates_async_transitive_dependencies() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let (mut loader, _requests) = RecordingLoader::new([
+        ("setup.js", "globalThis.events = [];"),
+        (
+            "root.js",
+            r#"
+            import "./async.js";
+            globalThis.events.push("root");
+            export const answer = 42;
+            "#,
+        ),
+        (
+            "async.js",
+            r#"
+            import "./dependency.js";
+            globalThis.events.push("async start");
+            await Promise.resolve();
+            globalThis.events.push("async end");
+            "#,
+        ),
+        ("dependency.js", "globalThis.events.push('dependency');"),
+    ]);
+    context.set_dynamic_module_loader(loader.clone());
+    context.eval_module_named(
+        "main.js",
+        r#"
+        import "./setup.js";
+        globalThis.deferBefore = "unset";
+        globalThis.deferAnswer = "unset";
+        import.defer("./root.js").then(namespace => {
+            const before = globalThis.events.join(",");
+            globalThis.deferBefore = before;
+            const answer = namespace.answer;
+            globalThis.deferAnswer = answer;
+        });
+        "#,
+        &mut loader,
+    )?;
+    context.run_jobs()?;
+    ensure(
+        context.eval(r#"deferBefore === "dependency,async start,async end""#)? == Value::Bool(true),
+        "import.defer did not eagerly evaluate async dependencies",
+    )?;
+    ensure(
+        context.eval("deferAnswer === 42")? == Value::Bool(true),
+        "import.defer namespace did not expose its export",
+    )?;
+    ensure(
+        context.eval(r#"events.join(",") === "dependency,async start,async end,root""#)?
+            == Value::Bool(true),
+        "import.defer did not lazily evaluate the sync root",
+    )
+}
+
+#[test]
+fn exposes_stable_null_prototype_import_meta() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let (mut loader, _requests) = RecordingLoader::new([]);
+    context.eval_module_named(
+        "meta.js",
+        r#"
+        globalThis.importMetaWorked = import.meta === import.meta
+            && Object.getPrototypeOf(import.meta) === null;
+        "#,
+        &mut loader,
+    )?;
+    let result = context.eval("globalThis.importMetaWorked")?;
+    ensure(
+        result == Value::Bool(true),
+        "import.meta did not preserve module-local identity and prototype",
+    )
+}
+
 #[derive(Clone)]
 struct RecordingLoader {
     sources: BTreeMap<String, String>,

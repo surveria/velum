@@ -31,7 +31,9 @@ impl Context {
         };
         let write = match object_ref.value {
             Value::Object(id) => {
-                if self.objects.is_proxy(*id) {
+                if self.objects.is_module_namespace(*id)? {
+                    SemanticPropertyWrite::Resolved(false)
+                } else if self.objects.is_proxy(*id) {
                     SemanticPropertyWrite::Resolved(self.proxy_set(
                         *id,
                         property,
@@ -260,6 +262,11 @@ impl Context {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return Ok(None);
         };
+        if let Value::Object(id) = object_ref.value
+            && self.objects.is_module_namespace(*id)?
+        {
+            return Ok(Some(false));
+        }
         if let Value::Object(id) = object_ref.value
             && self
                 .objects

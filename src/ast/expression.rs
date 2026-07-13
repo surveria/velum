@@ -71,6 +71,7 @@ pub enum Expr {
         flags: StaticString,
     },
     This,
+    ImportMeta,
     NewTarget,
     Identifier(StaticBinding),
     Parenthesized(Box<Expression>),

@@ -51,6 +51,11 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::ImportMeta => {
+                state.stack.push(self.import_meta_value()?);
+                state.pc = next;
+                Ok(None)
+            }
             BytecodeInstruction::LoadNewTarget => {
                 state.stack.push(self.current_new_target()?);
                 state.pc = next;

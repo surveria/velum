@@ -288,6 +288,7 @@ impl BytecodeInstruction {
             | Self::CreateRegExp { .. }
             | Self::PushUndefined
             | Self::LoadThis
+            | Self::ImportMeta
             | Self::LoadNewTarget
             | Self::StoreAnnexBVar(_)
             | Self::StoreLast

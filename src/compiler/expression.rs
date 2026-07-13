@@ -50,6 +50,9 @@ impl BytecodeCompiler<'_> {
             Expr::This => {
                 self.emit(BytecodeInstruction::LoadThis);
             }
+            Expr::ImportMeta => {
+                self.emit(BytecodeInstruction::ImportMeta);
+            }
             Expr::NewTarget => {
                 self.emit(BytecodeInstruction::LoadNewTarget);
             }

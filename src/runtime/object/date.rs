@@ -68,6 +68,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            module_namespace: false,
             shadow_realm: None,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,
