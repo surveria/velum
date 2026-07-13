@@ -240,6 +240,22 @@ impl Context {
         };
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.temporal_calendar(Some(&calendar_value))?;
+        if !matches!(calendar.identifier(), "iso8601" | "chinese" | "dangi") {
+            let era = self.get_named(value, "era")?;
+            let era_year = self.get_named(value, "eraYear")?;
+            if matches!(era, Value::Undefined) != matches!(era_year, Value::Undefined) {
+                return Err(Error::type_error(
+                    "PlainYearMonth era and eraYear must be provided together",
+                ));
+            }
+            if !matches!(era, Value::Undefined) {
+                self.to_string(&era)?;
+                let number = self.to_number(&era_year)?;
+                if !number.is_finite() {
+                    return Err(Self::plain_year_month_range("eraYear"));
+                }
+            }
+        }
         let month = self.plain_date_optional_i64(value, "month")?;
         let month_code_value = self.get_named(value, "monthCode")?;
         let month_code = if matches!(month_code_value, Value::Undefined) {
