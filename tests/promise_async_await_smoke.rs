@@ -234,6 +234,40 @@ fn async_function_can_suspend_more_than_once() -> TestResult {
 }
 
 #[test]
+fn rejection_after_repeated_suspension_uses_the_shared_completion_path() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let rejectSecond;
+        let stage = 0;
+        let result = "pending";
+
+        async function task() {
+            await Promise.resolve(1);
+            stage = 1;
+            await new Promise(function(resolve, reject) {
+                rejectSecond = reject;
+            });
+            stage = 2;
+        }
+
+        task().then(
+            function() { result = "fulfilled"; },
+            function(reason) { result = reason; }
+        );
+        "#,
+    )?;
+
+    ensure_value(&context.eval("stage")?, &Value::Number(1.0))?;
+    ensure_value(&context.eval("result")?, &Value::from("pending"))?;
+    context.eval("rejectSecond('second await')")?;
+    ensure_value(&context.eval("stage")?, &Value::Number(1.0))?;
+    ensure_value(&context.eval("result")?, &Value::from("second await"))
+}
+
+#[test]
 fn rejected_await_rejects_the_async_function_promise() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

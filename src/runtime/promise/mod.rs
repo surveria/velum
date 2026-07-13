@@ -235,17 +235,26 @@ impl Context {
         new_target: Value,
     ) -> Result<Value> {
         let (promise, object) = self.create_pending_promise()?;
-        match self.eval_async_function_completion_with_this_and_new_target(
+        let completion = self.eval_async_function_completion_with_this_and_new_target(
             id, args, this_value, new_target,
-        )? {
-            Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
+        )?;
+        self.settle_or_suspend_async_function(id, promise, completion)?;
+        Ok(object)
+    }
+
+    fn settle_or_suspend_async_function(
+        &mut self,
+        function: FunctionId,
+        result_promise: PromiseId,
+        completion: Completion,
+    ) -> Result<()> {
+        match completion {
+            Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
             Completion::Return(value) | Completion::ReturnDirect(value) => {
-                self.resolve_promise(promise, value)?;
+                self.resolve_promise(result_promise, value)
             }
-            Completion::Throw(value) => self.reject_promise(promise, value)?,
-            Completion::TailCall(_) => {
-                return Err(Error::runtime("tail call escaped async function"));
-            }
+            Completion::Throw(value) => self.reject_promise(result_promise, value),
+            Completion::TailCall(_) => Err(Error::runtime("tail call escaped async function")),
             Completion::Break { .. } | Completion::Continue { .. } => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
@@ -254,11 +263,12 @@ impl Context {
                     ),
                     true,
                 )?;
-                self.reject_promise(promise, reason)?;
+                self.reject_promise(result_promise, reason)
             }
             Completion::Suspended(awaited) => {
-                let continuation = self.detach_suspended_async_function(id, promise)?;
-                self.add_async_await_reaction(awaited, continuation)?;
+                let continuation =
+                    self.detach_suspended_async_function(function, result_promise)?;
+                self.add_async_await_reaction(awaited, continuation)
             }
             Completion::Yielded(value) | Completion::YieldedIteratorResult(value) => {
                 let reason = self.create_error_object(
@@ -268,13 +278,12 @@ impl Context {
                     ),
                     true,
                 )?;
-                self.reject_promise(promise, reason)?;
+                self.reject_promise(result_promise, reason)
             }
             Completion::GeneratorStart => {
-                return Err(Error::runtime("async function entered generator start"));
+                Err(Error::runtime("async function entered generator start"))
             }
         }
-        Ok(object)
     }
 
     pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
@@ -704,44 +713,7 @@ impl Context {
                 return self.reject_promise(result_promise, reason);
             }
         };
-        match completion {
-            Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
-            Completion::Return(value) | Completion::ReturnDirect(value) => {
-                self.resolve_promise(result_promise, value)
-            }
-            Completion::Throw(value) => self.reject_promise(result_promise, value),
-            Completion::TailCall(_) => {
-                Err(Error::runtime("tail call escaped resumed async function"))
-            }
-            Completion::Suspended(awaited) => {
-                let continuation =
-                    self.detach_suspended_async_function(function, result_promise)?;
-                self.add_async_await_reaction(awaited, continuation)
-            }
-            Completion::Yielded(value) | Completion::YieldedIteratorResult(value) => {
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::TypeError,
-                        format!("async function yielded unexpected value {value}"),
-                    ),
-                    true,
-                )?;
-                self.reject_promise(result_promise, reason)
-            }
-            Completion::GeneratorStart => Err(Error::runtime(
-                "async function resumed into generator start",
-            )),
-            Completion::Break { .. } | Completion::Continue { .. } => {
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::SyntaxError,
-                        "invalid async function completion",
-                    ),
-                    true,
-                )?;
-                self.reject_promise(result_promise, reason)
-            }
-        }
+        self.settle_or_suspend_async_function(function, result_promise, completion)
     }
 
     fn promise_state(&self, id: PromiseId) -> Result<&PromiseState> {
