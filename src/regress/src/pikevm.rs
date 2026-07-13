@@ -241,6 +241,22 @@ fn try_match_state<Input: InputIndexer, Dir: Direction>(
             nextinsn_or_fail!(matched)
         }
 
+        Insn::NamedBackRef { groups, icase } => {
+            let range = groups
+                .iter()
+                .find_map(|group| s.groups.get(*group as usize).and_then(GroupData::as_range));
+            let matched = if let Some(range) = range {
+                if *icase {
+                    matchers::backref_icase(input, dir, range, &mut s.pos)
+                } else {
+                    matchers::backref(input, dir, range, &mut s.pos)
+                }
+            } else {
+                true
+            };
+            nextinsn_or_fail!(matched)
+        }
+
         &Insn::Lookahead {
             negate,
             start_group: _,

@@ -342,6 +342,7 @@ pub(in crate::runtime) struct IteratorHelperState {
     pub(in crate::runtime) next: Value,
     pub(in crate::runtime) counter: f64,
     pub(in crate::runtime) done: bool,
+    pub(in crate::runtime) executing: bool,
     pub(in crate::runtime) mode: IteratorHelperMode,
 }
 
@@ -564,6 +565,21 @@ impl SnapshotIteratorState {
 }
 
 impl IteratorHelperState {
+    pub(in crate::runtime) const fn new(
+        iterator: Value,
+        next: Value,
+        mode: IteratorHelperMode,
+    ) -> Self {
+        Self {
+            iterator,
+            next,
+            counter: 0.0,
+            done: false,
+            executing: false,
+            mode,
+        }
+    }
+
     fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,

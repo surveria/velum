@@ -345,6 +345,13 @@ impl Emitter {
                             icase,
                         })
                     }
+                    Node::NamedBackRef { groups, icase } => {
+                        let groups = groups.iter().map(|group| group.saturating_sub(1)).collect();
+                        self.emit_insn(Insn::NamedBackRef {
+                            groups,
+                            icase: *icase,
+                        })
+                    }
 
                     Node::ByteSet(bytes) => self.emit_byte_set_insn(bytes),
 

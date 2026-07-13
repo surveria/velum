@@ -41,6 +41,8 @@ of the project-owned 800-line source-file gate.
 - Non-Unicode pattern parsing retains UTF-16 code units for matching while
   named capture-group identifiers decode valid surrogate pairs as Unicode
   identifier characters.
+- Duplicate named capture groups use one shared backreference instruction that
+  selects the participating alternative before matching its captured text.
 - `Regex::retained_payload_bytes` reports the compiled program's logical
   dynamic storage so the embedding VM can enforce its retained-payload policy.
 

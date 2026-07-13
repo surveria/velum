@@ -125,6 +125,22 @@ impl Context {
         &mut self,
         state_id: CollectionIteratorId,
     ) -> Result<Value> {
+        let state = self.iterator_helper_state_mut(state_id)?;
+        if state.executing {
+            return Err(Error::type_error("Iterator helper is already running"));
+        }
+        state.executing = true;
+        let result = self.eval_iterator_helper_next_active(state_id);
+        if let Ok(state) = self.iterator_helper_state_mut(state_id) {
+            state.executing = false;
+        }
+        result
+    }
+
+    fn eval_iterator_helper_next_active(
+        &mut self,
+        state_id: CollectionIteratorId,
+    ) -> Result<Value> {
         loop {
             self.charge_runtime_steps(ITERATOR_STEP_CHARGE)?;
             let plan = self.plan_helper_step(state_id)?;

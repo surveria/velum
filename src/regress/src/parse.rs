@@ -1730,21 +1730,13 @@ where
                             icase: self.flags.icase,
                         }
                     }
-                    _ => {
-                        // Unusual case of multiple groups sharing a name: the backref should try each in turn.
-                        // Lower to alternations of backreferences. Reverse to keep it right-associative: a | (b | (c | d))...
-                        let backrefs =
-                            group_indices
-                                .iter()
-                                .rev()
-                                .map(|group_index| ir::Node::BackRef {
-                                    group: *group_index + 1,
-                                    icase: self.flags.icase,
-                                });
-                        backrefs
-                            .reduce(|right, left| ir::Node::Alt(Box::new(left), Box::new(right)))
-                            .unwrap()
-                    }
+                    _ => ir::Node::NamedBackRef {
+                        groups: group_indices
+                            .iter()
+                            .map(|group_index| group_index + 1)
+                            .collect(),
+                        icase: self.flags.icase,
+                    },
                 };
                 Ok(node)
             }

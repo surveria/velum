@@ -257,7 +257,9 @@ impl Context {
             NativeCallTarget::JsonRawJson => self.eval_direct_json_raw_json(args),
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
             NativeCallTarget::Number => self.eval_direct_number_constructor(args),
-            NativeCallTarget::Promise => self.eval_direct_promise_constructor(args),
+            NativeCallTarget::Promise => {
+                Err(Error::type_error("Promise constructor requires 'new'"))
+            }
             NativeCallTarget::PromiseResolve => {
                 self.eval_promise_resolve(runtime_call_args(args), this_value)
             }

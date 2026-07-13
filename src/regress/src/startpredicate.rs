@@ -124,6 +124,7 @@ fn compute_start_predicate(n: &Node) -> Option<AbstractStartPredicate> {
         Node::Empty => arbitrary,
         Node::Goal => arbitrary,
         Node::BackRef { .. } => arbitrary,
+        Node::NamedBackRef { .. } => arbitrary,
 
         Node::CharSet(chars) => {
             // Pick the first bytes out.

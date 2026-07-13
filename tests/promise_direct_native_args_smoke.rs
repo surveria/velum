@@ -6,6 +6,7 @@ const PROMISE_DIRECT_TARGET_ARGS_SETUP: &str = r#"
 var order = "";
 var fulfilledTotal = 0;
 var rejectedText = "";
+var promiseCallThrows = 0;
 var mark = function(label, value) {
     order = order + label;
     return value;
@@ -13,7 +14,15 @@ var mark = function(label, value) {
 "#;
 
 const PROMISE_DIRECT_TARGET_ARGS_SCRIPT: &str = r#"
-var created = Promise(function(resolve, reject) {
+try {
+    Promise(mark("p", function() {}));
+} catch (error) {
+    if (error instanceof TypeError) {
+        promiseCallThrows = promiseCallThrows + 1;
+    }
+}
+
+var created = new Promise(function(resolve, reject) {
     order = order + "x";
     resolve(mark("a", 10));
 });
@@ -32,7 +41,8 @@ Promise.reject(mark("d", "offline")).catch(mark("e", function(reason) {
 "#;
 
 const PROMISE_DIRECT_TARGET_ARGS_CHECK: &str = r#"
-order === "xabcdexabcde" &&
+order === "pxabcdepxabcde" &&
+    promiseCallThrows === 2 &&
     fulfilledTotal === 62 &&
     rejectedText === "offline;offline;" ? 42 : 0
 "#;

@@ -890,6 +890,22 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
                         next_or_bt!(matched)
                     }
 
+                    Insn::NamedBackRef { groups, icase } => {
+                        let range = groups
+                            .iter()
+                            .find_map(|group| self.s.groups.iat(*group as usize).as_range());
+                        let matched = if let Some(range) = range {
+                            if *icase {
+                                matchers::backref_icase(input, dir, range, &mut pos)
+                            } else {
+                                matchers::backref(input, dir, range, &mut pos)
+                            }
+                        } else {
+                            true
+                        };
+                        next_or_bt!(matched)
+                    }
+
                     &Insn::Lookahead {
                         negate,
                         start_group,
