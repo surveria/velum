@@ -85,7 +85,7 @@ fn supports_basic_var_hoisting() -> TestResult {
     let Err(error) = eval("let lexical = 1; var lexical;") else {
         return Err("expected var and lexical redeclaration conflict".into());
     };
-    ensure_error_kind(&error, "javascript")
+    ensure_error_kind(&error, "parser")
 }
 
 #[test]
@@ -777,7 +777,8 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
 fn ensure_error_kind(error: &Error, expected: &str) -> TestResult {
     let matches = matches!(
         (error, expected),
-        (Error::Runtime { .. }, "runtime")
+        (Error::Parse { .. }, "parser")
+            | (Error::Runtime { .. }, "runtime")
             | (Error::JavaScript { .. }, "javascript")
             | (Error::ResourceLimit { .. }, "resource limit")
     );
