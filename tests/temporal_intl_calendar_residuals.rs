@@ -95,7 +95,7 @@ fn distinguishes_rounded_string_offsets_from_exact_property_bag_offsets() -> Tes
 #[test]
 fn temporal_with_rejects_temporal_objects_and_empty_bags() -> TestResult {
     let value = eval(
-        r#"
+        r"
         const date = new Temporal.PlainDate(2026, 7, 13);
         const dateTime = new Temporal.PlainDateTime(2026, 7, 13);
         let rejected = 0;
@@ -112,7 +112,7 @@ fn temporal_with_rejects_temporal_objects_and_empty_bags() -> TestResult {
             }
         }
         rejected
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Number(4.0))
 }

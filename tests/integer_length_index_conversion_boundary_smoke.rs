@@ -148,7 +148,7 @@ fn rejects_out_of_range_to_index_values() -> TestResult {
 #[test]
 fn reports_unsupported_byte_buffer_lengths_as_range_errors() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let score = 40;
         try { new ArrayBuffer(4294967296); } catch (error) {
             score = score + (error instanceof RangeError ? 1 : 0);
@@ -157,7 +157,7 @@ fn reports_unsupported_byte_buffer_lengths_as_range_errors() -> TestResult {
             score = score + (error instanceof RangeError ? 1 : 0);
         }
         score
-        "#,
+        ",
     )
 }
 
