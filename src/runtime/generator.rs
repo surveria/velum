@@ -543,7 +543,8 @@ impl Context {
                 let result = self.create_generator_result(value, false)?;
                 Ok((GeneratorState::Suspended(execution), result))
             }
-            Completion::YieldedIteratorResult(result) => {
+            Completion::DelegatedYield(delegated) => {
+                let result = delegated.into_iterator_result()?;
                 if self.semantic_object_ref(&result)?.is_none() {
                     return Err(Error::runtime(
                         "delegated generator result is not an object",

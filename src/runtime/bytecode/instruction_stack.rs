@@ -248,7 +248,7 @@ impl Context {
             | Completion::Continue { .. }
             | Completion::GeneratorStart
             | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => completion.into_result().map(|_| None),
+            | Completion::DelegatedYield(_)) => completion.into_result().map(|_| None),
         }
     }
 
@@ -300,10 +300,10 @@ impl Context {
                 state.mark_yield_suspended();
                 Ok(Some(Completion::Yielded(value)))
             }
-            YieldDelegateStep::YieldedIteratorResult(result) => {
+            YieldDelegateStep::DelegatedYield(delegated) => {
                 state.store_yield_delegate(continuation)?;
                 state.mark_yield_suspended();
-                Ok(Some(Completion::YieldedIteratorResult(result)))
+                Ok(Some(Completion::DelegatedYield(delegated)))
             }
             YieldDelegateStep::Complete(value) => {
                 state.stack.push(value);
@@ -343,7 +343,7 @@ impl Context {
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
-                | Completion::YieldedIteratorResult(_)) => return Ok(Some(completion)),
+                | Completion::DelegatedYield(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }

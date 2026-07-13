@@ -755,9 +755,7 @@ impl Context {
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => {
-                completion.into_function_result().map(|_| object)
-            }
+            | Completion::DelegatedYield(_)) => completion.into_function_result().map(|_| object),
         }
     }
 

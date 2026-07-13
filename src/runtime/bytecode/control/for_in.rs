@@ -37,7 +37,7 @@ impl Context {
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
-                | Completion::YieldedIteratorResult(_)) => return Ok(Some(completion)),
+                | Completion::DelegatedYield(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }

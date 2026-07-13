@@ -3,8 +3,10 @@ use crate::{
     bytecode::{BytecodeBlock, BytecodeProgram},
     error::{Error, Result},
     runtime::{
-        Context, control::Completion, control::runtime_exception_value,
-        resource_scope::ScopeDisposal, roots::VmRootKind,
+        Context,
+        control::{Completion, DelegatedYield, runtime_exception_value},
+        resource_scope::ScopeDisposal,
+        roots::VmRootKind,
     },
     value::{FunctionId, Value},
 };
@@ -24,8 +26,8 @@ pub(in crate::runtime) enum BytecodeOutcome {
         value: Value,
         span: Option<SourceSpan>,
     },
-    YieldedIteratorResult {
-        result: Value,
+    DelegatedYield {
+        delegated: DelegatedYield,
         span: Option<SourceSpan>,
     },
     GeneratorStart {
@@ -39,7 +41,7 @@ impl BytecodeOutcome {
             Self::Completed { completion, .. } => completion,
             Self::Suspended { awaited, .. } => Completion::Suspended(awaited),
             Self::Yielded { value, .. } => Completion::Yielded(value),
-            Self::YieldedIteratorResult { result, .. } => Completion::YieldedIteratorResult(result),
+            Self::DelegatedYield { delegated, .. } => Completion::DelegatedYield(delegated),
             Self::GeneratorStart { .. } => Completion::GeneratorStart,
         }
     }
@@ -49,7 +51,7 @@ impl BytecodeOutcome {
             Self::Completed { span, .. }
             | Self::Suspended { span, .. }
             | Self::Yielded { span, .. }
-            | Self::YieldedIteratorResult { span, .. }
+            | Self::DelegatedYield { span, .. }
             | Self::GeneratorStart { span } => *span,
         }
     }
@@ -69,7 +71,7 @@ impl BytecodeOutcome {
             self,
             Self::Suspended { .. }
                 | Self::Yielded { .. }
-                | Self::YieldedIteratorResult { .. }
+                | Self::DelegatedYield { .. }
                 | Self::GeneratorStart { .. }
         )
     }
@@ -391,12 +393,12 @@ impl Context {
                             span: Some(span),
                         }
                     }
-                    Completion::YieldedIteratorResult(result) => {
+                    Completion::DelegatedYield(delegated) => {
                         if !state.is_suspended() {
                             state.mark_child_suspended();
                         }
-                        BytecodeOutcome::YieldedIteratorResult {
-                            result,
+                        BytecodeOutcome::DelegatedYield {
+                            delegated,
                             span: Some(span),
                         }
                     }

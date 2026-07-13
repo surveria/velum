@@ -508,10 +508,9 @@ impl Context {
                     awaited,
                 ))
             }
-            Completion::YieldedIteratorResult(result) => {
-                let await_value = self.get_named(&result, "0")?;
-                let value = self.get_named(&result, "1")?;
-                if await_value == Value::Bool(true) {
+            Completion::DelegatedYield(delegated) => {
+                let (value, await_before_yield) = delegated.into_async_value()?;
+                if await_before_yield {
                     let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
                         return Err(Error::runtime(
                             "async generator delegated yield did not await a Promise",

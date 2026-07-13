@@ -1,6 +1,10 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, control::Completion, roots::VmRootKind},
+    runtime::{
+        Context,
+        control::{Completion, DelegatedYield},
+        roots::VmRootKind,
+    },
     value::Value,
 };
 
@@ -207,11 +211,9 @@ impl Context {
         let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
         if !done {
-            let payload = self.create_array_from_elements(vec![
-                Value::Bool(continuation.await_yielded_values),
-                value,
-            ])?;
-            return Ok(YieldDelegateStep::YieldedIteratorResult(payload));
+            return Ok(YieldDelegateStep::DelegatedYield(
+                DelegatedYield::async_value(value, continuation.await_yielded_values),
+            ));
         }
         set_protocol_done(&mut continuation.source);
         Ok(match done_kind {

@@ -84,7 +84,7 @@ impl Context {
                     completion @ (Completion::Suspended(_)
                     | Completion::GeneratorStart
                     | Completion::Yielded(_)
-                    | Completion::YieldedIteratorResult(_)) => {
+                    | Completion::DelegatedYield(_)) => {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
