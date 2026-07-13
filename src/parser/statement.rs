@@ -224,6 +224,7 @@ impl Parser {
     fn function_body_inner(&mut self) -> Result<ParsedFunctionBody> {
         let mut statements = Vec::new();
         let mut directive_prologue = true;
+        let mut directive_legacy_escape = false;
         let mut contains_use_strict = false;
 
         while !self.check(&TokenKind::RBrace) {
@@ -234,7 +235,11 @@ impl Parser {
             if directive_prologue && Self::is_use_strict_directive(&statement) {
                 contains_use_strict = true;
             }
-            self.update_directive_prologue(&mut directive_prologue, &statement);
+            self.update_directive_prologue(
+                &mut directive_prologue,
+                &mut directive_legacy_escape,
+                &statement,
+            )?;
             statements.push(statement);
         }
 

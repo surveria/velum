@@ -366,6 +366,12 @@ impl Parser {
                 })
             }
             TokenKind::String(name) => {
+                if self.is_strict_mode() && name.legacy_escape {
+                    return Err(Error::parse_at(
+                        "legacy escape sequence is not allowed in strict mode",
+                        token_span,
+                    ));
+                }
                 let name = String::from_utf16(&name.cooked).map_err(|_| {
                     Error::parse_at(
                         "object property names containing lone surrogates are not supported yet",
@@ -377,10 +383,18 @@ impl Parser {
                     shorthand_name: None,
                 })
             }
-            TokenKind::Number(value) => Ok(ObjectPropertyName::Static {
-                key: self.static_name(Value::Number(value).to_string())?,
-                shorthand_name: None,
-            }),
+            TokenKind::Number(value) => {
+                if self.is_strict_mode() && value.legacy {
+                    return Err(Error::parse_at(
+                        "legacy numeric literal is not allowed in strict mode",
+                        token_span,
+                    ));
+                }
+                Ok(ObjectPropertyName::Static {
+                    key: self.static_name(Value::Number(value.value).to_string())?,
+                    shorthand_name: None,
+                })
+            }
             TokenKind::BigInt(value) => Ok(ObjectPropertyName::Static {
                 key: self.static_name(value.to_string())?,
                 shorthand_name: None,

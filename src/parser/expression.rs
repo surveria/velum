@@ -318,10 +318,17 @@ impl Parser {
         value: crate::lexer::StringToken,
         span: crate::SourceSpan,
     ) -> Result<Expression> {
+        if self.is_strict_mode() && value.legacy_escape {
+            return Err(Error::parse_at(
+                "legacy escape sequence is not allowed in strict mode",
+                span,
+            ));
+        }
         Ok(Expression::new(
             Expr::StringLiteral {
                 value: self.static_string_shared(value.cooked)?,
                 escape_free: value.escape_free,
+                legacy_escape: value.legacy_escape,
             },
             span,
         ))
@@ -468,7 +475,13 @@ impl Parser {
         Ok(match token.kind {
             TokenKind::LexicalError(error) => return Err(*error),
             TokenKind::Number(value) => {
-                Expression::new(Expr::Literal(Value::Number(value)), token_span)
+                if self.is_strict_mode() && value.legacy {
+                    return Err(Error::parse_at(
+                        "legacy numeric literal is not allowed in strict mode",
+                        token_span,
+                    ));
+                }
+                Expression::new(Expr::Literal(Value::Number(value.value)), token_span)
             }
             TokenKind::BigInt(value) => {
                 Expression::new(Expr::Literal(Value::BigInt(value)), token_span)

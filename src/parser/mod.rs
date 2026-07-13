@@ -203,6 +203,7 @@ impl Parser {
         let mut statements = Vec::new();
         let mut module = self.is_module_goal().then(ModuleSyntax::default);
         let mut directive_prologue = true;
+        let mut directive_legacy_escape = false;
         while !self.at_end() {
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
@@ -219,7 +220,11 @@ impl Parser {
                 continue;
             }
             let statement = self.statement_list_item()?;
-            self.update_directive_prologue(&mut directive_prologue, &statement);
+            self.update_directive_prologue(
+                &mut directive_prologue,
+                &mut directive_legacy_escape,
+                &statement,
+            )?;
             statements.push(statement);
         }
         if let Some(module) = module.as_ref() {

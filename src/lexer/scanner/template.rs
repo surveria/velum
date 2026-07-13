@@ -148,6 +148,12 @@ impl Lexer {
     }
 
     fn template_escape(&mut self, slash_offset: usize, output: &mut Vec<u16>) -> Result<()> {
-        self.escape_sequence(slash_offset, output, EscapeContext::Template)
+        if self.escape_sequence(slash_offset, output, EscapeContext::Template)? {
+            return Err(Error::lex(
+                "legacy escape sequence is not allowed in a template literal",
+                slash_offset,
+            ));
+        }
+        Ok(())
     }
 }

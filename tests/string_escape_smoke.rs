@@ -44,10 +44,32 @@ fn reports_invalid_escape_sequences() -> TestResult {
     };
     ensure_error_contains(&error, "empty braced unicode escape")?;
 
-    let Err(error) = eval(r#""\09""#) else {
-        return Err("expected legacy octal escape to fail".into());
+    let Err(error) = eval(r#""use strict"; "\09""#) else {
+        return Err("expected strict legacy octal escape to fail".into());
     };
-    ensure_error_contains(&error, "legacy octal escape sequences")
+    ensure_error_contains(&error, "legacy escape sequence")
+}
+
+#[test]
+fn supports_legacy_string_escapes_in_sloppy_code() -> TestResult {
+    let value = eval(r#"["\0", "\1", "\10", "\377", "\400", "\8", "\9"].join(":")"#)?;
+    ensure_value(
+        &value,
+        &Value::String("\0:\u{0001}:\u{0008}:ÿ: 0:8:9".to_owned().into()),
+    )
+}
+
+#[test]
+fn validates_legacy_escapes_across_strict_directive_prologues() -> TestResult {
+    ensure_value(
+        &eval(r#""use strict"; "\0""#)?,
+        &Value::String("\0".to_owned().into()),
+    )?;
+
+    let Err(error) = eval(r#"function invalid() { "\1"; "use strict"; }"#) else {
+        return Err("expected a preceding legacy escape in a strict prologue to fail".into());
+    };
+    ensure_error_contains(&error, "strict directive prologue")
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
