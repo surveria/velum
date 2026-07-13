@@ -15,8 +15,23 @@ fn callable_edge_snapshots_start_empty_and_sum_stable_categories() -> TestResult
     ensure_usize(snapshot.total(), 0, "fresh callable edge total")?;
     ensure_usize(
         VmCallableEdgeKind::all().len(),
-        6,
+        7,
         "callable edge kind count",
+    )?;
+    ensure_snapshot_sum(snapshot)
+}
+
+#[test]
+fn snapshots_host_function_properties() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.register_host_function_typed("hostEdge", |_call| Ok(()))?;
+    vm.eval("hostEdge.metadata = { answer: 42 }")?;
+
+    let snapshot = vm.callable_edge_snapshot()?;
+    ensure_positive(
+        snapshot.count(VmCallableEdgeKind::HostFunctionProperty),
+        "host function property edges",
     )?;
     ensure_snapshot_sum(snapshot)
 }

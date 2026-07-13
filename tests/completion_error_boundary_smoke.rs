@@ -133,13 +133,20 @@ fn rejects_foreign_host_errors_even_when_object_slots_collide() -> TestResult {
     };
 
     let mut second_context = runtime.context();
-    let Value::Object(local_id) =
-        second_context.eval("let localMarker = { source: 'second' }; localMarker")?
-    else {
-        return Err("second VM did not create a local object marker".into());
-    };
-    if foreign_id != &local_id {
-        return Err("test setup did not create colliding object slots".into());
+    let mut has_local_collision = false;
+    for _ in 0..64 {
+        let Value::Object(local_id) =
+            second_context.eval("var localMarker = { source: 'second' }; localMarker")?
+        else {
+            return Err("second VM did not create a local object marker".into());
+        };
+        if foreign_id == &local_id {
+            has_local_collision = true;
+            break;
+        }
+    }
+    if !has_local_collision {
+        return Err("test setup did not reach a colliding object slot".into());
     }
     second_context
         .register_host_function("throwForeign", move |_call| Err(foreign_error.clone()))?;

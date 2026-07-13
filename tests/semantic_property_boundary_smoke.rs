@@ -149,23 +149,24 @@ fn routes_symbol_destructuring_descriptors_and_iteration_protocol() -> TestResul
 }
 
 #[test]
-fn preserves_current_host_function_property_errors() -> TestResult {
+fn routes_host_function_properties_through_the_semantic_boundary() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.register_host_function("hostBoundary", |_call| Ok(Value::Undefined))?;
 
-    let Err(read_error) = context.eval("hostBoundary.missing") else {
-        return Err("expected host function property read to fail".into());
-    };
-    ensure_error_contains(
-        &read_error,
-        "member access 'missing' is not supported for function",
+    let value = context.eval(
+        r"
+        hostBoundary.answer = 42;
+        hostBoundary.missing === undefined
+            && !('missing' in hostBoundary)
+            && hostBoundary.answer === 42
+            && 'call' in hostBoundary ? 42 : 0
+        ",
     )?;
-
-    let Err(has_error) = context.eval("'missing' in hostBoundary") else {
-        return Err("expected host function property presence check to fail".into());
-    };
-    ensure_error_contains(&has_error, "operator 'in' is not supported for function")
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected host function boundary result 42, got {value:?}").into())
 }
 
 fn eval_is_42(source: &str) -> TestResult {
@@ -176,12 +177,4 @@ fn eval_is_42(source: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected 42, got {value:?}; output: {:?}", context.output()).into())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, expected: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(expected) {
-        return Ok(());
-    }
-    Err(format!("expected error containing '{expected}', got '{message}'").into())
 }

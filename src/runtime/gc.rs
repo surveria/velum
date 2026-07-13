@@ -233,12 +233,11 @@ impl Reachability {
                     .get(id.index())
                     .ok_or_else(|| Error::runtime("reachable native function disappeared"))?
                     .visit_strong_edges(self)?,
-                MarkTarget::HostFunction(id) => {
-                    context
-                        .host_functions
-                        .get(id.index())
-                        .ok_or_else(|| Error::runtime("reachable host function disappeared"))?;
-                }
+                MarkTarget::HostFunction(id) => context
+                    .host_functions
+                    .get(id.index())
+                    .ok_or_else(|| Error::runtime("reachable host function disappeared"))?
+                    .visit_strong_edges(self)?,
                 MarkTarget::BoundFunction(id) => context
                     .bound_functions
                     .get(id.index())

@@ -744,9 +744,12 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
             }
+            Value::HostFunction(id) => {
+                self.has_host_function_property_lookup(*id, property.lookup())
+            }
             Value::String(_) => has_property(&self.objects, target, property.lookup()),
             Value::Bool(_) | Value::Number(_) | Value::BigInt(_) | Value::Symbol(_) => Ok(false),
-            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
+            Value::Undefined | Value::Null => Err(Error::runtime(
                 "Object.hasOwn target cannot be converted to an object",
             )),
         }

@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         Context,
         object::{PropertyLookup, TypedArrayPropertyIndex},
-        property::{get_property, get_property_with_receiver, has_property},
+        property::get_property_with_receiver,
     },
     value::{ObjectId, Value},
 };
@@ -162,10 +162,9 @@ impl Context {
             Value::NativeFunction(id) => SemanticPropertyRead::Resolved(
                 self.get_native_function_property_lookup(*id, receiver, property)?,
             ),
-            Value::HostFunction(_) => {
-                let value = get_property(&self.objects, object, property)?;
-                SemanticPropertyRead::Resolved(self.runtime_property_value(value)?)
-            }
+            Value::HostFunction(id) => SemanticPropertyRead::Resolved(
+                self.get_host_function_property_lookup(*id, receiver, property)?,
+            ),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -257,9 +256,9 @@ impl Context {
             Value::NativeFunction(id) => SemanticPropertyPresence::Resolved(
                 self.has_native_function_property_including_prototype_lookup(*id, property)?,
             ),
-            Value::HostFunction(_) => {
-                SemanticPropertyPresence::Resolved(has_property(&self.objects, object, property)?)
-            }
+            Value::HostFunction(id) => SemanticPropertyPresence::Resolved(
+                self.has_host_function_property_including_prototype_lookup(*id, property)?,
+            ),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

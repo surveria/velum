@@ -1,5 +1,5 @@
 use crate::{
-    error::{Error, Result},
+    error::Result,
     runtime::{
         Context,
         object::{
@@ -29,9 +29,7 @@ impl Context {
             Value::Object(id) => self.objects.prototype_value(*id)?,
             Value::Function(id) => self.function_inheritance_prototype_value(*id)?,
             Value::NativeFunction(id) => self.native_function_object_prototype_value(*id)?,
-            Value::HostFunction(_) => {
-                return Err(Error::runtime("host function prototype is not available"));
-            }
+            Value::HostFunction(id) => self.host_function_inheritance_prototype_value(*id)?,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -60,7 +58,14 @@ impl Context {
                 self.set_function_static_parent(*id, prototype)?;
                 true
             }
-            Value::NativeFunction(_) | Value::HostFunction(_) => false,
+            Value::NativeFunction(_) => false,
+            Value::HostFunction(id) => {
+                if self.semantic_prototype_chain_contains(&prototype, target)? {
+                    false
+                } else {
+                    self.try_set_host_function_inheritance_prototype(*id, prototype)?
+                }
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -84,7 +89,7 @@ impl Context {
             Value::Object(id) => self.objects.is_extensible(*id)?,
             Value::Function(id) => self.function_is_extensible(*id)?,
             Value::NativeFunction(id) => self.native_function_is_extensible(*id)?,
-            Value::HostFunction(_) => true,
+            Value::HostFunction(id) => self.host_function_is_extensible(*id)?,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -119,7 +124,10 @@ impl Context {
                 self.prevent_native_function_extensions(*id)?;
                 true
             }
-            Value::HostFunction(_) => true,
+            Value::HostFunction(id) => {
+                self.prevent_host_function_extensions(*id)?;
+                true
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -164,7 +172,11 @@ impl Context {
                 }
                 return Ok(Some(true));
             }
-            Value::HostFunction(_) => {
+            Value::HostFunction(id) => {
+                match level {
+                    SemanticIntegrityLevel::Sealed => self.seal_host_function(*id)?,
+                    SemanticIntegrityLevel::Frozen => self.freeze_host_function(*id)?,
+                }
                 return Ok(Some(true));
             }
             Value::Undefined
@@ -227,7 +239,12 @@ impl Context {
                     SemanticIntegrityLevel::Frozen => self.native_function_is_frozen(*id).map(Some),
                 };
             }
-            Value::HostFunction(_) => return Ok(Some(false)),
+            Value::HostFunction(id) => {
+                return match level {
+                    SemanticIntegrityLevel::Sealed => self.host_function_is_sealed(*id).map(Some),
+                    SemanticIntegrityLevel::Frozen => self.host_function_is_frozen(*id).map(Some),
+                };
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -249,6 +266,27 @@ impl Context {
             }
         }
         Ok(Some(true))
+    }
+
+    fn semantic_prototype_chain_contains(
+        &mut self,
+        prototype: &Value,
+        target: &Value,
+    ) -> Result<bool> {
+        let mut current = prototype.clone();
+        loop {
+            if crate::runtime::abstract_operations::same_value(&current, target) {
+                return Ok(true);
+            }
+            let Some(next) = self.semantic_get_prototype(&current)? else {
+                return Ok(false);
+            };
+            if matches!(next, Value::Null) {
+                return Ok(false);
+            }
+            self.step()?;
+            current = next;
+        }
     }
 
     fn integrity_property_update(

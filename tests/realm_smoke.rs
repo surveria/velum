@@ -78,12 +78,14 @@ fn test262_realm_host_preserves_function_origin_and_default_prototype() -> TestR
         var realmA = $262.createRealm().global;
         realmA.calls = 0;
         var realmB = $262.createRealm().global;
+        var evalPrototypeOk = Object.getPrototypeOf(realmA.eval)
+            === realmA.eval("Function.prototype");
         var newTarget = new realmB.Function();
         newTarget.prototype = null;
         var fn = Reflect.construct(realmA.Function, ["calls += 1;"], newTarget);
         var prototypeOk = Object.getPrototypeOf(fn) === realmB.Function.prototype;
         var instanceOk = new fn() instanceof realmA.Object;
-        prototypeOk && instanceOk && realmA.calls === 1;
+        evalPrototypeOk && prototypeOk && instanceOk && realmA.calls === 1;
         "#,
     )?;
     assert_eq!(result, Value::Bool(true));

@@ -7,7 +7,7 @@ use crate::{
             PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
             PropertyWritable,
         },
-        property::{DynamicPropertyKey, delete_property, set_property},
+        property::{DynamicPropertyKey, delete_property},
     },
     value::Value,
 };
@@ -71,17 +71,17 @@ impl Context {
                 )?;
                 SemanticPropertyWrite::Resolved(updated)
             }
-            Value::HostFunction(_) => {
+            Value::HostFunction(id) => {
                 let key = self.semantic_property_key(property)?;
-                set_property(
-                    &mut self.objects,
-                    object,
-                    key,
-                    property.name(),
+                let mut dynamic = DynamicPropertyKey::new(property.name().to_owned(), Some(key));
+                let receiver = Value::HostFunction(*id);
+                let updated = self.write_host_function_property_with_receiver(
+                    *id,
+                    &mut dynamic,
                     value,
-                    self.limits.max_object_properties,
+                    &receiver,
                 )?;
-                SemanticPropertyWrite::Resolved(true)
+                SemanticPropertyWrite::Resolved(updated)
             }
             Value::Undefined
             | Value::Null
@@ -155,6 +155,26 @@ impl Context {
             .map(|updated| updated.unwrap_or(false))
     }
 
+    fn write_host_function_property_with_receiver(
+        &mut self,
+        target: crate::value::HostFunctionId,
+        property: &mut DynamicPropertyKey,
+        value: Value,
+        receiver: &Value,
+    ) -> Result<bool> {
+        if let Some(descriptor) =
+            self.host_function_own_property_descriptor_lookup(target, property.lookup())?
+        {
+            return self.reflect_write_with_descriptor(property, value, receiver, descriptor);
+        }
+        let parent = self.host_function_inheritance_prototype_value(target)?;
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return self.reflect_define_receiver_property(property, value, receiver);
+        }
+        self.semantic_reflect_property_write(&parent, property, value, receiver)
+            .map(|updated| updated.unwrap_or(false))
+    }
+
     /// Finishes an object-like write after an optimizer declines the ordinary
     /// object tail. Accessor lookup stays on the semantic slow path.
     pub(in crate::runtime) fn finish_semantic_property_write(
@@ -205,11 +225,9 @@ impl Context {
             Value::NativeFunction(id) => SemanticPropertyDelete::Resolved(
                 self.delete_native_function_property_lookup(*id, property)?,
             ),
-            Value::HostFunction(_) => SemanticPropertyDelete::Resolved(delete_property(
-                &mut self.objects,
-                object,
-                property,
-            )?),
+            Value::HostFunction(id) => SemanticPropertyDelete::Resolved(
+                self.delete_host_function_property_lookup(*id, property)?,
+            ),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -293,9 +311,6 @@ impl Context {
                 property.remember_key(key);
             }
         }
-        if matches!(object_ref.value, Value::HostFunction(_)) {
-            return Ok(Some(false));
-        }
         if let Some(descriptor) = self.semantic_own_property_descriptor(target, property)? {
             return self
                 .reflect_write_with_descriptor(property, value, receiver, descriptor)
@@ -341,9 +356,7 @@ impl Context {
         value: Value,
         receiver: &Value,
     ) -> Result<bool> {
-        if self.semantic_object_ref(receiver)?.is_none()
-            || matches!(receiver, Value::HostFunction(_))
-        {
+        if self.semantic_object_ref(receiver)?.is_none() {
             return Ok(false);
         }
         let mut new_property = true;

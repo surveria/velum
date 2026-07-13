@@ -7,7 +7,7 @@ use crate::{
             PropertyUpdate,
         },
     },
-    value::{FunctionId, NativeFunctionId, Value},
+    value::{FunctionId, HostFunctionId, NativeFunctionId, Value},
 };
 
 use super::properties::FunctionPropertyKind;
@@ -194,6 +194,35 @@ impl Context {
         self.finish_semantic_property_read(read, receiver, property)
     }
 
+    pub(crate) fn get_host_function_property_lookup(
+        &mut self,
+        id: HostFunctionId,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if let Some(descriptor) = self.host_function_own_property_descriptor_lookup(id, property)? {
+            return match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => self.checked_value(descriptor.value()),
+                OwnPropertyDescriptor::Accessor(descriptor) if descriptor.has_getter() => {
+                    self.call_accessor_getter(descriptor.get_ref(), receiver.clone())
+                }
+                OwnPropertyDescriptor::Accessor(_) => Ok(Value::Undefined),
+            };
+        }
+        let parent = self.host_function_inheritance_prototype_value(id)?;
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return Ok(Value::Undefined);
+        }
+        let property = self
+            .known_function_prototype_lookup(property)
+            .unwrap_or(property);
+        let Some(read) = self.semantic_property_read_with_receiver(&parent, receiver, property)?
+        else {
+            return Ok(Value::Undefined);
+        };
+        self.finish_semantic_property_read(read, receiver, property)
+    }
+
     pub(in crate::runtime) fn function_inheritance_prototype_value(
         &mut self,
         id: FunctionId,
@@ -252,6 +281,21 @@ impl Context {
         Ok(function.properties.own_property_descriptor(property))
     }
 
+    pub(crate) fn host_function_own_property_descriptor_lookup(
+        &self,
+        id: HostFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        let function = self.host_function(id)?;
+        if let Some(descriptor) = function
+            .properties()
+            .intrinsic_descriptor(FunctionPropertyKind::from_name(property.name()))
+        {
+            return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
+        }
+        Ok(function.properties().own_property_descriptor(property))
+    }
+
     pub(crate) fn has_function_property_lookup(
         &self,
         id: FunctionId,
@@ -263,6 +307,40 @@ impl Context {
             return Ok(true);
         }
         Ok(function.properties.has(property))
+    }
+
+    pub(crate) fn has_host_function_property_lookup(
+        &self,
+        id: HostFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let function = self.host_function(id)?;
+        let property_kind = FunctionPropertyKind::from_name(property.name());
+        if function.properties().has_intrinsic(property_kind) {
+            return Ok(true);
+        }
+        Ok(function.properties().has(property))
+    }
+
+    pub(crate) fn has_host_function_property_including_prototype_lookup(
+        &mut self,
+        id: HostFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.has_host_function_property_lookup(id, property)? {
+            return Ok(true);
+        }
+        let parent = self.host_function_inheritance_prototype_value(id)?;
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return Ok(false);
+        }
+        let property = self
+            .known_function_prototype_lookup(property)
+            .unwrap_or(property);
+        let Some(presence) = self.semantic_property_presence(&parent, property)? else {
+            return Ok(false);
+        };
+        self.finish_semantic_property_presence(presence, property)
     }
 
     pub(crate) fn has_function_property_including_prototype_lookup(
@@ -308,6 +386,20 @@ impl Context {
             .define_property(key, property_kind, update, max_properties)
     }
 
+    pub(crate) fn define_host_function_property_key(
+        &mut self,
+        id: HostFunctionId,
+        property: &str,
+        key: PropertyKey,
+        update: PropertyUpdate,
+    ) -> Result<()> {
+        let max_properties = self.limits.max_object_properties;
+        let property_kind = FunctionPropertyKind::from_name(property);
+        self.host_function_mut(id)?
+            .properties_mut()
+            .define_property(key, property_kind, update, max_properties)
+    }
+
     pub(crate) fn delete_function_property_lookup(
         &mut self,
         id: FunctionId,
@@ -316,6 +408,17 @@ impl Context {
         let property_kind = FunctionPropertyKind::from_name(property.name());
         let function = self.function_mut(id)?;
         function.properties.delete(property, property_kind)
+    }
+
+    pub(crate) fn delete_host_function_property_lookup(
+        &mut self,
+        id: HostFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let property_kind = FunctionPropertyKind::from_name(property.name());
+        self.host_function_mut(id)?
+            .properties_mut()
+            .delete(property, property_kind)
     }
 
     pub(crate) fn function_own_keys(
@@ -332,6 +435,13 @@ impl Context {
     ) -> Result<(Vec<String>, Vec<crate::storage::symbol::SymbolId>)> {
         let function = self.native_function(id)?;
         function.properties().own_keys(&self.atoms)
+    }
+
+    pub(crate) fn host_function_own_keys(
+        &self,
+        id: HostFunctionId,
+    ) -> Result<(Vec<String>, Vec<crate::storage::symbol::SymbolId>)> {
+        self.host_function(id)?.properties().own_keys(&self.atoms)
     }
 
     pub(in crate::runtime) fn function_is_extensible(&self, id: FunctionId) -> Result<bool> {
@@ -403,6 +513,59 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<bool> {
         Ok(self.native_function(id)?.properties().is_frozen())
+    }
+
+    pub(in crate::runtime) fn host_function_is_extensible(
+        &self,
+        id: HostFunctionId,
+    ) -> Result<bool> {
+        Ok(self.host_function(id)?.properties().is_extensible())
+    }
+
+    pub(in crate::runtime) fn prevent_host_function_extensions(
+        &mut self,
+        id: HostFunctionId,
+    ) -> Result<()> {
+        self.host_function_mut(id)?
+            .properties_mut()
+            .prevent_extensions();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn seal_host_function(&mut self, id: HostFunctionId) -> Result<()> {
+        self.host_function_mut(id)?.properties_mut().seal();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn freeze_host_function(&mut self, id: HostFunctionId) -> Result<()> {
+        self.host_function_mut(id)?.properties_mut().freeze();
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn host_function_is_sealed(&self, id: HostFunctionId) -> Result<bool> {
+        Ok(self.host_function(id)?.properties().is_sealed())
+    }
+
+    pub(in crate::runtime) fn host_function_is_frozen(&self, id: HostFunctionId) -> Result<bool> {
+        Ok(self.host_function(id)?.properties().is_frozen())
+    }
+
+    pub(in crate::runtime) fn host_function_inheritance_prototype_value(
+        &self,
+        id: HostFunctionId,
+    ) -> Result<Value> {
+        Ok(self.host_function(id)?.properties().prototype())
+    }
+
+    pub(in crate::runtime) fn try_set_host_function_inheritance_prototype(
+        &mut self,
+        id: HostFunctionId,
+        prototype: Value,
+    ) -> Result<bool> {
+        Ok(self
+            .host_function_mut(id)?
+            .properties_mut()
+            .try_set_inheritance_prototype(prototype))
     }
 
     pub(in crate::runtime) fn set_function_static_parent(

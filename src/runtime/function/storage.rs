@@ -7,6 +7,16 @@ use crate::{
 use super::{FunctionProperties, FunctionScopeTemplate, expected_function_local_count};
 
 impl Context {
+    pub(crate) fn activate_host_function_property_storage(
+        &mut self,
+        id: crate::value::HostFunctionId,
+    ) -> Result<()> {
+        let storage_ledger = self.storage_ledger.clone();
+        self.host_function_mut(id)?
+            .properties_mut()
+            .activate_storage(storage_ledger)
+    }
+
     pub(super) fn function_metadata_cache_count(
         param_binding_count: usize,
         param_atom_count: usize,

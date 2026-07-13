@@ -139,10 +139,8 @@ impl Context {
                     )?;
                 }
             },
-            Value::HostFunction(_) => {
-                return Err(Error::type_error(
-                    "property definition target is not supported",
-                ));
+            Value::HostFunction(id) => {
+                self.define_host_function_property_key(*id, property.name(), key, update)?;
             }
             Value::Undefined
             | Value::Null
@@ -248,9 +246,9 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.native_function_own_property_descriptor_lookup(*id, property.lookup())
             }
-            Value::HostFunction(_) => Err(Error::runtime(
-                "property descriptor target cannot be converted to an object",
-            )),
+            Value::HostFunction(id) => {
+                self.host_function_own_property_descriptor_lookup(*id, property.lookup())
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

@@ -213,6 +213,15 @@ impl Context {
         })
     }
 
+    pub(crate) fn with_realm_id<T>(
+        &mut self,
+        realm: &RealmId,
+        operation: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let index = self.validate_realm(realm)?;
+        self.with_realm(index, operation)
+    }
+
     pub(crate) fn eval_realm_source_value(
         &mut self,
         realm: &RealmId,
