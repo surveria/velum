@@ -4,6 +4,7 @@ use crate::{
         Context,
         abstract_operations::{same_value, to_boolean},
         call::RuntimeCallArgs,
+        native::LegacyRegExpStaticKind,
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
             PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
@@ -71,6 +72,7 @@ impl Context {
         self.push_native_function_with_id(id, NativeFunctionKind::RegExp, prototype, name)?;
         self.install_species_accessor(id)?;
         self.install_regexp_static_methods(id)?;
+        self.install_legacy_regexp_static_accessors(id)?;
         self.install_regexp_prototype_methods(prototype_id)?;
         self.install_regexp_prototype_symbol_methods(prototype_id)?;
         self.insert_global_builtin(REGEXP_NAME, constructor.clone())?;
@@ -330,6 +332,106 @@ impl Context {
         Ok(())
     }
 
+    fn install_legacy_regexp_static_accessors(
+        &mut self,
+        constructor: crate::value::NativeFunctionId,
+    ) -> Result<()> {
+        for (name, kind, writable) in [
+            ("input", LegacyRegExpStaticKind::Input, true),
+            ("$_", LegacyRegExpStaticKind::Input, true),
+            ("lastMatch", LegacyRegExpStaticKind::LastMatch, false),
+            ("$&", LegacyRegExpStaticKind::LastMatch, false),
+            ("lastParen", LegacyRegExpStaticKind::LastParen, false),
+            ("$+", LegacyRegExpStaticKind::LastParen, false),
+            ("leftContext", LegacyRegExpStaticKind::LeftContext, false),
+            ("$`", LegacyRegExpStaticKind::LeftContext, false),
+            ("rightContext", LegacyRegExpStaticKind::RightContext, false),
+            ("$'", LegacyRegExpStaticKind::RightContext, false),
+        ] {
+            self.define_legacy_regexp_static_accessor(constructor, name, kind, writable)?;
+        }
+        for capture in 1_u8..=9 {
+            let name = format!("${capture}");
+            self.define_legacy_regexp_static_accessor(
+                constructor,
+                &name,
+                LegacyRegExpStaticKind::Capture(capture),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn define_legacy_regexp_static_accessor(
+        &mut self,
+        constructor: crate::value::NativeFunctionId,
+        name: &str,
+        kind: LegacyRegExpStaticKind,
+        writable: bool,
+    ) -> Result<()> {
+        let getter = self.create_ephemeral_native_function(
+            NativeFunctionKind::RegExpLegacyGetter(kind),
+            Value::Undefined,
+        )?;
+        let setter = if writable {
+            Some(self.create_ephemeral_native_function(
+                NativeFunctionKind::RegExpLegacyInputSetter,
+                Value::Undefined,
+            )?)
+        } else {
+            None
+        };
+        let key = self.intern_property_key(name)?;
+        self.define_native_function_accessor_property_key(
+            constructor,
+            name,
+            key,
+            AccessorPropertyUpdate::new(
+                Some(getter),
+                setter,
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            ),
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_legacy_regexp_static_getter(
+        &mut self,
+        kind: LegacyRegExpStaticKind,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.require_legacy_regexp_constructor(this_value)?;
+        match kind {
+            LegacyRegExpStaticKind::Input
+            | LegacyRegExpStaticKind::LastMatch
+            | LegacyRegExpStaticKind::LastParen
+            | LegacyRegExpStaticKind::LeftContext
+            | LegacyRegExpStaticKind::RightContext
+            | LegacyRegExpStaticKind::Capture(_) => self.heap_string_value(""),
+        }
+    }
+
+    pub(in crate::runtime::native) fn eval_legacy_regexp_input_setter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.require_legacy_regexp_constructor(this_value)?;
+        let value = args.as_slice().first().unwrap_or(&Value::Undefined);
+        self.to_utf16_string(value)?;
+        Ok(Value::Undefined)
+    }
+
+    fn require_legacy_regexp_constructor(&mut self, this_value: &Value) -> Result<()> {
+        let constructor = self.regexp_constructor_value()?;
+        if same_value(&constructor, this_value) {
+            return Ok(());
+        }
+        Err(Error::type_error(
+            "legacy RegExp accessor requires the intrinsic RegExp constructor",
+        ))
+    }
+
     fn install_regexp_prototype_symbol_methods(&mut self, prototype: ObjectId) -> Result<()> {
         for (property, display, kind) in [
             (
@@ -406,6 +508,13 @@ impl Context {
         if kind == NativeFunctionKind::RegExpPrototypeFlagsGetter {
             return self.eval_regexp_prototype_flags_getter(this_value);
         }
+        if self.is_regexp_prototype(this_value)? {
+            return if kind == NativeFunctionKind::RegExpPrototypeSourceGetter {
+                self.heap_string_value("(?:)")
+            } else {
+                Ok(Value::Undefined)
+            };
+        }
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
         match kind {
@@ -431,6 +540,14 @@ impl Context {
             }
             _ => Err(Error::runtime("native function is not a RegExp getter")),
         }
+    }
+
+    fn is_regexp_prototype(&mut self, value: &Value) -> Result<bool> {
+        let Value::Object(id) = value else {
+            return Ok(false);
+        };
+        self.regexp_constructor_prototype()
+            .map(|prototype| *id == prototype)
     }
 
     fn eval_regexp_prototype_flags_getter(&mut self, receiver: &Value) -> Result<Value> {

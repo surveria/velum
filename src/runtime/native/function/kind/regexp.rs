@@ -2,6 +2,9 @@ use super::NativeFunctionKind;
 
 const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const REGEXP_NAME: &str = "RegExp";
+const REGEXP_LEGACY_GETTER_LENGTH: f64 = 0.0;
+const REGEXP_LEGACY_INPUT_SETTER_LENGTH: f64 = 1.0;
+const REGEXP_LEGACY_INPUT_SETTER_NAME: &str = "set input";
 const REGEXP_ESCAPE_LENGTH: f64 = 1.0;
 const REGEXP_ESCAPE_NAME: &str = "escape";
 const REGEXP_PROTOTYPE_COMPILE_LENGTH: f64 = 2.0;
@@ -31,11 +34,45 @@ const REGEXP_SYMBOL_SEARCH_NAME: &str = "[Symbol.search]";
 const REGEXP_SYMBOL_SPLIT_LENGTH: f64 = 2.0;
 const REGEXP_SYMBOL_SPLIT_NAME: &str = "[Symbol.split]";
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime) enum LegacyRegExpStaticKind {
+    Input,
+    LastMatch,
+    LastParen,
+    LeftContext,
+    RightContext,
+    Capture(u8),
+}
+
+impl LegacyRegExpStaticKind {
+    const fn getter_name(self) -> &'static str {
+        match self {
+            Self::Input => "get input",
+            Self::LastMatch => "get lastMatch",
+            Self::LastParen => "get lastParen",
+            Self::LeftContext => "get leftContext",
+            Self::RightContext => "get rightContext",
+            Self::Capture(1) => "get $1",
+            Self::Capture(2) => "get $2",
+            Self::Capture(3) => "get $3",
+            Self::Capture(4) => "get $4",
+            Self::Capture(5) => "get $5",
+            Self::Capture(6) => "get $6",
+            Self::Capture(7) => "get $7",
+            Self::Capture(8) => "get $8",
+            Self::Capture(9) => "get $9",
+            Self::Capture(_) => "get legacy capture",
+        }
+    }
+}
+
 impl NativeFunctionKind {
     pub(super) const fn regexp_length(self) -> Option<f64> {
         match self {
             Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
             Self::RegExpEscape => Some(REGEXP_ESCAPE_LENGTH),
+            Self::RegExpLegacyGetter(_) => Some(REGEXP_LEGACY_GETTER_LENGTH),
+            Self::RegExpLegacyInputSetter => Some(REGEXP_LEGACY_INPUT_SETTER_LENGTH),
             Self::RegExpPrototypeCompile => Some(REGEXP_PROTOTYPE_COMPILE_LENGTH),
             Self::RegExpPrototypeDotAllGetter
             | Self::RegExpPrototypeFlagsGetter
@@ -64,6 +101,8 @@ impl NativeFunctionKind {
         match self {
             Self::RegExp => Some(REGEXP_NAME),
             Self::RegExpEscape => Some(REGEXP_ESCAPE_NAME),
+            Self::RegExpLegacyGetter(kind) => Some(kind.getter_name()),
+            Self::RegExpLegacyInputSetter => Some(REGEXP_LEGACY_INPUT_SETTER_NAME),
             Self::RegExpPrototypeCompile => Some(REGEXP_PROTOTYPE_COMPILE_NAME),
             Self::RegExpPrototypeDotAllGetter => Some(REGEXP_PROTOTYPE_DOT_ALL_GETTER_NAME),
             Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
