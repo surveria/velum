@@ -23,13 +23,11 @@ enum ClassKeySeed {
     Private(StaticName),
 }
 
-/// One parsed class member function: its allocated static function id plus
-/// parameters and body statements with pattern prologues applied.
+/// One parsed class member function and its allocated static function id.
 struct ParsedClassFunction {
     id: crate::syntax::StaticFunctionId,
     params: Rc<[crate::ast::FunctionParam]>,
     body: Rc<[Statement]>,
-    parameter_prologue_count: usize,
     arguments_binding: Option<crate::syntax::StaticBinding>,
 }
 
@@ -232,7 +230,6 @@ impl Parser {
             name: key_name,
             params: function.params,
             body: function.body,
-            parameter_prologue_count: function.parameter_prologue_count,
         });
         Ok(())
     }
@@ -433,13 +430,12 @@ impl Parser {
         } else {
             None
         };
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         Ok(ParsedClassFunction {
             id,
             params: params.into(),
             body: statements.into(),
-            parameter_prologue_count,
             arguments_binding,
         })
     }

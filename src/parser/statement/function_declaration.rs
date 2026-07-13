@@ -56,8 +56,8 @@ impl Parser {
         } else {
             None
         };
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         let block_scoped =
             self.function_declaration_context == super::super::FunctionDeclarationContext::Lexical;
         let annex_b_var_binding =
@@ -74,7 +74,6 @@ impl Parser {
             id,
             params: params.into(),
             body: statements.into(),
-            parameter_prologue_count,
             kind,
             strict,
         })

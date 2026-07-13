@@ -104,7 +104,10 @@ impl Parser {
     ) -> Result<()> {
         let mut parameter_names = BTreeSet::new();
         for param in params {
-            parameter_names.insert(param.name.name().as_str().to_owned());
+            param.target.for_each_binding(&mut |binding| {
+                parameter_names.insert(binding.name().as_str().to_owned());
+                Ok::<(), crate::Error>(())
+            })?;
         }
         for statement in body {
             let mut lexical_names = Vec::new();

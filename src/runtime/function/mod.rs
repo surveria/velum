@@ -184,9 +184,9 @@ impl Context {
         let scope_template = parameters::function_scope_template(
             &param_atoms,
             &param_frames,
-            init.bytecode.has_parameter_defaults(),
+            init.bytecode.requires_parameter_initialization(),
         )?;
-        let param_binding_ids = parameters::function_param_binding_ids(params);
+        let param_binding_ids = parameters::function_param_binding_ids(params)?;
         let metadata_cache_count = Self::function_metadata_cache_count(
             param_binding_ids.len(),
             param_atoms.len(),
@@ -424,7 +424,6 @@ impl Context {
             None
         };
         let args = packed_args.as_deref().unwrap_or(raw_args);
-        let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base = self.push_call_activation(
             id,
             (upvalues, with_environments.to_vec()),
@@ -452,11 +451,13 @@ impl Context {
                 return Err(error);
             }
         };
-        let scope_result = if let Some(template) = scope_template.as_deref() {
-            self.function_scope_from_template(template, args)
-        } else {
-            self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults)
-        };
+        let scope_result = self.function_call_scope(
+            scope_template.as_deref(),
+            &param_atoms,
+            &param_frames,
+            args,
+            bytecode.requires_parameter_initialization(),
+        );
         let scope = match scope_result {
             Ok(scope) => scope,
             Err(error) => {

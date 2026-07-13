@@ -1,9 +1,9 @@
 use crate::{
     binding_metadata::BindingOperand,
     bytecode::{
-        BytecodeBinding, BytecodeCompletion, BytecodeFunction, BytecodeFunctionParam,
-        BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
-        BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+        BytecodeBinding, BytecodeCompletion, BytecodeFunction, BytecodeInstruction,
+        BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericEqualityOp,
     },
     error::{Error, Result},
     runtime::{
@@ -500,9 +500,8 @@ fn can_use_pre_setup_fast_path(
         && !class_constructor
         && new_target_mode == BytecodeNewTargetMode::Own
         && !bytecode.uses_arguments()
-        && !bytecode.has_parameter_defaults()
-        && !bytecode.has_rest_parameter()
-        && params_have_unique_names(bytecode.params())
+        && bytecode.simple_parameters
+        && bytecode.has_unique_parameter_names()
 }
 
 fn compile_function_fast_path_kind(
@@ -750,19 +749,6 @@ fn param_index_for_operand(
         let frame = frame.as_ref()?;
         (frame.scope() == Some(scope) && frame.slot().index() == slot).then_some(index)
     }))
-}
-
-fn params_have_unique_names(params: &[BytecodeFunctionParam]) -> bool {
-    for (index, param) in params.iter().enumerate() {
-        if params
-            .iter()
-            .skip(index.saturating_add(1))
-            .any(|other| other.binding().name() == param.binding().name())
-        {
-            return false;
-        }
-    }
-    true
 }
 
 fn has_empty_hoist(bytecode: &BytecodeFunction) -> bool {

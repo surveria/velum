@@ -159,8 +159,8 @@ impl Parser {
         } else {
             None
         };
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -174,7 +174,6 @@ impl Parser {
                 arguments_binding,
                 params: params.into(),
                 body: statements.into(),
-                parameter_prologue_count,
                 kind: FunctionKind::Ordinary,
                 strict,
             },
@@ -275,8 +274,8 @@ impl Parser {
         } else {
             None
         };
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -290,7 +289,6 @@ impl Parser {
                 arguments_binding,
                 params: params.into(),
                 body: statements.into(),
-                parameter_prologue_count,
                 kind,
                 strict,
             },

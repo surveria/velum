@@ -65,8 +65,8 @@ impl Parser {
         } else {
             None
         };
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         Ok(self.expression_node(
             start,
             Expr::Function {
@@ -75,7 +75,6 @@ impl Parser {
                 arguments_binding,
                 params: params.into(),
                 body: statements.into(),
-                parameter_prologue_count,
                 kind,
                 strict,
             },

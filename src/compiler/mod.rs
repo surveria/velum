@@ -11,10 +11,10 @@ use crate::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
         BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKey,
         BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode,
-        BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
-        BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
-        BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
-        BytecodeProgram, BytecodeProperty,
+        BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
+        BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     source::{SourceId, SourceSpan},
@@ -95,19 +95,16 @@ impl BytecodeBlock {
     fn compile_function_statements(
         statements: &[Statement],
         kind: crate::syntax::FunctionKind,
-        parameter_prologue_count: usize,
         layout: &BindingLayout,
     ) -> Result<Self> {
         let fallback_span = statements
             .first()
             .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
         let mut compiler = BytecodeCompiler::new(layout, fallback_span);
-        let split = parameter_prologue_count.min(statements.len());
-        compiler.compile_statements(&statements[..split], StatementValue::Store)?;
         if kind.is_generator() {
             compiler.emit(BytecodeInstruction::GeneratorStart);
         }
-        compiler.compile_statements(&statements[split..], StatementValue::Store)?;
+        compiler.compile_statements(statements, StatementValue::Store)?;
         compiler.finish()
     }
 
@@ -433,7 +430,6 @@ impl<'a> BytecodeCompiler<'a> {
                     class.constructor.arguments_binding.clone(),
                     &class.constructor.params,
                     &class.constructor.body,
-                    0,
                     FunctionCompileMode::new(crate::syntax::FunctionKind::Ordinary, true),
                     self.layout,
                 )?,
@@ -472,7 +468,6 @@ impl<'a> BytecodeCompiler<'a> {
                     member.arguments_binding.clone(),
                     &member.params,
                     &member.body,
-                    member.parameter_prologue_count,
                     FunctionCompileMode::new(member.function_kind, true),
                     self.layout,
                 )?,

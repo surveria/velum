@@ -7,13 +7,14 @@ use crate::{
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{
-        AccessorKind, BinaryOp, DeclKind, FunctionKind, StaticBinding, StaticCallSiteId,
-        StaticFunctionId, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+        AccessorKind, BinaryOp, DeclKind, FunctionKind, StaticCallSiteId, StaticFunctionId,
+        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     value::Value,
 };
 
 use super::block::BytecodeBlock;
+use super::function::BytecodeFunction;
 use super::function_mode::BytecodeNewTargetMode;
 use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
@@ -42,112 +43,6 @@ impl BytecodeProgram {
     }
     pub const fn hoist_plan(&self) -> &BytecodeHoistPlan {
         &self.hoist_plan
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BytecodeFunction {
-    self_binding: Option<StaticBinding>,
-    arguments_binding: Option<StaticBinding>,
-    params: Rc<[BytecodeFunctionParam]>,
-    param_defaults: Rc<[Option<BytecodeBlock>]>,
-    body: BytecodeBlock,
-    hoist_plan: BytecodeHoistPlan,
-    capture_bindings: Rc<[StaticBinding]>,
-    uses_arguments: bool,
-    strict: bool,
-    pub(crate) simple_parameters: bool,
-}
-
-pub struct BytecodeFunctionInit {
-    pub self_binding: Option<StaticBinding>,
-    pub arguments_binding: Option<StaticBinding>,
-    pub params: Rc<[BytecodeFunctionParam]>,
-    pub param_defaults: Rc<[Option<BytecodeBlock>]>,
-    pub body: BytecodeBlock,
-    pub hoist_plan: BytecodeHoistPlan,
-    pub capture_bindings: Rc<[StaticBinding]>,
-    pub uses_arguments: bool,
-    pub strict: bool,
-    pub simple_parameters: bool,
-}
-impl BytecodeFunction {
-    pub(crate) fn new(init: BytecodeFunctionInit) -> Self {
-        Self {
-            self_binding: init.self_binding,
-            arguments_binding: init.arguments_binding,
-            params: init.params,
-            param_defaults: init.param_defaults,
-            body: init.body,
-            hoist_plan: init.hoist_plan,
-            capture_bindings: init.capture_bindings,
-            uses_arguments: init.uses_arguments,
-            strict: init.strict,
-            simple_parameters: init.simple_parameters,
-        }
-    }
-    pub const fn self_binding(&self) -> Option<&StaticBinding> {
-        self.self_binding.as_ref()
-    }
-    pub const fn arguments_binding(&self) -> Option<&StaticBinding> {
-        self.arguments_binding.as_ref()
-    }
-    pub const fn uses_arguments(&self) -> bool {
-        self.uses_arguments
-    }
-    pub const fn strict(&self) -> bool {
-        self.strict
-    }
-    pub fn params(&self) -> &[BytecodeFunctionParam] {
-        &self.params
-    }
-    pub fn param_defaults(&self) -> &[Option<BytecodeBlock>] {
-        &self.param_defaults
-    }
-    pub fn has_parameter_defaults(&self) -> bool {
-        self.param_defaults.iter().any(Option::is_some)
-    }
-    pub fn has_rest_parameter(&self) -> bool {
-        self.params.last().is_some_and(BytecodeFunctionParam::rest)
-    }
-
-    pub const fn body(&self) -> &BytecodeBlock {
-        &self.body
-    }
-
-    pub const fn hoist_plan(&self) -> &BytecodeHoistPlan {
-        &self.hoist_plan
-    }
-
-    pub fn capture_bindings(&self) -> &[StaticBinding] {
-        &self.capture_bindings
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BytecodeFunctionParam {
-    binding: StaticBinding,
-    has_default: bool,
-    rest: bool,
-}
-
-impl BytecodeFunctionParam {
-    pub(crate) const fn new(binding: StaticBinding, has_default: bool, rest: bool) -> Self {
-        Self {
-            binding,
-            has_default,
-            rest,
-        }
-    }
-
-    pub const fn binding(&self) -> &StaticBinding {
-        &self.binding
-    }
-    pub const fn has_default(&self) -> bool {
-        self.has_default
-    }
-    pub const fn rest(&self) -> bool {
-        self.rest
     }
 }
 
@@ -373,9 +268,42 @@ pub enum BytecodePattern {
     },
 }
 
+impl BytecodePattern {
+    pub(crate) fn for_each_binding(
+        &self,
+        visit: &mut impl FnMut(&BytecodeBinding) -> Result<()>,
+    ) -> Result<()> {
+        match self {
+            Self::Binding(binding) => visit(binding),
+            Self::Assignment(_) => Err(Error::runtime(
+                "assignment target appeared in a binding pattern",
+            )),
+            Self::Object { properties, rest } => {
+                for property in properties.iter() {
+                    property.target.pattern.for_each_binding(visit)?;
+                }
+                if let Some(rest) = rest {
+                    rest.for_each_binding(visit)?;
+                }
+                Ok(())
+            }
+            Self::Array { elements, rest } => {
+                for element in elements.iter().flatten() {
+                    element.pattern.for_each_binding(visit)?;
+                }
+                if let Some(rest) = rest {
+                    rest.for_each_binding(visit)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeDestructureMode {
     Declaration(DeclKind),
+    Parameter,
     Assignment,
 }
 

@@ -79,7 +79,6 @@ pub enum Stmt {
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
-        parameter_prologue_count: usize,
         kind: FunctionKind,
         strict: bool,
     },
