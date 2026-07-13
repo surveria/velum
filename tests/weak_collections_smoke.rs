@@ -50,6 +50,25 @@ fn weak_set_stores_object_and_symbol_values() -> TestResult {
 }
 
 #[test]
+fn weak_collections_store_javascript_and_native_function_keys() -> TestResult {
+    ensure_string(
+        r#"
+        function javascriptKey() {}
+        const nativeKey = Array;
+        const map = new WeakMap([
+            [javascriptKey, "javascript"],
+            [nativeKey, "native"]
+        ]);
+        const set = new WeakSet([javascriptKey, nativeKey]);
+        "" + map.get(javascriptKey) + ":" + map.get(nativeKey)
+            + ":" + set.has(javascriptKey) + ":" + set.has(nativeKey)
+            + ":" + map.delete(javascriptKey) + ":" + set.delete(nativeKey)
+        "#,
+        "javascript:native:true:true:true:true",
+    )
+}
+
+#[test]
 fn weak_collections_seed_from_iterables() -> TestResult {
     ensure_string(
         r#"

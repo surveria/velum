@@ -479,16 +479,24 @@ impl Reachability {
     fn weak_key_is_reachable(&self, value: &Value) -> bool {
         match value {
             Value::Object(id) => self.objects.get(id.index()).copied().unwrap_or(false),
+            Value::Function(id) => self.functions.get(id.index()).copied().unwrap_or(false),
+            Value::NativeFunction(id) => self
+                .native_functions
+                .get(id.index())
+                .copied()
+                .unwrap_or(false),
+            Value::HostFunction(id) => self
+                .host_functions
+                .get(id.index())
+                .copied()
+                .unwrap_or(false),
             Value::Symbol(symbol) => self.symbols.contains(&symbol.id()),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
             | Value::BigInt(_)
-            | Value::String(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_) => false,
+            | Value::String(_) => false,
         }
     }
 
