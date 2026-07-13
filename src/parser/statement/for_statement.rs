@@ -191,7 +191,8 @@ impl Parser {
             };
             return Ok(Some((target, object, head)));
         }
-        let name = self.consume_binding_identifier("expected for-in binding name")?;
+        let name =
+            self.consume_declaration_binding_identifier(kind, "expected for-in binding name")?;
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
         };

@@ -709,7 +709,7 @@ impl Parser {
                 },
             ));
         }
-        let name = self.consume_binding_identifier("expected binding name")?;
+        let name = self.consume_declaration_binding_identifier(kind, "expected binding name")?;
         let init = if self.match_kind(&TokenKind::Equal) {
             Some(self.assignment_expression()?)
         } else if kind.requires_initializer() {
@@ -718,6 +718,24 @@ impl Parser {
             None
         };
         Ok(self.statement_node(start, Stmt::VarDecl { name, kind, init }))
+    }
+
+    pub(super) fn consume_declaration_binding_identifier(
+        &mut self,
+        kind: DeclKind,
+        message: &str,
+    ) -> Result<crate::syntax::StaticBinding> {
+        if kind == DeclKind::Var
+            && !self.is_strict_mode()
+            && self.peek().is_some_and(|token| {
+                token.kind == TokenKind::Let
+                    || matches!(&token.kind, TokenKind::Identifier(name) if name.as_ref() == "let")
+            })
+        {
+            let name = self.consume_identifier(message)?;
+            return self.static_binding(name);
+        }
+        self.consume_binding_identifier(message)
     }
 
     fn declarations_stmt(&self, declarations: Vec<Statement>) -> Result<Stmt> {

@@ -286,7 +286,7 @@ impl Parser {
             return Err(self.parse_error("super is not a valid binding identifier"));
         }
         let name = self.consume_identifier(message)?;
-        if self.is_strict_mode() && name.as_str() == "let" {
+        if name.as_str() == "let" {
             return Err(self.parse_error("let is not a valid binding identifier"));
         }
         if (self.yield_identifier_is_reserved() || self.is_strict_mode())
