@@ -108,14 +108,15 @@ impl Parser {
     /// accessor; otherwise it is an ordinary key (`{get: 1}`, `{get() {}}`,
     /// `{get}`), which falls through to the regular property paths.
     fn object_accessor_start(&mut self) -> Option<ObjectPropertyKind> {
-        let TokenKind::Identifier(name) = self.peek_kind(0)? else {
-            return None;
-        };
-        let kind = match name.as_str() {
-            GETTER_KEYWORD_NAME => ObjectPropertyKind::Get,
-            SETTER_KEYWORD_NAME => ObjectPropertyKind::Set,
-            _ => return None,
-        };
+        let kind = self.peek().and_then(|token| {
+            if token.is_unescaped_identifier_named(GETTER_KEYWORD_NAME) {
+                Some(ObjectPropertyKind::Get)
+            } else if token.is_unescaped_identifier_named(SETTER_KEYWORD_NAME) {
+                Some(ObjectPropertyKind::Set)
+            } else {
+                None
+            }
+        })?;
         self.peek_kind(1)
             .is_some_and(is_object_property_name_start)
             .then_some(kind)

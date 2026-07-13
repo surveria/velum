@@ -44,3 +44,8 @@ pub(super) const fn keyword_property_name(kind: &TokenKind) -> Option<&'static s
         _ => None,
     }
 }
+
+pub(super) const fn is_reserved_word_token(kind: &TokenKind) -> bool {
+    keyword_property_name(kind).is_some()
+        && !matches!(kind, TokenKind::Let | TokenKind::Async | TokenKind::Await)
+}

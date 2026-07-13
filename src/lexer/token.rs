@@ -24,6 +24,11 @@ impl Token {
     pub const fn offset(&self) -> usize {
         self.span.start()
     }
+
+    pub fn is_unescaped_identifier_named(&self, expected: &str) -> bool {
+        !self.identifier_escaped
+            && matches!(&self.kind, TokenKind::Identifier(name) if name == expected)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -255,13 +255,7 @@ impl Parser {
     fn new_target_expr(&mut self, new_span: crate::SourceSpan) -> Result<Expression> {
         let token = self.advance_token("expected 'target' after 'new.'")?;
         let token_span = token.span;
-        let TokenKind::Identifier(name) = token.kind else {
-            return Err(Error::parse_at(
-                "expected 'target' after 'new.'",
-                token_span,
-            ));
-        };
-        if name != NEW_TARGET_PROPERTY_NAME {
+        if !token.is_unescaped_identifier_named(NEW_TARGET_PROPERTY_NAME) {
             return Err(Error::parse_at(
                 "expected 'target' after 'new.'",
                 token_span,
@@ -389,6 +383,16 @@ impl Parser {
         ))
     }
 
+    fn advance_primary_token(&mut self) -> Result<crate::lexer::Token> {
+        let token = self
+            .advance_regexp()
+            .ok_or_else(|| self.parse_error("expected expression"))?;
+        if token.identifier_escaped && super::property_name::is_reserved_word_token(&token.kind) {
+            return Err(Error::parse_at("escaped reserved word", token.span));
+        }
+        Ok(token)
+    }
+
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
         if self.check(&TokenKind::LParen) {
             if !self.allow_super_call {
@@ -469,9 +473,7 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expression> {
-        let token = self
-            .advance_regexp()
-            .ok_or_else(|| self.parse_error("expected expression"))?;
+        let token = self.advance_primary_token()?;
         let token_span = token.span;
         Ok(match token.kind {
             TokenKind::LexicalError(error) => return Err(*error),

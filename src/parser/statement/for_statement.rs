@@ -168,13 +168,11 @@ impl Parser {
     }
 
     fn using_of_lookahead(&mut self) -> bool {
-        self.peek_token(1).is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
-        }) && self.peek_token(2).is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
-        })
+        self.peek_token(1)
+            .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD))
+            && self
+                .peek_token(2)
+                .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD))
     }
 
     fn for_in_binding_header(
@@ -219,10 +217,8 @@ impl Parser {
     }
 
     fn next_is_contextual_of(&mut self) -> bool {
-        self.peek().is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
-        })
+        self.peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD))
     }
 
     fn for_in_assignment_target_start(&mut self) -> bool {
@@ -243,10 +239,7 @@ impl Parser {
             Some(TokenKind::In)
         ) || self
             .peek_token(closing.saturating_add(1))
-            .is_some_and(|token| {
-                !token.identifier_escaped
-                    && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
-            })
+            .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD))
     }
 
     fn for_init(&mut self) -> Result<Option<Box<Statement>>> {

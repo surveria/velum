@@ -388,10 +388,10 @@ impl Parser {
     }
 
     fn match_contextual_module_word(&mut self, expected: &str) -> bool {
-        if !self.peek().is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == expected)
-        }) {
+        if !self
+            .peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(expected))
+        {
             return false;
         }
         self.advance().is_some()
