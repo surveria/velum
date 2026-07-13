@@ -99,19 +99,13 @@ impl Context {
     }
 
     pub(in crate::runtime) fn default_derived_constructor_super(
-        &self,
+        &mut self,
         id: FunctionId,
     ) -> Result<Option<Value>> {
-        let function = self.function(id)?;
-        if function.class_constructor != FunctionClassConstructor::DefaultDerived {
+        if self.function(id)?.class_constructor != FunctionClassConstructor::DefaultDerived {
             return Ok(None);
         }
-        function
-            .super_binding
-            .as_ref()
-            .and_then(|binding| binding.constructor.clone())
-            .map(Some)
-            .ok_or_else(|| Error::runtime("default derived constructor has no superclass"))
+        self.function_inheritance_prototype_value(id).map(Some)
     }
 
     pub(in crate::runtime) fn current_class_field_initializer_context(&self) -> Result<bool> {

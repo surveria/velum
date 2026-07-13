@@ -81,6 +81,25 @@ fn default_derived_constructor_does_not_iterate_arguments() -> TestResult {
 }
 
 #[test]
+fn default_derived_constructor_resolves_the_current_superclass() -> TestResult {
+    ensure_string(
+        r#"
+        class First {
+            constructor() { this.value = "first"; }
+        }
+        class Second {
+            constructor() { this.value = "second"; }
+        }
+        class Derived extends First {}
+        const before = new Derived().value;
+        Object.setPrototypeOf(Derived, Second);
+        before + ":" + new Derived().value
+        "#,
+        "first:second",
+    )
+}
+
+#[test]
 fn super_method_calls_resolve_through_the_chain() -> TestResult {
     ensure_string(
         r#"
