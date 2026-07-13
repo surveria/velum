@@ -537,6 +537,15 @@ execution-frame, and association owners; Module remains an explicit zero-store
 policy. Every snapshot reconciles the ledger and checks all twenty-six owner
 totals against the configured policy.
 
+The first post-audit accounting-centralization tranche makes each JavaScript
+`Function` derive one checked storage footprint from its complete record.
+Creation-time reservations and the independent full-owner recount consume that
+same footprint for function, captured-binding, metadata-cache, property,
+private-slot, and source-record contributions; `FunctionProperties` remains the
+ledger owner for its own mutable property/cache storage. Other distributed
+record types remain follow-up centralization work rather than being hidden by a
+guarded copy of their current formulas.
+
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
 and checked category/total record sums. AS-05b2b adds an independent per-kind

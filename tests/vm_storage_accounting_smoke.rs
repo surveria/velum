@@ -143,6 +143,53 @@ fn reconciles_arguments_binding_cache_entries() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn reconciles_heterogeneous_function_owner_footprints() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r#"
+        const captured = { lens: 42 };
+        function makeCamera(prefix) {
+            return function namedCamera({ value = captured.lens } = {}, ...rest) {
+                namedCamera.last = value + rest.length + arguments.length;
+                class Camera {
+                    static #state = captured;
+                    static readState() { return this.#state.lens; }
+                    field = prefix;
+                    #privateField = namedCamera.last;
+                    read() { return this.field + this.#privateField; }
+                }
+                namedCamera.lastClass = Camera;
+                return Camera.readState() + new Camera().read().length;
+            };
+        }
+        var camera = makeCamera("camera");
+        Object.defineProperty(camera, "metadata", {
+            get() { return captured; },
+            configurable: true
+        });
+        camera({}, 1, 2);
+        "#,
+    )?;
+
+    vm.storage_snapshot()?;
+    vm.collect_garbage()?;
+    let snapshot = vm.storage_snapshot()?;
+    ensure_positive(
+        snapshot.count(VmStorageKind::JavaScriptFunction),
+        "heterogeneous JavaScript functions",
+    )?;
+    ensure_positive(
+        snapshot.count(VmStorageKind::ObjectProperty),
+        "function-owned properties and private slots",
+    )?;
+    ensure_positive(
+        snapshot.count(VmStorageKind::CacheEntry),
+        "function metadata cache entries",
+    )
+}
+
 fn ensure_materialized_payload_bytes(snapshot: &VmStorageSnapshot) -> TestResult {
     for (kind, label) in [
         (VmStorageKind::Atom, "atom text bytes"),

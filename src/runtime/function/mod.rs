@@ -187,65 +187,45 @@ impl Context {
             init.bytecode.requires_parameter_initialization(),
         )?;
         let param_binding_ids = parameters::function_param_binding_ids(params)?;
-        let metadata_cache_count = Self::function_metadata_cache_count(
-            param_binding_ids.len(),
-            param_atoms.len(),
-            param_frames.len(),
-            fast_path.is_some(),
-            scope_template.as_deref(),
-            self_binding.is_some(),
-            arguments_binding.is_some(),
-        )?;
-        let properties = self.activate_function_storage(
-            upvalues
-                .cells
-                .len()
-                .checked_add(with_environments.len())
-                .ok_or_else(|| Error::limit("function captured binding count overflowed"))?,
-            metadata_cache_count,
-            FunctionProperties::new(prototype, intrinsic_defaults),
-        )?;
         let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
         let lexical_this =
             self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         let script_or_module_name = self.active_script_or_module_name();
-        self.functions.insert_at_next(
-            id.index(),
-            super::Function {
-                realm: self.active_realm_index(),
-                script_or_module_name,
-                self_binding,
-                arguments_binding,
-                param_binding_ids,
-                param_atoms,
-                param_frames,
-                bytecode: init.bytecode.clone(),
-                fast_path: fast_path.map(Rc::new),
-                source: None,
-                upvalues: upvalues.cells,
-                with_environments,
-                static_name_atom_cache,
-                static_binding_cache,
-                static_binding_layout,
-                properties,
-                constructable: init.constructable,
-                kind: init.kind,
-                class_constructor: init.class_constructor,
-                super_binding,
-                static_parent: None,
-                class_fields: None,
-                class_private_slots: None,
-                private_environment: self.current_private_environment(),
-                private_slots: Vec::new(),
-                params_remembered: std::cell::Cell::new(false),
-                scope_template,
-                lexical_this,
-                new_target: FunctionNewTarget::from_mode(
-                    init.new_target_mode,
-                    self.current_new_target()?,
-                ),
-            },
-        )?;
+        let new_target =
+            FunctionNewTarget::from_mode(init.new_target_mode, self.current_new_target()?);
+        let mut function_record = super::Function {
+            realm: self.active_realm_index(),
+            script_or_module_name,
+            self_binding,
+            arguments_binding,
+            param_binding_ids,
+            param_atoms,
+            param_frames,
+            bytecode: init.bytecode.clone(),
+            fast_path: fast_path.map(Rc::new),
+            source: None,
+            upvalues: upvalues.cells,
+            with_environments,
+            static_name_atom_cache,
+            static_binding_cache,
+            static_binding_layout,
+            properties: FunctionProperties::new(prototype, intrinsic_defaults),
+            constructable: init.constructable,
+            kind: init.kind,
+            class_constructor: init.class_constructor,
+            super_binding,
+            static_parent: None,
+            class_fields: None,
+            class_private_slots: None,
+            private_environment: self.current_private_environment(),
+            private_slots: Vec::new(),
+            params_remembered: std::cell::Cell::new(false),
+            scope_template,
+            lexical_this,
+            new_target,
+        };
+        self.activate_function_storage(&mut function_record)?;
+        self.functions.insert_at_next(id.index(), function_record)?;
         Ok(function)
     }
 
@@ -580,7 +560,7 @@ impl Context {
         let previous_bytes = self.function(id)?.source.as_deref().map_or(0, str::len);
         let additional_count = usize::from(self.function(id)?.source.is_none());
         let projected_count = self
-            .source_record_count()
+            .source_record_count()?
             .checked_add(additional_count)
             .ok_or_else(|| Error::limit("source record count overflowed"))?;
         let projected_payload_bytes = self
