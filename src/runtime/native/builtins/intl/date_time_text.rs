@@ -1,11 +1,23 @@
 use crate::runtime::object::DateTimeFormatValue;
 
 use super::{
-    formatting::{DateTimeInput, FormatPart},
+    date_time_types::{DateTimeInput, FormatPart},
     number_digits,
 };
 
-pub(super) fn format_month(month: u8, style: Option<&str>, calendar: &str) -> String {
+pub(super) fn format_month(
+    month: u8,
+    month_code: Option<&str>,
+    style: Option<&str>,
+    calendar: &str,
+) -> String {
+    if calendar == "hebrew" {
+        return hebrew_month_name(month_code).to_owned();
+    }
+    if matches!(calendar, "chinese" | "dangi") && month_code.is_some_and(|code| code.ends_with('L'))
+    {
+        return format!("{month}bis");
+    }
     if matches!(style, Some("long" | "short" | "narrow")) {
         let names = if calendar.starts_with("islamic") {
             &ISLAMIC_MONTHS
@@ -24,6 +36,25 @@ pub(super) fn format_month(month: u8, style: Option<&str>, calendar: &str) -> St
         format!("{month:02}")
     } else {
         month.to_string()
+    }
+}
+
+fn hebrew_month_name(month_code: Option<&str>) -> &'static str {
+    match month_code {
+        Some("M01") => "Tishri",
+        Some("M02") => "Heshvan",
+        Some("M03") => "Kislev",
+        Some("M04") => "Tevet",
+        Some("M05") => "Shevat",
+        Some("M05L") => "Adar I",
+        Some("M06") => "Adar",
+        Some("M07") => "Nisan",
+        Some("M08") => "Iyar",
+        Some("M09") => "Sivan",
+        Some("M10") => "Tamuz",
+        Some("M11") => "Av",
+        Some("M12") => "Elul",
+        _ => "",
     }
 }
 

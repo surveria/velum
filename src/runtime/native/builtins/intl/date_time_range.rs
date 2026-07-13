@@ -8,8 +8,9 @@ use crate::{
     value::Value,
 };
 
-use super::formatting::{
-    DateTimeInput, DateTimeInputKind, FormatPart, date_time_number_input, format_parts,
+use super::{
+    date_time_types::{DateTimeInput, DateTimeInputKind, FormatPart},
+    formatting::{date_time_number_input, format_parts},
 };
 
 const RANGE_SEPARATOR: &str = "\u{2009}–\u{2009}";
@@ -49,20 +50,7 @@ impl Context {
         let end = end.into_input(self, &formatter)?;
         let start_parts = format_parts(&formatter, &start)?;
         let end_parts = format_parts(&formatter, &end)?;
-        let range_parts = if start_parts == end_parts {
-            source_parts(start_parts, "shared")
-        } else {
-            let mut parts = source_parts(start_parts, "startRange");
-            parts.push(SourcePart {
-                part: FormatPart {
-                    kind: "literal",
-                    value: RANGE_SEPARATOR.to_owned(),
-                },
-                source: "shared",
-            });
-            parts.extend(source_parts(end_parts, "endRange"));
-            parts
-        };
+        let range_parts = partition_range_parts(&formatter, start_parts, end_parts);
         if to_parts {
             return self.date_time_range_parts_value(range_parts);
         }
@@ -145,4 +133,98 @@ fn source_parts(parts: Vec<FormatPart>, source: &'static str) -> Vec<SourcePart>
         .into_iter()
         .map(|part| SourcePart { part, source })
         .collect()
+}
+
+fn partition_range_parts(
+    formatter: &DateTimeFormatValue,
+    start: Vec<FormatPart>,
+    end: Vec<FormatPart>,
+) -> Vec<SourcePart> {
+    if start == end {
+        return source_parts(start, "shared");
+    }
+    if !uses_textual_month(formatter) {
+        return uncollapsed_range_parts(start, end);
+    }
+    let prefix_len = start
+        .iter()
+        .zip(&end)
+        .take_while(|(start_part, end_part)| start_part == end_part)
+        .count();
+    let suffix_limit = start.len().min(end.len()).saturating_sub(prefix_len);
+    let suffix_len = start
+        .iter()
+        .rev()
+        .zip(end.iter().rev())
+        .take(suffix_limit)
+        .take_while(|(start_part, end_part)| start_part == end_part)
+        .count();
+    if suffix_len == 0 {
+        return uncollapsed_range_parts(start, end);
+    }
+    let start_middle_len = start
+        .len()
+        .saturating_sub(prefix_len)
+        .saturating_sub(suffix_len);
+    let end_middle_len = end
+        .len()
+        .saturating_sub(prefix_len)
+        .saturating_sub(suffix_len);
+    let mut parts = sourced_iter(start.iter().take(prefix_len).cloned(), "shared");
+    parts.extend(sourced_iter(
+        start
+            .iter()
+            .skip(prefix_len)
+            .take(start_middle_len)
+            .cloned(),
+        "startRange",
+    ));
+    parts.push(range_separator());
+    parts.extend(sourced_iter(
+        end.iter().skip(prefix_len).take(end_middle_len).cloned(),
+        "endRange",
+    ));
+    parts.extend(sourced_iter(
+        end.into_iter()
+            .skip(prefix_len.saturating_add(end_middle_len)),
+        "shared",
+    ));
+    parts
+}
+
+fn uncollapsed_range_parts(start: Vec<FormatPart>, end: Vec<FormatPart>) -> Vec<SourcePart> {
+    let mut parts = source_parts(start, "startRange");
+    parts.push(range_separator());
+    parts.extend(source_parts(end, "endRange"));
+    parts
+}
+
+fn sourced_iter(
+    parts: impl IntoIterator<Item = FormatPart>,
+    source: &'static str,
+) -> Vec<SourcePart> {
+    parts
+        .into_iter()
+        .map(|part| SourcePart { part, source })
+        .collect()
+}
+
+fn range_separator() -> SourcePart {
+    SourcePart {
+        part: FormatPart {
+            kind: "literal",
+            value: RANGE_SEPARATOR.to_owned(),
+        },
+        source: "shared",
+    }
+}
+
+fn uses_textual_month(formatter: &DateTimeFormatValue) -> bool {
+    matches!(
+        formatter.options.month.as_deref(),
+        Some("long" | "short" | "narrow")
+    ) || matches!(
+        formatter.options.date_style.as_deref(),
+        Some("full" | "long" | "medium")
+    )
 }

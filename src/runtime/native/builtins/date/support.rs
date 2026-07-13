@@ -258,15 +258,17 @@ fn parse_time_part(text: Option<&str>) -> Result<Option<(i64, i64, i64, i64)>> {
     let Some(minute_text) = parts.next() else {
         return Ok(None);
     };
-    let Some(second_text) = parts.next() else {
-        return Ok(None);
-    };
+    let second_text = parts.next();
     if parts.next().is_some() {
         return Ok(None);
     }
     let hour = parse_fixed_digits(hour_text, 2);
     let minute = parse_fixed_digits(minute_text, 2);
-    let (second, millisecond) = parse_second_and_millisecond(second_text)?;
+    let (second, millisecond) = if let Some(second_text) = second_text {
+        parse_second_and_millisecond(second_text)?
+    } else {
+        (Some(0), 0)
+    };
     let (Some(hour), Some(minute), Some(second)) = (hour, minute, second) else {
         return Ok(None);
     };

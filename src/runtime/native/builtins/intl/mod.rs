@@ -1,6 +1,8 @@
 mod date_time_format;
+mod date_time_locale;
 mod date_time_range;
 mod date_time_text;
+mod date_time_types;
 mod duration_format;
 mod formatting;
 mod number_digits;
@@ -10,6 +12,8 @@ mod number_options;
 mod number_range;
 mod number_rounding;
 mod options;
+
+pub(in crate::runtime::native) use date_time_locale::DateLocaleDefaults;
 
 use crate::{
     error::{Error, Result},

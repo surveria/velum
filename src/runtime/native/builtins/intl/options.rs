@@ -346,8 +346,8 @@ fn resolve_time_zone(requested: Option<&str>) -> Result<String> {
     let text = requested.unwrap_or("UTC");
     let time_zone = temporal_rs::TimeZone::try_from_identifier_str(text)
         .map_err(|error| Error::exception(ErrorName::RangeError, error.to_string()))?;
-    if text.contains('/') {
-        return Ok(text.to_owned());
+    if let Some((canonical_case, _)) = jiff_tzdb::get(text) {
+        return Ok(canonical_case.to_owned());
     }
     time_zone
         .identifier()
@@ -378,7 +378,13 @@ fn resolve_date_time_locale(
     let numbering_system = numbering_explicit
         .clone()
         .or_else(|| numbering_extension.clone())
-        .unwrap_or_else(|| "latn".to_owned());
+        .unwrap_or_else(|| {
+            if base.to_ascii_lowercase().starts_with("ar") {
+                "arab".to_owned()
+            } else {
+                "latn".to_owned()
+            }
+        });
     let hour_cycle_extension = unicode_extension(locale, "hc")
         .filter(|value| matches!(value.as_str(), "h11" | "h12" | "h23" | "h24"));
     let mut extensions = Vec::new();

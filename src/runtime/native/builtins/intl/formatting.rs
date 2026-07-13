@@ -18,40 +18,7 @@ use super::date_time_text::{
     flexible_day_period, format_month, localize_numeric_parts, time_zone_name, weekday_name,
     year_parts,
 };
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum DateTimeInputKind {
-    Instant,
-    PlainDate,
-    PlainDateTime,
-    PlainMonthDay,
-    PlainTime,
-    PlainYearMonth,
-    ZonedDateTime,
-    LegacyDate,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct DateTimeInput {
-    pub(super) kind: DateTimeInputKind,
-    pub(super) year: Option<i32>,
-    pub(super) era: Option<String>,
-    pub(super) month: Option<u8>,
-    pub(super) day: Option<u8>,
-    pub(super) weekday: Option<u16>,
-    pub(super) hour: Option<u8>,
-    pub(super) minute: Option<u8>,
-    pub(super) second: Option<u8>,
-    pub(super) millisecond: Option<u16>,
-    pub(super) time_zone: Option<String>,
-    pub(super) offset: Option<String>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct FormatPart {
-    pub(super) kind: &'static str,
-    pub(super) value: String,
-}
+use super::date_time_types::{DateTimeInput, DateTimeInputKind, FormatPart};
 
 impl Context {
     pub(super) fn eval_intl_date_time_format(
@@ -177,11 +144,13 @@ fn plain_date_input(date: temporal_rs::PlainDate, calendar: Calendar) -> Result<
     } else {
         date
     };
+    let month_code = date.month_code();
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainDate,
         year: Some(date.era_year().unwrap_or_else(|| date.year())),
         era: date.era().map(|era| era.to_string()),
-        month: Some(date.month()),
+        month: Some(month_code.to_month_integer()),
+        month_code: Some(month_code.as_str().to_owned()),
         day: Some(date.day()),
         weekday: Some(date.day_of_week()),
         hour: None,
@@ -203,11 +172,13 @@ fn plain_date_time_input(
     } else {
         date_time
     };
+    let month_code = date_time.month_code();
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainDateTime,
         year: Some(date_time.era_year().unwrap_or_else(|| date_time.year())),
         era: date_time.era().map(|era| era.to_string()),
-        month: Some(date_time.month()),
+        month: Some(month_code.to_month_integer()),
+        month_code: Some(month_code.as_str().to_owned()),
         day: Some(date_time.day()),
         weekday: Some(date_time.day_of_week()),
         hour: Some(date_time.hour()),
@@ -229,6 +200,7 @@ fn plain_month_day_input(
         year: Some(month_day.reference_year()),
         era: None,
         month: Some(month_day.month_code().to_month_integer()),
+        month_code: Some(month_day.month_code().as_str().to_owned()),
         day: Some(month_day.day()),
         weekday: None,
         hour: None,
@@ -246,6 +218,7 @@ const fn plain_time_input(time: temporal_rs::PlainTime) -> DateTimeInput {
         year: None,
         era: None,
         month: None,
+        month_code: None,
         day: None,
         weekday: None,
         hour: Some(time.hour()),
@@ -262,11 +235,13 @@ fn plain_year_month_input(
     calendar: &Calendar,
 ) -> Result<DateTimeInput> {
     check_calendar_exact(year_month.calendar(), calendar)?;
+    let month_code = year_month.month_code();
     Ok(DateTimeInput {
         kind: DateTimeInputKind::PlainYearMonth,
         year: Some(year_month.era_year().unwrap_or_else(|| year_month.year())),
         era: year_month.era().map(|era| era.to_string()),
-        month: Some(year_month.month()),
+        month: Some(month_code.to_month_integer()),
+        month_code: Some(month_code.as_str().to_owned()),
         day: Some(year_month.reference_day()),
         weekday: None,
         hour: None,
@@ -292,11 +267,13 @@ fn zoned_date_time_input(
         .time_zone()
         .identifier()
         .map_err(intl_temporal_error)?;
+    let month_code = zoned.month_code();
     Ok(DateTimeInput {
         kind: DateTimeInputKind::ZonedDateTime,
         year: Some(zoned.era_year().unwrap_or_else(|| zoned.year())),
         era: zoned.era().map(|era| era.to_string()),
-        month: Some(zoned.month()),
+        month: Some(month_code.to_month_integer()),
+        month_code: Some(month_code.as_str().to_owned()),
         day: Some(zoned.day()),
         weekday: Some(zoned.day_of_week()),
         hour: Some(zoned.hour()),
@@ -324,11 +301,13 @@ fn instant_input(
         .time_zone()
         .identifier()
         .map_err(intl_temporal_error)?;
+    let month_code = zoned.month_code();
     Ok(DateTimeInput {
         kind,
         year: Some(zoned.era_year().unwrap_or_else(|| zoned.year())),
         era: zoned.era().map(|era| era.to_string()),
-        month: Some(zoned.month()),
+        month: Some(month_code.to_month_integer()),
+        month_code: Some(month_code.as_str().to_owned()),
         day: Some(zoned.day()),
         weekday: Some(zoned.day_of_week()),
         hour: Some(zoned.hour()),
@@ -490,10 +469,19 @@ fn selected_groups(formatter: &DateTimeFormatValue, kind: DateTimeInputKind) -> 
         && (formatter.options.date_style.is_some()
             || (explicit_date && !only_era)
             || ((no_components || only_era || only_zone) && default_date));
+    let era_default_time = only_era
+        && matches!(
+            kind,
+            DateTimeInputKind::Instant
+                | DateTimeInputKind::PlainDateTime
+                | DateTimeInputKind::PlainTime
+        );
     let show_time = time_capable
         && (formatter.options.time_style.is_some()
             || explicit_time
-            || ((no_components || only_era || only_zone) && default_time));
+            || (no_components && default_time)
+            || era_default_time
+            || (only_zone && default_time));
     let zone_capable = matches!(
         kind,
         DateTimeInputKind::Instant
@@ -559,7 +547,12 @@ fn append_date_parts(
         .year
         .as_deref()
         .or_else(|| (options.date_style.as_deref() == Some("short")).then_some("2-digit"));
-    let month_text = format_month(month, month_style, &formatter.calendar);
+    let month_text = format_month(
+        month,
+        input.month_code.as_deref(),
+        month_style,
+        &formatter.calendar,
+    );
     let german = formatter.locale.to_ascii_lowercase().starts_with("de");
     let japanese = formatter.locale.to_ascii_lowercase().starts_with("ja");
     append_date_layout(

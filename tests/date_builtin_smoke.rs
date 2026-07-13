@@ -11,6 +11,7 @@ fn supports_date_constructor_and_utc_methods() -> TestResult {
         r#"
         let epoch = new Date(0);
         let parsed = Date.parse("2020-01-02T03:04:05.006Z");
+        let shortParsed = Date.parse("2020-01-02T03:04Z");
         let utc = Date.UTC(2020, 0, 2, 3, 4, 5, 6);
         let constructed = new Date(2020, 0, 2, 3, 4, 5, 6);
         let fromString = new Date("2020-01-02T03:04:05.006Z");
@@ -49,6 +50,7 @@ fn supports_date_constructor_and_utc_methods() -> TestResult {
             epoch.getSeconds() === 0 &&
             epoch.getMilliseconds() === 0 &&
             parsed === utc &&
+            shortParsed === Date.UTC(2020, 0, 2, 3, 4, 0, 0) &&
             constructed.toISOString() === "2020-01-02T03:04:05.006Z" &&
             fromString.toJSON() === "2020-01-02T03:04:05.006Z" &&
             invalid.toString() === "Invalid Date" &&
@@ -297,8 +299,8 @@ fn annex_b_and_locale_date_methods_are_available() -> TestResult {
         "#,
         concat!(
             "70|915148800000|1999-01-01T00:00:00.000Z|true|true|true|toUTCString|0|",
-            "Fri Jan 01 1999 00:00:00 GMT+0000 (UTC)|Fri Jan 01 1999|",
-            "00:00:00 GMT+0000 (UTC)|toLocaleString|toLocaleDateString|toLocaleTimeString"
+            "1/1/1999, 12:00:00 AM|1/1/1999|12:00:00 AM|",
+            "toLocaleString|toLocaleDateString|toLocaleTimeString"
         ),
     )
 }
