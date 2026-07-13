@@ -403,16 +403,12 @@ fn validate_styles(formatter: &DateTimeFormatValue, kind: DateTimeInputKind) -> 
             | DateTimeInputKind::PlainMonthDay
             | DateTimeInputKind::PlainYearMonth
     );
-    if date_only && formatter.options.time_style.is_some() && formatter.options.date_style.is_none()
-    {
+    if date_only && formatter.options.time_style.is_some() {
         return Err(Error::type_error(
             "timeStyle is invalid for this Temporal value",
         ));
     }
-    if kind == DateTimeInputKind::PlainTime
-        && formatter.options.date_style.is_some()
-        && formatter.options.time_style.is_none()
-    {
+    if kind == DateTimeInputKind::PlainTime && formatter.options.date_style.is_some() {
         return Err(Error::type_error(
             "dateStyle is invalid for Temporal.PlainTime",
         ));

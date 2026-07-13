@@ -265,7 +265,7 @@ impl Context {
                 "Pacific/Apia",
                 "UTC",
             ],
-            "numberingSystem" => &["latn"],
+            "numberingSystem" => super::number_digits::SUPPORTED_NUMBERING_SYSTEMS,
             _ => {
                 return Err(Error::exception(
                     crate::value::ErrorName::RangeError,

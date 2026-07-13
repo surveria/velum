@@ -91,6 +91,7 @@ impl Context {
                 self.plain_month_day_string(receiver, display)
             }
             TemporalFunctionKind::PlainMonthDayPrototypeToLocaleString => {
+                self.plain_month_day_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::PlainMonthDayPrototypeToJson => {

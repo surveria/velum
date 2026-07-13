@@ -18,6 +18,16 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         defaults: DateLocaleDefaults,
     ) -> Result<Value> {
+        let Value::Object(id) = this_value else {
+            return Err(Error::type_error("Date method receiver must be a Date"));
+        };
+        let date = self
+            .objects
+            .date_value(*id)?
+            .ok_or_else(|| Error::type_error("Date method receiver must be a Date"))?;
+        if date.millis().is_none() {
+            return self.heap_string_value("Invalid Date");
+        }
         let locale = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         if matches!(options, Value::Null) {

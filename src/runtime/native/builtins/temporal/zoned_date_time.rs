@@ -262,6 +262,7 @@ impl Context {
                 self.eval_zoned_date_time_to_string(args, receiver)
             }
             TemporalFunctionKind::ZonedDateTimePrototypeToLocaleString => {
+                self.zoned_date_time_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::ZonedDateTimePrototypeToJson => {

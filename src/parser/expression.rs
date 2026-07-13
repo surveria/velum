@@ -167,6 +167,12 @@ impl Parser {
                 self.peek_kind(0),
                 Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
             ) {
+                if Self::is_optional_chain(&expr) {
+                    return Err(Error::parse_at(
+                        "optional chains cannot be tagged templates",
+                        expr.span(),
+                    ));
+                }
                 expr = self.tagged_template_suffix(expr)?;
                 continue;
             }

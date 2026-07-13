@@ -304,3 +304,33 @@ fn annex_b_and_locale_date_methods_are_available() -> TestResult {
         ),
     )
 }
+
+#[test]
+fn locale_date_methods_validate_receivers_and_invalid_dates() -> TestResult {
+    ensure_string(
+        r#"
+        const methods = [
+            Date.prototype.toLocaleString,
+            Date.prototype.toLocaleDateString,
+            Date.prototype.toLocaleTimeString,
+        ];
+        let rejected = 0;
+        for (const method of methods) {
+            for (const receiver of [undefined, null, 5, {}]) {
+                try {
+                    method.call(receiver);
+                } catch (error) {
+                    if (error instanceof TypeError) rejected += 1;
+                }
+            }
+        }
+        [
+            rejected,
+            new Date(NaN).toLocaleString(),
+            new Date(Infinity).toLocaleDateString(),
+            new Date(-Infinity).toLocaleTimeString(),
+        ].join("|")
+        "#,
+        "12|Invalid Date|Invalid Date|Invalid Date",
+    )
+}

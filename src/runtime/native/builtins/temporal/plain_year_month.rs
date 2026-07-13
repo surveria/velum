@@ -134,6 +134,7 @@ impl Context {
                 self.plain_year_month_string(receiver, display)
             }
             TemporalFunctionKind::PlainYearMonthPrototypeToLocaleString => {
+                self.plain_year_month_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::PlainYearMonthPrototypeToJson => {

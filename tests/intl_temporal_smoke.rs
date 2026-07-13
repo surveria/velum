@@ -94,3 +94,52 @@ fn formats_duration_like_values_consistently() -> TestResult {
     )?;
     ensure_value(&value, &Value::Bool(true))
 }
+
+#[test]
+fn validates_temporal_receivers_styles_and_numbering_systems() -> TestResult {
+    let value = eval(
+        r#"
+        const localeMethods = [
+            Temporal.Instant.prototype.toLocaleString,
+            Temporal.PlainDate.prototype.toLocaleString,
+            Temporal.PlainDateTime.prototype.toLocaleString,
+            Temporal.PlainMonthDay.prototype.toLocaleString,
+            Temporal.PlainTime.prototype.toLocaleString,
+            Temporal.PlainYearMonth.prototype.toLocaleString,
+            Temporal.ZonedDateTime.prototype.toLocaleString,
+        ];
+        let rejected = 0;
+        for (const method of localeMethods) {
+            try {
+                method.call({});
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        for (const action of [
+            () => new Temporal.PlainDate(2026, 1, 20).toLocaleString(
+                "en",
+                { dateStyle: "full", timeStyle: "full" },
+            ),
+            () => new Temporal.PlainTime(12).toLocaleString(
+                "en",
+                { dateStyle: "full", timeStyle: "full" },
+            ),
+        ]) {
+            try {
+                action();
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        const systems = Intl.supportedValuesOf("numberingSystem");
+        rejected === 9 && ["arab", "deva", "hanidec", "latn", "thai"].every(
+            (numberingSystem) =>
+                systems.includes(numberingSystem) &&
+                new Intl.DateTimeFormat("en", { numberingSystem })
+                    .resolvedOptions().numberingSystem === numberingSystem,
+        )
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}

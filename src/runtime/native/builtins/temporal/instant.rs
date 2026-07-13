@@ -111,6 +111,7 @@ impl Context {
                 self.eval_instant_to_string(args, receiver)
             }
             TemporalFunctionKind::InstantPrototypeToLocaleString => {
+                self.instant_receiver(receiver)?;
                 self.format_temporal_locale_string(receiver, args)
             }
             TemporalFunctionKind::InstantPrototypeToJson => self.instant_default_string(receiver),
