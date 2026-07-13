@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use num_traits::ToPrimitive;
 use temporal_rs::{
     Calendar, Instant, PlainDate, PlainDateTime, PlainMonthDay, PlainTime, PlainYearMonth,
@@ -35,19 +37,94 @@ impl Context {
         self.temporal_calendar_constructor(
             TemporalFunctionKind::PlainDateConstructor,
             PLAIN_DATE_TAG,
-            &[("from", TemporalFunctionKind::PlainDateFrom)],
+            &[
+                ("from", TemporalFunctionKind::PlainDateFrom),
+                ("compare", TemporalFunctionKind::PlainDateCompare),
+            ],
             &[
                 ("year", TemporalFunctionKind::PlainDatePrototypeYear),
                 ("month", TemporalFunctionKind::PlainDatePrototypeMonth),
+                (
+                    "monthCode",
+                    TemporalFunctionKind::PlainDatePrototypeMonthCode,
+                ),
                 ("day", TemporalFunctionKind::PlainDatePrototypeDay),
                 (
                     "calendarId",
                     TemporalFunctionKind::PlainDatePrototypeCalendarId,
                 ),
+                ("era", TemporalFunctionKind::PlainDatePrototypeEra),
+                ("eraYear", TemporalFunctionKind::PlainDatePrototypeEraYear),
+                (
+                    "dayOfWeek",
+                    TemporalFunctionKind::PlainDatePrototypeDayOfWeek,
+                ),
+                (
+                    "dayOfYear",
+                    TemporalFunctionKind::PlainDatePrototypeDayOfYear,
+                ),
+                (
+                    "weekOfYear",
+                    TemporalFunctionKind::PlainDatePrototypeWeekOfYear,
+                ),
+                (
+                    "yearOfWeek",
+                    TemporalFunctionKind::PlainDatePrototypeYearOfWeek,
+                ),
+                (
+                    "daysInWeek",
+                    TemporalFunctionKind::PlainDatePrototypeDaysInWeek,
+                ),
+                (
+                    "daysInMonth",
+                    TemporalFunctionKind::PlainDatePrototypeDaysInMonth,
+                ),
+                (
+                    "daysInYear",
+                    TemporalFunctionKind::PlainDatePrototypeDaysInYear,
+                ),
+                (
+                    "monthsInYear",
+                    TemporalFunctionKind::PlainDatePrototypeMonthsInYear,
+                ),
+                (
+                    "inLeapYear",
+                    TemporalFunctionKind::PlainDatePrototypeInLeapYear,
+                ),
             ],
             &[
+                ("with", TemporalFunctionKind::PlainDatePrototypeWith),
+                (
+                    "withCalendar",
+                    TemporalFunctionKind::PlainDatePrototypeWithCalendar,
+                ),
+                ("add", TemporalFunctionKind::PlainDatePrototypeAdd),
+                ("subtract", TemporalFunctionKind::PlainDatePrototypeSubtract),
+                ("until", TemporalFunctionKind::PlainDatePrototypeUntil),
+                ("since", TemporalFunctionKind::PlainDatePrototypeSince),
+                ("equals", TemporalFunctionKind::PlainDatePrototypeEquals),
+                (
+                    "toPlainDateTime",
+                    TemporalFunctionKind::PlainDatePrototypeToPlainDateTime,
+                ),
+                (
+                    "toZonedDateTime",
+                    TemporalFunctionKind::PlainDatePrototypeToZonedDateTime,
+                ),
+                (
+                    "toPlainYearMonth",
+                    TemporalFunctionKind::PlainDatePrototypeToPlainYearMonth,
+                ),
+                (
+                    "toPlainMonthDay",
+                    TemporalFunctionKind::PlainDatePrototypeToPlainMonthDay,
+                ),
                 ("toString", TemporalFunctionKind::PlainDatePrototypeToString),
                 ("toJSON", TemporalFunctionKind::PlainDatePrototypeToJson),
+                (
+                    "toLocaleString",
+                    TemporalFunctionKind::PlainDatePrototypeToLocaleString,
+                ),
                 ("valueOf", TemporalFunctionKind::PlainDatePrototypeValueOf),
             ],
         )
@@ -229,7 +306,7 @@ impl Context {
         let year = self.temporal_i32(values.first(), "PlainDate year")?;
         let month = self.temporal_u8(values.get(1), "PlainDate month")?;
         let day = self.temporal_u8(values.get(2), "PlainDate day")?;
-        let calendar = self.temporal_calendar(values.get(3))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(3))?;
         let date = PlainDate::try_new(year, month, day, calendar).map_err(temporal_error)?;
         self.create_plain_date_value(date)
     }
@@ -254,7 +331,7 @@ impl Context {
         let zone_value = values.get(1).cloned().unwrap_or(Value::Undefined);
         let zone_text = self.to_string(&zone_value)?;
         let time_zone = TimeZone::try_from_str(&zone_text).map_err(temporal_error)?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let zoned = ZonedDateTime::try_new(nanos, time_zone, calendar).map_err(temporal_error)?;
         self.create_zoned_date_time_value(zoned)
     }
@@ -274,7 +351,7 @@ impl Context {
             self.temporal_optional_u16(values.get(6), "PlainDateTime millisecond")?,
             self.temporal_optional_u16(values.get(7), "PlainDateTime microsecond")?,
             self.temporal_optional_u16(values.get(8), "PlainDateTime nanosecond")?,
-            self.temporal_calendar(values.get(9))?,
+            Self::temporal_calendar_identifier(values.get(9))?,
         )
         .map_err(temporal_error)?;
         self.create_temporal_calendar_value(
@@ -290,7 +367,7 @@ impl Context {
         let values = args.as_slice();
         let month = self.temporal_u8(values.first(), "PlainMonthDay month")?;
         let day = self.temporal_u8(values.get(1), "PlainMonthDay day")?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let reference_year = self.temporal_optional_i32(values.get(3), "reference year")?;
         let month_day = PlainMonthDay::new_with_overflow(
             month,
@@ -313,7 +390,7 @@ impl Context {
         let values = args.as_slice();
         let year = self.temporal_i32(values.first(), "PlainYearMonth year")?;
         let month = self.temporal_u8(values.get(1), "PlainYearMonth month")?;
-        let calendar = self.temporal_calendar(values.get(2))?;
+        let calendar = Self::temporal_calendar_identifier(values.get(2))?;
         let reference_day = self.temporal_optional_u8_value(values.get(3), "reference day")?;
         let year_month = PlainYearMonth::try_new(year, month, reference_day, calendar)
             .map_err(temporal_error)?;
@@ -416,24 +493,54 @@ impl Context {
     fn temporal_integer(&mut self, value: Option<&Value>, name: &str) -> Result<f64> {
         let value = value.cloned().unwrap_or(Value::Undefined);
         let number = self.to_number(&value)?;
-        if number.is_finite() && number.fract() == 0.0 {
-            return Ok(number);
+        if number.is_finite() {
+            return Ok(number.trunc());
         }
         Err(Error::exception(
             ErrorName::RangeError,
-            format!("{name} must be a finite integer"),
+            format!("{name} must be finite"),
         ))
     }
 
-    fn temporal_calendar(&mut self, value: Option<&Value>) -> Result<Calendar> {
+    pub(super) fn temporal_calendar(&self, value: Option<&Value>) -> Result<Calendar> {
         let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(Calendar::default());
         };
-        let text = self.to_string(value)?;
+        if let Value::Object(id) = value {
+            let calendar = match self.objects.temporal_value(*id)? {
+                Some(TemporalValue::PlainDate(date)) => Some(date.calendar()),
+                Some(TemporalValue::PlainDateTime(date_time)) => Some(date_time.calendar()),
+                Some(TemporalValue::PlainMonthDay(month_day)) => Some(month_day.calendar()),
+                Some(TemporalValue::PlainYearMonth(year_month)) => Some(year_month.calendar()),
+                Some(TemporalValue::ZonedDateTime(zoned)) => Some(zoned.calendar()),
+                Some(
+                    TemporalValue::Duration(_)
+                    | TemporalValue::Instant(_)
+                    | TemporalValue::PlainTime(_),
+                )
+                | None => None,
+            };
+            if let Some(calendar) = calendar {
+                return Ok(calendar.clone());
+            }
+        }
+        let Some(text) = value.string_text() else {
+            return Err(Error::type_error("Temporal calendar must be a string"));
+        };
+        Calendar::from_str(text).map_err(temporal_error)
+    }
+
+    fn temporal_calendar_identifier(value: Option<&Value>) -> Result<Calendar> {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
+            return Ok(Calendar::default());
+        };
+        let Some(text) = value.string_text() else {
+            return Err(Error::type_error("Temporal calendar must be a string"));
+        };
         Calendar::try_from_utf8(text.as_bytes()).map_err(temporal_error)
     }
 
-    fn create_plain_date_value(&mut self, date: PlainDate) -> Result<Value> {
+    pub(super) fn create_plain_date_value(&mut self, date: PlainDate) -> Result<Value> {
         let prototype =
             self.temporal_constructor_prototype(TemporalFunctionKind::PlainDateConstructor)?;
         self.objects.create_temporal_object(
@@ -453,7 +560,7 @@ impl Context {
         )
     }
 
-    fn create_temporal_calendar_value(
+    pub(super) fn create_temporal_calendar_value(
         &mut self,
         value: TemporalValue,
         kind: TemporalFunctionKind,
@@ -505,6 +612,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         receiver: &Value,
     ) -> Result<Value> {
+        if kind.is_plain_date() {
+            return self.eval_plain_date_kind(kind, args, receiver);
+        }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(
                 "Temporal.PlainDate constructor requires 'new'",
@@ -631,7 +741,7 @@ impl Context {
         self.create_zoned_date_time_value(zoned)
     }
 
-    fn plain_date_receiver(&self, value: &Value) -> Result<PlainDate> {
+    pub(super) fn plain_date_receiver(&self, value: &Value) -> Result<PlainDate> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(PLAIN_DATE_RECEIVER_ERROR));
         };

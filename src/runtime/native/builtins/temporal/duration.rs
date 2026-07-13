@@ -136,7 +136,7 @@ impl Context {
         }
     }
 
-    fn create_duration_value(&mut self, duration: Duration) -> Result<Value> {
+    pub(super) fn create_duration_value(&mut self, duration: Duration) -> Result<Value> {
         let prototype = self.temporal_duration_constructor_prototype()?;
         self.objects.create_temporal_object(
             TemporalValue::Duration(duration),
@@ -202,7 +202,7 @@ impl Context {
         Ok(Value::Number(result))
     }
 
-    fn duration_from_value(&mut self, value: Option<&Value>) -> Result<Duration> {
+    pub(super) fn duration_from_value(&mut self, value: Option<&Value>) -> Result<Duration> {
         let Some(value) = value else {
             return Err(Error::type_error(DURATION_ARGUMENT_ERROR));
         };
