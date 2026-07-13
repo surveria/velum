@@ -1,11 +1,13 @@
-use super::{LexicalGoal, StringToken, Token, TokenKind, template::TemplateSubstitutionState};
+use super::{
+    LexicalGoal, NumberToken, StringToken, Token, TokenKind, template::TemplateSubstitutionState,
+};
 use crate::{
     error::{Error, Result},
     lexer::classification::EscapeContext,
     lexer::support::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
         HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
-        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_DECIMAL,
+        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_DECIMAL, RADIX_OCTAL,
         UNICODE_ESCAPE_DIGITS, append_utf16_value, checked_hex_accumulate, digit_value,
         digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
         is_line_terminator, numeric_prefix, push_utf16_char, unicode_char,
@@ -236,15 +238,35 @@ impl Lexer {
             return Ok(());
         }
         let value = digits_to_number(&digits, radix, offset, description)?;
-        self.push(TokenKind::Number(value), offset);
+        self.reject_numeric_literal_continuation()?;
+        self.push(
+            TokenKind::Number(NumberToken {
+                value,
+                legacy: false,
+            }),
+            offset,
+        );
         Ok(())
     }
 
     fn decimal_number(&mut self, offset: usize) -> Result<()> {
         let mut text = self.digit_sequence(RADIX_DECIMAL, offset, "decimal numeric literal")?;
+        let integer_end = self.cursor;
+        let leading_zero = text.len() > 1 && text.starts_with('0');
+        let integer_has_separator = self
+            .source
+            .get(offset..integer_end)
+            .is_some_and(|source| source.contains(NUMERIC_SEPARATOR));
+
+        if leading_zero && integer_has_separator {
+            return Err(Error::lex(
+                "legacy-style numeric literal cannot contain a numeric separator",
+                offset,
+            ));
+        }
 
         if self.consume_bigint_suffix() {
-            if text.len() > 1 && text.starts_with('0') {
+            if leading_zero {
                 return Err(Error::lex(
                     "decimal BigInt literal cannot have a leading zero",
                     offset,
@@ -252,11 +274,18 @@ impl Lexer {
             }
             let value = JsBigInt::parse_digits(&text, RADIX_DECIMAL)
                 .ok_or_else(|| Error::lex("invalid decimal BigInt literal", offset))?;
+            self.reject_numeric_literal_continuation()?;
             self.push(TokenKind::BigInt(value), offset);
             return Ok(());
         }
 
         if self.peek_char() == Some(DECIMAL_POINT) {
+            if leading_zero {
+                return Err(Error::lex(
+                    "decimal literal cannot extend a legacy-style integer",
+                    offset,
+                ));
+            }
             self.advance();
             text.push(DECIMAL_POINT);
             if matches!(self.peek_char(), Some('0'..='9')) {
@@ -267,14 +296,30 @@ impl Lexer {
         }
 
         if self.peek_char().is_some_and(is_exponent_marker) {
+            if leading_zero {
+                return Err(Error::lex(
+                    "decimal literal cannot extend a legacy-style integer",
+                    offset,
+                ));
+            }
             self.decimal_exponent(&mut text, offset)?;
         }
 
         self.reject_bigint_suffix("decimal numeric literal")?;
-        let value = text
-            .parse::<f64>()
-            .map_err(|_| Error::lex("invalid decimal numeric literal", offset))?;
-        self.push(TokenKind::Number(value), offset);
+        self.reject_numeric_literal_continuation()?;
+        let value = if leading_zero && text.chars().all(|ch| matches!(ch, '0'..='7')) {
+            digits_to_number(&text, RADIX_OCTAL, offset, "legacy octal numeric literal")?
+        } else {
+            text.parse::<f64>()
+                .map_err(|_| Error::lex("invalid decimal numeric literal", offset))?
+        };
+        self.push(
+            TokenKind::Number(NumberToken {
+                value,
+                legacy: leading_zero,
+            }),
+            offset,
+        );
         Ok(())
     }
 
@@ -289,10 +334,30 @@ impl Lexer {
         }
 
         self.reject_bigint_suffix("decimal numeric literal")?;
+        self.reject_numeric_literal_continuation()?;
         let value = text
             .parse::<f64>()
             .map_err(|_| Error::lex("invalid decimal numeric literal", offset))?;
-        self.push(TokenKind::Number(value), offset);
+        self.push(
+            TokenKind::Number(NumberToken {
+                value,
+                legacy: false,
+            }),
+            offset,
+        );
+        Ok(())
+    }
+
+    fn reject_numeric_literal_continuation(&self) -> Result<()> {
+        let Some((offset, ch)) = self.peek() else {
+            return Ok(());
+        };
+        if ch.is_ascii_digit() || is_identifier_start(ch) || ch == '\\' {
+            return Err(Error::lex(
+                "numeric literal cannot be immediately followed by an identifier or digit",
+                offset,
+            ));
+        }
         Ok(())
     }
 
@@ -382,6 +447,7 @@ impl Lexer {
         self.advance();
         let mut output = Vec::new();
         let mut escape_free = true;
+        let mut legacy_escape = false;
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
@@ -391,6 +457,7 @@ impl Lexer {
                         TokenKind::String(StringToken {
                             cooked: output.into(),
                             escape_free,
+                            legacy_escape,
                         }),
                         offset,
                     );
@@ -398,7 +465,7 @@ impl Lexer {
                 }
                 '\\' => {
                     escape_free = false;
-                    self.string_escape(current_offset, &mut output)?;
+                    legacy_escape |= self.string_escape(current_offset, &mut output)?;
                 }
                 '\n' | '\r' => return Err(Error::lex("unterminated string literal", offset)),
                 other => push_utf16_char(&mut output, other),
@@ -408,7 +475,7 @@ impl Lexer {
         Err(Error::lex("unterminated string literal", offset))
     }
 
-    fn string_escape(&mut self, slash_offset: usize, output: &mut Vec<u16>) -> Result<()> {
+    fn string_escape(&mut self, slash_offset: usize, output: &mut Vec<u16>) -> Result<bool> {
         self.escape_sequence(slash_offset, output, EscapeContext::String)
     }
 
@@ -417,7 +484,7 @@ impl Lexer {
         slash_offset: usize,
         output: &mut Vec<u16>,
         context: EscapeContext,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let Some((escape_offset, escaped)) = self.peek() else {
             return Err(Error::lex("unterminated escape sequence", slash_offset));
         };
@@ -429,7 +496,9 @@ impl Lexer {
             'r' => push_utf16_char(output, '\r'),
             't' => push_utf16_char(output, '\t'),
             'v' => push_utf16_char(output, ASCII_VERTICAL_TAB),
-            '0' => self.zero_escape(escape_offset, output)?,
+            '0'..='7' => {
+                return self.legacy_octal_escape(escaped, output);
+            }
             'x' => {
                 let ch = self.fixed_hex_escape(escape_offset, HEX_ESCAPE_DIGITS, "hex escape")?;
                 push_utf16_char(output, ch);
@@ -446,26 +515,37 @@ impl Lexer {
                     self.advance();
                 }
             }
-            '1'..='9' => {
-                return Err(Error::lex(
-                    "legacy octal escape sequences are not supported",
-                    escape_offset,
-                ));
+            '8' | '9' => {
+                push_utf16_char(output, escaped);
+                return Ok(true);
             }
             other => push_utf16_char(output, other),
         }
-        Ok(())
+        Ok(false)
     }
 
-    fn zero_escape(&self, escape_offset: usize, output: &mut Vec<u16>) -> Result<()> {
-        if self.peek_char().is_some_and(|ch| ch.is_ascii_digit()) {
-            return Err(Error::lex(
-                "legacy octal escape sequences are not supported",
-                escape_offset,
-            ));
+    fn legacy_octal_escape(&mut self, first: char, output: &mut Vec<u16>) -> Result<bool> {
+        let legacy = first != '0' || self.peek_char().is_some_and(|ch| ch.is_ascii_digit());
+        let mut value = first
+            .to_digit(RADIX_OCTAL)
+            .ok_or_else(|| Error::lex("invalid legacy octal escape", self.current_offset()))?;
+        let max_additional_digits = if matches!(first, '0'..='3') { 2 } else { 1 };
+        for _ in 0..max_additional_digits {
+            let Some(digit) = self.peek_char().and_then(|ch| ch.to_digit(RADIX_OCTAL)) else {
+                break;
+            };
+            self.advance();
+            value = value
+                .checked_mul(RADIX_OCTAL)
+                .and_then(|current| current.checked_add(digit))
+                .ok_or_else(|| {
+                    Error::lex("legacy octal escape overflowed", self.current_offset())
+                })?;
         }
-        push_utf16_char(output, '\0');
-        Ok(())
+        let ch = char::from_u32(value)
+            .ok_or_else(|| Error::lex("invalid legacy octal escape", self.current_offset()))?;
+        push_utf16_char(output, ch);
+        Ok(legacy)
     }
 
     fn string_unicode_escape(&mut self, escape_offset: usize, output: &mut Vec<u16>) -> Result<()> {

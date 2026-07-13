@@ -14,6 +14,13 @@ pub struct Token {
 pub struct StringToken {
     pub cooked: Rc<[u16]>,
     pub escape_free: bool,
+    pub legacy_escape: bool,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct NumberToken {
+    pub value: f64,
+    pub legacy: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -37,7 +44,7 @@ impl Token {
 pub enum TokenKind {
     #[doc(hidden)]
     LexicalError(Box<Error>),
-    Number(f64),
+    Number(NumberToken),
     BigInt(JsBigInt),
     String(StringToken),
     NoSubstitutionTemplate(TemplatePart),

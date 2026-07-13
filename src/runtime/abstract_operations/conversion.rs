@@ -369,7 +369,7 @@ pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
 }
 
 pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
-    let trimmed = value.trim();
+    let trimmed = value.trim_matches(is_ecmascript_string_whitespace);
     if trimmed.is_empty() {
         return 0.0;
     }
@@ -388,6 +388,10 @@ pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
         }
         number
     })
+}
+
+const fn is_ecmascript_string_whitespace(ch: char) -> bool {
+    ch.is_whitespace() || ch == '\u{FEFF}'
 }
 
 fn prefixed_integer_to_number(value: &str) -> Option<f64> {

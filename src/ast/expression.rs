@@ -48,6 +48,7 @@ pub enum Expr {
     StringLiteral {
         value: StaticString,
         escape_free: bool,
+        legacy_escape: bool,
     },
     Spread(Box<Expression>),
     Class(Box<crate::ast::ClassLiteral>),

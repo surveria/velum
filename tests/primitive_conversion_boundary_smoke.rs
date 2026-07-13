@@ -39,6 +39,16 @@ fn preserves_ordinary_to_primitive_order() -> TestResult {
 }
 
 #[test]
+fn trims_all_ecmascript_whitespace_during_numeric_conversion() -> TestResult {
+    eval_is_42(
+        r#"
+        Number("\uFEFF\u3000 42 \u2029") === 42 &&
+            Number("\uFEFF") === 0 ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn routes_numeric_consumers_through_to_number() -> TestResult {
     let cases = [
         ("unary plus", "+value === 40"),

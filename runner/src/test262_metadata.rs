@@ -157,6 +157,9 @@ fn parse_metadata(source: &str, relative_path: &str) -> anyhow::Result<Test262Me
 }
 
 fn parse_metadata_yaml(yaml: &str, relative_path: &str) -> anyhow::Result<Test262Metadata> {
+    if let Ok(metadata) = serde_yaml_ng::from_str(yaml) {
+        return Ok(metadata);
+    }
     human_yaml::from_str(yaml)
         .with_context(|| format!("failed to parse Test262 metadata in '{relative_path}'"))
 }
@@ -498,6 +501,24 @@ bad source
         ensure_texts(&metadata.flags, &[FLAG_ONLY_STRICT])?;
         let Some(negative) = metadata.negative else {
             return Err("expected negative metadata".into());
+        };
+        ensure_text(&negative.phase, "parse")?;
+        ensure_text(&negative.error_type, "SyntaxError")
+    }
+
+    #[test]
+    fn parses_negative_metadata_after_quoted_info() -> TestResult {
+        let source = r#"/*---
+info: "StringLiteral :: \"\\\" or '\\' is not correct"
+es5id: 7.8.4_A3.1_T1
+description: Checking if execution of "\" fails
+negative:
+  phase: parse
+  type: SyntaxError
+---*/"#;
+        let metadata = parse_metadata(source, "test/quoted-info.js")?;
+        let Some(negative) = metadata.negative else {
+            return Err("expected negative metadata after quoted info".into());
         };
         ensure_text(&negative.phase, "parse")?;
         ensure_text(&negative.error_type, "SyntaxError")

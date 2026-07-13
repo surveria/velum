@@ -10,17 +10,28 @@ impl Parser {
     pub(super) fn update_directive_prologue(
         &mut self,
         directive_prologue: &mut bool,
+        legacy_escape_seen: &mut bool,
         statement: &Statement,
-    ) {
+    ) -> Result<()> {
         if !*directive_prologue {
-            return;
+            return Ok(());
         }
         if Self::is_use_strict_directive(statement) {
+            if *legacy_escape_seen {
+                return Err(crate::Error::parse_at(
+                    "legacy escape sequence is not allowed in a strict directive prologue",
+                    statement.span(),
+                ));
+            }
             self.set_strict_mode(true);
+        }
+        if Self::string_directive(statement).is_some_and(|(_, _, legacy_escape)| legacy_escape) {
+            *legacy_escape_seen = true;
         }
         if !Self::is_string_directive(statement) {
             *directive_prologue = false;
         }
+        Ok(())
     }
 
     pub(super) fn validate_function_name_in_strict_code(&self, name: &StaticName) -> Result<()> {
@@ -124,14 +135,19 @@ impl Parser {
         Ok(())
     }
 
-    fn string_directive(statement: &Statement) -> Option<(&str, bool)> {
+    fn string_directive(statement: &Statement) -> Option<(&str, bool, bool)> {
         let Stmt::Expr(expression) = statement.kind() else {
             return None;
         };
-        let Expr::StringLiteral { value, escape_free } = expression.kind() else {
+        let Expr::StringLiteral {
+            value,
+            escape_free,
+            legacy_escape,
+        } = expression.kind()
+        else {
             return None;
         };
-        Some((value.as_str(), *escape_free))
+        Some((value.as_str(), *escape_free, *legacy_escape))
     }
 
     fn is_string_directive(statement: &Statement) -> bool {
@@ -140,7 +156,7 @@ impl Parser {
 
     pub(super) fn is_use_strict_directive(statement: &Statement) -> bool {
         Self::string_directive(statement)
-            .is_some_and(|(value, escape_free)| escape_free && value == USE_STRICT_DIRECTIVE)
+            .is_some_and(|(value, escape_free, _)| escape_free && value == USE_STRICT_DIRECTIVE)
     }
 
     fn is_restricted_strict_name(name: &str) -> bool {
