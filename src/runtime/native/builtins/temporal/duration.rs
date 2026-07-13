@@ -126,9 +126,9 @@ impl Context {
             TemporalFunctionKind::PrototypeToString => {
                 self.eval_duration_to_string(args, this_value)
             }
-            TemporalFunctionKind::PrototypeToJson
-            | TemporalFunctionKind::PrototypeToLocaleString => {
-                self.duration_default_string(this_value)
+            TemporalFunctionKind::PrototypeToJson => self.duration_default_string(this_value),
+            TemporalFunctionKind::PrototypeToLocaleString => {
+                self.format_temporal_duration_locale_string(this_value, args)
             }
             TemporalFunctionKind::PrototypeValueOf => Err(Error::type_error(
                 "Temporal.Duration cannot be converted to a primitive",

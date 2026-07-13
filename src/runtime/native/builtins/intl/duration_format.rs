@@ -155,6 +155,19 @@ impl Context {
         self.create_array_from_elements(values)
     }
 
+    pub(in crate::runtime::native) fn format_temporal_duration_locale_string(
+        &mut self,
+        value: &Value,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let formatter = self.construct_intl_duration_format(args)?;
+        self.eval_intl_duration_format(
+            RuntimeCallArgs::values(std::slice::from_ref(value)),
+            &formatter,
+            false,
+        )
+    }
+
     pub(super) fn eval_intl_duration_format_resolved_options(
         &mut self,
         this_value: &Value,
