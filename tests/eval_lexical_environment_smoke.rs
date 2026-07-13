@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime, Value};
+use rs_quickjs::{Engine, HostOperation, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -83,6 +83,131 @@ fn indirect_eval_uses_the_global_variable_environment() -> TestResult {
         typeof indirectLexical === "undefined"
         "#,
     )
+}
+
+#[test]
+fn indirect_eval_var_declarations_preserve_builtin_bindings() -> TestResult {
+    expect_true(
+        r#"
+        var indirectEval = eval;
+        indirectEval("var eval;");
+        eval === indirectEval
+        "#,
+    )
+}
+
+#[test]
+fn global_eval_declarations_create_configurable_bindings() -> TestResult {
+    expect_true(
+        r#"
+        eval("var evalVar = 1; function evalFunction() { return 2; }");
+        var varDescriptor = Object.getOwnPropertyDescriptor(globalThis, "evalVar");
+        var functionDescriptor = Object.getOwnPropertyDescriptor(globalThis, "evalFunction");
+        evalVar === 1 && evalFunction() === 2 &&
+        varDescriptor.writable && varDescriptor.enumerable && varDescriptor.configurable &&
+        functionDescriptor.writable && functionDescriptor.enumerable &&
+        functionDescriptor.configurable
+        "#,
+    )
+}
+
+#[test]
+fn global_eval_rejects_non_definable_functions_before_mutation() -> TestResult {
+    expect_true(
+        r#"
+        var error;
+        try {
+            eval("var untouched; function NaN() {}");
+        } catch (caught) {
+            error = caught;
+        }
+        error instanceof TypeError && typeof untouched === "undefined"
+        "#,
+    )
+}
+
+#[test]
+fn annex_b_eval_block_functions_use_configurable_global_vars() -> TestResult {
+    expect_true(
+        r#"
+        eval("var initial = blockFunction; { function blockFunction() { return 42; } }");
+        var descriptor = Object.getOwnPropertyDescriptor(globalThis, "blockFunction");
+        initial === undefined && blockFunction() === 42 &&
+        descriptor.writable && descriptor.enumerable && descriptor.configurable
+        "#,
+    )
+}
+
+#[test]
+fn annex_b_eval_preserves_existing_globals_after_separate_scripts() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    for name in [
+        "hostAgentStart",
+        "hostAgentBroadcast",
+        "hostAgentReport",
+        "hostAgentSleep",
+    ] {
+        context.register_host_function(name, |_call| Ok(Value::Undefined))?;
+    }
+    context.register_host_operation("hostDetachBuffer", HostOperation::DetachArrayBuffer)?;
+    context.register_host_operation("hostCreateRealm", HostOperation::CreateRealm)?;
+    context.eval(
+        r"
+        var harnessHost = {
+            global: globalThis,
+            detach: hostDetachBuffer,
+            createRealm: hostCreateRealm,
+            agent: {
+                start: hostAgentStart,
+                broadcast: hostAgentBroadcast,
+                report: hostAgentReport,
+                sleep: hostAgentSleep
+            }
+        };
+        ",
+    )?;
+    context.eval("let harnessLexical = 1; var harnessGlobal = 2;")?;
+    context.eval(
+        r#"
+        var savedGlobalObject = Function("return this;")();
+        function globalObject() { return savedGlobalObject; }
+        "#,
+    )?;
+    let value = context.eval(
+        r#"
+        Object.defineProperty(globalObject(), "existingEvalFunction", {
+            value: "initial",
+            enumerable: true,
+            writable: true,
+            configurable: false
+        });
+        eval("var initial = existingEvalFunction; { function existingEvalFunction() { return 42; } }");
+        initial === "initial" && existingEvalFunction() === 42
+        "#,
+    )?;
+    if value == Value::Bool(true) {
+        return Ok(());
+    }
+    Err(format!("expected preserved eval global, got {value:?}").into())
+}
+
+#[test]
+fn configurable_eval_vars_do_not_block_later_global_lexicals() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval("eval('if (true) { function configurableEvalBinding() {} }');")?;
+    context.eval("let configurableEvalBinding = 42;")?;
+    let value = context.eval(
+        r#"
+        configurableEvalBinding === 42 &&
+        typeof globalThis.configurableEvalBinding === "function"
+        "#,
+    )?;
+    if value == Value::Bool(true) {
+        return Ok(());
+    }
+    Err(format!("expected lexical binding to shadow eval property, got {value:?}").into())
 }
 
 #[test]

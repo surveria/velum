@@ -407,13 +407,10 @@ impl Context {
         {
             cell.assign_bytecode(binding.name(), value.clone(), binding.strict_write())?;
             let global_object = self.global_object_id()?;
-            return self.define_global_object_data_property(
+            return self.update_global_object_data_property_value(
                 global_object,
                 binding.name().name(),
                 value,
-                PropertyWritable::Yes,
-                PropertyEnumerable::Yes,
-                PropertyConfigurable::No,
             );
         }
         if let Some(builtin) = self.realm.builtin_globals.get(atom)

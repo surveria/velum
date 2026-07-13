@@ -410,6 +410,20 @@ impl Context {
         reservation.commit()
     }
 
+    pub(in crate::runtime) fn clear_global_object_property_authority(
+        &mut self,
+        name: &str,
+    ) -> Result<()> {
+        let Some(atom) = self.atom(name) else {
+            return Ok(());
+        };
+        if self.realm.object_global_names.remove(&atom) {
+            self.storage_ledger
+                .release_count(VmStorageKind::CacheEntry, 1)?;
+        }
+        Ok(())
+    }
+
     pub(in crate::runtime) fn global_object_name_is_authoritative(&self, name: &str) -> bool {
         self.atom(name)
             .is_some_and(|atom| self.realm.object_global_names.contains(&atom))

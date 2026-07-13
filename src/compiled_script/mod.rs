@@ -38,6 +38,7 @@ enum CompileMode {
         strict: bool,
         super_context: EvalSuperContext,
         class_field_context: EvalClassFieldContext,
+        allow_new_target: bool,
         private_names: Rc<[StaticName]>,
     },
 }
@@ -46,6 +47,7 @@ pub struct EvalCompileContext {
     strict: bool,
     super_context: EvalSuperContext,
     class_field_context: EvalClassFieldContext,
+    allow_new_target: bool,
     private_names: Rc<[StaticName]>,
 }
 
@@ -64,6 +66,7 @@ impl CompileMode {
             strict: context.strict,
             super_context: context.super_context,
             class_field_context: context.class_field_context,
+            allow_new_target: context.allow_new_target,
             private_names: context.private_names,
         }
     }
@@ -83,11 +86,13 @@ impl CompileMode {
                 strict,
                 super_context,
                 class_field_context,
+                allow_new_target,
                 private_names,
             } => Some(parser::EvalParseContext::new(
                 *strict,
                 *super_context,
                 *class_field_context,
+                *allow_new_target,
                 private_names,
             )),
         }
@@ -99,12 +104,14 @@ impl EvalCompileContext {
         strict: bool,
         super_context: EvalSuperContext,
         class_field_context: EvalClassFieldContext,
+        allow_new_target: bool,
         private_names: Rc<[StaticName]>,
     ) -> Self {
         Self {
             strict,
             super_context,
             class_field_context,
+            allow_new_target,
             private_names,
         }
     }

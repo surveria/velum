@@ -170,8 +170,19 @@ impl Context {
         has_arguments_binding: bool,
         has_self_binding: bool,
     ) -> Result<()> {
-        let expected_local_count =
-            expected_function_local_count(local_base, has_arguments_binding, has_self_binding)?;
+        let has_separate_body_scope = self
+            .activation_frames
+            .last()
+            .and_then(crate::runtime::activation::ActivationFrame::function_environment_phase)
+            .is_some_and(
+                crate::runtime::activation::FunctionEnvironmentPhase::has_separate_body_scope,
+            );
+        let expected_local_count = expected_function_local_count(
+            local_base,
+            has_arguments_binding,
+            has_self_binding,
+            has_separate_body_scope,
+        )?;
         let actual_local_count = self.locals.len();
         let local_scope_stack_ok = actual_local_count == expected_local_count;
         self.leave_function_local_frame(local_base)?;

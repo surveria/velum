@@ -73,6 +73,7 @@ impl Context {
         } else {
             crate::compiled_script::EvalClassFieldContext::None
         };
+        let allow_new_target = direct && self.direct_eval_allows_new_target()?;
         let private_names: Rc<[crate::syntax::StaticName]> = if direct {
             self.current_private_environment()
                 .map_or_else(|| Rc::from([]), |environment| environment.visible_names())
@@ -86,6 +87,7 @@ impl Context {
                 strict_mode,
                 super_context,
                 class_field_context,
+                allow_new_target,
                 private_names,
             ),
         )
@@ -113,29 +115,37 @@ impl Context {
         if strict_mode || !direct {
             return Ok(());
         }
-        let Some(function_id) = self
-            .activation_frames
-            .iter()
-            .rev()
-            .find_map(crate::runtime::activation::ActivationFrame::function_id)
+        let Some((function_id, local_base, phase)) =
+            self.activation_frames.iter().rev().find_map(|frame| {
+                Some((
+                    frame.function_id()?,
+                    frame.local_base()?,
+                    frame.function_environment_phase()?,
+                ))
+            })
         else {
             return Ok(());
         };
-        if !self
-            .function(function_id)?
-            .bytecode
-            .requires_parameter_initialization()
-        {
+        if phase != crate::runtime::activation::FunctionEnvironmentPhase::ParameterInitialization {
             return Ok(());
         }
-        let Some(parameter_scope) = self.locals.last() else {
+        let function = self.function(function_id)?;
+        if !function.bytecode.requires_parameter_initialization() {
             return Ok(());
-        };
+        }
+        let parameter_environment_start = local_base
+            .checked_add(usize::from(function.self_binding.is_some()))
+            .ok_or_else(|| crate::error::Error::limit("parameter environment index overflowed"))?;
         for binding in script.bytecode().hoist_plan().var_declarations() {
             let Some(atom) = self.atom(binding.name().as_str()) else {
                 continue;
             };
-            if parameter_scope.contains(atom) {
+            if self
+                .locals
+                .iter()
+                .skip(parameter_environment_start)
+                .any(|scope| scope.contains(atom))
+            {
                 return Err(crate::error::Error::exception(
                     crate::value::ErrorName::SyntaxError,
                     format!("'{}' has already been declared", binding.name()),

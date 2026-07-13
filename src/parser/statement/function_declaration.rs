@@ -54,9 +54,7 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
-        if kind.is_generator() {
-            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
-        }
+        self.validate_function_parameter_lexicals(&parameters.params, &body.statements)?;
         let id = self.static_function()?;
         let strict = inherited_strict || body.contains_use_strict;
         let arguments_binding = if uses_arguments {

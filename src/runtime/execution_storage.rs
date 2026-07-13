@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     Context, FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
-    activation::{ActivationFrame, ActivationFrameStorageFootprint},
+    activation::{ActivationFrame, ActivationFrameStorageFootprint, FunctionEnvironmentPhase},
     binding::scope::BindingScope,
     function::FunctionSuperBinding,
     private::PrivateEnvironment,
@@ -114,6 +114,21 @@ impl Context {
             return Err(Error::runtime("function activation frame disappeared"));
         };
         self.release_frame_storage(frame.storage_footprint()?)
+    }
+
+    pub(super) fn set_current_function_environment_phase(
+        &mut self,
+        phase: FunctionEnvironmentPhase,
+    ) -> Result<()> {
+        let frame = self
+            .activation_frames
+            .last_mut()
+            .ok_or_else(|| Error::runtime("function activation frame disappeared"))?;
+        let current = frame
+            .function_environment_phase_mut()
+            .ok_or_else(|| Error::runtime("active frame is not a function call"))?;
+        *current = phase;
+        Ok(())
     }
 
     pub(super) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {
@@ -247,6 +262,22 @@ impl Context {
             }
         }
         None
+    }
+
+    pub(in crate::runtime) fn direct_eval_allows_new_target(&self) -> Result<bool> {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return Ok(false);
+            }
+            let Some(function_id) = frame.function_id() else {
+                continue;
+            };
+            return Ok(matches!(
+                self.function(function_id)?.new_target,
+                super::FunctionNewTarget::Own
+            ));
+        }
+        Ok(false)
     }
 
     pub(in crate::runtime) fn current_activation_super(

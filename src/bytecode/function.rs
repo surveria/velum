@@ -65,9 +65,9 @@ impl BytecodeFunction {
     }
 
     pub fn requires_parameter_initialization(&self) -> bool {
-        self.params.iter().any(|param| {
-            param.has_default() || matches!(param.target(), BytecodeFunctionParamTarget::Pattern(_))
-        })
+        self.params
+            .iter()
+            .any(BytecodeFunctionParam::requires_runtime_initialization)
     }
 
     pub fn has_rest_parameter(&self) -> bool {
@@ -123,6 +123,10 @@ impl BytecodeFunctionParam {
             default,
             rest,
         }
+    }
+
+    const fn requires_runtime_initialization(&self) -> bool {
+        self.has_default() || matches!(self.target(), BytecodeFunctionParamTarget::Pattern(_))
     }
 
     pub const fn target(&self) -> &BytecodeFunctionParamTarget {

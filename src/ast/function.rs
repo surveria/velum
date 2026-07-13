@@ -77,4 +77,8 @@ impl FunctionParam {
             && self.default.is_none()
             && !self.rest
     }
+
+    pub const fn requires_runtime_initialization(&self) -> bool {
+        self.default.is_some() || matches!(self.target, FunctionParamTarget::Pattern(_))
+    }
 }
