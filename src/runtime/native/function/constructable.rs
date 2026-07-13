@@ -105,6 +105,7 @@ impl NativeFunctionKind {
                 | Self::Set
                 | Self::WeakMap
                 | Self::WeakSet
+                | Self::TypedArrayIntrinsic
                 | Self::TypedArray(_)
                 | Self::Date(DateFunctionKind::Constructor)
                 | Self::Temporal(

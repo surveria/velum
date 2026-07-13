@@ -317,6 +317,14 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let length = self.array_like_length(this_value)?;
+        self.eval_array_to_locale_string_with_length(this_value, length)
+    }
+
+    pub(super) fn eval_array_to_locale_string_with_length(
+        &mut self,
+        this_value: &Value,
+        length: usize,
+    ) -> Result<Value> {
         let mut joined =
             self.join_string_with_separator_capacity(length, ARRAY_JOIN_DEFAULT_SEPARATOR.len())?;
         for index in 0..length {

@@ -182,7 +182,7 @@ impl Context {
         strict: bool,
     ) -> Result<()> {
         if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
-            || (!strict && self.bytecode_property_target_is_array(object)?)
+            || (!strict && self.bytecode_property_target_is_plain_array(object)?)
         {
             return self.set_static_property_value(object, property, access, value);
         }
@@ -205,7 +205,7 @@ impl Context {
         strict: bool,
     ) -> Result<()> {
         if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
-            || (!strict && self.bytecode_property_target_is_array(object)?)
+            || (!strict && self.bytecode_property_target_is_plain_array(object)?)
         {
             return self.set_cached_dynamic_property_value(object, property, access, value);
         }
@@ -228,13 +228,12 @@ impl Context {
         Ok(())
     }
 
-    fn bytecode_property_target_is_array(&self, object: &Value) -> Result<bool> {
+    fn bytecode_property_target_is_plain_array(&self, object: &Value) -> Result<bool> {
         let Value::Object(id) = object else {
             return Ok(false);
         };
-        self.objects
-            .array_len_if_array(*id)
-            .map(|length| length.is_some())
+        Ok(self.objects.array_len_if_array(*id)?.is_some()
+            && !self.objects.prototype_chain_has_typed_array(*id)?)
     }
 
     pub(in crate::runtime::bytecode) fn eval_bytecode_update_binding(

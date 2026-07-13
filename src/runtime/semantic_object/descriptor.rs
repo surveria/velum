@@ -4,11 +4,12 @@ use crate::{
         Context,
         object::{
             DataPropertyDescriptor, OwnPropertyDescriptor, PropertyConfigurable,
-            PropertyEnumerable, PropertyUpdate, PropertyWritable, TypedArrayPropertyIndex,
+            PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
+            TypedArrayPropertyIndex,
         },
         property::{DynamicPropertyKey, has_property},
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -110,18 +111,7 @@ impl Context {
         let key = self.intern_dynamic_property_key(property)?;
         match object_ref.value {
             Value::Object(id) => {
-                self.objects.define_property(
-                    *id,
-                    key,
-                    property.name(),
-                    update,
-                    self.limits.max_object_properties,
-                )?;
-                if self.is_global_object_id(*id)
-                    && property.key().is_none_or(|key| key.symbol_id().is_none())
-                {
-                    self.mark_global_object_property_authoritative(*id, property.name())?;
-                }
+                return self.semantic_define_ordinary_object_property(*id, property, key, update);
             }
             Value::Function(id) => {
                 self.define_function_property_key(*id, property.name(), key, update)?;
@@ -157,6 +147,36 @@ impl Context {
         Ok(true)
     }
 
+    fn semantic_define_ordinary_object_property(
+        &mut self,
+        id: ObjectId,
+        property: &DynamicPropertyKey,
+        key: PropertyKey,
+        update: PropertyUpdate,
+    ) -> Result<bool> {
+        if self
+            .objects
+            .own_property_descriptor(id, property.lookup())?
+            .is_none()
+            && !self.objects.is_extensible(id)?
+        {
+            return Ok(false);
+        }
+        self.objects.define_property(
+            id,
+            key,
+            property.name(),
+            update,
+            self.limits.max_object_properties,
+        )?;
+        if self.is_global_object_id(id)
+            && property.key().is_none_or(|key| key.symbol_id().is_none())
+        {
+            self.mark_global_object_property_authoritative(id, property.name())?;
+        }
+        Ok(true)
+    }
+
     fn semantic_define_typed_array_index(
         &mut self,
         id: crate::value::ObjectId,
@@ -180,9 +200,9 @@ impl Context {
                 return Err(Error::runtime("typed array view is not available"));
             };
             let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
-            if !self.objects.set_typed_array_value(id, index, &element)? {
-                return Ok(false);
-            }
+            self.objects
+                .set_typed_array_value(id, index, &element)
+                .map(drop)?;
         }
         Ok(true)
     }
