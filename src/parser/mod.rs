@@ -789,7 +789,6 @@ impl ControlContext {
             .any(|entry| entry.name == *label && entry.is_iteration_target)
     }
 }
-
 #[derive(Debug, Clone)]
 struct LabelContext {
     name: StaticName,
