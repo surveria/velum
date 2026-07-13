@@ -270,6 +270,11 @@ impl Context {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
             }
         }
+        for cache in &self.static_name_atom_caches {
+            cache.visit_template_objects(|value| {
+                visitor.visit_value(VmRootKind::BytecodeFrame, value)
+            })?;
+        }
         self.objects.visit_direct_roots(visitor)?;
         for job in &self.promise_jobs {
             job.visit_direct_roots(visitor)?;

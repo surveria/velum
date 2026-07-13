@@ -348,6 +348,14 @@ impl Function {
                 result?;
             }
         }
+        if let Some(cache) = &self.static_name_atom_cache {
+            cache.visit_template_objects(|value| {
+                visitor.visit(
+                    VmCallableEdgeKind::JavaScriptFunctionInternal,
+                    StrongEdgeReference::Value(value),
+                )
+            })?;
+        }
         self.properties
             .visit_strong_edges(VmCallableEdgeKind::JavaScriptFunctionProperty, visitor)?;
         if let Some(binding) = &self.super_binding {

@@ -1,5 +1,6 @@
 mod address;
 mod block;
+mod call_site;
 mod completion;
 mod fast_path;
 mod function;
@@ -9,6 +10,7 @@ mod metrics;
 mod numeric;
 mod private;
 mod super_property;
+mod template;
 mod types;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
@@ -23,6 +25,7 @@ pub struct BytecodeMetrics {
 
 pub use address::BytecodeAddress;
 pub use block::BytecodeBlock;
+pub use call_site::BytecodeCallSite;
 pub use completion::BytecodeCompletion;
 pub use fast_path::BytecodeDirectThrow;
 pub use function::{
@@ -36,11 +39,12 @@ pub use numeric::{
 };
 pub use private::{BytecodeClassMemberKey, BytecodePrivateName};
 pub use super_property::BytecodeSuperProperty;
+pub use template::BytecodeTemplateElement;
 pub use types::{
-    BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCallSite, BytecodeCatch,
-    BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind,
-    BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
-    BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCatch, BytecodeClass,
+    BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind, BytecodeDestructureMode,
+    BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunctionDeclaration,
+    BytecodeInstruction, BytecodeObjectProperty, BytecodePattern, BytecodePatternKey,
+    BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram, BytecodeProperty,
+    BytecodeSwitchCase,
 };

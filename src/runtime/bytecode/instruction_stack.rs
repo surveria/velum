@@ -34,6 +34,9 @@ impl Context {
             BytecodeInstruction::TemplateConcat { part_count } => {
                 self.eval_bytecode_template_concat(state, *part_count, next)
             }
+            BytecodeInstruction::GetTemplateObject { site, quasis } => {
+                self.eval_bytecode_get_template_object(state, *site, quasis, next)
+            }
             BytecodeInstruction::StringConcat { .. }
             | BytecodeInstruction::StringConcatStatic { .. } => {
                 self.eval_bytecode_string_concat_instruction(state, instruction, next)

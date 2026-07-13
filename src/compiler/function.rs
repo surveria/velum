@@ -586,6 +586,7 @@ impl CaptureBindingCollector {
         match expr.kind() {
             Expr::Literal(_)
             | Expr::StringLiteral { .. }
+            | Expr::TemplateObject { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::ImportMeta

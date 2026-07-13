@@ -279,6 +279,7 @@ impl BytecodeInstruction {
             | Self::PushLiteral(_)
             | Self::PushString(_)
             | Self::TemplateConcat { .. }
+            | Self::GetTemplateObject { .. }
             | Self::StringConcat { .. }
             | Self::StringConcatStatic { .. }
             | Self::CollectSpreadArgs { .. }

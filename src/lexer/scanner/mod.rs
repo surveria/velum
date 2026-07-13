@@ -422,6 +422,7 @@ impl Lexer {
 
     fn template_part(&mut self, offset: usize, position: TemplatePartPosition) -> Result<()> {
         let mut output = Vec::new();
+        let mut cooked_valid = true;
         let raw_start = offset
             .checked_add(1)
             .ok_or_else(|| Error::lex("template literal raw span overflowed", offset))?;
@@ -430,14 +431,16 @@ impl Lexer {
             self.advance();
             match ch {
                 '`' => {
+                    let cooked = cooked_valid.then_some(output);
                     let part =
-                        template_part_value(&self.source, output, raw_start, current_offset)?;
+                        template_part_value(&self.source, cooked, raw_start, current_offset)?;
                     return self.end_template_part(position, part, offset);
                 }
                 '$' if self.peek_char() == Some(TEMPLATE_SUBSTITUTION_START) => {
                     self.advance();
+                    let cooked = cooked_valid.then_some(output);
                     let part =
-                        template_part_value(&self.source, output, raw_start, current_offset)?;
+                        template_part_value(&self.source, cooked, raw_start, current_offset)?;
                     return self.begin_template_substitution(
                         position,
                         part,
@@ -445,7 +448,12 @@ impl Lexer {
                         current_offset,
                     );
                 }
-                '\\' => self.template_escape(current_offset, &mut output)?,
+                '\\' => {
+                    if self.template_escape(current_offset, &mut output).is_err() {
+                        cooked_valid = false;
+                        output.clear();
+                    }
+                }
                 '\n' => push_utf16_char(&mut output, '\n'),
                 '\r' => {
                     if self.peek_char() == Some('\n') {

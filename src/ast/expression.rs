@@ -21,7 +21,7 @@ pub struct ObjectProperty {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TemplateElement {
-    pub cooked: StaticString,
+    pub cooked: Option<StaticString>,
     pub raw: StaticString,
 }
 
@@ -65,6 +65,10 @@ pub enum Expr {
     TemplateLiteral {
         quasis: Vec<TemplateElement>,
         expressions: Vec<Expression>,
+    },
+    TemplateObject {
+        site: StaticCallSiteId,
+        quasis: Vec<TemplateElement>,
     },
     RegExpLiteral {
         pattern: StaticString,

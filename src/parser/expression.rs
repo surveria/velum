@@ -159,6 +159,13 @@ impl Parser {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;
             }
+            if matches!(
+                self.peek_kind(0),
+                Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
+            ) {
+                expr = self.tagged_template_suffix(expr)?;
+                continue;
+            }
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }
@@ -230,10 +237,18 @@ impl Parser {
                 expr = self.member_dot_suffix(expr)?;
                 continue;
             }
-            if !self.match_kind(&TokenKind::LBracket) {
-                break;
+            if self.match_kind(&TokenKind::LBracket) {
+                expr = self.member_bracket_suffix(expr)?;
+                continue;
             }
-            expr = self.member_bracket_suffix(expr)?;
+            if matches!(
+                self.peek_kind(0),
+                Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
+            ) {
+                expr = self.tagged_template_suffix(expr)?;
+                continue;
+            }
+            break;
         }
         Ok(expr)
     }
@@ -288,58 +303,6 @@ impl Parser {
         ))
     }
 
-    fn template_literal(
-        &mut self,
-        head: crate::lexer::TemplatePart,
-        start: crate::SourceSpan,
-    ) -> Result<Expression> {
-        let (quasis, expressions) = self.template_parts(head)?;
-        Ok(self.expression_node(
-            start,
-            Expr::TemplateLiteral {
-                quasis,
-                expressions,
-            },
-        ))
-    }
-
-    fn template_parts(
-        &mut self,
-        head: crate::lexer::TemplatePart,
-    ) -> Result<(Vec<crate::ast::TemplateElement>, Vec<Expression>)> {
-        let mut quasis = vec![self.template_element(head)?];
-        let mut expressions = Vec::new();
-        loop {
-            expressions.push(self.expression()?);
-            let token = self.advance_token("expected template literal continuation")?;
-            let token_span = token.span;
-            match token.kind {
-                TokenKind::TemplateMiddle(part) => quasis.push(self.template_element(part)?),
-                TokenKind::TemplateTail(part) => {
-                    quasis.push(self.template_element(part)?);
-                    break;
-                }
-                _ => {
-                    return Err(Error::parse_at(
-                        "expected '}' to continue template literal",
-                        token_span,
-                    ));
-                }
-            }
-        }
-        Ok((quasis, expressions))
-    }
-
-    fn template_element(
-        &mut self,
-        part: crate::lexer::TemplatePart,
-    ) -> Result<crate::ast::TemplateElement> {
-        Ok(crate::ast::TemplateElement {
-            cooked: self.static_string_shared(part.cooked)?,
-            raw: self.static_string_shared(part.raw)?,
-        })
-    }
-
     fn string_literal(
         &mut self,
         value: crate::lexer::StringToken,
@@ -349,21 +312,6 @@ impl Parser {
             Expr::StringLiteral {
                 value: self.static_string_shared(value.cooked)?,
                 escape_free: value.escape_free,
-            },
-            span,
-        ))
-    }
-
-    fn no_substitution_template(
-        &mut self,
-        part: crate::lexer::TemplatePart,
-        span: crate::SourceSpan,
-    ) -> Result<Expression> {
-        let quasi = self.template_element(part)?;
-        Ok(Expression::new(
-            Expr::TemplateLiteral {
-                quasis: vec![quasi],
-                expressions: Vec::new(),
             },
             span,
         ))

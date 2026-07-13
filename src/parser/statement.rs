@@ -637,12 +637,6 @@ impl Parser {
     }
 
     fn consume_restricted_statement_terminator(&mut self, message: &str) -> Result<()> {
-        // Tagged templates are a documented deferred grammar. The expression
-        // parser leaves their TemplateHead suffix at the cursor, so it must not
-        // be misclassified as a separate statement missing a terminator.
-        if matches!(self.peek_kind(0), Some(TokenKind::TemplateHead(_))) {
-            return Ok(());
-        }
         self.consume_statement_terminator(message)
     }
 

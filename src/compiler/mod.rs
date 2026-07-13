@@ -14,7 +14,7 @@ use crate::{
         BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
         BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
+        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty, BytecodeTemplateElement,
     },
     error::{Error, Result},
     source::{SourceId, SourceSpan},

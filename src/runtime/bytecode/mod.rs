@@ -19,6 +19,7 @@ mod spread;
 pub(in crate::runtime) mod state;
 mod string_concat;
 mod super_ops;
+mod template;
 
 pub(in crate::runtime) use continuation::BytecodeContinuationFrame;
 pub(in crate::runtime) use destructure::DestructureOutcome;
@@ -72,6 +73,7 @@ impl Context {
             | BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
+            | BytecodeInstruction::GetTemplateObject { .. }
             | BytecodeInstruction::StringConcat { .. }
             | BytecodeInstruction::StringConcatStatic { .. }
             | BytecodeInstruction::CreateRegExp { .. }

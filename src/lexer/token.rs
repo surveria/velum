@@ -18,7 +18,7 @@ pub struct StringToken {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TemplatePart {
-    pub cooked: Rc<[u16]>,
+    pub cooked: Option<Rc<[u16]>>,
     pub raw: Rc<[u16]>,
 }
 

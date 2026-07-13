@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use super::{
-    BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCompiler, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-    BytecodeNumericUnaryOp, Error, Expr, Expression, NativeCallTarget, Result, StaticBinding,
-    StaticPropertyAccessId, StaticString, TemplateElement, UnaryOp, checked_template_part_count,
-    constructor_binding_expr, has_spread_arg,
+    BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCallSite, BytecodeCompiler,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeTemplateElement, Error, Expr,
+    Expression, NativeCallTarget, Result, StaticBinding, StaticPropertyAccessId, StaticString,
+    TemplateElement, UnaryOp, checked_template_part_count, constructor_binding_expr,
+    has_spread_arg,
 };
 
 impl BytecodeCompiler<'_> {
@@ -41,6 +42,18 @@ impl BytecodeCompiler<'_> {
                 quasis,
                 expressions,
             } => return self.compile_template_literal(quasis, expressions),
+            Expr::TemplateObject { site, quasis } => {
+                let quasis = quasis
+                    .iter()
+                    .map(|quasi| {
+                        BytecodeTemplateElement::new(quasi.cooked.clone(), quasi.raw.clone())
+                    })
+                    .collect::<Vec<_>>();
+                self.emit(BytecodeInstruction::GetTemplateObject {
+                    site: BytecodeCallSite::new(*site),
+                    quasis: quasis.into(),
+                });
+            }
             Expr::RegExpLiteral { pattern, flags } => {
                 self.emit(BytecodeInstruction::CreateRegExp {
                     pattern: pattern.clone(),
@@ -301,13 +314,21 @@ impl BytecodeCompiler<'_> {
                     "template literal without substitutions has extra elements",
                 ));
             }
-            self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
+            let cooked = quasi
+                .cooked
+                .as_ref()
+                .ok_or_else(|| Error::runtime("untagged template has invalid cooked text"))?;
+            self.emit(BytecodeInstruction::PushString(cooked.clone()));
             return Ok(());
         }
         let mut part_count = 0usize;
         for (index, quasi) in quasis.iter().enumerate() {
-            if !quasi.cooked.as_str().is_empty() {
-                self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
+            let cooked = quasi
+                .cooked
+                .as_ref()
+                .ok_or_else(|| Error::runtime("untagged template has invalid cooked text"))?;
+            if !cooked.as_str().is_empty() {
+                self.emit(BytecodeInstruction::PushString(cooked.clone()));
                 part_count = checked_template_part_count(part_count)?;
             }
             if let Some(expression) = expressions.get(index) {

@@ -27,6 +27,7 @@ mod sequence;
 mod statement;
 mod static_tables;
 mod strict;
+mod template;
 mod yield_context;
 
 use await_context::{AwaitExpressionContext, AwaitIdentifierContext};

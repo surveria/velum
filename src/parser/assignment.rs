@@ -218,6 +218,7 @@ impl Parser {
             | Expr::Class(_)
             | Expr::SuperCall { .. }
             | Expr::TemplateLiteral { .. }
+            | Expr::TemplateObject { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::ImportMeta
