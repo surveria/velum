@@ -21,6 +21,7 @@ impl NativeFunctionKind {
             | Self::StringPrototypeToLowerCase
             | Self::StringPrototypeIsWellFormed
             | Self::StringPrototypeIterator
+            | Self::StringPrototypeNormalize
             | Self::StringPrototypeToUpperCase
             | Self::StringPrototypeToString
             | Self::StringPrototypeTrim
@@ -43,6 +44,7 @@ impl NativeFunctionKind {
             | Self::StringPrototypeIncludes
             | Self::StringPrototypeIndexOf
             | Self::StringPrototypeLastIndexOf
+            | Self::StringPrototypeLocaleCompare
             | Self::StringPrototypeMatch
             | Self::StringPrototypeMatchAll
             | Self::StringPrototypePadEnd

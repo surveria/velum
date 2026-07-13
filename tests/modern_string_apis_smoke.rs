@@ -104,6 +104,23 @@ fn string_iterator_exposes_standard_metadata() -> TestResult {
     )
 }
 
+#[test]
+fn normalization_and_locale_compare_share_canonical_equivalence() -> TestResult {
+    expect_true(
+        r#"
+        var composed = "\u00f6";
+        var decomposed = "o\u0308";
+        composed.normalize("NFD") === decomposed &&
+            decomposed.normalize() === composed &&
+            "\u1e9b\u0323".normalize("NFKC") === "\u1e69" &&
+            composed.localeCompare(decomposed) === 0 &&
+            "a".localeCompare("b") === -"b".localeCompare("a") &&
+            String.prototype.normalize.length === 0 &&
+            String.prototype.localeCompare.length === 1
+        "#,
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

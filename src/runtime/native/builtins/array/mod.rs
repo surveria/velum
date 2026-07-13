@@ -22,6 +22,7 @@ mod sort;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_JOIN_PROPERTY: &str = "join";
+const ARRAY_TO_LOCALE_STRING_PROPERTY: &str = "toLocaleString";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_FROM_PROPERTY: &str = "from";
 const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
@@ -308,6 +309,33 @@ impl Context {
             return self.call_value(&join, &[], this_value.clone());
         }
         self.eval_object_prototype_to_string(RuntimeCallArgs::values(&[]), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_array_to_locale_string(
+        &mut self,
+        _args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let length = self.array_like_length(this_value)?;
+        let mut joined =
+            self.join_string_with_separator_capacity(length, ARRAY_JOIN_DEFAULT_SEPARATOR.len())?;
+        for index in 0..length {
+            self.step()?;
+            if index > 0 {
+                self.push_join_text(&mut joined, ARRAY_JOIN_DEFAULT_SEPARATOR)?;
+            }
+            let value = self.get_array_like_index(this_value, index)?;
+            if matches!(value, Value::Undefined | Value::Null) {
+                continue;
+            }
+            let method = self
+                .get_named_method(&value, ARRAY_TO_LOCALE_STRING_PROPERTY)?
+                .ok_or_else(|| Error::type_error("element toLocaleString method is missing"))?;
+            let localized = self.call_value(&method, &[], value)?;
+            let text = self.to_string(&localized)?;
+            self.push_join_text(&mut joined, &text)?;
+        }
+        self.heap_string_value(&joined)
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_join(
