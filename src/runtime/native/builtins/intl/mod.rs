@@ -1,9 +1,12 @@
 mod date_time_format;
 mod duration_format;
 mod formatting;
+mod number_digits;
 mod number_format;
 mod number_formatting;
 mod number_options;
+mod number_range;
+mod number_rounding;
 mod options;
 
 use crate::{
@@ -116,7 +119,9 @@ impl Context {
                 self.eval_intl_duration_format(args, this_value)
             }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
-            IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
+            IntlFunctionKind::NumberFormatConstructor => {
+                self.call_intl_number_format(args, this_value)
+            }
             IntlFunctionKind::NumberFormatFormatGetter => {
                 self.eval_intl_number_format_getter(this_value)
             }

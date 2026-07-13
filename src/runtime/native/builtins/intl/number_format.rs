@@ -6,7 +6,8 @@ use crate::{
         native::IntlFunctionKind,
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, IntlValue, NumberFormatValue,
-            PropertyConfigurable, PropertyEnumerable, PropertyUpdate, PropertyWritable,
+            PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
+            PropertyWritable,
         },
     },
     value::{ErrorName, NativeFunctionId, ObjectId, Value},
@@ -14,9 +15,10 @@ use crate::{
 
 const NUMBER_FORMAT_TAG: &str = "Intl.NumberFormat";
 const SUPPORTED_LOCALES_OF: &str = "supportedLocalesOf";
+const LEGACY_CONSTRUCTED_SYMBOL: &str = "IntlLegacyConstructedSymbol";
 
 impl Context {
-    pub(super) fn intl_number_format_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn intl_number_format_constructor_value(&mut self) -> Result<Value> {
         let constructor_kind = IntlFunctionKind::NumberFormatConstructor;
         let native_kind = super::intl_kind(constructor_kind);
         let existed = self.native_function_id(native_kind).is_some();
@@ -64,11 +66,48 @@ impl Context {
         )
     }
 
-    pub(super) fn eval_intl_number_format_getter(&mut self, this_value: &Value) -> Result<Value> {
-        let Value::Object(formatter_id) = this_value else {
-            return Err(Error::type_error("Intl.NumberFormat receiver is invalid"));
+    pub(super) fn call_intl_number_format(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let prototype =
+            self.intl_constructor_prototype(IntlFunctionKind::NumberFormatConstructor)?;
+        let legacy_receiver = match this_value {
+            Value::Object(id) => {
+                *id == prototype || self.objects.prototype_chain_has_object(*id, prototype)?
+            }
+            _ => false,
         };
-        let cached = match self.objects.intl_value(*formatter_id)? {
+        let number_format = self.construct_intl_number_format(args)?;
+        if !legacy_receiver {
+            return Ok(number_format);
+        }
+        let Value::Object(receiver) = this_value else {
+            return Err(Error::runtime("legacy NumberFormat receiver disappeared"));
+        };
+        let symbol = self.create_symbol_value(Some(LEGACY_CONSTRUCTED_SYMBOL))?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("legacy NumberFormat symbol is invalid"));
+        };
+        self.objects.define_property(
+            *receiver,
+            PropertyKey::symbol(symbol.id()),
+            LEGACY_CONSTRUCTED_SYMBOL,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(number_format),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        Ok(this_value.clone())
+    }
+
+    pub(super) fn eval_intl_number_format_getter(&mut self, this_value: &Value) -> Result<Value> {
+        let formatter_id = self.number_format_receiver_id(this_value)?;
+        let cached = match self.objects.intl_value(formatter_id)? {
             Some(IntlValue::NumberFormat(value)) => value.bound_format.clone(),
             _ => return Err(Error::type_error("Intl.NumberFormat receiver is invalid")),
         };
@@ -76,10 +115,10 @@ impl Context {
             return Ok(cached);
         }
         let bound = self.create_ephemeral_native_function(
-            super::intl_kind(IntlFunctionKind::NumberFormatBoundFormat(*formatter_id)),
+            super::intl_kind(IntlFunctionKind::NumberFormatBoundFormat(formatter_id)),
             Value::Undefined,
         )?;
-        let Some(IntlValue::NumberFormat(value)) = self.objects.intl_value_mut(*formatter_id)?
+        let Some(IntlValue::NumberFormat(value)) = self.objects.intl_value_mut(formatter_id)?
         else {
             return Err(Error::runtime("Intl.NumberFormat receiver disappeared"));
         };
@@ -87,14 +126,49 @@ impl Context {
         Ok(bound)
     }
 
-    pub(super) fn number_format_receiver(&self, this_value: &Value) -> Result<NumberFormatValue> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::type_error("Intl.NumberFormat receiver is invalid"));
-        };
-        match self.objects.intl_value(*id)? {
+    pub(super) fn number_format_receiver(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<NumberFormatValue> {
+        let id = self.number_format_receiver_id(this_value)?;
+        match self.objects.intl_value(id)? {
             Some(IntlValue::NumberFormat(value)) => Ok(value.as_ref().clone()),
             _ => Err(Error::type_error("Intl.NumberFormat receiver is invalid")),
         }
+    }
+
+    fn number_format_receiver_id(&mut self, this_value: &Value) -> Result<ObjectId> {
+        if let Value::Object(id) = this_value
+            && matches!(
+                self.objects.intl_value(*id)?,
+                Some(IntlValue::NumberFormat(_))
+            )
+        {
+            return Ok(*id);
+        }
+        for key in self.semantic_own_property_keys(this_value)? {
+            let Value::Symbol(symbol) = key else {
+                continue;
+            };
+            if symbol.description() != Some(LEGACY_CONSTRUCTED_SYMBOL) {
+                continue;
+            }
+            let lookup = PropertyLookup::from_key(
+                LEGACY_CONSTRUCTED_SYMBOL,
+                PropertyKey::symbol(symbol.id()),
+            );
+            let fallback = self.get(this_value, lookup)?;
+            let Value::Object(id) = fallback else {
+                continue;
+            };
+            if matches!(
+                self.objects.intl_value(id)?,
+                Some(IntlValue::NumberFormat(_))
+            ) {
+                return Ok(id);
+            }
+        }
+        Err(Error::type_error("Intl.NumberFormat receiver is invalid"))
     }
 
     pub(super) fn eval_intl_number_format_resolved_options(
@@ -132,19 +206,11 @@ impl Context {
             "minimumIntegerDigits",
             Value::Number(f64::from(formatter.minimum_integer_digits)),
         ));
-        if let (Some(minimum), Some(maximum)) = (
+        let significant_digits = (
             formatter.minimum_significant_digits,
             formatter.maximum_significant_digits,
-        ) {
-            fields.push((
-                "minimumSignificantDigits",
-                Value::Number(f64::from(minimum)),
-            ));
-            fields.push((
-                "maximumSignificantDigits",
-                Value::Number(f64::from(maximum)),
-            ));
-        } else {
+        );
+        if formatter.rounding_priority != "auto" || significant_digits.0.is_none() {
             fields.push((
                 "minimumFractionDigits",
                 Value::Number(f64::from(formatter.minimum_fraction_digits)),
@@ -152,6 +218,16 @@ impl Context {
             fields.push((
                 "maximumFractionDigits",
                 Value::Number(f64::from(formatter.maximum_fraction_digits)),
+            ));
+        }
+        if let (Some(minimum), Some(maximum)) = significant_digits {
+            fields.push((
+                "minimumSignificantDigits",
+                Value::Number(f64::from(minimum)),
+            ));
+            fields.push((
+                "maximumSignificantDigits",
+                Value::Number(f64::from(maximum)),
             ));
         }
         fields.push((
@@ -306,7 +382,7 @@ impl Context {
     }
 }
 
-fn canonical_locale(locale: &str) -> Result<String> {
+pub(super) fn canonical_locale(locale: &str) -> Result<String> {
     if locale.is_empty()
         || locale
             .split('-')

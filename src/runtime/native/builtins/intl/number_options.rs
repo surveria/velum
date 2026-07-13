@@ -6,7 +6,6 @@ use crate::{
     value::{ErrorName, Value},
 };
 
-const NUMBERING_SYSTEMS: &[&str] = &["arab", "hanidec", "latn", "thai"];
 const ROUNDING_INCREMENTS: &[u16] = &[
     1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000,
 ];
@@ -16,7 +15,7 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<NumberFormatValue> {
-        let locale = self.intl_locale(args.as_slice().first())?;
+        let locale = self.number_format_locale(args.as_slice().first())?;
         let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         if matches!(options, Value::Null) {
             return Err(Error::type_error(
@@ -36,7 +35,8 @@ impl Context {
         {
             return Err(range_error("numberingSystem has an invalid value"));
         }
-        let numbering_system = resolved_numbering_system(&locale, numbering_system_option);
+        let (locale, numbering_system) =
+            resolved_numbering_system(&locale, numbering_system_option);
 
         let style = self.number_string_option(
             &options,
@@ -62,6 +62,9 @@ impl Context {
             &["standard", "accounting"],
             "standard",
         )?;
+        if style == "currency" && currency_option.is_none() {
+            return Err(Error::type_error("currency style requires currency"));
+        }
         let unit_option = self.number_optional_string(&options, "unit")?;
         if let Some(unit) = &unit_option
             && !is_sanctioned_unit(unit)
@@ -75,11 +78,7 @@ impl Context {
             "short",
         )?;
         let currency = match style.as_str() {
-            "currency" => Some(
-                currency_option
-                    .ok_or_else(|| Error::type_error("currency style requires currency"))?
-                    .to_ascii_uppercase(),
-            ),
+            "currency" => currency_option.map(|value| value.to_ascii_uppercase()),
             _ => None,
         };
         let unit = match style.as_str() {
@@ -99,32 +98,54 @@ impl Context {
             self.number_u8_option(&options, "minimumIntegerDigits", 1, 21, 1)?;
 
         let currency_digits = currency.as_deref().map_or(2, currency_minor_digits);
-        let default_minimum_fraction = match style.as_str() {
-            "currency" => currency_digits,
-            _ => 0,
+        let standard_notation = notation == "standard";
+        let default_minimum_fraction = if style == "currency" && standard_notation {
+            currency_digits
+        } else {
+            0
         };
-        let default_maximum_fraction = match style.as_str() {
-            "currency" => currency_digits,
-            "percent" => 0,
-            _ => 3,
+        let default_maximum_fraction = if style == "currency" && standard_notation {
+            currency_digits
+        } else if style == "percent" || notation == "compact" {
+            0
+        } else {
+            3
         };
         let minimum_fraction_value = self.number_option_value(&options, "minimumFractionDigits")?;
         let maximum_fraction_value = self.number_option_value(&options, "maximumFractionDigits")?;
-        let minimum_fraction_digits = self.number_u8_value(
-            &minimum_fraction_value,
-            "minimumFractionDigits",
-            0,
-            100,
-            default_minimum_fraction,
-        )?;
-        let maximum_fraction_default = default_maximum_fraction.max(minimum_fraction_digits);
-        let maximum_fraction_digits = self.number_u8_value(
-            &maximum_fraction_value,
-            "maximumFractionDigits",
-            minimum_fraction_digits,
-            100,
-            maximum_fraction_default,
-        )?;
+        let minimum_present = !matches!(minimum_fraction_value, Value::Undefined);
+        let maximum_present = !matches!(maximum_fraction_value, Value::Undefined);
+        let (minimum_fraction_digits, maximum_fraction_digits) =
+            match (minimum_present, maximum_present) {
+                (true, _) => {
+                    let minimum = self.number_u8_value(
+                        &minimum_fraction_value,
+                        "minimumFractionDigits",
+                        0,
+                        100,
+                        default_minimum_fraction,
+                    )?;
+                    let maximum = self.number_u8_value(
+                        &maximum_fraction_value,
+                        "maximumFractionDigits",
+                        minimum,
+                        100,
+                        default_maximum_fraction.max(minimum),
+                    )?;
+                    (minimum, maximum)
+                }
+                (false, true) => {
+                    let maximum = self.number_u8_value(
+                        &maximum_fraction_value,
+                        "maximumFractionDigits",
+                        0,
+                        100,
+                        default_maximum_fraction,
+                    )?;
+                    (default_minimum_fraction.min(maximum), maximum)
+                }
+                (false, false) => (default_minimum_fraction, default_maximum_fraction),
+            };
 
         let minimum_significant_value =
             self.number_option_value(&options, "minimumSignificantDigits")?;
@@ -187,13 +208,14 @@ impl Context {
             &["auto", "stripIfInteger"],
             "auto",
         )?;
-        if rounding_increment != 1
-            && (rounding_priority != "auto"
-                || has_significant
-                || minimum_fraction_digits != maximum_fraction_digits)
-        {
+        if rounding_increment != 1 && (rounding_priority != "auto" || has_significant) {
             return Err(Error::type_error(
                 "roundingIncrement is incompatible with digit options",
+            ));
+        }
+        if rounding_increment != 1 && minimum_fraction_digits != maximum_fraction_digits {
+            return Err(range_error(
+                "roundingIncrement requires equal fraction digit limits",
             ));
         }
 
@@ -231,6 +253,45 @@ impl Context {
             trailing_zero_display,
             bound_format: None,
         })
+    }
+
+    fn number_format_locale(&mut self, value: Option<&Value>) -> Result<String> {
+        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
+            return Ok("en-US".to_owned());
+        };
+        if matches!(value, Value::Null) {
+            return Err(Error::type_error("Intl locale list cannot be null"));
+        }
+        if let Some(text) = value.string_text() {
+            return resolve_number_format_locale(text);
+        }
+        let Value::Object(_) = value else {
+            return Ok("en-US".to_owned());
+        };
+        let length_value = self.get_named(value, "length")?;
+        let length = Self::length_to_usize(
+            self.to_length(&length_value)?,
+            "Intl locale list length exceeded supported range",
+        )?;
+        let mut first = None;
+        for index in 0..length {
+            self.step()?;
+            let name = index.to_string();
+            let lookup = self.property_lookup(&name);
+            if !self.has_property_value_with_lookup(value, lookup)? {
+                continue;
+            }
+            let item = self.get_named(value, &name)?;
+            if item.string_text().is_none() && !matches!(item, Value::Object(_)) {
+                return Err(Error::type_error("Intl locale entry is invalid"));
+            }
+            let locale = self.to_string(&item)?;
+            let locale = resolve_number_format_locale(&locale)?;
+            if first.is_none() {
+                first = Some(locale);
+            }
+        }
+        Ok(first.unwrap_or_else(|| "en-US".to_owned()))
     }
 
     fn number_optional_string(&mut self, options: &Value, name: &str) -> Result<Option<String>> {
@@ -336,10 +397,12 @@ impl Context {
             Value::Bool(true) => Ok(Some("always".to_owned())),
             _ => {
                 let text = self.to_string(&value)?;
-                Ok(match text.as_str() {
-                    "auto" | "always" | "min2" => Some(text),
-                    _ => Some(default.to_owned()),
-                })
+                match text.as_str() {
+                    "auto" | "always" | "min2" => Ok(Some(text)),
+                    "true" | "false" => Ok(Some(default.to_owned())),
+                    "0" | "" => Ok(None),
+                    _ => Err(range_error("useGrouping has an unsupported value")),
+                }
             }
         }
     }
@@ -355,13 +418,40 @@ fn is_unicode_type(value: &str) -> bool {
     })
 }
 
-fn resolved_numbering_system(locale: &str, option: Option<String>) -> String {
-    let requested = option
+fn resolved_numbering_system(locale: &str, option: Option<String>) -> (String, String) {
+    let base = locale.split("-u-").next().unwrap_or(locale).to_owned();
+    let extension = super::options::unicode_extension(locale, "nu")
+        .filter(|value| super::number_digits::digits(value).is_some());
+    let explicit = option
         .map(|value| value.to_ascii_lowercase())
-        .or_else(|| super::options::unicode_extension(locale, "nu"));
-    requested
-        .filter(|value| NUMBERING_SYSTEMS.contains(&value.as_str()))
-        .unwrap_or_else(|| "latn".to_owned())
+        .filter(|value| super::number_digits::digits(value).is_some());
+    if let Some(explicit) = explicit {
+        let resolved_locale = if extension.as_deref() == Some(explicit.as_str()) {
+            format!("{base}-u-nu-{explicit}")
+        } else {
+            base
+        };
+        return (resolved_locale, explicit);
+    }
+    if let Some(extension) = extension {
+        return (format!("{base}-u-nu-{extension}"), extension);
+    }
+    (base, "latn".to_owned())
+}
+
+fn resolve_number_format_locale(locale: &str) -> Result<String> {
+    let canonical = super::number_format::canonical_locale(locale)?;
+    let base = canonical.split("-u-").next().unwrap_or(&canonical);
+    let resolved_base = if base.eq_ignore_ascii_case("en-us") {
+        "en-US".to_owned()
+    } else {
+        base.to_owned()
+    };
+    let extension = super::options::unicode_extension(&canonical, "nu")
+        .filter(|value| super::number_digits::digits(value).is_some());
+    Ok(extension.map_or(resolved_base.clone(), |extension| {
+        format!("{resolved_base}-u-nu-{extension}")
+    }))
 }
 
 fn is_currency_code(value: &str) -> bool {

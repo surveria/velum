@@ -7,6 +7,11 @@ use crate::{
     value::{ErrorName, ObjectId, Value},
 };
 
+use super::number_range::{format_range_text, range_separator};
+use super::number_rounding::{
+    NumberInput, RoundedNumber, parse_number_input, round_fraction, round_standard,
+};
+
 #[derive(Clone, Debug)]
 struct NumberPart {
     kind: &'static str,
@@ -17,11 +22,6 @@ struct NumberPart {
 struct FormattedNumber {
     text: String,
     parts: Vec<NumberPart>,
-}
-
-enum NumberInput {
-    Number(f64),
-    Integer(String),
 }
 
 impl Context {
@@ -89,7 +89,8 @@ impl Context {
             shared.extend(start.parts);
             return self.number_parts_value(shared, Some("shared"));
         }
-        let text = format!("{}–{}", start.text, end.text);
+        let separator = range_separator(&formatter);
+        let text = format_range_text(&formatter, &start.text, &end.text, separator);
         if !parts {
             return self.heap_string_value(&text);
         }
@@ -100,7 +101,7 @@ impl Context {
         values.push(self.number_part_value(
             NumberPart {
                 kind: "literal",
-                value: "–".to_owned(),
+                value: separator.to_owned(),
             },
             Some("shared"),
         )?);
@@ -111,10 +112,28 @@ impl Context {
     }
 
     fn number_format_input(&mut self, value: &Value) -> Result<NumberInput> {
-        match self.to_numeric(value)? {
-            NumericValue::Number(value) => Ok(NumberInput::Number(value)),
-            NumericValue::BigInt(value) => Ok(NumberInput::Integer(value.to_string())),
+        if let Some(text) = value.string_text() {
+            return parse_number_input(text);
         }
+        match self.to_numeric(value)? {
+            NumericValue::Number(value) if value.is_nan() => Ok(NumberInput::Nan),
+            NumericValue::Number(value) if value.is_infinite() => Ok(NumberInput::Infinity {
+                negative: value.is_sign_negative(),
+            }),
+            NumericValue::Number(value) => parse_number_input(&value.to_string()),
+            NumericValue::BigInt(value) => parse_number_input(&value.to_string()),
+        }
+    }
+
+    pub(in crate::runtime::native) fn eval_number_to_locale_string(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let formatter = self.parse_number_format(args)?;
+        let input = self.number_format_input(this_value)?;
+        let formatted = format_number(&formatter, input)?;
+        self.heap_string_value(&formatted.text)
     }
 
     fn number_parts_value(
@@ -146,151 +165,241 @@ impl Context {
 
 fn format_number(formatter: &NumberFormatValue, input: NumberInput) -> Result<FormattedNumber> {
     match input {
-        NumberInput::Number(value) => format_f64(formatter, value),
-        NumberInput::Integer(value) => format_integer(formatter, &value),
+        NumberInput::Nan => special_number(
+            formatter,
+            false,
+            true,
+            "nan",
+            if locale_starts_with(formatter, "zh") {
+                "非數值"
+            } else {
+                "NaN"
+            },
+        ),
+        NumberInput::Infinity { negative } => {
+            special_number(formatter, negative, false, "infinity", "∞")
+        }
+        NumberInput::Finite(mut input) => {
+            if formatter.style == "percent" {
+                input.scale_power(2)?;
+            }
+            if matches!(formatter.notation.as_str(), "engineering" | "scientific") {
+                return format_exponential(formatter, input);
+            }
+            if formatter.notation == "compact" {
+                return format_compact(formatter, input);
+            }
+            let rounded = round_standard(&input, formatter)?;
+            format_rounded_number(formatter, rounded)
+        }
     }
 }
 
-fn format_f64(formatter: &NumberFormatValue, input: f64) -> Result<FormattedNumber> {
-    if input.is_nan() {
-        return special_number(formatter, false, "nan", "NaN");
-    }
-    let negative = input.is_sign_negative();
-    if input.is_infinite() {
-        return special_number(formatter, negative, "infinity", "∞");
-    }
-    let mut value = input.abs();
-    if formatter.style == "percent" {
-        value *= 100.0;
-    }
-    let rounded = if let Some(maximum) = formatter.maximum_significant_digits {
-        format_significant(
-            value,
-            formatter.minimum_significant_digits.unwrap_or(1),
-            maximum,
-        )
+fn format_rounded_number(
+    formatter: &NumberFormatValue,
+    rounded: RoundedNumber,
+) -> Result<FormattedNumber> {
+    format_decimal_text(formatter, &rounded.text, rounded.negative, rounded.zero)
+}
+
+fn format_exponential(
+    formatter: &NumberFormatValue,
+    mut input: super::number_rounding::DecimalInput,
+) -> Result<FormattedNumber> {
+    let magnitude = input.magnitude()?;
+    let exponent = if formatter.notation == "engineering" {
+        magnitude.div_euclid(3).saturating_mul(3)
     } else {
-        format_fraction(
-            value,
-            formatter.minimum_fraction_digits,
-            formatter.maximum_fraction_digits,
-            formatter.rounding_increment,
-            &formatter.rounding_mode,
-            &formatter.trailing_zero_display,
-        )?
+        magnitude
     };
-    format_decimal_text(formatter, &rounded, negative, value == 0.0)
+    input.scale_power(exponent.saturating_neg())?;
+    let rounded = round_fraction(
+        &input,
+        formatter.minimum_fraction_digits,
+        formatter.maximum_fraction_digits,
+        1,
+        &formatter.rounding_mode,
+        &formatter.trailing_zero_display,
+    )?;
+    let mut formatted = format_rounded_number(formatter, rounded)?;
+    formatted.parts.push(NumberPart {
+        kind: "exponentSeparator",
+        value: "E".to_owned(),
+    });
+    if exponent < 0 {
+        formatted.parts.push(NumberPart {
+            kind: "exponentMinusSign",
+            value: "-".to_owned(),
+        });
+    }
+    formatted.parts.push(NumberPart {
+        kind: "exponentInteger",
+        value: localize_digits(
+            &exponent.unsigned_abs().to_string(),
+            &formatter.numbering_system,
+        ),
+    });
+    refresh_formatted_text(&mut formatted);
+    Ok(formatted)
 }
 
-fn format_integer(formatter: &NumberFormatValue, input: &str) -> Result<FormattedNumber> {
-    let (negative, digits) = input
-        .strip_prefix('-')
-        .map_or((false, input), |digits| (true, digits));
-    let minimum = usize::from(formatter.minimum_integer_digits);
-    let padded = if digits.len() < minimum {
-        let padding = minimum
-            .checked_sub(digits.len())
-            .ok_or_else(|| Error::limit("number padding underflowed"))?;
-        format!("{}{}", "0".repeat(padding), digits)
-    } else {
-        digits.to_owned()
-    };
-    format_decimal_text(
-        formatter,
-        &padded,
-        negative,
-        digits.bytes().all(|byte| byte == b'0'),
-    )
+fn format_compact(
+    formatter: &NumberFormatValue,
+    mut input: super::number_rounding::DecimalInput,
+) -> Result<FormattedNumber> {
+    let magnitude = input.magnitude()?;
+    let compact = compact_pattern(formatter, magnitude);
+    input.scale_power(compact.exponent.saturating_neg())?;
+    let scaled_magnitude = magnitude.saturating_sub(compact.exponent);
+    let maximum_fraction = u8::try_from(1_i32.saturating_sub(scaled_magnitude).max(0))
+        .map_err(|_| Error::limit("compact fraction digits exceeded supported range"))?;
+    let rounded = round_fraction(
+        &input,
+        0,
+        maximum_fraction,
+        1,
+        &formatter.rounding_mode,
+        &formatter.trailing_zero_display,
+    )?;
+    let mut formatted = format_rounded_number(formatter, rounded)?;
+    if let Some(suffix) = compact.suffix {
+        if compact.separator {
+            formatted.parts.push(NumberPart {
+                kind: "literal",
+                value: compact_separator(formatter).to_owned(),
+            });
+        }
+        formatted.parts.push(NumberPart {
+            kind: "compact",
+            value: suffix.to_owned(),
+        });
+    }
+    refresh_formatted_text(&mut formatted);
+    Ok(formatted)
 }
 
-fn format_fraction(
-    value: f64,
-    minimum: u8,
-    maximum: u8,
-    increment: u16,
-    rounding_mode: &str,
-    trailing_zero_display: &str,
-) -> Result<String> {
-    let precision = usize::from(maximum);
-    let exponent = i32::from(maximum);
-    let scale = 10_f64.powi(exponent);
-    let increment_value = f64::from(increment) / scale;
-    let scaled = value / increment_value;
-    let rounded = match rounding_mode {
-        "ceil" => scaled.ceil(),
-        "floor" => scaled.floor(),
-        "expand" => scaled.ceil(),
-        "trunc" => scaled.floor(),
-        "halfEven" => round_half_even(scaled),
-        "halfCeil" | "halfFloor" | "halfTrunc" | "halfExpand" => scaled.round(),
-        _ => return Err(Error::runtime("unsupported NumberFormat rounding mode")),
-    } * increment_value;
-    let mut text = format!("{rounded:.precision$}");
-    let minimum = if trailing_zero_display == "stripIfInteger" && rounded.fract() == 0.0 {
-        0
-    } else {
-        usize::from(minimum)
-    };
-    trim_fraction(&mut text, minimum);
-    Ok(text)
+struct CompactPattern {
+    exponent: i32,
+    suffix: Option<&'static str>,
+    separator: bool,
 }
 
-fn format_significant(value: f64, minimum: u8, maximum: u8) -> String {
-    if value == 0.0 {
-        let zeros = usize::from(minimum.saturating_sub(1));
-        return if zeros == 0 {
-            "0".to_owned()
-        } else {
-            format!("0.{}", "0".repeat(zeros))
+fn compact_pattern(formatter: &NumberFormatValue, magnitude: i32) -> CompactPattern {
+    if locale_starts_with(formatter, "ja") || locale_starts_with(formatter, "zh") {
+        if magnitude >= 8 {
+            return CompactPattern {
+                exponent: 8,
+                suffix: Some(if locale_starts_with(formatter, "zh") {
+                    "億"
+                } else {
+                    "億"
+                }),
+                separator: false,
+            };
+        }
+        if magnitude >= 4 {
+            return CompactPattern {
+                exponent: 4,
+                suffix: Some(if locale_starts_with(formatter, "zh") {
+                    "萬"
+                } else {
+                    "万"
+                }),
+                separator: false,
+            };
+        }
+        return CompactPattern {
+            exponent: 0,
+            suffix: None,
+            separator: false,
         };
     }
-    let magnitude = value.log10().floor();
-    let decimal_places = f64::from(maximum) - 1.0 - magnitude;
-    let rounded = if decimal_places >= 0.0 {
-        let precision = decimal_places.to_usize().unwrap_or(0);
-        format!("{value:.precision$}")
+    if locale_starts_with(formatter, "ko") {
+        let (exponent, suffix) = if magnitude >= 8 {
+            (8, Some("억"))
+        } else if magnitude >= 4 {
+            (4, Some("만"))
+        } else if magnitude >= 3 {
+            (3, Some("천"))
+        } else {
+            (0, None)
+        };
+        return CompactPattern {
+            exponent,
+            suffix,
+            separator: false,
+        };
+    }
+    if formatter.locale.eq_ignore_ascii_case("en-IN") && magnitude >= 5 {
+        return CompactPattern {
+            exponent: 5,
+            suffix: Some("L"),
+            separator: false,
+        };
+    }
+    if magnitude >= 6 {
+        let (suffix, separator) = compact_million_pattern(formatter);
+        return CompactPattern {
+            exponent: 6,
+            suffix: Some(suffix),
+            separator,
+        };
+    }
+    if magnitude >= 3
+        && !(locale_starts_with(formatter, "de") && formatter.compact_display == "short")
+    {
+        let (suffix, separator) = compact_thousand_pattern(formatter);
+        return CompactPattern {
+            exponent: 3,
+            suffix: Some(suffix),
+            separator,
+        };
+    }
+    CompactPattern {
+        exponent: 0,
+        suffix: None,
+        separator: false,
+    }
+}
+
+fn compact_million_pattern(formatter: &NumberFormatValue) -> (&'static str, bool) {
+    if locale_starts_with(formatter, "de") {
+        if formatter.compact_display == "long" {
+            ("Millionen", true)
+        } else {
+            ("Mio.", true)
+        }
+    } else if formatter.compact_display == "long" {
+        ("million", true)
     } else {
-        let scale = 10_f64.powf(-decimal_places);
-        format!("{:.0}", (value / scale).round() * scale)
-    };
-    let mut text = rounded;
-    let required = significant_decimal_minimum(&text, usize::from(minimum));
-    trim_fraction(&mut text, required);
-    text
-}
-
-fn significant_decimal_minimum(text: &str, minimum: usize) -> usize {
-    let integer_digits = text
-        .split('.')
-        .next()
-        .map(|integer| integer.trim_start_matches('0').len())
-        .unwrap_or(0);
-    minimum.saturating_sub(integer_digits)
-}
-
-fn trim_fraction(text: &mut String, minimum: usize) {
-    let Some(dot) = text.find('.') else {
-        return;
-    };
-    while text.len().saturating_sub(dot).saturating_sub(1) > minimum && text.ends_with('0') {
-        text.pop();
-    }
-    if text.ends_with('.') {
-        text.pop();
+        ("M", false)
     }
 }
 
-fn round_half_even(value: f64) -> f64 {
-    let floor = value.floor();
-    let fraction = value - floor;
-    if fraction != 0.5 {
-        return value.round();
-    }
-    if (floor / 2.0).fract() == 0.0 {
-        floor
+fn compact_thousand_pattern(formatter: &NumberFormatValue) -> (&'static str, bool) {
+    if locale_starts_with(formatter, "de") {
+        ("Tausend", true)
+    } else if formatter.compact_display == "long" {
+        ("thousand", true)
     } else {
-        floor + 1.0
+        ("K", false)
     }
+}
+
+fn compact_separator(formatter: &NumberFormatValue) -> &'static str {
+    if locale_starts_with(formatter, "de") && formatter.compact_display == "short" {
+        "\u{00a0}"
+    } else {
+        " "
+    }
+}
+
+fn refresh_formatted_text(formatted: &mut FormattedNumber) {
+    formatted.text = formatted
+        .parts
+        .iter()
+        .map(|part| part.value.as_str())
+        .collect();
 }
 
 fn format_decimal_text(
@@ -302,14 +411,30 @@ fn format_decimal_text(
     let mut split = rounded.split('.');
     let integer = split.next().unwrap_or("0");
     let fraction = split.next();
-    let grouped = group_integer(integer, formatter);
-    let decimal_separator = if formatter.locale.to_ascii_lowercase().starts_with("de") {
+    let minimum_integer_digits = usize::from(formatter.minimum_integer_digits);
+    let padded = if integer.len() < minimum_integer_digits {
+        let padding = minimum_integer_digits.saturating_sub(integer.len());
+        format!("{}{}", "0".repeat(padding), integer)
+    } else {
+        integer.to_owned()
+    };
+    let grouped = group_integer(&padded, formatter);
+    let decimal_separator = if uses_decimal_comma(formatter) {
         ","
     } else {
         "."
     };
     let mut parts = Vec::new();
-    push_sign(&mut parts, formatter, negative, zero);
+    push_unit_prefix(&mut parts, formatter);
+    let accounting = uses_accounting_parentheses(formatter, negative, zero);
+    if accounting {
+        parts.push(NumberPart {
+            kind: "literal",
+            value: "(".to_owned(),
+        });
+    } else {
+        push_sign(&mut parts, formatter, negative, zero);
+    }
     push_style_prefix(&mut parts, formatter);
     push_grouped_integer(&mut parts, &grouped, formatter);
     if let Some(fraction) = fraction {
@@ -323,6 +448,12 @@ fn format_decimal_text(
         });
     }
     push_style_suffix(&mut parts, formatter);
+    if accounting {
+        parts.push(NumberPart {
+            kind: "literal",
+            value: ")".to_owned(),
+        });
+    }
     let text = parts.iter().map(|part| part.value.as_str()).collect();
     Ok(FormattedNumber { text, parts })
 }
@@ -330,11 +461,12 @@ fn format_decimal_text(
 fn special_number(
     formatter: &NumberFormatValue,
     negative: bool,
+    zero_like: bool,
     kind: &'static str,
     value: &str,
 ) -> Result<FormattedNumber> {
     let mut parts = Vec::new();
-    push_sign(&mut parts, formatter, negative, false);
+    push_sign(&mut parts, formatter, negative, zero_like);
     push_style_prefix(&mut parts, formatter);
     parts.push(NumberPart {
         kind,
@@ -378,14 +510,17 @@ fn push_sign(
 }
 
 fn push_style_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
-    if formatter.style != "currency" {
+    if formatter.style != "currency"
+        || locale_starts_with(formatter, "de")
+        || locale_starts_with(formatter, "pt")
+    {
         return;
     }
     let currency = formatter.currency.as_deref().unwrap_or("");
     let value = match formatter.currency_display.as_str() {
         "code" => currency,
         "name" => currency,
-        _ => currency_symbol(currency),
+        _ => currency_symbol(formatter, currency),
     };
     parts.push(NumberPart {
         kind: "currency",
@@ -395,19 +530,138 @@ fn push_style_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue)
 
 fn push_style_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
     match formatter.style.as_str() {
+        "currency"
+            if locale_starts_with(formatter, "de") || locale_starts_with(formatter, "pt") =>
+        {
+            parts.push(NumberPart {
+                kind: "literal",
+                value: "\u{00a0}".to_owned(),
+            });
+            let currency = formatter.currency.as_deref().unwrap_or("");
+            let value = match formatter.currency_display.as_str() {
+                "code" | "name" => currency,
+                _ => currency_symbol(formatter, currency),
+            };
+            parts.push(NumberPart {
+                kind: "currency",
+                value: value.to_owned(),
+            });
+        }
         "percent" => parts.push(NumberPart {
             kind: "percentSign",
             value: "%".to_owned(),
         }),
-        "unit" => parts.push(NumberPart {
+        "unit" if formatter.unit.as_deref() == Some("percent") => parts.push(NumberPart {
             kind: "unit",
-            value: format!(" {}", formatter.unit.as_deref().unwrap_or("")),
+            value: "%".to_owned(),
         }),
+        "unit" => push_unit_suffix(parts, formatter),
         _ => {}
     }
 }
 
-fn currency_symbol(currency: &str) -> &str {
+fn push_unit_prefix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
+    if formatter.style != "unit"
+        || formatter.unit.as_deref() != Some("kilometer-per-hour")
+        || formatter.unit_display != "long"
+    {
+        return;
+    }
+    let value = if locale_starts_with(formatter, "ja") {
+        Some("時速")
+    } else if locale_starts_with(formatter, "ko") {
+        Some("시속")
+    } else if locale_starts_with(formatter, "zh") {
+        Some("每小時")
+    } else {
+        None
+    };
+    if let Some(value) = value {
+        parts.push(NumberPart {
+            kind: "unit",
+            value: value.to_owned(),
+        });
+        parts.push(NumberPart {
+            kind: "literal",
+            value: " ".to_owned(),
+        });
+    }
+}
+
+fn push_unit_suffix(parts: &mut Vec<NumberPart>, formatter: &NumberFormatValue) {
+    let unit = formatter.unit.as_deref().unwrap_or("");
+    if unit != "kilometer-per-hour" {
+        push_spaced_unit(parts, unit);
+        return;
+    }
+    let (separator, value) = if locale_starts_with(formatter, "de") {
+        (
+            " ",
+            if formatter.unit_display == "long" {
+                "Kilometer pro Stunde"
+            } else {
+                "km/h"
+            },
+        )
+    } else if locale_starts_with(formatter, "ja") {
+        match formatter.unit_display.as_str() {
+            "narrow" => ("", "km/h"),
+            "long" => (" ", "キロメートル"),
+            _ => (" ", "km/h"),
+        }
+    } else if locale_starts_with(formatter, "ko") {
+        (
+            "",
+            if formatter.unit_display == "long" {
+                "킬로미터"
+            } else {
+                "km/h"
+            },
+        )
+    } else if locale_starts_with(formatter, "zh") {
+        (
+            if formatter.unit_display == "narrow" {
+                ""
+            } else {
+                " "
+            },
+            if formatter.unit_display == "long" {
+                "公里"
+            } else {
+                "公里/小時"
+            },
+        )
+    } else {
+        match formatter.unit_display.as_str() {
+            "narrow" => ("", "km/h"),
+            "long" => (" ", "kilometers per hour"),
+            _ => (" ", "km/h"),
+        }
+    };
+    if !separator.is_empty() {
+        parts.push(NumberPart {
+            kind: "literal",
+            value: separator.to_owned(),
+        });
+    }
+    parts.push(NumberPart {
+        kind: "unit",
+        value: value.to_owned(),
+    });
+}
+
+fn push_spaced_unit(parts: &mut Vec<NumberPart>, unit: &str) {
+    parts.push(NumberPart {
+        kind: "literal",
+        value: " ".to_owned(),
+    });
+    parts.push(NumberPart {
+        kind: "unit",
+        value: unit.to_owned(),
+    });
+}
+
+fn currency_symbol<'a>(formatter: &NumberFormatValue, currency: &'a str) -> &'a str {
     match currency {
         "CNY" => "CN¥",
         "EUR" => "€",
@@ -415,9 +669,35 @@ fn currency_symbol(currency: &str) -> &str {
         "INR" => "₹",
         "JPY" => "¥",
         "KRW" => "₩",
+        "USD" if locale_starts_with(formatter, "ko") || locale_starts_with(formatter, "zh") => {
+            "US$"
+        }
         "USD" => "$",
         _ => currency,
     }
+}
+
+fn uses_accounting_parentheses(formatter: &NumberFormatValue, negative: bool, zero: bool) -> bool {
+    formatter.style == "currency"
+        && formatter.currency_sign == "accounting"
+        && !locale_starts_with(formatter, "de")
+        && negative
+        && match formatter.sign_display.as_str() {
+            "never" => false,
+            "exceptZero" | "negative" if zero => false,
+            _ => true,
+        }
+}
+
+fn locale_starts_with(formatter: &NumberFormatValue, language: &str) -> bool {
+    formatter
+        .locale
+        .get(..language.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(language))
+}
+
+fn uses_decimal_comma(formatter: &NumberFormatValue) -> bool {
+    locale_starts_with(formatter, "de") || locale_starts_with(formatter, "pt")
 }
 
 fn group_integer(integer: &str, formatter: &NumberFormatValue) -> String {
@@ -427,7 +707,12 @@ fn group_integer(integer: &str, formatter: &NumberFormatValue) -> String {
     if integer.len() <= 3 || (grouping == "min2" && integer.len() <= 4) {
         return integer.to_owned();
     }
-    let separator = if formatter.locale.to_ascii_lowercase().starts_with("de") {
+    if formatter.locale.eq_ignore_ascii_case("en-IN") {
+        return group_indian_integer(integer);
+    }
+    let separator = if locale_starts_with(formatter, "pt") {
+        '\u{00a0}'
+    } else if locale_starts_with(formatter, "de") {
         '.'
     } else {
         ','
@@ -442,8 +727,29 @@ fn group_integer(integer: &str, formatter: &NumberFormatValue) -> String {
     reversed.chars().rev().collect()
 }
 
+fn group_indian_integer(integer: &str) -> String {
+    let split = integer.len().saturating_sub(3);
+    let Some(prefix) = integer.get(..split) else {
+        return integer.to_owned();
+    };
+    let Some(suffix) = integer.get(split..) else {
+        return integer.to_owned();
+    };
+    let mut reversed = String::with_capacity(prefix.len().saturating_add(prefix.len() / 2));
+    for (index, character) in prefix.chars().rev().enumerate() {
+        if index > 0 && index % 2 == 0 {
+            reversed.push(',');
+        }
+        reversed.push(character);
+    }
+    let grouped_prefix: String = reversed.chars().rev().collect();
+    format!("{grouped_prefix},{suffix}")
+}
+
 fn push_grouped_integer(parts: &mut Vec<NumberPart>, integer: &str, formatter: &NumberFormatValue) {
-    let separator = if formatter.locale.to_ascii_lowercase().starts_with("de") {
+    let separator = if locale_starts_with(formatter, "pt") {
+        '\u{00a0}'
+    } else if locale_starts_with(formatter, "de") {
         '.'
     } else {
         ','
@@ -463,11 +769,8 @@ fn push_grouped_integer(parts: &mut Vec<NumberPart>, integer: &str, formatter: &
 }
 
 fn localize_digits(value: &str, numbering_system: &str) -> String {
-    let digits = match numbering_system {
-        "arab" => "٠١٢٣٤٥٦٧٨٩",
-        "hanidec" => "〇一二三四五六七八九",
-        "thai" => "๐๑๒๓๔๕๖๗๘๙",
-        _ => return value.to_owned(),
+    let Some(digits) = super::number_digits::digits(numbering_system) else {
+        return value.to_owned();
     };
     value
         .chars()
@@ -479,18 +782,4 @@ fn localize_digits(value: &str, numbering_system: &str) -> String {
                 .unwrap_or(character)
         })
         .collect()
-}
-
-trait FloatToUsize {
-    fn to_usize(self) -> Option<usize>;
-}
-
-impl FloatToUsize for f64 {
-    fn to_usize(self) -> Option<usize> {
-        if self.is_finite() && self >= 0.0 && self <= 100.0 {
-            self.to_string().parse().ok()
-        } else {
-            None
-        }
-    }
 }
