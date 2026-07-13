@@ -84,8 +84,8 @@ impl NativeFunctionKind {
             | Self::MapGetOrInsert
             | Self::MapGetOrInsertComputed
             | Self::WeakMapGetOrInsert
-            | Self::WeakMapGetOrInsertComputed => Some(2.0),
-            Self::FinalizationRegistryRegister => Some(2.0),
+            | Self::WeakMapGetOrInsertComputed
+            | Self::FinalizationRegistryRegister => Some(2.0),
             _ => None,
         }
     }
