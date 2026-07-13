@@ -480,6 +480,15 @@ atom. Hashing is an implementation choice: another index may replace it while
 preserving stable ids, exact string equality, single payload ownership,
 transactional limits, and snapshot reconciliation.
 
+Transient roots are owned by stable independent scope buckets. Direct-root
+visitation traverses every live bucket, while dropping a scope removes only
+that bucket and releases exactly its ledger count, regardless of scope-drop
+order. Nested unwinding is therefore proportional to the roots being removed
+rather than to all roots still live in other scopes. The arena and bucket
+layout may change while complete category tracing, arbitrary drop order,
+panic-free cleanup, checked accounting, and behavioral callback evidence stay
+intact.
+
 Shape metadata is an optimization index, not an object-layout authority.
 Stable `ShapeId` values describe ordered property keys and descriptor
 attributes, while semantic property operations remain owned by `Object` and
