@@ -119,13 +119,12 @@ impl Context {
         let Value::NativeFunction(constructor_id) = constructor else {
             return Err(Error::runtime("Intl.Locale constructor is not native"));
         };
-        let prototype = match self
+        let Value::Object(prototype) = self
             .native_function(constructor_id)?
             .properties()
             .prototype()
-        {
-            Value::Object(id) => id,
-            _ => return Err(Error::runtime("Intl.Locale prototype is not an object")),
+        else {
+            return Err(Error::runtime("Intl.Locale prototype is not an object"));
         };
         for kind in LOCALE_ACCESSORS {
             self.install_locale_accessor(prototype, *kind)?;
@@ -458,7 +457,7 @@ impl Context {
         let directionality = LocaleDirectionality::new_extended();
         let direction = match directionality.get(&locale.id) {
             Some(Direction::RightToLeft) => "rtl",
-            Some(Direction::LeftToRight) | Some(_) | None => "ltr",
+            _ => "ltr",
         };
         let direction = self.heap_string_value(direction)?;
         self.create_intl_data_object(vec![("direction", direction)])
@@ -659,7 +658,7 @@ fn locale_keyword_text(locale: &Locale, key: &str) -> Result<Option<String>> {
         .unicode
         .keywords
         .get(&key)
-        .map(|value| value.to_string()))
+        .map(ToString::to_string))
 }
 
 fn canonical_weekday(value: String) -> String {

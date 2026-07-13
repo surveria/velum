@@ -193,16 +193,16 @@ impl IntlFunctionKind {
             | Self::DateTimeFormatFormatGetter
             | Self::LocaleAccessor(_)
             | Self::LocaleMethod(_) => 0.0,
-            Self::LocaleConstructor => 1.0,
-            Self::DateTimeFormatFormatToParts
+            Self::LocaleConstructor
+            | Self::DateTimeFormatFormatToParts
             | Self::DurationFormatFormat
             | Self::SupportedValuesOf
             | Self::NumberFormatBoundFormat(_)
             | Self::NumberFormatFormatToParts
             | Self::NumberFormatSupportedLocalesOf
             | Self::DateTimeFormatBoundFormat(_)
-            | Self::DateTimeFormatSupportedLocalesOf => 1.0,
-            Self::GetCanonicalLocales => 1.0,
+            | Self::DateTimeFormatSupportedLocalesOf
+            | Self::GetCanonicalLocales => 1.0,
             Self::NumberFormatFormatRange
             | Self::NumberFormatFormatRangeToParts
             | Self::DateTimeFormatFormatRange
