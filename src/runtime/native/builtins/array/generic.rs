@@ -16,6 +16,7 @@ const ARRAY_LIKE_INDEX_LIMIT_ERROR: &str = "array-like index exceeded supported 
 const ARRAY_CONCAT_LENGTH_ERROR: &str = "Array.prototype.concat result exceeds safe integer range";
 const ARRAY_SPECIES_ERROR: &str = "Array species value must be a constructor";
 const ARRAY_SPECIES_LENGTH_RANGE_ERROR: &str = "Invalid array length";
+const ARRAY_DELETE_PROPERTY_ERROR: &str = "Cannot delete non-configurable array-like property";
 const ARRAY_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const IS_CONCAT_SPREADABLE_PROPERTY: &str = "isConcatSpreadable";
 const IS_CONCAT_SPREADABLE_DISPLAY: &str = "[Symbol.isConcatSpreadable]";
@@ -487,14 +488,18 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = self.intern_property_key(property)?;
-        self.set_property_value_with_accessors(object, key, property, value)
+        let lookup = PropertyLookup::from_key(property, key);
+        self.set(object, lookup, value, object, SetFailureBehavior::Throw)
+            .map(|_| ())
     }
 
     pub(super) fn delete_array_like_index(&mut self, object: &Value, index: usize) -> Result<()> {
         let property = Self::array_like_index_name(index)?;
         let lookup = self.property_lookup(&property);
-        self.delete_property_value_with_lookup(object, lookup)
-            .map(|_| ())
+        if self.delete_property_value_with_lookup(object, lookup)? {
+            return Ok(());
+        }
+        Err(Error::type_error(ARRAY_DELETE_PROPERTY_ERROR))
     }
 
     pub(super) fn ensure_array_like_object(object: &Value) -> Result<()> {

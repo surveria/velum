@@ -114,6 +114,7 @@ impl Context {
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && let Some(end) = length.checked_add(args.len())
             && !self
                 .objects
@@ -185,10 +186,16 @@ impl Context {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && !self.objects.array_index_range_has_accessor_in_chain(
                 *id,
                 length.saturating_sub(1),
                 length,
+            )?
+            && !self.objects.prototype_chain_has_array_index_in_range(
+                *id,
+                length.saturating_sub(1),
+                usize::from(length > 0),
             )?
         {
             return self.objects.array_pop(*id);
@@ -408,6 +415,7 @@ impl Context {
         Self::eval_array_discard_args(args);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -451,6 +459,7 @@ impl Context {
     ) -> Result<Value> {
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && self.objects.array_length_is_writable(*id)?
             && let Some(end) = length.checked_add(args.len())
             && !self
                 .objects
