@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T042826Z.md`
-- Task: PR #561: parser: preserve frontend syntax boundaries
-- Performance: 6.30x (4/5 >1.00x) (from `rsqjs-test-report-20260713T042826Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T042826Z.md`)
+- `rsqjs-test-report-20260713T045058Z.md`
+- Task: PR #560: runtime: implement Intl DateTimeFormat foundation
+- Performance: 6.17x (4/5 >1.00x) (from `rsqjs-test-report-20260713T045058Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T045058Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 94260 passed / 8318 failed (91.89%) (from `rsqjs-test-report-20260713T042826Z.md`)
+- Full Test262: 94876 passed / 7702 failed (92.49%) (from `rsqjs-test-report-20260713T045058Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -521,3 +521,4 @@ Latest report:
 | `20260713T033311Z` `61b1c5c` PR #555: runtime: complete Temporal ZonedDateTime semantics | 6.08x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94087 passed / 8491 failed (91.72%) |
 | `20260713T035350Z` `f641c75` PR #558: runtime: complete Temporal Now semantics | 6.06x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94260 passed / 8318 failed (91.89%) |
 | `20260713T042826Z` `00ad25d` PR #561: parser: preserve frontend syntax boundaries | 6.30x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94260 passed / 8318 failed (91.89%) |
+| `20260713T045058Z` `199623c` PR #560: runtime: implement Intl DateTimeFormat foundation | 6.17x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
