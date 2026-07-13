@@ -318,7 +318,9 @@ impl PromiseJob {
     pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.binding_count(),
-            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) | Self::AtomicsWait { .. } => {
+                Ok(0)
+            }
         }
     }
 
