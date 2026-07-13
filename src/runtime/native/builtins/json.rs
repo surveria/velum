@@ -1,8 +1,12 @@
 use crate::{
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
-    runtime::{Context, roots::VmRootKind},
+    runtime::object::{
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectPrimitiveValue, ObjectPropertyInit,
+        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
+        PropertyWritable,
+    },
+    runtime::{Context, property::DynamicPropertyKey, roots::VmRootKind},
     value::{ObjectId, Value, format_ecmascript_number},
 };
 
@@ -237,21 +241,17 @@ impl Context {
         reviver: &Value,
     ) -> Result<Value> {
         let value = self.get_named(holder, key)?;
-        if let Value::Object(id) = value.clone() {
-            self.internalize_json_children(&value, id, reviver)?;
+        if matches!(value, Value::Object(_)) {
+            self.internalize_json_children(&value, reviver)?;
         }
         let key_value = self.heap_string_value(key)?;
         let args = [key_value, value];
         self.call_json_callback(reviver, holder.clone(), &args)
     }
 
-    fn internalize_json_children(
-        &mut self,
-        holder: &Value,
-        id: ObjectId,
-        reviver: &Value,
-    ) -> Result<()> {
-        if let Some(length) = self.objects.array_len_if_array(id)? {
+    fn internalize_json_children(&mut self, holder: &Value, reviver: &Value) -> Result<()> {
+        if self.semantic_is_array(holder)? {
+            let length = self.array_like_length(holder)?;
             for index in 0..length {
                 self.internalize_json_child(holder, &index.to_string(), reviver)?;
             }
@@ -278,8 +278,28 @@ impl Context {
     }
 
     fn set_json_property(&mut self, holder: &Value, key: &str, value: Value) -> Result<()> {
-        let property = self.intern_property_key(key)?;
-        self.set_property_value_with_accessors(holder, property, key, value)
+        let descriptor = DataPropertyDescriptor::new(
+            value.clone(),
+            PropertyWritable::Yes,
+            PropertyEnumerable::Yes,
+            PropertyConfigurable::Yes,
+        );
+        let descriptor_value =
+            self.create_property_descriptor_object(&OwnPropertyDescriptor::Data(descriptor))?;
+        let update = PropertyUpdate::Data(DataPropertyUpdate::new(
+            Some(value),
+            Some(PropertyWritable::Yes),
+            Some(PropertyEnumerable::Yes),
+            Some(PropertyConfigurable::Yes),
+        ));
+        let mut property = DynamicPropertyKey::new(key.to_owned(), None);
+        self.semantic_define_own_property_update_with_descriptor(
+            holder,
+            &mut property,
+            update,
+            &descriptor_value,
+        )?;
+        Ok(())
     }
 
     fn json_replacer(&mut self, value: Option<&Value>) -> Result<JsonReplacer> {

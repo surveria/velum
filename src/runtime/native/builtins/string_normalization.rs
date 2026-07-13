@@ -1,10 +1,8 @@
-use std::cmp::Ordering;
-
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, roots::VmRootKind},
     value::{ErrorName, Value},
 };
 
@@ -48,13 +46,18 @@ impl Context {
             Some(value) => self.to_string(value)?,
             None => self.to_string(&Value::Undefined)?,
         };
-        let left = left.nfc().collect::<String>();
-        let right = right.nfc().collect::<String>();
-        let result = match left.cmp(&right) {
-            Ordering::Less => -1.0,
-            Ordering::Equal => 0.0,
-            Ordering::Greater => 1.0,
+        let collator_args = args.as_slice().get(1..).unwrap_or_default();
+        let collator = self.construct_intl_collator(RuntimeCallArgs::values(collator_args))?;
+        let Value::Object(collator_id) = &collator else {
+            return Err(Error::runtime(
+                "Intl.Collator construction returned a non-object",
+            ));
         };
-        Ok(Value::Number(result))
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&collator))?;
+        let left = self.heap_string_value(&left)?;
+        let right = self.heap_string_value(&right)?;
+        roots.add_values([&left, &right])?;
+        self.eval_intl_collator_compare(RuntimeCallArgs::values(&[left, right]), *collator_id)
     }
 }

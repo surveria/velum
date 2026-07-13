@@ -413,3 +413,29 @@ fn json_parse_rejects_non_json_number_and_container_grammar() -> TestResult {
         "7:7",
     )
 }
+
+#[test]
+fn reviver_observes_proxy_arrays_and_descriptor_failures() -> TestResult {
+    ensure_string(
+        r#"
+        const result = JSON.parse('{"a": 1, "b": 2}', function(key, value) {
+            if (key === "a") {
+                Object.defineProperty(this, "b", { configurable: false });
+            }
+            if (key === "b") return 22;
+            if (key === "") return new Proxy([value.a, value.b], {});
+            return value;
+        });
+        const arrayProxy = new Proxy([], {});
+        arrayProxy.other = 0;
+        let visitedOther = false;
+        JSON.parse('[null, null]', function(key, value) {
+            if (key === "other") visitedOther = true;
+            this[1] = arrayProxy;
+            return value;
+        });
+        String(Array.isArray(result)) + ":" + result.join(":") + ":" + visitedOther
+        "#,
+        "true:1:2:false",
+    )
+}

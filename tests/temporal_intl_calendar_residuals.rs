@@ -91,3 +91,28 @@ fn distinguishes_rounded_string_offsets_from_exact_property_bag_offsets() -> Tes
     )?;
     ensure_value(&value, &Value::Bool(true))
 }
+
+#[test]
+fn temporal_with_rejects_temporal_objects_and_empty_bags() -> TestResult {
+    let value = eval(
+        r"
+        const date = new Temporal.PlainDate(2026, 7, 13);
+        const dateTime = new Temporal.PlainDateTime(2026, 7, 13);
+        let rejected = 0;
+        for (const action of [
+            () => date.with(date),
+            () => date.with({}),
+            () => dateTime.with(dateTime),
+            () => dateTime.with({}),
+        ]) {
+            try {
+                action();
+            } catch (error) {
+                if (error instanceof TypeError) rejected += 1;
+            }
+        }
+        rejected
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(4.0))
+}

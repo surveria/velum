@@ -5,7 +5,7 @@ use crate::{
         object::{
             DataPropertyDescriptor, OwnPropertyDescriptor, PropertyConfigurable,
             PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
-            TypedArrayPropertyIndex,
+            TypedArrayPropertyIndex, is_compatible_property_update,
         },
         property::{DynamicPropertyKey, has_property},
     },
@@ -138,12 +138,14 @@ impl Context {
         key: PropertyKey,
         update: PropertyUpdate,
     ) -> Result<bool> {
-        if self
+        let current = self
             .objects
-            .own_property_descriptor(id, property.lookup())?
-            .is_none()
-            && !self.objects.is_extensible(id)?
-        {
+            .own_property_descriptor(id, property.lookup())?;
+        if !is_compatible_property_update(
+            self.objects.is_extensible(id)?,
+            &update,
+            current.as_ref(),
+        ) {
             return Ok(false);
         }
         self.objects.define_property(

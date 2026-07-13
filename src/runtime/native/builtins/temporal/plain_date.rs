@@ -315,6 +315,11 @@ impl Context {
         let Some(Value::Object(fields)) = values.first() else {
             return Err(Error::type_error("PlainDate.with requires an object"));
         };
+        if self.objects.temporal_value(*fields)?.is_some() {
+            return Err(Error::type_error(
+                "PlainDate.with does not accept Temporal objects",
+            ));
+        }
         let object = Value::Object(*fields);
         for name in ["calendar", "timeZone"] {
             if !matches!(self.get_named(&object, name)?, Value::Undefined) {
@@ -333,6 +338,17 @@ impl Context {
             Some(self.plain_date_month_code(&month_code_value)?)
         };
         let year = self.plain_date_optional_i64(&object, "year")?;
+        if day.is_none()
+            && era.is_none()
+            && era_year.is_none()
+            && month.is_none()
+            && month_code.is_none()
+            && year.is_none()
+        {
+            return Err(Error::type_error(
+                "PlainDate.with requires at least one date field",
+            ));
+        }
         if day.is_some_and(|value| value <= 0) {
             return Err(Self::plain_date_range("day"));
         }

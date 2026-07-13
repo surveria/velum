@@ -476,6 +476,14 @@ impl Context {
     }
 
     pub(super) fn check_byte_buffer_length(&self, length: usize) -> Result<()> {
+        let maximum = usize::try_from(u32::MAX)
+            .map_err(|_| Error::limit(TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR))?;
+        if length > maximum {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
+            ));
+        }
         if length > self.limits.max_object_properties {
             return Err(Error::limit(format!(
                 "typed array byte length exceeded {}",

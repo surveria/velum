@@ -82,12 +82,16 @@ impl Context {
             NativeCallTarget::StringPrototypeSubstring => {
                 Some(self.eval_direct_string_prototype_substring(args, this_value))
             }
-            NativeCallTarget::StringPrototypeToLocaleLowerCase
-            | NativeCallTarget::StringPrototypeToLowerCase => {
+            NativeCallTarget::StringPrototypeToLocaleLowerCase => {
+                Some(self.eval_direct_locale_case(args, this_value, false))
+            }
+            NativeCallTarget::StringPrototypeToLowerCase => {
                 Some(self.eval_string_prototype_to_lower_case(runtime_call_args(args), this_value))
             }
-            NativeCallTarget::StringPrototypeToLocaleUpperCase
-            | NativeCallTarget::StringPrototypeToUpperCase => {
+            NativeCallTarget::StringPrototypeToLocaleUpperCase => {
+                Some(self.eval_direct_locale_case(args, this_value, true))
+            }
+            NativeCallTarget::StringPrototypeToUpperCase => {
                 Some(self.eval_string_prototype_to_upper_case(runtime_call_args(args), this_value))
             }
             NativeCallTarget::StringPrototypeToString => {
@@ -106,6 +110,19 @@ impl Context {
                 Some(self.eval_string_prototype_value_of(runtime_call_args(args), this_value))
             }
             _ => None,
+        }
+    }
+
+    fn eval_direct_locale_case(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+        uppercase: bool,
+    ) -> Result<Value> {
+        if uppercase {
+            self.eval_string_prototype_to_locale_upper_case(runtime_call_args(args), this_value)
+        } else {
+            self.eval_string_prototype_to_locale_lower_case(runtime_call_args(args), this_value)
         }
     }
 
@@ -186,12 +203,16 @@ impl Context {
             NativeFunctionKind::StringPrototypeSubstring => {
                 Some(self.eval_string_prototype_substring(args, this_value))
             }
-            NativeFunctionKind::StringPrototypeToLocaleLowerCase
-            | NativeFunctionKind::StringPrototypeToLowerCase => {
+            NativeFunctionKind::StringPrototypeToLocaleLowerCase => {
+                Some(self.eval_string_prototype_to_locale_lower_case(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeToLowerCase => {
                 Some(self.eval_string_prototype_to_lower_case(args, this_value))
             }
-            NativeFunctionKind::StringPrototypeToLocaleUpperCase
-            | NativeFunctionKind::StringPrototypeToUpperCase => {
+            NativeFunctionKind::StringPrototypeToLocaleUpperCase => {
+                Some(self.eval_string_prototype_to_locale_upper_case(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeToUpperCase => {
                 Some(self.eval_string_prototype_to_upper_case(args, this_value))
             }
             NativeFunctionKind::StringPrototypeToString => {

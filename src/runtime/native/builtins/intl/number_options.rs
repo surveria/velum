@@ -10,6 +10,54 @@ const ROUNDING_INCREMENTS: &[u16] = &[
     1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000,
 ];
 
+pub(super) const SUPPORTED_SIMPLE_UNITS: &[&str] = &[
+    "acre",
+    "bit",
+    "byte",
+    "celsius",
+    "centimeter",
+    "day",
+    "degree",
+    "fahrenheit",
+    "fluid-ounce",
+    "foot",
+    "gallon",
+    "gigabit",
+    "gigabyte",
+    "gram",
+    "hectare",
+    "hour",
+    "inch",
+    "kilobit",
+    "kilobyte",
+    "kilogram",
+    "kilometer",
+    "liter",
+    "megabit",
+    "megabyte",
+    "meter",
+    "microsecond",
+    "mile",
+    "mile-scandinavian",
+    "milliliter",
+    "millimeter",
+    "millisecond",
+    "minute",
+    "month",
+    "nanosecond",
+    "ounce",
+    "percent",
+    "petabyte",
+    "pound",
+    "second",
+    "stone",
+    "terabit",
+    "terabyte",
+    "week",
+    "yard",
+    "year",
+];
+
 struct NumberUnitOptions {
     style: String,
     currency: Option<String>,
@@ -544,52 +592,5 @@ fn is_sanctioned_unit(value: &str) -> bool {
 }
 
 fn is_simple_unit(value: &str) -> bool {
-    matches!(
-        value,
-        "acre"
-            | "bit"
-            | "byte"
-            | "celsius"
-            | "centimeter"
-            | "day"
-            | "degree"
-            | "fahrenheit"
-            | "fluid-ounce"
-            | "foot"
-            | "gallon"
-            | "gigabit"
-            | "gigabyte"
-            | "gram"
-            | "hectare"
-            | "hour"
-            | "inch"
-            | "kilobit"
-            | "kilobyte"
-            | "kilogram"
-            | "kilometer"
-            | "liter"
-            | "megabit"
-            | "megabyte"
-            | "meter"
-            | "microsecond"
-            | "mile"
-            | "mile-scandinavian"
-            | "milliliter"
-            | "millimeter"
-            | "millisecond"
-            | "minute"
-            | "month"
-            | "nanosecond"
-            | "ounce"
-            | "percent"
-            | "petabyte"
-            | "pound"
-            | "second"
-            | "stone"
-            | "terabit"
-            | "terabyte"
-            | "week"
-            | "yard"
-            | "year"
-    )
+    SUPPORTED_SIMPLE_UNITS.contains(&value)
 }
