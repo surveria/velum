@@ -3,10 +3,12 @@ use std::rc::Rc;
 use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
+    runtime::Context,
     runtime::control::{Completion, TailCallReturnMode},
-    runtime::{Context, FunctionClassConstructor},
     value::{FunctionId, Value},
 };
+
+use super::FunctionClassConstructor;
 
 /// Super references available to a class constructor or method body.
 #[derive(Debug)]

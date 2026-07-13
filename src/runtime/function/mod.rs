@@ -10,7 +10,7 @@ use crate::{
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
         PropertyWritable,
     },
-    runtime::{CompiledBindingFrame, Context, FunctionClassConstructor},
+    runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
@@ -29,6 +29,27 @@ mod property_dispatch;
 mod storage;
 mod suspended;
 mod upvalues;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum FunctionClassConstructor {
+    None,
+    Explicit,
+    DefaultDerived,
+}
+
+impl FunctionClassConstructor {
+    const fn from_flag(class_constructor: bool) -> Self {
+        if class_constructor {
+            Self::Explicit
+        } else {
+            Self::None
+        }
+    }
+
+    const fn is_class(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
