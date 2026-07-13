@@ -453,7 +453,10 @@ impl Context {
 
     fn can_be_held_weakly(&self, value: &Value) -> Result<bool> {
         match value {
-            Value::Object(_) => Ok(true),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Ok(true),
             Value::Symbol(symbol) => Ok(self.symbols.key_for(symbol.id())?.is_none()),
             _ => Ok(false),
         }

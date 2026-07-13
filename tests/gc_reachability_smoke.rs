@@ -215,6 +215,53 @@ fn resolves_weak_map_ephemerons_without_marking_dead_keys() -> TestResult {
 }
 
 #[test]
+fn resolves_callable_weak_map_ephemerons_without_marking_dead_functions() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var liveFunction = function liveFunction() {};
+        var liveFunctionValue = { answer: 42 };
+        var nativeFunctionValue = { answer: 43 };
+        var callableWeakMap = new WeakMap();
+        callableWeakMap.set(liveFunction, liveFunctionValue);
+        callableWeakMap.set(Array, nativeFunctionValue);
+        (function addDeadFunctionEntry() {
+            const deadFunction = function deadFunction() {};
+            callableWeakMap.set(deadFunction, { answer: 1 });
+        })();
+        42
+        ",
+    )?;
+
+    let snapshot = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        snapshot.unreachable(VmGcKind::JavaScriptFunction),
+        "unreachable weak function key",
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_at_least(
+        report.reclaimed(VmGcKind::JavaScriptFunction),
+        1,
+        "reclaimed weak function key",
+    )?;
+    ensure_usize(
+        report.weak_entries_removed(),
+        1,
+        "removed callable weak entry",
+    )?;
+    let result = vm.eval(
+        "callableWeakMap.get(liveFunction) === liveFunctionValue && callableWeakMap.get(Array) === nativeFunctionValue ? 42 : 0",
+    )?;
+    ensure(
+        result.to_string() == "42",
+        "live function key did not retain its ephemeron value",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
 fn distinguishes_registered_and_unreachable_symbols() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

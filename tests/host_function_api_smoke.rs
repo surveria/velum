@@ -39,6 +39,32 @@ fn registers_typed_host_functions() -> TestResult {
 }
 
 #[test]
+fn host_functions_are_valid_weak_collection_keys() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context()
+        .register_host_function(HOST_ADD_NAME, host_add)?;
+
+    vm.context().eval(
+        r#"
+        var hostWeakValue = { kind: "host" };
+        var hostWeakMap = new WeakMap([[hostAdd, hostWeakValue]]);
+        var hostWeakSet = new WeakSet([hostAdd]);
+        "#,
+    )?;
+    vm.collect_garbage()?;
+    let actual = vm.context().eval(
+        r#"
+        "" + (hostWeakMap.get(hostAdd) === hostWeakValue)
+            + ":" + hostWeakSet.has(hostAdd)
+            + ":" + hostWeakMap.delete(hostAdd)
+            + ":" + hostWeakSet.delete(hostAdd)
+        "#,
+    )?;
+    ensure_value(&actual, &Value::from("true:true:true:true"))
+}
+
+#[test]
 fn reports_contextual_host_argument_errors() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
