@@ -513,7 +513,13 @@ impl Context {
         let Some(text) = value.string_text() else {
             return Err(Error::type_error("Temporal calendar must be a string"));
         };
-        Self::temporal_calendar_from_text(text)
+        if text.eq_ignore_ascii_case("islamic") {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                "The islamic calendar alias is not valid for Temporal",
+            ));
+        }
+        Calendar::try_from_utf8(text.as_bytes()).map_err(temporal_error)
     }
 
     pub(super) fn temporal_calendar_from_text(text: &str) -> Result<Calendar> {
