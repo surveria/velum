@@ -1,5 +1,6 @@
 mod date_time_format;
 mod date_time_range;
+mod date_time_text;
 mod duration_format;
 mod formatting;
 mod number_digits;

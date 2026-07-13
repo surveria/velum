@@ -57,7 +57,7 @@ impl Context {
             ));
         }
         let preferences = self.parse_date_time_preferences(&options_value)?;
-        let options = self.parse_date_time_components(
+        let mut options = self.parse_date_time_components(
             &options_value,
             preferences.hour12,
             preferences.hour_cycle.clone(),
@@ -69,6 +69,11 @@ impl Context {
             options.hour12,
             options.hour_cycle.as_deref(),
         );
+        options.hour_cycle = Some(resolve_hour_cycle(
+            &locale,
+            options.hour12,
+            options.hour_cycle.as_deref(),
+        ));
         Ok(DateTimeFormatValue {
             locale,
             calendar,
@@ -131,11 +136,11 @@ impl Context {
         }
         let fractional = self.date_time_option_value(options_value, "fractionalSecondDigits")?;
         if !matches!(fractional, Value::Undefined) {
-            let digits = self.to_number(&fractional)?.floor();
-            if !digits.is_finite() || !(1.0..=3.0).contains(&digits) {
+            let number = self.to_number(&fractional)?;
+            if !number.is_finite() || !(1.0..=3.0).contains(&number) {
                 return Err(range_error("fractionalSecondDigits is out of range"));
             }
-            options.fractional_second_digits = digits.to_u8();
+            options.fractional_second_digits = number.floor().to_u8();
         }
         options.time_zone_name = self.date_time_option_string(
             options_value,
@@ -168,11 +173,11 @@ impl Context {
                 "dateStyle and timeStyle cannot be combined with component options",
             ));
         }
-        if options.date_style.is_none()
+        options.default_components = options.date_style.is_none()
             && options.time_style.is_none()
             && !options.has_explicit_date_fields()
-            && !options.has_explicit_time_fields()
-        {
+            && !options.has_explicit_time_fields();
+        if options.default_components {
             options.year = Some("numeric".to_owned());
             options.month = Some("numeric".to_owned());
             options.day = Some("numeric".to_owned());
@@ -253,6 +258,37 @@ impl Context {
             ));
         }
         Ok(Some(text))
+    }
+}
+
+fn resolve_hour_cycle(locale: &str, hour12: Option<bool>, requested: Option<&str>) -> String {
+    if let Some(hour12) = hour12 {
+        return if hour12 {
+            if locale.to_ascii_lowercase().starts_with("ja") {
+                "h11"
+            } else {
+                "h12"
+            }
+        } else {
+            "h23"
+        }
+        .to_owned();
+    }
+    if let Some(requested) = requested {
+        return requested.to_owned();
+    }
+    if let Some(extension) = unicode_extension(locale, "hc")
+        && matches!(extension.as_str(), "h11" | "h12" | "h23" | "h24")
+    {
+        return extension;
+    }
+    if ["de", "fr", "it", "ja"]
+        .iter()
+        .any(|prefix| locale.to_ascii_lowercase().starts_with(prefix))
+    {
+        "h23".to_owned()
+    } else {
+        "h12".to_owned()
     }
 }
 

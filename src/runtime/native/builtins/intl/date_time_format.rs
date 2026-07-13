@@ -202,18 +202,15 @@ impl Context {
             fields.push(("hour12", Value::Bool(matches!(hour_cycle, "h11" | "h12"))));
         }
         for (name, value) in [
-            ("dateStyle", formatter.options.date_style.as_deref()),
-            ("timeStyle", formatter.options.time_style.as_deref()),
             ("weekday", formatter.options.weekday.as_deref()),
             ("era", formatter.options.era.as_deref()),
             ("year", formatter.options.year.as_deref()),
             ("month", formatter.options.month.as_deref()),
             ("day", formatter.options.day.as_deref()),
+            ("dayPeriod", formatter.options.day_period.as_deref()),
             ("hour", formatter.options.hour.as_deref()),
             ("minute", formatter.options.minute.as_deref()),
             ("second", formatter.options.second.as_deref()),
-            ("dayPeriod", formatter.options.day_period.as_deref()),
-            ("timeZoneName", formatter.options.time_zone_name.as_deref()),
         ] {
             if let Some(value) = value {
                 fields.push((name, self.heap_string_value(value)?));
@@ -221,6 +218,15 @@ impl Context {
         }
         if let Some(digits) = formatter.options.fractional_second_digits {
             fields.push(("fractionalSecondDigits", Value::Number(f64::from(digits))));
+        }
+        for (name, value) in [
+            ("timeZoneName", formatter.options.time_zone_name.as_deref()),
+            ("dateStyle", formatter.options.date_style.as_deref()),
+            ("timeStyle", formatter.options.time_style.as_deref()),
+        ] {
+            if let Some(value) = value {
+                fields.push((name, self.heap_string_value(value)?));
+            }
         }
         self.create_intl_data_object(fields)
     }
@@ -275,20 +281,10 @@ impl Context {
     }
 
     pub(super) fn resolved_hour_cycle(formatter: &DateTimeFormatValue) -> Option<&str> {
-        if !formatter.options.has_explicit_time_fields() && formatter.options.time_style.is_none() {
+        if formatter.options.hour.is_none() && formatter.options.time_style.is_none() {
             return None;
         }
-        if let Some(hour12) = formatter.options.hour12 {
-            return Some(if hour12 { "h12" } else { "h23" });
-        }
-        if let Some(hour_cycle) = formatter.options.hour_cycle.as_deref() {
-            return Some(hour_cycle);
-        }
-        Some(if formatter.locale.to_ascii_lowercase().starts_with("de") {
-            "h23"
-        } else {
-            "h12"
-        })
+        formatter.options.hour_cycle.as_deref()
     }
 
     pub(super) fn create_intl_data_object(

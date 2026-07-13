@@ -8,6 +8,7 @@ use super::{Object, ObjectHeap};
 
 #[derive(Debug, Clone, Default)]
 pub(in crate::runtime) struct DateTimeFormatOptions {
+    pub default_components: bool,
     pub date_style: Option<String>,
     pub time_style: Option<String>,
     pub weekday: Option<String>,
