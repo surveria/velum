@@ -106,6 +106,28 @@ fn strict_arrow_parameters_reject_future_reserved_words() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn arrow_lookahead_balances_mixed_nested_delimiters() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const arrow = ({ outer: [first, { value: second }] }, [third]) =>
+            first + second + third;
+        arrow({ outer: [10, { value: 12 }] }, [20]) === 42;
+        ",
+    )?;
+    ensure_value(&value, &Value::Bool(true))?;
+
+    for source in [
+        "const arrow = ([value}) => value;",
+        "const arrow = ({value]) => value;",
+    ] {
+        ensure_parse_error(source)?;
+    }
+    Ok(())
+}
+
 fn ensure_parse_error(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

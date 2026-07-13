@@ -18,6 +18,7 @@ mod expression;
 mod function;
 mod function_expression;
 mod literal;
+mod lookahead;
 mod member;
 mod module;
 mod pattern;

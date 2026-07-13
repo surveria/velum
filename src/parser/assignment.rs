@@ -101,39 +101,10 @@ impl Parser {
     }
 
     pub(super) fn outer_literal_closing_offset(&mut self) -> Option<usize> {
-        let first = self.peek_kind(0)?;
-        let first = match first {
-            TokenKind::LBrace => Delimiter::Brace,
-            TokenKind::LBracket => Delimiter::Bracket,
-            _ => return None,
-        };
-        let mut delimiters = vec![first];
-        let mut offset = 1usize;
-        while let Some(kind) = self.peek_kind(offset) {
-            let closing = match kind {
-                TokenKind::RParen => Some(Delimiter::Paren),
-                TokenKind::RBrace => Some(Delimiter::Brace),
-                TokenKind::RBracket => Some(Delimiter::Bracket),
-                _ => None,
-            };
-            if let Some(closing) = closing {
-                if delimiters.pop() != Some(closing) {
-                    return None;
-                }
-            } else {
-                match kind {
-                    TokenKind::LParen => delimiters.push(Delimiter::Paren),
-                    TokenKind::LBrace => delimiters.push(Delimiter::Brace),
-                    TokenKind::LBracket => delimiters.push(Delimiter::Bracket),
-                    _ => {}
-                }
-            }
-            if delimiters.is_empty() {
-                return Some(offset);
-            }
-            offset = offset.saturating_add(1);
+        match self.peek_kind(0)? {
+            TokenKind::LBrace | TokenKind::LBracket => self.balanced_closing_offset(0),
+            _ => None,
         }
-        None
     }
 
     fn assignment_operator(&mut self) -> Option<(Option<BinaryOp>, crate::SourceSpan)> {
@@ -332,11 +303,4 @@ impl Parser {
             },
         )
     }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum Delimiter {
-    Paren,
-    Brace,
-    Bracket,
 }

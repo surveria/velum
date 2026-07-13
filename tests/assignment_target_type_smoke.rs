@@ -75,6 +75,20 @@ fn sloppy_call_loop_targets_throw_after_call_and_strict_code_is_rejected() -> Te
     Err(format!("expected parser error, got {error}").into())
 }
 
+#[test]
+fn destructuring_lookahead_balances_mixed_nested_delimiters() -> TestResult {
+    expect_true(
+        r"
+        let first;
+        let second;
+        ({ outer: [first, { value: second }] } = {
+            outer: [20, { value: 22 }]
+        });
+        first + second === 42;
+        ",
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

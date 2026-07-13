@@ -691,33 +691,9 @@ impl Parser {
     }
 
     fn parenthesized_arrow_end(&mut self, lparen_offset: usize) -> Option<usize> {
-        if !self.peek_kind_is(lparen_offset, &TokenKind::LParen) {
-            return None;
-        }
-        let mut offset = lparen_offset;
-        let mut depth = 0usize;
-        loop {
-            let kind = self.peek_kind(offset)?;
-            match kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => {
-                    depth = depth.checked_add(1)?;
-                }
-                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                    depth = depth.checked_sub(1)?;
-                    if depth == 0 {
-                        if !self.peek_kind_is(offset, &TokenKind::RParen) {
-                            return None;
-                        }
-                        let arrow = offset.checked_add(1)?;
-                        return self
-                            .peek_kind_is_no_line_terminator(arrow, &TokenKind::Arrow)
-                            .then_some(arrow);
-                    }
-                }
-                TokenKind::Eof => return None,
-                _ => {}
-            }
-            offset = offset.checked_add(1)?;
-        }
+        let closing = self.balanced_closing_offset(lparen_offset)?;
+        let arrow = closing.checked_add(1)?;
+        self.peek_kind_is_no_line_terminator(arrow, &TokenKind::Arrow)
+            .then_some(arrow)
     }
 }
