@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T134556Z.md`
-- Task: PR #584: runtime: complete Intl.DateTimeFormat semantics
-- Performance: 5.79x (4/5 >1.00x) (from `rsqjs-test-report-20260713T134556Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T134556Z.md`)
+- `rsqjs-test-report-20260713T135721Z.md`
+- Task: PR #593: runtime: complete Date residual semantics
+- Performance: 5.40x (4/5 >1.00x) (from `rsqjs-test-report-20260713T135721Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T135721Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 97876 passed / 4702 failed (95.42%) (from `rsqjs-test-report-20260713T134556Z.md`)
+- Full Test262: 97996 passed / 4582 failed (95.53%) (from `rsqjs-test-report-20260713T135721Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -540,3 +540,4 @@ Latest report:
 | `20260713T122357Z` `3c14e5a` PR #582: runtime: complete Atomics agent semantics | 6.09x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 97365 passed / 5213 failed (94.92%) |
 | `20260713T131541Z` `5de608b` PR #590: architecture: type delegated yield transport | 5.50x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 97450 passed / 5128 failed (95.00%) |
 | `20260713T134556Z` `ffb3a00` PR #584: runtime: complete Intl.DateTimeFormat semantics | 5.79x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 97876 passed / 4702 failed (95.42%) |
+| `20260713T135721Z` `3d201e8` PR #593: runtime: complete Date residual semantics | 5.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 97996 passed / 4582 failed (95.53%) |
