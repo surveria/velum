@@ -1,3 +1,5 @@
+use std::{collections::HashMap, rc::Rc};
+
 use crate::{
     error::{Error, Result},
     syntax::{
@@ -9,14 +11,14 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub(super) struct StaticStringTable {
     strings: Vec<StaticString>,
-    index: Vec<StaticStringIndexEntry>,
+    index: HashMap<Rc<[u16]>, StaticStringId>,
 }
 
 impl StaticStringTable {
-    pub(super) const fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             strings: Vec::new(),
-            index: Vec::new(),
+            index: HashMap::new(),
         }
     }
 
@@ -25,75 +27,35 @@ impl StaticStringTable {
     }
 
     pub(super) fn intern_owned(&mut self, value: Vec<u16>, offset: usize) -> Result<StaticString> {
-        let position = match self.static_string_position(&value) {
-            Ok(position) => return self.static_string_at_index_position(position, offset),
-            Err(position) => position,
-        };
-        if position > self.index.len() {
-            return Err(Error::parse(
-                "static string insert position is out of range",
-                offset,
-            ));
+        if let Some(id) = self.index.get(value.as_slice()).copied() {
+            return self.static_string(id, offset);
         }
         let id = StaticStringId::from_index(self.strings.len())?;
-        let value = StaticString::new(id, value);
+        let value = StaticString::new(value);
         self.strings.push(value.clone());
-        self.index
-            .insert(position, StaticStringIndexEntry::new(value.clone()));
+        self.index.insert(value.shared_units(), id);
         Ok(value)
     }
 
-    fn static_string_at_index_position(
-        &self,
-        position: usize,
-        offset: usize,
-    ) -> Result<StaticString> {
-        let entry = self
-            .index
-            .get(position)
-            .ok_or_else(|| Error::parse("static string index entry is not available", offset))?;
+    fn static_string(&self, id: StaticStringId, offset: usize) -> Result<StaticString> {
         self.strings
-            .get(entry.id().index()?)
+            .get(id.index()?)
             .cloned()
             .ok_or_else(|| Error::parse("static string id is not defined", offset))
-    }
-
-    fn static_string_position(&self, value: &[u16]) -> std::result::Result<usize, usize> {
-        self.index
-            .binary_search_by(|entry| entry.as_utf16().cmp(value))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct StaticStringIndexEntry {
-    value: StaticString,
-}
-
-impl StaticStringIndexEntry {
-    const fn new(value: StaticString) -> Self {
-        Self { value }
-    }
-
-    fn as_utf16(&self) -> &[u16] {
-        self.value.as_utf16()
-    }
-
-    const fn id(&self) -> StaticStringId {
-        self.value.id()
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct StaticNameTable {
     names: Vec<StaticName>,
-    index: Vec<StaticNameIndexEntry>,
+    index: HashMap<Rc<str>, StaticNameId>,
 }
 
 impl StaticNameTable {
-    pub(super) const fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             names: Vec::new(),
-            index: Vec::new(),
+            index: HashMap::new(),
         }
     }
 
@@ -102,84 +64,57 @@ impl StaticNameTable {
     }
 
     pub(super) fn intern_owned(&mut self, name: String, offset: usize) -> Result<StaticName> {
-        let position = match self.static_name_position(&name) {
-            Ok(position) => return self.static_name_at_index_position(position, offset),
-            Err(position) => position,
-        };
-        self.insert(name, position, offset)
+        if let Some(id) = self.index.get(name.as_str()).copied() {
+            return self.static_name(id, offset);
+        }
+        self.insert_owned(name)
     }
 
     pub(super) fn intern_borrowed(&mut self, name: &str, offset: usize) -> Result<StaticName> {
-        let position = match self.static_name_position(name) {
-            Ok(position) => return self.static_name_at_index_position(position, offset),
-            Err(position) => position,
-        };
-        if position > self.index.len() {
-            return Err(Error::parse(
-                "static name insert position is out of range",
-                offset,
-            ));
+        if let Some(id) = self.index.get(name).copied() {
+            return self.static_name(id, offset);
         }
         let id = StaticNameId::from_index(self.names.len())?;
         let name = StaticName::borrowed(id, name);
-        self.remember_name(name, position);
-        self.names
-            .last()
-            .cloned()
-            .ok_or_else(|| Error::parse("static name insert failed", offset))
-    }
-
-    fn insert(&mut self, name: String, position: usize, offset: usize) -> Result<StaticName> {
-        if position > self.index.len() {
-            return Err(Error::parse(
-                "static name insert position is out of range",
-                offset,
-            ));
-        }
-        let id = StaticNameId::from_index(self.names.len())?;
-        let name = StaticName::new(id, name);
-        self.remember_name(name.clone(), position);
+        self.remember_name(name.clone());
         Ok(name)
     }
 
-    fn remember_name(&mut self, name: StaticName, position: usize) {
-        self.names.push(name.clone());
-        self.index.insert(position, StaticNameIndexEntry::new(name));
+    fn insert_owned(&mut self, name: String) -> Result<StaticName> {
+        let id = StaticNameId::from_index(self.names.len())?;
+        let name = StaticName::new(id, name);
+        self.remember_name(name.clone());
+        Ok(name)
     }
 
-    fn static_name_at_index_position(&self, position: usize, offset: usize) -> Result<StaticName> {
-        let entry = self
-            .index
-            .get(position)
-            .ok_or_else(|| Error::parse("static name index entry is not available", offset))?;
+    fn remember_name(&mut self, name: StaticName) {
+        self.index.insert(name.shared_text(), name.id());
+        self.names.push(name);
+    }
+
+    fn static_name(&self, id: StaticNameId, offset: usize) -> Result<StaticName> {
         self.names
-            .get(entry.id().index()?)
+            .get(id.index()?)
             .cloned()
             .ok_or_else(|| Error::parse("static name id is not defined", offset))
     }
 
-    fn static_name_position(&self, name: &str) -> std::result::Result<usize, usize> {
-        self.index
-            .binary_search_by(|entry| entry.as_str().cmp(name))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct StaticNameIndexEntry {
-    name: StaticName,
-}
-
-impl StaticNameIndexEntry {
-    const fn new(name: StaticName) -> Self {
-        Self { name }
-    }
-
-    fn as_str(&self) -> &str {
-        self.name.as_str()
-    }
-
-    const fn id(&self) -> StaticNameId {
-        self.name.id()
+    pub(super) fn rollback_to(&mut self, len: usize, offset: usize) -> Result<()> {
+        if len > self.names.len() {
+            return Err(Error::parse("static name rollback is out of range", offset));
+        }
+        while self.names.len() > len {
+            let Some(name) = self.names.pop() else {
+                return Err(Error::parse("static name rollback failed", offset));
+            };
+            if self.index.remove(name.as_str()).is_none() {
+                return Err(Error::parse(
+                    "static name index entry is not defined",
+                    offset,
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -205,6 +140,17 @@ impl StaticBindingTable {
             .ok_or_else(|| Error::limit("static binding count overflowed"))?;
         Ok(StaticBinding::new(id, name))
     }
+
+    pub(super) fn rollback_to(&mut self, count: usize, offset: usize) -> Result<()> {
+        if count > self.count {
+            return Err(Error::parse(
+                "static binding rollback is out of range",
+                offset,
+            ));
+        }
+        self.count = count;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -228,5 +174,16 @@ impl StaticFunctionTable {
             .checked_add(1)
             .ok_or_else(|| Error::limit("static function count overflowed"))?;
         Ok(id)
+    }
+
+    pub(super) fn rollback_to(&mut self, count: usize, offset: usize) -> Result<()> {
+        if count > self.count {
+            return Err(Error::parse(
+                "static function rollback is out of range",
+                offset,
+            ));
+        }
+        self.count = count;
+        Ok(())
     }
 }
