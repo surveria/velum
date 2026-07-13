@@ -14,6 +14,7 @@ mod calendar_types;
 mod duration;
 mod install;
 mod instant;
+mod now;
 mod plain_date;
 mod plain_date_time;
 mod plain_date_time_options;
@@ -70,6 +71,8 @@ impl Context {
         )?;
         let duration = self.temporal_duration_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Duration", duration)?;
+        let now = self.temporal_now_value()?;
+        self.define_non_enumerable_object_property(namespace, "Now", now)?;
         let instant = self.temporal_instant_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Instant", instant)?;
         let plain_date = self.temporal_plain_date_constructor_value()?;

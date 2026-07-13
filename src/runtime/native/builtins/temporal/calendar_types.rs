@@ -609,6 +609,9 @@ impl Context {
         if kind.is_zoned_date_time() {
             return self.eval_zoned_date_time_kind(kind, args, receiver);
         }
+        if kind.is_temporal_now() {
+            return self.eval_temporal_now_kind(kind, args);
+        }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(
                 "Temporal.PlainDate constructor requires 'new'",
