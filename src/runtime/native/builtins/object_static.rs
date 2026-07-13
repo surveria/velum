@@ -351,7 +351,10 @@ impl Context {
 
     fn validate_define_properties_target(target: &Value) -> Result<()> {
         match target {
-            Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) => Ok(()),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Ok(()),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -360,9 +363,6 @@ impl Context {
             | Value::String(_)
             | Value::Symbol(_) => Err(Error::type_error(
                 "Object.defineProperties target must be an object",
-            )),
-            Value::HostFunction(_) => Err(Error::runtime(
-                "Object.defineProperties host-function targets are not supported",
             )),
         }
     }

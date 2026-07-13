@@ -64,7 +64,7 @@ use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::{
     FunctionArgumentsBinding, FunctionScopeTemplate, FunctionSelfBinding,
 };
-pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
+pub use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 pub(in crate::runtime) use suspended::{DetachedFunctionExecution, SuspendedAsyncFunction};
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";

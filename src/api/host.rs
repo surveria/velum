@@ -4,11 +4,12 @@ use crate::{
     api::owned_value::OwnedValue,
     error::{Error, Result},
     ownership::VmIdentity,
-    runtime::RetainedValue,
-    runtime::VmRootSnapshot,
     runtime::call::RuntimeCallArgs,
     runtime::retained_values::RetainedValueRegistry,
-    runtime::{Context, RealmId},
+    runtime::{
+        Context, RealmId, RetainedValue, VmRootSnapshot,
+        function::{FunctionIntrinsicDefaults, FunctionProperties},
+    },
     syntax::DeclKind,
     value::{HostFunctionId, Value},
 };
@@ -131,6 +132,7 @@ impl FromJsValue<'_> for String {
 pub struct HostFunction {
     name: String,
     kind: HostFunctionKind,
+    properties: FunctionProperties,
 }
 
 #[derive(Clone)]
@@ -144,44 +146,50 @@ enum HostFunctionKind {
 }
 
 impl HostFunction {
+    const fn with_kind(name: String, kind: HostFunctionKind) -> Self {
+        let properties = FunctionProperties::new(
+            Value::Undefined,
+            FunctionIntrinsicDefaults::new(Value::Number(0.0), Value::Undefined, None),
+        );
+        Self {
+            name,
+            kind,
+            properties,
+        }
+    }
+
     fn new<F>(name: String, callback: F) -> Self
     where
         F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
     {
-        Self {
+        Self::with_kind(
             name,
-            kind: HostFunctionKind::Callback {
+            HostFunctionKind::Callback {
                 callback: Rc::new(callback),
                 allow_vm_handles: false,
             },
-        }
+        )
     }
 
     const fn operation(name: String, operation: HostOperation) -> Self {
-        Self {
-            name,
-            kind: HostFunctionKind::Operation(operation),
-        }
+        Self::with_kind(name, HostFunctionKind::Operation(operation))
     }
 
     const fn realm_eval(name: String, realm: RealmId) -> Self {
-        Self {
-            name,
-            kind: HostFunctionKind::RealmEval(realm),
-        }
+        Self::with_kind(name, HostFunctionKind::RealmEval(realm))
     }
 
     fn new_internal<F>(name: String, callback: F) -> Self
     where
         F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
     {
-        Self {
+        Self::with_kind(
             name,
-            kind: HostFunctionKind::Callback {
+            HostFunctionKind::Callback {
                 callback: Rc::new(callback),
                 allow_vm_handles: true,
             },
-        }
+        )
     }
 
     fn new_typed<F, R>(name: String, callback: F) -> Self
@@ -218,6 +226,18 @@ impl HostFunction {
 
     pub(crate) const fn storage_name_bytes(&self) -> usize {
         self.name.len()
+    }
+
+    pub(crate) const fn properties(&self) -> &FunctionProperties {
+        &self.properties
+    }
+
+    pub(crate) const fn properties_mut(&mut self) -> &mut FunctionProperties {
+        &mut self.properties
+    }
+
+    fn release_property_storage(&mut self) -> Result<()> {
+        self.properties.release_storage()
     }
 
     const fn operation_kind(&self) -> Option<HostOperation> {
@@ -411,12 +431,15 @@ impl Context {
     fn create_internal_realm_eval_function(
         &mut self,
         name: String,
-        realm: RealmId,
+        realm: &RealmId,
     ) -> Result<Value> {
-        self.create_internal_host_function_value(HostFunction::realm_eval(name, realm))
+        let target = realm.clone();
+        self.with_realm_id(realm, |context| {
+            context.create_internal_host_function_value(HostFunction::realm_eval(name, target))
+        })
     }
 
-    fn create_internal_host_function_value(&mut self, function: HostFunction) -> Result<Value> {
+    fn create_internal_host_function_value(&mut self, mut function: HostFunction) -> Result<Value> {
         if function.name.is_empty() {
             return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
         }
@@ -435,9 +458,18 @@ impl Context {
             projected_count,
             projected_payload_bytes,
         )?;
+        self.initialize_host_function_object(&mut function)?;
         self.host_functions.reserve_insert()?;
+        self.host_functions.reserve_removals(1)?;
         let id = HostFunctionId::new(self.host_functions.next_index());
         self.host_functions.insert_at_next(id.index(), function)?;
+        if let Err(error) = self.activate_host_function_property_storage(id) {
+            let removed = self.host_functions.remove_reserved(id.index())?;
+            if removed.is_none() {
+                return Err(Error::runtime("host function rollback failed"));
+            }
+            return Err(error);
+        }
         Ok(Value::HostFunction(id))
     }
 
@@ -492,7 +524,7 @@ impl Context {
         self.register_host_function_value(create_host_function(name, callback))
     }
 
-    fn register_host_function_value(&mut self, function: HostFunction) -> Result<()> {
+    fn register_host_function_value(&mut self, mut function: HostFunction) -> Result<()> {
         if function.name.is_empty() {
             return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
         }
@@ -512,18 +544,26 @@ impl Context {
             projected_count,
             projected_payload_bytes,
         )?;
+        self.initialize_host_function_object(&mut function)?;
 
         self.host_functions.reserve_insert()?;
         self.host_functions.reserve_removals(1)?;
         let id = HostFunctionId::new(self.host_functions.next_index());
         let binding_name = function.name.clone();
         self.host_functions.insert_at_next(id.index(), function)?;
-        let result = self.define(&binding_name, Value::HostFunction(id), DeclKind::Const);
-        if let Err(error) = result {
+        if let Err(error) = self.activate_host_function_property_storage(id) {
             let removed = self.host_functions.remove_reserved(id.index())?;
             if removed.is_none() {
                 return Err(Error::runtime("host function rollback failed"));
             }
+            return Err(error);
+        }
+        let result = self.define(&binding_name, Value::HostFunction(id), DeclKind::Const);
+        if let Err(error) = result {
+            let Some(mut removed) = self.host_functions.remove_reserved(id.index())? else {
+                return Err(Error::runtime("host function rollback failed"));
+            };
+            removed.release_property_storage()?;
             return Err(error);
         }
         Ok(())
@@ -578,16 +618,31 @@ impl Context {
             }
             HostOperation::CreateRealm => {
                 let realm = self.create_realm()?;
-                let eval =
-                    self.create_internal_realm_eval_function("eval".to_owned(), realm.clone())?;
+                let eval = self.create_internal_realm_eval_function("eval".to_owned(), &realm)?;
                 self.install_realm_global_eval(&realm, eval)
             }
         }
     }
 
-    fn host_function(&self, id: HostFunctionId) -> Result<&HostFunction> {
+    fn initialize_host_function_object(&mut self, function: &mut HostFunction) -> Result<()> {
+        let prototype = self.function_constructor_prototype_value()?;
+        let name = self.heap_string_value(&function.name)?;
+        function
+            .properties_mut()
+            .set_inheritance_prototype(prototype);
+        function.properties_mut().set_generated_name(name);
+        Ok(())
+    }
+
+    pub(crate) fn host_function(&self, id: HostFunctionId) -> Result<&HostFunction> {
         self.host_functions
             .get(id.index())
+            .ok_or_else(|| Error::runtime("host function id is not defined"))
+    }
+
+    pub(crate) fn host_function_mut(&mut self, id: HostFunctionId) -> Result<&mut HostFunction> {
+        self.host_functions
+            .get_mut(id.index())
             .ok_or_else(|| Error::runtime("host function id is not defined"))
     }
 

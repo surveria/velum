@@ -481,6 +481,16 @@ impl Context {
                 function.properties().storage_cache_entry_count(),
             )?;
         }
+        for function in &self.host_functions {
+            counter.record(
+                VmStorageKind::ObjectProperty,
+                function.properties().storage_property_count()?,
+            )?;
+            counter.record(
+                VmStorageKind::CacheEntry,
+                function.properties().storage_cache_entry_count(),
+            )?;
+        }
 
         counter.record(VmStorageKind::JavaScriptFunction, self.functions.len())?;
         counter.record(VmStorageKind::NativeFunction, self.native_functions.len())?;

@@ -176,9 +176,10 @@ impl Context {
                 let (names, symbols) = self.native_function_own_keys(*id)?;
                 self.function_property_key_values(names, symbols)
             }
-            Value::HostFunction(_) => Err(Error::runtime(
-                "own property keys target cannot be converted to an object",
-            )),
+            Value::HostFunction(id) => {
+                let (names, symbols) = self.host_function_own_keys(*id)?;
+                self.function_property_key_values(names, symbols)
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

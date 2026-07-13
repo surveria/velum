@@ -61,7 +61,7 @@ impl FunctionPropertyKind {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::runtime) struct FunctionProperties {
+pub struct FunctionProperties {
     prototype: Value,
     intrinsic_defaults: FunctionIntrinsicDefaults,
     length: FunctionIntrinsicProperty,
@@ -73,14 +73,14 @@ pub(in crate::runtime) struct FunctionProperties {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::runtime) struct FunctionIntrinsicDefaults {
+pub struct FunctionIntrinsicDefaults {
     length: DataPropertyDescriptor,
     name: DataPropertyDescriptor,
     prototype: Option<DataPropertyDescriptor>,
 }
 
 impl FunctionIntrinsicDefaults {
-    pub(in crate::runtime) const fn new(
+    pub const fn new(
         length: Value,
         name: Value,
         prototype: Option<DataPropertyDescriptor>,
@@ -174,10 +174,7 @@ impl FunctionPropertyEntry {
 }
 
 impl FunctionProperties {
-    pub(in crate::runtime) const fn new(
-        prototype: Value,
-        intrinsic_defaults: FunctionIntrinsicDefaults,
-    ) -> Self {
+    pub const fn new(prototype: Value, intrinsic_defaults: FunctionIntrinsicDefaults) -> Self {
         Self {
             prototype,
             intrinsic_defaults,
@@ -214,8 +211,38 @@ impl FunctionProperties {
         Ok(())
     }
 
-    pub(in crate::runtime) fn set_generated_name(&mut self, value: Value) {
+    pub fn release_storage(&mut self) -> Result<()> {
+        let Some(storage_ledger) = self.storage_ledger.take() else {
+            return Ok(());
+        };
+        let property_count = self.storage_property_count()?;
+        let cache_count = self.storage_cache_entry_count();
+        storage_ledger.release_count(VmStorageKind::ObjectProperty, property_count)?;
+        if let Err(error) = storage_ledger.release_count(VmStorageKind::CacheEntry, cache_count) {
+            storage_ledger.grow_count(VmStorageKind::ObjectProperty, property_count)?;
+            self.storage_ledger = Some(storage_ledger);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub fn set_generated_name(&mut self, value: Value) {
         self.intrinsic_defaults.set_name_value(value);
+    }
+
+    pub fn set_inheritance_prototype(&mut self, value: Value) {
+        self.prototype = value;
+    }
+
+    pub(in crate::runtime) fn try_set_inheritance_prototype(&mut self, value: Value) -> bool {
+        if crate::runtime::abstract_operations::same_value(&self.prototype, &value) {
+            return true;
+        }
+        if !self.is_extensible() {
+            return false;
+        }
+        self.prototype = value;
+        true
     }
 
     pub(in crate::runtime) fn storage_property_count(&self) -> Result<usize> {

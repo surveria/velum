@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Error, HostCall, Value};
+use rs_quickjs::{Engine, Error, HostCall, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -65,6 +65,104 @@ fn host_functions_are_valid_weak_collection_keys() -> TestResult {
 }
 
 #[test]
+fn host_functions_expose_ordinary_function_object_semantics() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    for name in ["hostObject", "hostSealed", "hostFrozen"] {
+        vm.context()
+            .register_host_function_typed(name, |_call| Ok(()))?;
+    }
+
+    vm.context().eval(
+        r#"
+        var hostSymbol = Symbol("host");
+        var inheritedHostState = { inherited: 40 };
+        var hostSetterValue = 0;
+        Object.defineProperty(hostObject, "answer", {
+            get: function () { return 42; },
+            set: function (value) { hostSetterValue = value; },
+            enumerable: true,
+            configurable: true
+        });
+        hostObject.extra = 2;
+        hostObject[hostSymbol] = 3;
+        Object.defineProperties(hostObject, {
+            batch: {
+                value: 4,
+                writable: true,
+                enumerable: true,
+                configurable: true
+            }
+        });
+        Object.assign(hostObject, { assigned: 5 });
+        (function attachOnlyHostOwnedState() {
+            const metadata = { answer: 42 };
+            hostObject.metadata = metadata;
+            Object.defineProperty(hostObject, "computed", {
+                get: function () { return metadata.answer; },
+                configurable: true
+            });
+        })();
+        hostSealed.value = 1;
+        hostFrozen.value = 1;
+        var copiedHostState = Object.assign({}, hostObject);
+        Object.seal(hostSealed);
+        Object.freeze(hostFrozen);
+        "#,
+    )?;
+    vm.collect_garbage()?;
+
+    let actual = vm.context().eval(
+        r#"
+        const nameDescriptor = Object.getOwnPropertyDescriptor(hostObject, "name");
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(hostObject, "length");
+        const keys = Reflect.ownKeys(hostObject);
+        hostObject.answer = 41;
+        const initial = Object.getPrototypeOf(hostObject) === Function.prototype
+            && hostObject instanceof Function
+            && hostObject.call(undefined) === undefined
+            && hostObject.name === "hostObject"
+            && hostObject.length === 0
+            && nameDescriptor.value === "hostObject"
+            && nameDescriptor.writable === false
+            && nameDescriptor.enumerable === false
+            && nameDescriptor.configurable === true
+            && lengthDescriptor.value === 0
+            && lengthDescriptor.writable === false
+            && lengthDescriptor.enumerable === false
+            && lengthDescriptor.configurable === true
+            && Object.hasOwn(hostObject, "answer")
+            && "answer" in hostObject
+            && hostObject.answer === 42
+            && hostSetterValue === 41
+            && Object.keys(hostObject).join(",") === "answer,extra,batch,assigned,metadata"
+            && keys[0] === "length"
+            && keys[1] === "name"
+            && keys.indexOf("answer") > 1
+            && keys[keys.length - 1] === hostSymbol
+            && Object.getOwnPropertySymbols(hostObject)[0] === hostSymbol
+            && hostObject.metadata.answer === 42
+            && hostObject.computed === 42
+            && copiedHostState.answer === 42
+            && copiedHostState.batch + copiedHostState.assigned === 9
+            && Reflect.setPrototypeOf(hostObject, hostObject) === false;
+        const changed = Object.setPrototypeOf(hostObject, inheritedHostState) === hostObject
+            && Object.getPrototypeOf(hostObject) === inheritedHostState
+            && hostObject.inherited + hostObject.extra === 42;
+        const deleted = delete hostObject.extra
+            && !Object.hasOwn(hostObject, "extra");
+        Object.preventExtensions(hostObject);
+        initial && changed && deleted
+            && Object.isExtensible(hostObject) === false
+            && Object.isSealed(hostSealed)
+            && Object.isFrozen(hostFrozen) ? 42 : 0
+        "#,
+    )?;
+    vm.storage_snapshot()?;
+    ensure_value(&actual, &Value::Number(42.0))
+}
+
+#[test]
 fn reports_contextual_host_argument_errors() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
@@ -121,17 +219,21 @@ fn interns_host_returned_strings_in_vm_heap() -> TestResult {
     vm.context()
         .register_host_function(HOST_ECHO_NAME, |_call| Ok(Value::from(CAMERA_LABEL)))?;
 
-    ensure_usize(vm.resource_usage().string_count, 0)?;
-    ensure_usize(vm.resource_usage().string_bytes, 0)?;
+    let registration_baseline = vm.resource_usage();
 
     let static_label = vm.context().eval("hostLabel()")?;
     ensure_value(&static_label, &Value::from(CAMERA_LABEL))?;
     let after_static_label = vm.resource_usage();
-    ensure_usize(after_static_label.string_count, 1)?;
-    ensure_usize(
-        after_static_label.string_bytes,
-        string_payload_bytes(CAMERA_LABEL),
-    )?;
+    let expected_count = registration_baseline
+        .string_count
+        .checked_add(1)
+        .ok_or("host string count overflowed")?;
+    ensure_usize(after_static_label.string_count, expected_count)?;
+    let expected_bytes = registration_baseline
+        .string_bytes
+        .checked_add(string_payload_bytes(CAMERA_LABEL))
+        .ok_or("host string byte count overflowed")?;
+    ensure_usize(after_static_label.string_bytes, expected_bytes)?;
 
     let owned_label = vm.context().eval("hostOwned()")?;
     ensure_value(&owned_label, &Value::from(CAMERA_LABEL))?;
@@ -198,6 +300,7 @@ fn rejects_duplicate_host_function_bindings() -> TestResult {
     let mut vm = engine.create_vm();
     vm.context()
         .register_host_function(HOST_ECHO_NAME, host_echo)?;
+    let before_duplicate = vm.storage_snapshot()?;
 
     let Err(error) = vm
         .context()
@@ -205,7 +308,16 @@ fn rejects_duplicate_host_function_bindings() -> TestResult {
     else {
         return Err("expected duplicate host function registration to fail".into());
     };
-    ensure_error_contains(&error, "'hostEcho' has already been declared")
+    ensure_error_contains(&error, "'hostEcho' has already been declared")?;
+    let after_duplicate = vm.storage_snapshot()?;
+    ensure_usize(
+        after_duplicate.count(VmStorageKind::ObjectProperty),
+        before_duplicate.count(VmStorageKind::ObjectProperty),
+    )?;
+    ensure_usize(
+        after_duplicate.count(VmStorageKind::CacheEntry),
+        before_duplicate.count(VmStorageKind::CacheEntry),
+    )
 }
 
 #[test]

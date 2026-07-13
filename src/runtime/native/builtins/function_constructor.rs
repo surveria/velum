@@ -118,7 +118,7 @@ impl Context {
         self.eval_generated_function_constructor(args.as_slice(), FunctionKind::AsyncGenerator)
     }
 
-    pub(in crate::runtime) fn function_constructor_prototype_value(&mut self) -> Result<Value> {
+    pub(crate) fn function_constructor_prototype_value(&mut self) -> Result<Value> {
         let Value::NativeFunction(id) = self.function_constructor_value()? else {
             return Err(Error::runtime("Function constructor value is not native"));
         };

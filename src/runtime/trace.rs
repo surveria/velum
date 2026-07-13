@@ -1,4 +1,5 @@
 use crate::{
+    api::host::HostFunction,
     error::Result,
     runtime::{
         collections::{CollectionId, CollectionIteratorId},
@@ -12,7 +13,7 @@ use crate::{
 
 use super::{Context, Function, FunctionNewTarget};
 
-const CALLABLE_EDGE_KIND_COUNT: usize = 6;
+const CALLABLE_EDGE_KIND_COUNT: usize = 7;
 const OBJECT_EDGE_KIND_COUNT: usize = 3;
 
 /// Strong-reference slot categories currently owned by callable stores.
@@ -27,6 +28,7 @@ pub enum VmCallableEdgeKind {
     JavaScriptFunctionInternal,
     NativeFunctionProperty,
     NativeFunctionInternal,
+    HostFunctionProperty,
     BoundFunctionInternal,
 }
 
@@ -37,6 +39,7 @@ impl VmCallableEdgeKind {
         Self::JavaScriptFunctionInternal,
         Self::NativeFunctionProperty,
         Self::NativeFunctionInternal,
+        Self::HostFunctionProperty,
         Self::BoundFunctionInternal,
     ];
 
@@ -53,7 +56,8 @@ impl VmCallableEdgeKind {
             Self::JavaScriptFunctionInternal => 2,
             Self::NativeFunctionProperty => 3,
             Self::NativeFunctionInternal => 4,
-            Self::BoundFunctionInternal => 5,
+            Self::HostFunctionProperty => 5,
+            Self::BoundFunctionInternal => 6,
         }
     }
 }
@@ -285,8 +289,8 @@ impl StrongEdgeVisitor<VmObjectEdgeKind> for ObjectEdgeCounter {
 }
 
 impl Context {
-    /// Counts strong-reference slots in JavaScript, native, and bound function
-    /// stores. This does not include object or asynchronous arenas.
+    /// Counts strong-reference slots in JavaScript, native, host, and bound
+    /// function stores. This does not include object or asynchronous arenas.
     ///
     /// # Errors
     /// Fails if an edge counter exceeds the supported range.
@@ -318,6 +322,9 @@ impl Context {
             function.visit_strong_edges(visitor)?;
         }
         for function in &self.native_functions {
+            function.visit_strong_edges(visitor)?;
+        }
+        for function in &self.host_functions {
             function.visit_strong_edges(visitor)?;
         }
         for function in &self.bound_functions {
@@ -429,6 +436,16 @@ impl Function {
             )?;
         }
         Ok(())
+    }
+}
+
+impl HostFunction {
+    pub(in crate::runtime) fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.properties()
+            .visit_strong_edges(VmCallableEdgeKind::HostFunctionProperty, visitor)
     }
 }
 

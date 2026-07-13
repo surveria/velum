@@ -1126,13 +1126,14 @@ check_callable_edge_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/trace.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${edge_kinds}" != 'JavaScriptFunctionUpvalue,JavaScriptFunctionProperty,JavaScriptFunctionInternal,NativeFunctionProperty,NativeFunctionInternal,BoundFunctionInternal,' ]]; then
+  if [[ "${edge_kinds}" != 'JavaScriptFunctionUpvalue,JavaScriptFunctionProperty,JavaScriptFunctionInternal,NativeFunctionProperty,NativeFunctionInternal,HostFunctionProperty,BoundFunctionInternal,' ]]; then
     fail "callable edge boundary changed; categories require an assigned AS migration"
   fi
 
   for source in \
     'for function in &self.functions {' \
     'for function in &self.native_functions {' \
+    'for function in &self.host_functions {' \
     'for function in &self.bound_functions {' \
     'for cell in self.upvalues.iter() {' \
     '.visit_strong_edges(' \
