@@ -564,7 +564,7 @@ impl Context {
         Ok(())
     }
 
-    fn plain_date_overflow_option(&mut self, value: Option<&Value>) -> Result<Overflow> {
+    pub(super) fn plain_date_overflow_option(&mut self, value: Option<&Value>) -> Result<Overflow> {
         let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(Overflow::Constrain);
         };
@@ -584,7 +584,7 @@ impl Context {
         })
     }
 
-    fn plain_date_difference_settings(
+    pub(super) fn plain_date_difference_settings(
         &mut self,
         value: Option<&Value>,
     ) -> Result<DifferenceSettings> {
@@ -649,7 +649,7 @@ impl Context {
         DisplayCalendar::from_str(&text).map_err(temporal_error)
     }
 
-    fn plain_time_from_value(&mut self, value: &Value) -> Result<PlainTime> {
+    pub(super) fn plain_time_from_value(&mut self, value: &Value) -> Result<PlainTime> {
         if let Value::Object(id) = value {
             match self.objects.temporal_value(*id)? {
                 Some(TemporalValue::PlainTime(time)) => return Ok(*time),
