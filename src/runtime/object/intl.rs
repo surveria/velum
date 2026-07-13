@@ -70,8 +70,10 @@ impl DateTimeFormatOptions {
 pub(in crate::runtime) struct DateTimeFormatValue {
     pub locale: String,
     pub calendar: String,
+    pub numbering_system: String,
     pub time_zone: String,
     pub options: DateTimeFormatOptions,
+    pub bound_format: Option<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +142,7 @@ impl IntlValue {
                 .locale
                 .len()
                 .saturating_add(value.calendar.len())
+                .saturating_add(value.numbering_system.len())
                 .saturating_add(value.time_zone.len())
                 .saturating_add(value.options.storage_payload_bytes()),
             Self::Duration => 0,
@@ -151,9 +154,12 @@ impl IntlValue {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        if let Self::Number(value) = self
-            && let Some(bound_format) = &value.bound_format
-        {
+        let bound_format = match self {
+            Self::DateTime(value) => value.bound_format.as_ref(),
+            Self::Number(value) => value.bound_format.as_ref(),
+            Self::Duration => None,
+        };
+        if let Some(bound_format) = bound_format {
             visitor.visit(
                 VmObjectEdgeKind::InternalSlot,
                 StrongEdgeReference::Value(bound_format),

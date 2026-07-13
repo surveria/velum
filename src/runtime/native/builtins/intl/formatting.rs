@@ -1,4 +1,7 @@
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use num_traits::ToPrimitive;
 
 use crate::{
     error::{Error, Result},
@@ -12,7 +15,7 @@ use crate::{
 use temporal_rs::{Calendar, Instant, TimeZone};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum DateTimeInputKind {
+pub(super) enum DateTimeInputKind {
     Instant,
     PlainDate,
     PlainDateTime,
@@ -23,9 +26,9 @@ enum DateTimeInputKind {
     LegacyDate,
 }
 
-#[derive(Debug, Clone)]
-struct DateTimeInput {
-    kind: DateTimeInputKind,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) struct DateTimeInput {
+    pub(super) kind: DateTimeInputKind,
     year: Option<i32>,
     month: Option<u8>,
     day: Option<u8>,
@@ -38,10 +41,10 @@ struct DateTimeInput {
     offset: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-struct FormatPart {
-    kind: &'static str,
-    value: String,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) struct FormatPart {
+    pub(super) kind: &'static str,
+    pub(super) value: String,
 }
 
 impl Context {
@@ -87,28 +90,38 @@ impl Context {
         self.heap_string_value(&text)
     }
 
-    fn intl_date_time_input(
-        &self,
+    pub(super) fn intl_date_time_input(
+        &mut self,
         formatter: &DateTimeFormatValue,
         value: &Value,
     ) -> Result<DateTimeInput> {
-        let Value::Object(id) = value else {
-            return Err(Error::type_error("Intl.DateTimeFormat value is invalid"));
+        if let Value::Object(id) = value {
+            if let Some(temporal) = self.objects.temporal_value(*id)? {
+                return temporal_input(formatter, temporal.clone());
+            }
+            if let Some(date) = self.objects.date_value(*id)? {
+                let millis = date
+                    .millis()
+                    .ok_or_else(|| Error::exception(ErrorName::RangeError, "Invalid Date"))?;
+                return legacy_millis_input(formatter, i128::from(millis));
+            }
+        }
+        let millis = if matches!(value, Value::Undefined) {
+            current_time_millis()?
+        } else {
+            let number = self.to_number(value)?;
+            if !number.is_finite() || number.abs() > 8_640_000_000_000_000.0 {
+                return Err(Error::exception(
+                    ErrorName::RangeError,
+                    "Date-time value is outside the valid range",
+                ));
+            }
+            number
+                .trunc()
+                .to_i128()
+                .ok_or_else(|| Error::limit("Date-time milliseconds exceeded i128"))?
         };
-        if let Some(temporal) = self.objects.temporal_value(*id)? {
-            return temporal_input(formatter, temporal.clone());
-        }
-        if let Some(date) = self.objects.date_value(*id)? {
-            let millis = date
-                .millis()
-                .ok_or_else(|| Error::exception(ErrorName::RangeError, "Invalid Date"))?;
-            let nanos = i128::from(millis)
-                .checked_mul(1_000_000)
-                .ok_or_else(|| Error::limit("Date nanoseconds overflowed"))?;
-            let instant = Instant::try_new(nanos).map_err(intl_temporal_error)?;
-            return instant_input(formatter, instant, DateTimeInputKind::LegacyDate);
-        }
-        Err(Error::type_error("Intl.DateTimeFormat value is invalid"))
+        legacy_millis_input(formatter, millis)
     }
 
     fn intl_parts_value(&mut self, parts: Vec<FormatPart>) -> Result<Value> {
@@ -303,7 +316,10 @@ fn instant_input(
     })
 }
 
-fn format_parts(formatter: &DateTimeFormatValue, input: &DateTimeInput) -> Result<Vec<FormatPart>> {
+pub(super) fn format_parts(
+    formatter: &DateTimeFormatValue,
+    input: &DateTimeInput,
+) -> Result<Vec<FormatPart>> {
     validate_styles(formatter, input.kind)?;
     let (show_date, show_time, show_zone) = selected_groups(formatter, input.kind);
     let mut parts = Vec::new();
@@ -326,6 +342,22 @@ fn format_parts(formatter: &DateTimeFormatValue, input: &DateTimeInput) -> Resul
         });
     }
     Ok(parts)
+}
+
+fn legacy_millis_input(formatter: &DateTimeFormatValue, millis: i128) -> Result<DateTimeInput> {
+    let nanos = millis
+        .checked_mul(1_000_000)
+        .ok_or_else(|| Error::limit("Date nanoseconds overflowed"))?;
+    let instant = Instant::try_new(nanos).map_err(intl_temporal_error)?;
+    instant_input(formatter, instant, DateTimeInputKind::LegacyDate)
+}
+
+fn current_time_millis() -> Result<i128> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| Error::runtime(error.to_string()))?;
+    i128::try_from(duration.as_millis())
+        .map_err(|error| Error::limit(format!("current time milliseconds overflowed: {error}")))
 }
 
 fn check_calendar(actual: &Calendar, requested: &Calendar) -> Result<()> {

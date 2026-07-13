@@ -41,14 +41,42 @@ fn formats_temporal_values_and_parts() -> TestResult {
     let value = eval(
         r#"
         const instant = new Temporal.Instant(1735213600_321_000_000n);
-        const formatter = new Intl.DateTimeFormat("en", { timeZone: "UTC" });
+        const options = {
+            timeZone: "UTC",
+            year: "numeric",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            second: "numeric"
+        };
+        const formatter = new Intl.DateTimeFormat("en", options);
         const formatted = formatter.format(instant);
         const parts = formatter.formatToParts(instant);
-        formatted === instant.toLocaleString("en", { timeZone: "UTC" }) &&
+        formatted === instant.toLocaleString("en", options) &&
             formatted.includes("2024") &&
             formatted.includes("11:46:40") &&
             parts.some((part) => part.type === "year" && part.value === "2024") &&
             parts.some((part) => part.type === "second" && part.value === "40")
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn exposes_date_time_format_methods() -> TestResult {
+    let value = eval(
+        r#"
+        const formatter = new Intl.DateTimeFormat("en-US", { timeZone: "UTC" });
+        const first = formatter.format;
+        const second = formatter.format;
+        const parts = formatter.formatRangeToParts(0, 0);
+        first === second &&
+            first(0) === formatter.format(0) &&
+            formatter.formatRange(0, 0) === formatter.format(0) &&
+            parts.length > 0 &&
+            parts.every((part) => part.source === "shared") &&
+            Intl.DateTimeFormat.supportedLocalesOf(["en-US"])[0] === "en-US"
         "#,
     )?;
     ensure_value(&value, &Value::Bool(true))

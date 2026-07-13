@@ -5,7 +5,6 @@ pub(in crate::runtime) const INTL_NAME: &str = "Intl";
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum IntlFunctionKind {
     DateTimeFormatConstructor,
-    DateTimeFormatFormat,
     DateTimeFormatFormatToParts,
     DateTimeFormatResolvedOptions,
     DurationFormatConstructor,
@@ -22,13 +21,17 @@ pub(in crate::runtime) enum IntlFunctionKind {
     NumberFormatSupportedLocalesOf,
     PluralRulesConstructor,
     RelativeTimeFormatConstructor,
+    DateTimeFormatFormatGetter,
+    DateTimeFormatBoundFormat(ObjectId),
+    DateTimeFormatFormatRange,
+    DateTimeFormatFormatRangeToParts,
+    DateTimeFormatSupportedLocalesOf,
 }
 
 impl IntlFunctionKind {
     pub(in crate::runtime::native) const fn index(self) -> usize {
         match self {
             Self::DateTimeFormatConstructor => 0,
-            Self::DateTimeFormatFormat => 1,
             Self::DateTimeFormatFormatToParts => 2,
             Self::DateTimeFormatResolvedOptions => 3,
             Self::DurationFormatConstructor => 4,
@@ -45,6 +48,11 @@ impl IntlFunctionKind {
             Self::NumberFormatSupportedLocalesOf => 15,
             Self::PluralRulesConstructor => 16,
             Self::RelativeTimeFormatConstructor => 17,
+            Self::DateTimeFormatFormatGetter => 18,
+            Self::DateTimeFormatBoundFormat(_) => 19,
+            Self::DateTimeFormatFormatRange => 20,
+            Self::DateTimeFormatFormatRangeToParts => 21,
+            Self::DateTimeFormatSupportedLocalesOf => 22,
         }
     }
 
@@ -58,22 +66,27 @@ impl IntlFunctionKind {
             | Self::NumberFormatFormatGetter
             | Self::NumberFormatResolvedOptions
             | Self::PluralRulesConstructor
-            | Self::RelativeTimeFormatConstructor => 0.0,
-            Self::DateTimeFormatFormat
-            | Self::DateTimeFormatFormatToParts
+            | Self::RelativeTimeFormatConstructor
+            | Self::DateTimeFormatFormatGetter => 0.0,
+            Self::DateTimeFormatFormatToParts
             | Self::DurationFormatFormat
             | Self::SupportedValuesOf
             | Self::NumberFormatBoundFormat(_)
             | Self::NumberFormatFormatToParts
-            | Self::NumberFormatSupportedLocalesOf => 1.0,
-            Self::NumberFormatFormatRange | Self::NumberFormatFormatRangeToParts => 2.0,
+            | Self::NumberFormatSupportedLocalesOf
+            | Self::DateTimeFormatBoundFormat(_)
+            | Self::DateTimeFormatSupportedLocalesOf => 1.0,
+            Self::NumberFormatFormatRange
+            | Self::NumberFormatFormatRangeToParts
+            | Self::DateTimeFormatFormatRange
+            | Self::DateTimeFormatFormatRangeToParts => 2.0,
         }
     }
 
     pub(in crate::runtime) const fn name(self) -> &'static str {
         match self {
             Self::DateTimeFormatConstructor => "DateTimeFormat",
-            Self::DateTimeFormatFormat | Self::DurationFormatFormat => "format",
+            Self::DurationFormatFormat => "format",
             Self::DateTimeFormatFormatToParts | Self::NumberFormatFormatToParts => "formatToParts",
             Self::DateTimeFormatResolvedOptions | Self::NumberFormatResolvedOptions => {
                 "resolvedOptions"
@@ -82,11 +95,15 @@ impl IntlFunctionKind {
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
             Self::NumberFormatConstructor => "NumberFormat",
-            Self::NumberFormatFormatGetter => "get format",
-            Self::NumberFormatBoundFormat(_) => "",
-            Self::NumberFormatFormatRange => "formatRange",
-            Self::NumberFormatFormatRangeToParts => "formatRangeToParts",
-            Self::NumberFormatSupportedLocalesOf => "supportedLocalesOf",
+            Self::NumberFormatFormatGetter | Self::DateTimeFormatFormatGetter => "get format",
+            Self::NumberFormatBoundFormat(_) | Self::DateTimeFormatBoundFormat(_) => "",
+            Self::NumberFormatFormatRange | Self::DateTimeFormatFormatRange => "formatRange",
+            Self::NumberFormatFormatRangeToParts | Self::DateTimeFormatFormatRangeToParts => {
+                "formatRangeToParts"
+            }
+            Self::NumberFormatSupportedLocalesOf | Self::DateTimeFormatSupportedLocalesOf => {
+                "supportedLocalesOf"
+            }
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
         }

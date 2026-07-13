@@ -1,4 +1,5 @@
 mod date_time_format;
+mod date_time_range;
 mod duration_format;
 mod formatting;
 mod number_digits;
@@ -20,7 +21,6 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-const DATE_TIME_FORMAT_TAG: &str = "Intl.DateTimeFormat";
 const DURATION_FORMAT_TAG: &str = "Intl.DurationFormat";
 
 impl Context {
@@ -103,16 +103,25 @@ impl Context {
     ) -> Result<Value> {
         match kind {
             IntlFunctionKind::DateTimeFormatConstructor => {
-                self.construct_intl_date_time_format(args)
+                self.call_intl_date_time_format(args, this_value)
             }
-            IntlFunctionKind::DateTimeFormatFormat => {
-                self.eval_intl_date_time_format(args, this_value, false)
+            IntlFunctionKind::DateTimeFormatFormatGetter => {
+                self.eval_intl_date_time_format_getter(this_value)
+            }
+            IntlFunctionKind::DateTimeFormatBoundFormat(formatter) => {
+                self.eval_intl_date_time_format_bound(args, formatter)
             }
             IntlFunctionKind::DateTimeFormatFormatToParts => {
                 self.eval_intl_date_time_format(args, this_value, true)
             }
             IntlFunctionKind::DateTimeFormatResolvedOptions => {
                 self.eval_intl_date_time_format_resolved_options(this_value)
+            }
+            IntlFunctionKind::DateTimeFormatFormatRange => {
+                self.eval_intl_date_time_format_range(args, this_value, false)
+            }
+            IntlFunctionKind::DateTimeFormatFormatRangeToParts => {
+                self.eval_intl_date_time_format_range(args, this_value, true)
             }
             IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
             IntlFunctionKind::DurationFormatFormat => {
@@ -140,31 +149,14 @@ impl Context {
             IntlFunctionKind::NumberFormatFormatRangeToParts => {
                 self.eval_intl_number_format_range(args, this_value, true)
             }
-            IntlFunctionKind::NumberFormatSupportedLocalesOf => {
+            IntlFunctionKind::DateTimeFormatSupportedLocalesOf
+            | IntlFunctionKind::NumberFormatSupportedLocalesOf => {
                 self.eval_intl_number_format_supported_locales(args)
             }
             IntlFunctionKind::CollatorConstructor
             | IntlFunctionKind::PluralRulesConstructor
             | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
         }
-    }
-
-    fn intl_date_time_format_constructor_value(&mut self) -> Result<Value> {
-        self.intl_constructor_value(
-            IntlFunctionKind::DateTimeFormatConstructor,
-            DATE_TIME_FORMAT_TAG,
-            &[
-                ("format", IntlFunctionKind::DateTimeFormatFormat),
-                (
-                    "formatToParts",
-                    IntlFunctionKind::DateTimeFormatFormatToParts,
-                ),
-                (
-                    "resolvedOptions",
-                    IntlFunctionKind::DateTimeFormatResolvedOptions,
-                ),
-            ],
-        )
     }
 
     fn intl_duration_format_constructor_value(&mut self) -> Result<Value> {
