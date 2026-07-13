@@ -10,6 +10,16 @@ mod private;
 mod super_property;
 mod types;
 
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub struct BytecodeMetrics {
+    instructions: usize,
+    binding_operands: usize,
+    property_operands: usize,
+    direct_native_calls: usize,
+    array_native_calls: usize,
+    numeric_instructions: usize,
+}
+
 pub use address::BytecodeAddress;
 pub use block::BytecodeBlock;
 pub use completion::BytecodeCompletion;
