@@ -1,205 +1,167 @@
-use crate::bytecode::{BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeSwitchCase};
+use crate::bytecode::{
+    BytecodeAssignmentTarget, BytecodeCatch, BytecodeClass, BytecodeForInTarget, BytecodeFunction,
+    BytecodeFunctionDeclaration, BytecodeHoistPlan, BytecodeMetrics, BytecodePattern,
+    BytecodePatternKey, BytecodeSuperProperty, BytecodeSwitchCase,
+};
 
 impl BytecodeAssignmentTarget {
-    pub(super) fn for_each_block(&self, visit: &mut impl FnMut(&BytecodeBlock)) {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
         match self {
-            Self::Binding(_) => {}
-            Self::WebCompatCall(target) => visit(target),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => {
-                visit(object);
+            Self::Binding(binding) => {
+                BytecodeMetrics::binding_operands(binding.direct_operand_count())
             }
+            Self::WebCompatCall(target) => target.metrics(),
+            Self::StaticProperty { object, .. }
+            | Self::ArrayIndexProperty { object, .. }
+            | Self::PrivateProperty { object, .. } => object
+                .metrics()
+                .combine(BytecodeMetrics::property_operands(1)),
             Self::ComputedProperty {
                 object, property, ..
-            } => {
-                visit(object);
-                visit(property);
+            } => object
+                .metrics()
+                .combine(property.metrics())
+                .combine(BytecodeMetrics::property_operands(1)),
+        }
+    }
+}
+
+impl BytecodeForInTarget {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        match self {
+            Self::Binding { name, .. } => {
+                BytecodeMetrics::binding_operands(name.direct_operand_count())
             }
-        }
-    }
-
-    pub(super) fn property_operand_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::WebCompatCall(target) => target.property_operand_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => {
-                object.property_operand_count().saturating_add(1)
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.metrics(true)
             }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .property_operand_count()
-                .saturating_add(property.property_operand_count()),
-        }
-    }
-
-    pub(super) fn direct_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::WebCompatCall(target) => target.direct_native_call_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => object.direct_native_call_count(),
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .direct_native_call_count()
-                .saturating_add(property.direct_native_call_count()),
-        }
-    }
-
-    pub(super) fn array_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::WebCompatCall(target) => target.array_native_call_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => object.array_native_call_count(),
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .array_native_call_count()
-                .saturating_add(property.array_native_call_count()),
-        }
-    }
-
-    pub(super) fn numeric_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::WebCompatCall(target) => target.numeric_instruction_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => object.numeric_instruction_count(),
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .numeric_instruction_count()
-                .saturating_add(property.numeric_instruction_count()),
-        }
-    }
-
-    pub(super) fn binding_operand_count(&self) -> usize {
-        match self {
-            Self::Binding(binding) => binding.direct_operand_count(),
-            Self::WebCompatCall(target) => target.binding_operand_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => object.binding_operand_count(),
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .binding_operand_count()
-                .saturating_add(property.binding_operand_count()),
-        }
-    }
-
-    pub(super) fn nested_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::WebCompatCall(target) => target.instruction_count(),
-            Self::StaticProperty { object, .. }
-            | Self::ArrayIndexProperty { object, .. }
-            | Self::PrivateProperty { object, .. } => object.instruction_count(),
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .instruction_count()
-                .saturating_add(property.instruction_count()),
+            Self::Assignment(target) => target.metrics(),
         }
     }
 }
 
 impl BytecodeSwitchCase {
-    pub(super) fn property_operand_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::property_operand_count)
-            .saturating_add(self.body.property_operand_count())
-    }
-
-    pub(super) fn direct_native_call_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::direct_native_call_count)
-            .saturating_add(self.body.direct_native_call_count())
-    }
-
-    pub(super) fn array_native_call_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::array_native_call_count)
-            .saturating_add(self.body.array_native_call_count())
-    }
-
-    pub(super) fn numeric_instruction_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::numeric_instruction_count)
-            .saturating_add(self.body.numeric_instruction_count())
-    }
-
-    pub(super) fn binding_operand_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::binding_operand_count)
-            .saturating_add(self.body.binding_operand_count())
-    }
-
-    pub(super) fn instruction_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::instruction_count)
-            .saturating_add(self.body.instruction_count())
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = self.body.metrics();
+        if let Some(test) = &self.test {
+            metrics.add(test.metrics());
+        }
+        metrics
     }
 }
 
 impl BytecodeCatch {
-    pub(super) fn property_operand_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.property_operand_count())
-            .saturating_add(self.body.property_operand_count())
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = self.body.metrics();
+        if let Some(param) = &self.param {
+            metrics.add(param.metrics(false));
+        }
+        for binding in self.param_bindings.iter() {
+            metrics.add(BytecodeMetrics::binding_operands(
+                binding.direct_operand_count(),
+            ));
+        }
+        metrics
     }
+}
 
-    pub(super) fn direct_native_call_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.direct_native_call_count())
-            .saturating_add(self.body.direct_native_call_count())
+impl BytecodeSuperProperty {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        match self {
+            Self::Static(_) => BytecodeMetrics::property_operands(1),
+            Self::Computed { expression, .. } => expression
+                .metrics()
+                .combine(BytecodeMetrics::property_operands(1)),
+        }
     }
+}
 
-    pub(super) fn array_native_call_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.array_native_call_count())
-            .saturating_add(self.body.array_native_call_count())
+impl BytecodeFunction {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = self.body().metrics();
+        for default in self.param_defaults().iter().flatten() {
+            metrics.add(default.metrics());
+        }
+        metrics.add(self.hoist_plan().metrics());
+        metrics
     }
+}
 
-    pub(super) fn numeric_instruction_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.numeric_instruction_count())
-            .saturating_add(self.body.numeric_instruction_count())
+impl BytecodeFunctionDeclaration {
+    fn metrics(&self) -> BytecodeMetrics {
+        BytecodeMetrics::binding_operands(self.name().direct_operand_count())
+            .combine(self.bytecode().metrics())
     }
+}
 
-    pub(super) fn binding_operand_count(&self) -> usize {
-        let targets = self.param_bindings.iter().fold(0usize, |count, binding| {
-            count.saturating_add(binding.direct_operand_count())
-        });
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.binding_operand_count())
-            .saturating_add(targets)
-            .saturating_add(self.body.binding_operand_count())
+impl BytecodeHoistPlan {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = BytecodeMetrics::empty();
+        for declaration in self.function_declarations() {
+            metrics.add(declaration.metrics());
+        }
+        metrics
     }
+}
 
-    pub(super) fn instruction_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, |pattern| pattern.nested_instruction_count())
-            .saturating_add(self.body.instruction_count())
+impl BytecodeClass {
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = self.constructor.metrics();
+        for member in self.members.iter() {
+            metrics.add(member.bytecode.metrics());
+        }
+        for field in self.fields.iter() {
+            if let Some(initializer) = &field.initializer {
+                metrics.add(initializer.metrics());
+            }
+        }
+        for block in self.static_blocks.iter() {
+            metrics.add(block.metrics());
+        }
+        metrics
+    }
+}
+
+impl BytecodePattern {
+    pub(super) fn metrics(&self, include_binding_operands: bool) -> BytecodeMetrics {
+        match self {
+            Self::Binding(binding) => {
+                if include_binding_operands {
+                    BytecodeMetrics::binding_operands(binding.direct_operand_count())
+                } else {
+                    BytecodeMetrics::empty()
+                }
+            }
+            Self::Assignment(target) => target.metrics(),
+            Self::Object { properties, rest } => {
+                let mut metrics = BytecodeMetrics::empty();
+                for property in properties.iter() {
+                    if let BytecodePatternKey::Computed(block) = &property.key {
+                        metrics.add(block.metrics());
+                    }
+                    if let Some(default) = &property.target.default {
+                        metrics.add(default.metrics());
+                    }
+                    metrics.add(property.target.pattern.metrics(include_binding_operands));
+                }
+                if let Some(rest) = rest {
+                    metrics.add(rest.metrics(include_binding_operands));
+                }
+                metrics
+            }
+            Self::Array { elements, rest } => {
+                let mut metrics = BytecodeMetrics::empty();
+                for element in elements.iter().flatten() {
+                    if let Some(default) = &element.default {
+                        metrics.add(default.metrics());
+                    }
+                    metrics.add(element.pattern.metrics(include_binding_operands));
+                }
+                if let Some(rest) = rest {
+                    metrics.add(rest.metrics(include_binding_operands));
+                }
+                metrics
+            }
+        }
     }
 }

@@ -265,12 +265,7 @@ impl CompiledScript {
         } else {
             compiler::compile_program(&program, &binding_layout)?
         };
-        let bytecode_instruction_count = bytecode.instruction_count();
-        let bytecode_binding_operand_count = bytecode.binding_operand_count();
-        let bytecode_property_operand_count = bytecode.property_operand_count();
-        let bytecode_direct_native_call_count = bytecode.direct_native_call_count();
-        let bytecode_array_native_call_count = bytecode.array_native_call_count();
-        let bytecode_numeric_instruction_count = bytecode.numeric_instruction_count();
+        let bytecode_metrics = bytecode.metrics();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();
         let script = Self {
@@ -289,12 +284,12 @@ impl CompiledScript {
                 global_binding_slot_count: binding_layout.global_slot_count(),
                 local_binding_slot_count: binding_layout.local_slot_count(),
                 upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
-                bytecode_instruction_count,
-                bytecode_binding_operand_count,
-                bytecode_property_operand_count,
-                bytecode_direct_native_call_count,
-                bytecode_array_native_call_count,
-                bytecode_numeric_instruction_count,
+                bytecode_instruction_count: bytecode_metrics.instruction_count(),
+                bytecode_binding_operand_count: bytecode_metrics.binding_operand_count(),
+                bytecode_property_operand_count: bytecode_metrics.property_operand_count(),
+                bytecode_direct_native_call_count: bytecode_metrics.direct_native_call_count(),
+                bytecode_array_native_call_count: bytecode_metrics.array_native_call_count(),
+                bytecode_numeric_instruction_count: bytecode_metrics.numeric_instruction_count(),
                 bytecode_hoisted_var_count,
                 bytecode_hoisted_function_count,
             },

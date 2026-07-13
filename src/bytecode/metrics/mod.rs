@@ -1,158 +1,155 @@
 use crate::{
+    api::native_call::NativeCallTarget,
     binding_metadata::BindingOperand,
-    bytecode::{
-        BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass, BytecodeForInTarget,
-        BytecodeInstruction, BytecodePattern, BytecodePatternKey, BytecodeSwitchCase,
-    },
+    bytecode::{BytecodeBinding, BytecodeBlock, BytecodeInstruction, BytecodeMetrics},
 };
 
 mod program;
 mod targets;
-mod traversal;
 
-use traversal::{count_blocks_2, count_for_blocks, count_switch, count_try};
+impl BytecodeMetrics {
+    pub const fn instruction_count(self) -> usize {
+        self.instructions
+    }
+
+    pub const fn binding_operand_count(self) -> usize {
+        self.binding_operands
+    }
+
+    pub const fn property_operand_count(self) -> usize {
+        self.property_operands
+    }
+
+    pub const fn direct_native_call_count(self) -> usize {
+        self.direct_native_calls
+    }
+
+    pub const fn array_native_call_count(self) -> usize {
+        self.array_native_calls
+    }
+
+    pub const fn numeric_instruction_count(self) -> usize {
+        self.numeric_instructions
+    }
+
+    pub(super) const fn binding_operands(count: usize) -> Self {
+        Self {
+            binding_operands: count,
+            ..Self::empty()
+        }
+    }
+
+    pub(super) const fn property_operands(count: usize) -> Self {
+        Self {
+            property_operands: count,
+            ..Self::empty()
+        }
+    }
+
+    const fn numeric_instruction() -> Self {
+        Self {
+            numeric_instructions: 1,
+            ..Self::empty()
+        }
+    }
+
+    const fn native_call(target: Option<NativeCallTarget>) -> Self {
+        Self {
+            direct_native_calls: target.is_some() as usize,
+            array_native_calls: match target {
+                Some(target) => target.is_array_target() as usize,
+                None => 0,
+            },
+            ..Self::empty()
+        }
+    }
+
+    pub(super) const fn empty() -> Self {
+        Self {
+            instructions: 0,
+            binding_operands: 0,
+            property_operands: 0,
+            direct_native_calls: 0,
+            array_native_calls: 0,
+            numeric_instructions: 0,
+        }
+    }
+
+    pub(super) const fn add(&mut self, other: Self) {
+        self.instructions = self.instructions.saturating_add(other.instructions);
+        self.binding_operands = self.binding_operands.saturating_add(other.binding_operands);
+        self.property_operands = self
+            .property_operands
+            .saturating_add(other.property_operands);
+        self.direct_native_calls = self
+            .direct_native_calls
+            .saturating_add(other.direct_native_calls);
+        self.array_native_calls = self
+            .array_native_calls
+            .saturating_add(other.array_native_calls);
+        self.numeric_instructions = self
+            .numeric_instructions
+            .saturating_add(other.numeric_instructions);
+    }
+
+    pub(super) const fn combine(mut self, other: Self) -> Self {
+        self.add(other);
+        self
+    }
+
+    const fn with_instruction(mut self) -> Self {
+        self.instructions = self.instructions.saturating_add(1);
+        self
+    }
+}
 
 impl BytecodeBlock {
-    pub fn instruction_count(&self) -> usize {
-        let nested = self
-            .instructions()
-            .iter()
-            .map(BytecodeInstruction::nested_instruction_count)
-            .sum::<usize>();
-        self.instructions().len().saturating_add(nested)
-    }
-
-    pub fn binding_operand_count(&self) -> usize {
-        self.instructions()
-            .iter()
-            .map(BytecodeInstruction::binding_operand_count)
-            .sum()
-    }
-
-    pub fn property_operand_count(&self) -> usize {
-        self.instructions()
-            .iter()
-            .map(BytecodeInstruction::property_operand_count)
-            .sum()
-    }
-
-    pub fn direct_native_call_count(&self) -> usize {
-        self.instructions()
-            .iter()
-            .map(BytecodeInstruction::direct_native_call_count)
-            .sum()
-    }
-
-    pub fn array_native_call_count(&self) -> usize {
-        self.instructions()
-            .iter()
-            .map(BytecodeInstruction::array_native_call_count)
-            .sum()
-    }
-
-    pub fn numeric_instruction_count(&self) -> usize {
-        self.instructions()
-            .iter()
-            .map(BytecodeInstruction::numeric_instruction_count)
-            .sum()
+    pub(super) fn metrics(&self) -> BytecodeMetrics {
+        let mut metrics = BytecodeMetrics::empty();
+        for instruction in self.instructions() {
+            metrics.add(instruction.metrics());
+        }
+        metrics
     }
 }
 
 impl BytecodeInstruction {
-    fn binding_operand_count(&self) -> usize {
-        match self {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive instruction match prevents structural metric drift"
+    )]
+    fn metrics(&self) -> BytecodeMetrics {
+        let metrics = match self {
             Self::LoadBinding(binding)
             | Self::StoreBinding(binding)
             | Self::ResolveBinding(binding)
             | Self::StoreResolvedBinding(binding)
             | Self::TypeOfBinding(binding)
-            | Self::DeleteBinding(binding) => binding.direct_operand_count(),
-            Self::DeclareBinding { name, .. }
-            | Self::HoistLexicalBinding { name, .. }
+            | Self::DeleteBinding(binding) => {
+                BytecodeMetrics::binding_operands(binding.direct_operand_count())
+            }
+            Self::HoistLexicalBinding { name, .. }
+            | Self::DeclareBinding { name, .. }
             | Self::UpdateBinding { name, .. }
-            | Self::CompoundStoreBinding { name, .. } => name.direct_operand_count(),
-            Self::CallBinding { callee, .. } | Self::CallBindingSpread { callee, .. } => {
-                callee.direct_operand_count()
+            | Self::CompoundStoreBinding { name, .. } => {
+                BytecodeMetrics::binding_operands(name.direct_operand_count())
             }
-            Self::Construct { constructor, .. } => constructor.direct_operand_count(),
-            Self::NullishCoalescing { right } => right.binding_operand_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .binding_operand_count()
-                .saturating_add(value.binding_operand_count()),
-            Self::WebCompatCallAssignment { target } => target.binding_operand_count(),
-            Self::While {
-                condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::binding_operand_count),
-            Self::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::binding_operand_count,
-            ),
-            Self::ForIn {
-                target,
-                object,
-                body,
-                ..
+            Self::CallBindingSpread { callee, native, .. }
+            | Self::CallBinding { callee, native, .. } => {
+                BytecodeMetrics::binding_operands(callee.direct_operand_count())
+                    .combine(BytecodeMetrics::native_call(*native))
             }
-            | Self::ForOf {
-                target,
-                object,
-                body,
+            Self::Construct {
+                constructor,
+                native,
                 ..
-            } => target
-                .binding_operand_count()
-                .saturating_add(object.binding_operand_count())
-                .saturating_add(body.binding_operand_count()),
-            Self::Switch {
-                discriminant,
-                cases,
-                ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::binding_operand_count,
-                BytecodeSwitchCase::binding_operand_count,
-            ),
-            Self::Try {
-                body,
-                catch,
-                finally_body,
-                ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::binding_operand_count,
-                BytecodeCatch::binding_operand_count,
-            ),
-            Self::Label { body, .. } => body.binding_operand_count(),
-            Self::ScopedBlock { block, .. } => block.binding_operand_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().binding_operand_count(),
-            Self::CreateClass { class } => class.binding_operand_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    fn property_operand_count(&self) -> usize {
-        match self {
+            } => BytecodeMetrics::binding_operands(constructor.direct_operand_count())
+                .combine(BytecodeMetrics::native_call(*native)),
             Self::DeleteStaticProperty { .. }
             | Self::DeleteComputedProperty { .. }
             | Self::UpdateStaticProperty { .. }
             | Self::UpdateArrayIndexProperty { .. }
             | Self::UpdateComputedProperty { .. }
-            | Self::Binary {
-                property_access: Some(_),
-                ..
-            }
             | Self::InStaticProperty { .. }
             | Self::CompoundStaticProperty { .. }
             | Self::CompoundArrayIndexProperty { .. }
@@ -164,258 +161,54 @@ impl BytecodeInstruction {
             | Self::StaticPropertyAssign { .. }
             | Self::ArrayIndexAssign { .. }
             | Self::ComputedPropertyAssign { .. }
-            | Self::CallStaticMember { .. }
-            | Self::CallComputedMember { .. }
             | Self::CallStaticMemberSpread { .. }
             | Self::CallComputedMemberSpread { .. }
             | Self::SuperMember { .. }
-            | Self::ComputedSuperMember { .. }
             | Self::CallSuperMember { .. }
             | Self::CallSuperMemberSpread { .. }
             | Self::CallComputedSuperMember { .. }
-            | Self::CallComputedSuperMemberSpread { .. } => 1,
-            Self::NullishCoalescing { right } => right.property_operand_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .property_operand_count()
-                .saturating_add(value.property_operand_count()),
-            Self::WebCompatCallAssignment { target } => target.property_operand_count(),
-            Self::While {
-                condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::property_operand_count),
-            Self::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::property_operand_count,
-            ),
-            Self::ForIn {
-                target,
-                object,
-                body,
-                ..
+            | Self::CallComputedSuperMemberSpread { .. } => BytecodeMetrics::property_operands(1),
+            Self::Binary {
+                property_access, ..
+            } => BytecodeMetrics::property_operands(usize::from(property_access.is_some())),
+            Self::CallStaticMember { native, .. } | Self::CallComputedMember { native, .. } => {
+                BytecodeMetrics::property_operands(1).combine(BytecodeMetrics::native_call(*native))
             }
-            | Self::ForOf {
-                target,
-                object,
-                body,
-                ..
-            } => target
-                .property_operand_count()
-                .saturating_add(object.property_operand_count())
-                .saturating_add(body.property_operand_count()),
-            Self::Switch {
-                discriminant,
-                cases,
-                ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::property_operand_count,
-                BytecodeSwitchCase::property_operand_count,
-            ),
-            Self::Try {
-                body,
-                catch,
-                finally_body,
-                ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::property_operand_count,
-                BytecodeCatch::property_operand_count,
-            ),
-            Self::Label { body, .. } => body.property_operand_count(),
-            Self::ScopedBlock { block, .. } => block.property_operand_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().property_operand_count(),
-            Self::CreateClass { class } => class.property_operand_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        match self {
-            Self::CallBinding { native, .. }
-            | Self::CallStaticMember { native, .. }
-            | Self::CallComputedMember { native, .. }
-            | Self::Construct { native, .. } => usize::from(native.is_some()),
-            Self::NullishCoalescing { right } => right.direct_native_call_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .direct_native_call_count()
-                .saturating_add(value.direct_native_call_count()),
-            Self::WebCompatCallAssignment { target } => target.direct_native_call_count(),
-            Self::While {
-                condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count),
-            Self::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::direct_native_call_count,
-            ),
-            Self::ForIn {
-                target,
-                object,
-                body,
-                ..
-            }
-            | Self::ForOf {
-                target,
-                object,
-                body,
-                ..
-            } => target
-                .direct_native_call_count()
-                .saturating_add(object.direct_native_call_count())
-                .saturating_add(body.direct_native_call_count()),
-            Self::Switch {
-                discriminant,
-                cases,
-                ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::direct_native_call_count,
-                BytecodeSwitchCase::direct_native_call_count,
-            ),
-            Self::Try {
-                body,
-                catch,
-                finally_body,
-                ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::direct_native_call_count,
-                BytecodeCatch::direct_native_call_count,
-            ),
-            Self::Label { body, .. } => body.direct_native_call_count(),
-            Self::ScopedBlock { block, .. } => block.direct_native_call_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().direct_native_call_count(),
-            Self::CreateClass { class } => class.direct_native_call_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        match self {
-            Self::CallBinding { native, .. }
-            | Self::CallStaticMember { native, .. }
-            | Self::CallComputedMember { native, .. }
-            | Self::Construct { native, .. } => {
-                native.map_or(0, |target| usize::from(target.is_array_target()))
-            }
-            Self::NullishCoalescing { right } => right.array_native_call_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .array_native_call_count()
-                .saturating_add(value.array_native_call_count()),
-            Self::WebCompatCallAssignment { target } => target.array_native_call_count(),
-            Self::While {
-                condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::array_native_call_count),
-            Self::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::array_native_call_count,
-            ),
-            Self::ForIn {
-                target,
-                object,
-                body,
-                ..
-            }
-            | Self::ForOf {
-                target,
-                object,
-                body,
-                ..
-            } => target
-                .array_native_call_count()
-                .saturating_add(object.array_native_call_count())
-                .saturating_add(body.array_native_call_count()),
-            Self::Switch {
-                discriminant,
-                cases,
-                ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::array_native_call_count,
-                BytecodeSwitchCase::array_native_call_count,
-            ),
-            Self::Try {
-                body,
-                catch,
-                finally_body,
-                ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::array_native_call_count,
-                BytecodeCatch::array_native_call_count,
-            ),
-            Self::Label { body, .. } => body.array_native_call_count(),
-            Self::ScopedBlock { block, .. } => block.array_native_call_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().array_native_call_count(),
-            Self::CreateClass { class } => class.array_native_call_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        match self {
             Self::NumberUnary(_)
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
-            | Self::NumberEquality(_) => 1,
-            Self::NullishCoalescing { right } => right.numeric_instruction_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .numeric_instruction_count()
-                .saturating_add(value.numeric_instruction_count()),
-            Self::WebCompatCallAssignment { target } => target.numeric_instruction_count(),
+            | Self::NumberEquality(_) => BytecodeMetrics::numeric_instruction(),
+            Self::NullishCoalescing { right } => right.metrics(),
+            Self::LogicalAssignment { target, value, .. } => {
+                target.metrics().combine(value.metrics())
+            }
+            Self::WebCompatCallAssignment { target } => target.metrics(),
+            Self::CreateFunction { bytecode, .. } => bytecode.metrics(),
             Self::While {
                 condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count),
+            }
+            | Self::DoWhile {
+                condition, body, ..
+            } => condition.metrics().combine(body.metrics()),
+            Self::With { body: block }
+            | Self::Label { body: block, .. }
+            | Self::ScopedBlock { block, .. } => block.metrics(),
             Self::For {
                 init,
                 condition,
                 update,
                 body,
                 ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::numeric_instruction_count,
-            ),
+            } => {
+                let mut metrics = body.metrics();
+                for block in [init.as_ref(), condition.as_ref(), update.as_ref()]
+                    .into_iter()
+                    .flatten()
+                {
+                    metrics.add(block.metrics());
+                }
+                metrics
+            }
             Self::ForIn {
                 target,
                 object,
@@ -428,353 +221,99 @@ impl BytecodeInstruction {
                 body,
                 ..
             } => target
-                .numeric_instruction_count()
-                .saturating_add(object.numeric_instruction_count())
-                .saturating_add(body.numeric_instruction_count()),
-            Self::Switch {
-                discriminant,
-                cases,
-                ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::numeric_instruction_count,
-                BytecodeSwitchCase::numeric_instruction_count,
-            ),
-            Self::Try {
-                body,
-                catch,
-                finally_body,
-                ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::numeric_instruction_count,
-                BytecodeCatch::numeric_instruction_count,
-            ),
-            Self::Label { body, .. } => body.numeric_instruction_count(),
-            Self::ScopedBlock { block, .. } => block.numeric_instruction_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().numeric_instruction_count(),
-            Self::CreateClass { class } => class.numeric_instruction_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    fn nested_instruction_count(&self) -> usize {
-        match self {
-            Self::NullishCoalescing { right } => right.instruction_count(),
-            Self::LogicalAssignment { target, value, .. } => target
-                .nested_instruction_count()
-                .saturating_add(value.instruction_count()),
-            Self::WebCompatCallAssignment { target } => target.instruction_count(),
-            Self::While {
-                condition, body, ..
-            } => count_blocks_2(condition, body, BytecodeBlock::instruction_count),
-            Self::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => count_for_blocks(
-                init.as_ref(),
-                condition.as_ref(),
-                update.as_ref(),
-                body,
-                BytecodeBlock::instruction_count,
-            ),
-            Self::ForIn {
-                object,
-                body,
-                target,
-                ..
+                .metrics()
+                .combine(object.metrics())
+                .combine(body.metrics()),
+            Self::DestructurePattern { pattern, .. } => pattern.metrics(true),
+            Self::CreateClass { class } => class.metrics(),
+            Self::ComputedSuperMember { expression, .. } => expression
+                .metrics()
+                .combine(BytecodeMetrics::property_operands(1)),
+            Self::SuperPropertyAssign {
+                property, value, ..
             }
-            | Self::ForOf {
-                object,
-                body,
-                target,
-                ..
-            } => object
-                .instruction_count()
-                .saturating_add(body.instruction_count())
-                .saturating_add(target.nested_instruction_count()),
+            | Self::CompoundSuperProperty {
+                property, value, ..
+            } => property.metrics().combine(value.metrics()),
+            Self::UpdateSuperProperty { property, .. } => property.metrics(),
             Self::Switch {
                 discriminant,
                 cases,
+                scope_init,
                 ..
-            } => count_switch(
-                discriminant,
-                cases,
-                BytecodeBlock::instruction_count,
-                BytecodeSwitchCase::instruction_count,
-            ),
+            } => {
+                let mut metrics = discriminant.metrics();
+                if let Some(scope_init) = scope_init {
+                    metrics.add(scope_init.metrics());
+                }
+                for case in cases.iter() {
+                    metrics.add(case.metrics());
+                }
+                metrics
+            }
             Self::Try {
                 body,
                 catch,
                 finally_body,
                 ..
-            } => count_try(
-                body,
-                catch.as_ref(),
-                finally_body.as_ref(),
-                BytecodeBlock::instruction_count,
-                BytecodeCatch::instruction_count,
-            ),
-            Self::Label { body, .. } => body.instruction_count(),
-            Self::ScopedBlock { block, .. } => block.instruction_count(),
-            Self::CreateFunction { bytecode, .. } => bytecode.body().instruction_count(),
-            Self::CreateClass { class } => class.instruction_count(),
-            instruction if instruction.is_leaf_instruction() => 0,
-            _ => 0,
-        }
-    }
-
-    const fn is_leaf_instruction(&self) -> bool {
-        matches!(
-            self,
-            Self::DeleteBinding(_)
-                | Self::DeleteStaticProperty { .. }
-                | Self::DeleteComputedProperty { .. }
-                | Self::DeleteValue
-                | Self::UpdateBinding { .. }
-                | Self::UpdateStaticProperty { .. }
-                | Self::UpdateArrayIndexProperty { .. }
-                | Self::UpdateComputedProperty { .. }
-                | Self::CompoundStoreBinding { .. }
-                | Self::CompoundStaticProperty { .. }
-                | Self::CompoundArrayIndexProperty { .. }
-                | Self::CompoundComputedProperty { .. }
-                | Self::CallBinding { .. }
-                | Self::CallValue { .. }
-                | Self::CallStaticMember { .. }
-                | Self::CallComputedMember { .. }
-                | Self::Construct { .. }
-                | Self::ConstructValue { .. }
-                | Self::PushLiteral(_)
-                | Self::PushString(_)
-                | Self::TemplateConcat { .. }
-                | Self::StringConcat { .. }
-                | Self::StringConcatStatic { .. }
-                | Self::CollectSpreadArgs { .. }
-                | Self::CallBindingSpread { .. }
-                | Self::CallValueSpread
-                | Self::CallStaticMemberSpread { .. }
-                | Self::CallComputedMemberSpread { .. }
-                | Self::ConstructValueSpread
-                | Self::ArrayLiteralSpread { .. }
-                | Self::CallSuper { .. }
-                | Self::CallSuperSpread
-                | Self::SuperMember { .. }
-                | Self::ComputedSuperMember { .. }
-                | Self::CallSuperMember { .. }
-                | Self::CallSuperMemberSpread { .. }
-                | Self::CallComputedSuperMember { .. }
-                | Self::CallComputedSuperMemberSpread { .. }
-                | Self::CreateRegExp { .. }
-                | Self::PushUndefined
-                | Self::LoadThis
-                | Self::LoadNewTarget
-                | Self::LoadBinding(_)
-                | Self::StoreBinding(_)
-                | Self::DeclareBinding { .. }
-                | Self::StoreLast
-                | Self::Pop
-                | Self::Unary(_)
-                | Self::NumberUnary(_)
-                | Self::TypeOfBinding(_)
-                | Self::TypeOfValue
-                | Self::Binary { .. }
-                | Self::InStaticProperty { .. }
-                | Self::NumberBinary(_)
-                | Self::NumberCompare(_)
-                | Self::NumberEquality(_)
-                | Self::StaticMember { .. }
-                | Self::ArrayLength { .. }
-                | Self::ArrayIndexMember { .. }
-                | Self::ComputedMember { .. }
-                | Self::StaticPropertyAssign { .. }
-                | Self::ArrayIndexAssign { .. }
-                | Self::ComputedPropertyAssign { .. }
-                | Self::ArrayLiteral { .. }
-                | Self::ObjectLiteral { .. }
-                | Self::Jump(_)
-                | Self::JumpIfFalse(_)
-                | Self::JumpIfFalseKeep(_)
-                | Self::JumpIfTrueKeep(_)
-                | Self::Complete(_)
-        )
+            } => {
+                let mut metrics = body.metrics();
+                if let Some(catch) = catch {
+                    metrics.add(catch.metrics());
+                }
+                if let Some(finally_body) = finally_body {
+                    metrics.add(finally_body.metrics());
+                }
+                metrics
+            }
+            Self::BeginPrivateEnvironment { .. }
+            | Self::PushLiteral(_)
+            | Self::PushString(_)
+            | Self::TemplateConcat { .. }
+            | Self::StringConcat { .. }
+            | Self::StringConcatStatic { .. }
+            | Self::CollectSpreadArgs { .. }
+            | Self::CallValueSpread
+            | Self::ConstructValueSpread
+            | Self::ArrayLiteralSpread { .. }
+            | Self::CreateRegExp { .. }
+            | Self::PushUndefined
+            | Self::LoadThis
+            | Self::LoadNewTarget
+            | Self::StoreAnnexBVar(_)
+            | Self::StoreLast
+            | Self::Pop
+            | Self::Unary(_)
+            | Self::Await
+            | Self::GeneratorStart
+            | Self::Yield { .. }
+            | Self::TypeOfValue
+            | Self::DeleteValue
+            | Self::PrivateMember { .. }
+            | Self::PrivateAssign { .. }
+            | Self::CompoundPrivateProperty { .. }
+            | Self::UpdatePrivateProperty { .. }
+            | Self::CallPrivateMember { .. }
+            | Self::CallPrivateMemberSpread { .. }
+            | Self::PrivateIn { .. }
+            | Self::CallValue { .. }
+            | Self::ConstructValue { .. }
+            | Self::ArrayLiteral { .. }
+            | Self::ObjectLiteral { .. }
+            | Self::CallSuper { .. }
+            | Self::CallSuperSpread
+            | Self::Jump(_)
+            | Self::JumpIfFalse(_)
+            | Self::JumpIfFalseKeep(_)
+            | Self::JumpIfTrueKeep(_)
+            | Self::Complete(_) => BytecodeMetrics::empty(),
+        };
+        metrics.with_instruction()
     }
 }
 
 impl BytecodeBinding {
-    const fn direct_operand_count(&self) -> usize {
+    pub(super) const fn direct_operand_count(&self) -> usize {
         !matches!(self.operand(), BindingOperand::Unresolved) as usize
-    }
-}
-
-impl BytecodeForInTarget {
-    fn property_operand_count(&self) -> usize {
-        match self {
-            Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.property_operand_count()
-            }
-            Self::Assignment(target) => target.property_operand_count(),
-        }
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.direct_native_call_count()
-            }
-            Self::Assignment(target) => target.direct_native_call_count(),
-        }
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.array_native_call_count()
-            }
-            Self::Assignment(target) => target.array_native_call_count(),
-        }
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.numeric_instruction_count()
-            }
-            Self::Assignment(target) => target.numeric_instruction_count(),
-        }
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        match self {
-            Self::Binding { name, .. } => name.direct_operand_count(),
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.binding_operand_count()
-            }
-            Self::Assignment(target) => target.binding_operand_count(),
-        }
-    }
-
-    fn nested_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
-                pattern.nested_instruction_count()
-            }
-            Self::Assignment(target) => target.nested_instruction_count(),
-        }
-    }
-}
-
-impl BytecodeClass {
-    fn sum_bodies(&self, count: fn(&BytecodeBlock) -> usize) -> usize {
-        let mut total = count(self.constructor.body());
-        for member in self.members.iter() {
-            total = total.saturating_add(count(member.bytecode.body()));
-        }
-        for field in self.fields.iter() {
-            if let Some(initializer) = &field.initializer {
-                total = total.saturating_add(count(initializer));
-            }
-        }
-        for block in self.static_blocks.iter() {
-            total = total.saturating_add(count(block));
-        }
-        total
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::binding_operand_count)
-    }
-
-    fn property_operand_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::property_operand_count)
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::direct_native_call_count)
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::array_native_call_count)
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::numeric_instruction_count)
-    }
-
-    fn instruction_count(&self) -> usize {
-        self.sum_bodies(BytecodeBlock::instruction_count)
-    }
-}
-
-impl BytecodePattern {
-    fn for_each_block(&self, count: &mut impl FnMut(&BytecodeBlock)) {
-        match self {
-            Self::Binding(_) => {}
-            Self::Assignment(target) => target.for_each_block(count),
-            Self::Object { properties, .. } => {
-                for property in properties.iter() {
-                    if let BytecodePatternKey::Computed(block) = &property.key {
-                        count(block);
-                    }
-                    if let Some(default) = &property.target.default {
-                        count(default);
-                    }
-                    property.target.pattern.for_each_block(count);
-                }
-            }
-            Self::Array { elements, rest } => {
-                for element in elements.iter().flatten() {
-                    if let Some(default) = &element.default {
-                        count(default);
-                    }
-                    element.pattern.for_each_block(count);
-                }
-                if let Some(rest) = rest {
-                    rest.for_each_block(count);
-                }
-            }
-        }
-    }
-
-    fn sum_blocks(&self, count: fn(&BytecodeBlock) -> usize) -> usize {
-        let mut total = 0usize;
-        self.for_each_block(&mut |block| total = total.saturating_add(count(block)));
-        total
-    }
-
-    fn property_operand_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::property_operand_count)
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::direct_native_call_count)
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::array_native_call_count)
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::numeric_instruction_count)
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::binding_operand_count)
-    }
-
-    fn nested_instruction_count(&self) -> usize {
-        self.sum_blocks(BytecodeBlock::instruction_count)
     }
 }
