@@ -206,6 +206,39 @@ fn resource_limits_remain_outside_javascript_catch() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn builtin_argument_validation_uses_catchable_error_classes() -> TestResult {
+    eval_is_42(
+        r#"
+        let score = 0;
+        for (const length of [-1, 1.5, NaN, Infinity, 4294967296]) {
+            try {
+                new Array(length);
+            } catch (error) {
+                if (error instanceof RangeError) score = score + 1;
+            }
+        }
+
+        const maximum = new Array(4294967295);
+        if (maximum.length === 4294967295) score = score + 1;
+
+        const marker = Symbol("marker");
+        try {
+            Symbol(marker);
+        } catch (error) {
+            if (error instanceof TypeError) score = score + 1;
+        }
+        try {
+            Symbol.for(marker);
+        } catch (error) {
+            if (error instanceof TypeError) score = score + 1;
+        }
+
+        score === 8 ? 42 : score
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

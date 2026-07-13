@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable},
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
 
 use super::{ARRAY_NAME, NativeFunctionKind};
@@ -586,8 +586,15 @@ impl Context {
         if value == 0.0 {
             return Ok(0);
         }
-        if !value.is_finite() || value.is_sign_negative() || value.fract() != 0.0 {
-            return Err(Error::runtime("invalid array length"));
+        if !value.is_finite()
+            || value.is_sign_negative()
+            || value.fract() != 0.0
+            || value > f64::from(u32::MAX)
+        {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                "Invalid array length",
+            ));
         }
         format!("{value:.0}")
             .parse::<usize>()
