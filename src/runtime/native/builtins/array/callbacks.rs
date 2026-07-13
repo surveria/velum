@@ -36,9 +36,10 @@ impl Context {
         this_value: &Value,
         visit_every_index: bool,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         let mode = Self::array_callback_visit_mode(visit_every_index);
-        self.visit_array_like_indices(this_value, mode, |context, index, value| {
+        self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -139,13 +140,14 @@ impl Context {
         this_value: &Value,
         visit_every_index: bool,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_some(callback, this_value)? {
             return Ok(value);
         }
         let mut matched = false;
         let mode = Self::array_callback_visit_mode(visit_every_index);
-        self.visit_array_like_indices(this_value, mode, |context, index, value| {
+        self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             let result = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -176,13 +178,14 @@ impl Context {
         this_value: &Value,
         visit_every_index: bool,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_every(callback, this_value)? {
             return Ok(value);
         }
         let mut matched = true;
         let mode = Self::array_callback_visit_mode(visit_every_index);
-        self.visit_array_like_indices(this_value, mode, |context, index, value| {
+        self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             let result = context.call_array_callback(
                 callback,
                 callback_this.clone(),
@@ -212,13 +215,15 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_find(callback, this_value)? {
             return Ok(value);
         }
         let mut found = Value::Undefined;
-        self.visit_array_like_indices(
+        self.visit_array_like_with_length(
             this_value,
+            length,
             CallbackVisitMode::EveryIndex,
             |context, index, value| {
                 let result = context.call_array_callback(
@@ -251,13 +256,15 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_find_index(callback, this_value)? {
             return Ok(value);
         }
         let mut found = Value::Number(INDEX_NOT_FOUND);
-        self.visit_array_like_indices(
+        self.visit_array_like_with_length(
             this_value,
+            length,
             CallbackVisitMode::EveryIndex,
             |context, index, value| {
                 let result = context.call_array_callback(
@@ -505,34 +512,6 @@ impl Context {
         }
     }
 
-    fn visit_array_like_indices<F>(
-        &mut self,
-        object: &Value,
-        mode: CallbackVisitMode,
-        mut visitor: F,
-    ) -> Result<()>
-    where
-        F: FnMut(&mut Self, usize, &Value) -> Result<ArrayCallbackAction>,
-    {
-        let length = self.array_like_length_for_callback(object)?;
-        for index in 0..length {
-            self.step()?;
-            let present = self.has_array_like_index(object, index)?;
-            if mode == CallbackVisitMode::PresentOnly && !present {
-                continue;
-            }
-            let value = if present {
-                self.get_array_like_index(object, index)?
-            } else {
-                Value::Undefined
-            };
-            if visitor(self, index, &value)? == ArrayCallbackAction::Stop {
-                return Ok(());
-            }
-        }
-        Ok(())
-    }
-
     fn eval_direct_array_reduce_with_direction(
         &mut self,
         args: &[Value],
@@ -540,6 +519,7 @@ impl Context {
         direction: ReduceDirection,
         visit_out_of_bounds: bool,
     ) -> Result<Value> {
+        let length = self.array_like_length_for_callback(this_value)?;
         let callback = self.array_callback_arg(args)?;
         let has_initial = args.get(1).is_some();
         let initial = args.get(1).cloned();
@@ -553,7 +533,6 @@ impl Context {
         {
             return Ok(value);
         }
-        let length = self.array_like_length_for_callback(this_value)?;
         let Some(mut state) =
             self.initial_reduce_state(this_value, length, direction, initial, visit_out_of_bounds)?
         else {

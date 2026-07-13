@@ -375,8 +375,7 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.array_length_from_value(&value)?;
-            self.objects.set_array_length(*id, length)?;
-            return Ok(true);
+            return self.objects.set_array_length(*id, length);
         }
         if new_property
             && let Value::Object(id) = receiver

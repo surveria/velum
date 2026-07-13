@@ -201,6 +201,88 @@ fn rejects_missing_callbacks_and_empty_reduce_without_initial_value() -> TestRes
 }
 
 #[test]
+fn callback_methods_observe_length_before_validating_callback() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let marker = {};
+        let receiver = {};
+        let lengthReads = 0;
+        Object.defineProperty(receiver, "length", {
+            get: function() {
+                lengthReads = lengthReads + 1;
+                throw marker;
+            }
+        });
+        let methods = [
+            Array.prototype.forEach,
+            Array.prototype.some,
+            Array.prototype.every,
+            Array.prototype.find,
+            Array.prototype.findIndex,
+            Array.prototype.reduce,
+            Array.prototype.reduceRight
+        ];
+        let markerErrors = 0;
+        methods.forEach(function(method) {
+            try {
+                method.call(receiver, undefined);
+            } catch (error) {
+                if (error === marker) {
+                    markerErrors = markerErrors + 1;
+                }
+            }
+        });
+        markerErrors === methods.length && lengthReads === methods.length ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn failed_array_length_shrink_preserves_set_failure_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let array = [0, 1, 2];
+        Object.defineProperty(array, "2", {
+            get: function() { return "locked"; },
+            configurable: false
+        });
+        Object.defineProperty(array, "1", {
+            get: function() {
+                array.length = 2;
+                return 1;
+            },
+            configurable: true
+        });
+        let everyResult = array.every(function(value) {
+            return value !== "locked";
+        });
+        let reflectResult = Reflect.set(array, "length", 2);
+        let strictThrew = false;
+        try {
+            (function() {
+                "use strict";
+                array.length = 2;
+            })();
+        } catch (error) {
+            strictThrew = error instanceof TypeError;
+        }
+        everyResult === false && array.length === 3 &&
+            reflectResult === false && strictThrew ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn limits_callback_methods_on_large_array_like_lengths() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_runtime_steps: 128,

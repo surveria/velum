@@ -93,9 +93,9 @@ impl Context {
             } else {
                 None
             };
-            self.objects
-                .define_array_length_property(*id, update, new_length)?;
-            return Ok(true);
+            return self
+                .objects
+                .define_array_length_property(*id, update, new_length);
         }
         if let Value::Object(id) = object_ref.value
             && self.is_global_object_id(*id)
