@@ -145,6 +145,11 @@ pub(in crate::runtime) enum IntlFunctionKind {
     LocaleAccessor(LocaleAccessorKind),
     LocaleMethod(LocaleMethodKind),
     GetCanonicalLocales,
+    ListFormatConstructor,
+    ListFormatFormat,
+    ListFormatFormatToParts,
+    ListFormatResolvedOptions,
+    ListFormatSupportedLocalesOf,
 }
 
 impl IntlFunctionKind {
@@ -176,6 +181,11 @@ impl IntlFunctionKind {
             Self::LocaleAccessor(kind) => 24 + kind.index(),
             Self::LocaleMethod(kind) => 36 + kind.index(),
             Self::GetCanonicalLocales => 46,
+            Self::ListFormatConstructor => 52,
+            Self::ListFormatFormat => 53,
+            Self::ListFormatFormatToParts => 54,
+            Self::ListFormatResolvedOptions => 55,
+            Self::ListFormatSupportedLocalesOf => 56,
         }
     }
 
@@ -190,6 +200,8 @@ impl IntlFunctionKind {
             | Self::NumberFormatResolvedOptions
             | Self::PluralRulesConstructor
             | Self::RelativeTimeFormatConstructor
+            | Self::ListFormatConstructor
+            | Self::ListFormatResolvedOptions
             | Self::DateTimeFormatFormatGetter
             | Self::LocaleAccessor(_)
             | Self::LocaleMethod(_) => 0.0,
@@ -203,6 +215,9 @@ impl IntlFunctionKind {
             | Self::DateTimeFormatBoundFormat(_)
             | Self::DateTimeFormatSupportedLocalesOf
             | Self::GetCanonicalLocales => 1.0,
+            Self::ListFormatFormat
+            | Self::ListFormatFormatToParts
+            | Self::ListFormatSupportedLocalesOf => 1.0,
             Self::NumberFormatFormatRange
             | Self::NumberFormatFormatRangeToParts
             | Self::DateTimeFormatFormatRange
@@ -237,6 +252,11 @@ impl IntlFunctionKind {
             Self::LocaleAccessor(kind) => kind.function_name(),
             Self::LocaleMethod(kind) => kind.name(),
             Self::GetCanonicalLocales => "getCanonicalLocales",
+            Self::ListFormatConstructor => "ListFormat",
+            Self::ListFormatFormat => "format",
+            Self::ListFormatFormatToParts => "formatToParts",
+            Self::ListFormatResolvedOptions => "resolvedOptions",
+            Self::ListFormatSupportedLocalesOf => "supportedLocalesOf",
         }
     }
 }

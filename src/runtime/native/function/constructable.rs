@@ -26,6 +26,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::DurationFormatConstructor
                         | IntlFunctionKind::CollatorConstructor
                         | IntlFunctionKind::LocaleConstructor
+                        | IntlFunctionKind::ListFormatConstructor
                         | IntlFunctionKind::NumberFormatConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor
@@ -85,6 +86,7 @@ impl NativeFunctionKind {
                         | IntlFunctionKind::DurationFormatConstructor
                         | IntlFunctionKind::CollatorConstructor
                         | IntlFunctionKind::LocaleConstructor
+                        | IntlFunctionKind::ListFormatConstructor
                         | IntlFunctionKind::NumberFormatConstructor
                         | IntlFunctionKind::PluralRulesConstructor
                         | IntlFunctionKind::RelativeTimeFormatConstructor

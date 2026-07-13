@@ -5,6 +5,7 @@ mod date_time_text;
 mod date_time_types;
 mod duration_format;
 mod formatting;
+mod list_format;
 mod locale;
 mod number_digits;
 mod number_format;
@@ -52,6 +53,8 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "DurationFormat", duration_format)?;
         let locale = self.intl_locale_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "Locale", locale)?;
+        let list_format = self.intl_list_format_constructor_value()?;
+        self.define_non_enumerable_object_property(namespace, "ListFormat", list_format)?;
         let number_format = self.intl_number_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "NumberFormat", number_format)?;
         for (name, kind, tag) in [
@@ -105,6 +108,7 @@ impl Context {
             }
             IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
             IntlFunctionKind::LocaleConstructor => self.construct_intl_locale(args),
+            IntlFunctionKind::ListFormatConstructor => self.construct_intl_list_format(args),
             IntlFunctionKind::NumberFormatConstructor => self.construct_intl_number_format(args),
             IntlFunctionKind::CollatorConstructor
             | IntlFunctionKind::PluralRulesConstructor
@@ -152,6 +156,21 @@ impl Context {
                 self.eval_intl_locale_accessor(kind, this_value)
             }
             IntlFunctionKind::LocaleMethod(kind) => self.eval_intl_locale_method(kind, this_value),
+            IntlFunctionKind::ListFormatConstructor => {
+                Err(Error::type_error("Intl.ListFormat requires new"))
+            }
+            IntlFunctionKind::ListFormatFormat => {
+                self.eval_intl_list_format(args, this_value, false)
+            }
+            IntlFunctionKind::ListFormatFormatToParts => {
+                self.eval_intl_list_format(args, this_value, true)
+            }
+            IntlFunctionKind::ListFormatResolvedOptions => {
+                self.eval_intl_list_format_resolved_options(this_value)
+            }
+            IntlFunctionKind::ListFormatSupportedLocalesOf => {
+                self.eval_intl_list_format_supported_locales(args)
+            }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
             IntlFunctionKind::GetCanonicalLocales => self.eval_intl_get_canonical_locales(args),
             IntlFunctionKind::NumberFormatConstructor => {
@@ -243,6 +262,7 @@ impl Context {
                 self.intl_duration_format_constructor_value()?
             }
             IntlFunctionKind::LocaleConstructor => self.intl_locale_constructor_value()?,
+            IntlFunctionKind::ListFormatConstructor => self.intl_list_format_constructor_value()?,
             IntlFunctionKind::CollatorConstructor => {
                 self.intl_constructor_value(kind, "Intl.Collator", &[])?
             }
