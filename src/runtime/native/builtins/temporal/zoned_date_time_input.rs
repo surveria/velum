@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use num_traits::ToPrimitive;
 use temporal_rs::{
-    Calendar, MonthCode, TimeZone, UtcOffset, ZonedDateTime,
+    Calendar, MonthCode, TimeZone, TinyAsciiStr, UtcOffset, ZonedDateTime,
     fields::{CalendarFields, ZonedDateTimeFields},
     options::{Disambiguation, OffsetDisambiguation, Overflow},
     parsed_intermediates::ParsedZonedDateTime,
@@ -26,6 +26,8 @@ enum ZonedInput {
 struct ZonedInputFields {
     calendar: Calendar,
     day: Option<i64>,
+    era: Option<TinyAsciiStr<19>>,
+    era_year: Option<i64>,
     hour: Option<i64>,
     microsecond: Option<i64>,
     millisecond: Option<i64>,
@@ -104,10 +106,10 @@ impl Context {
                 "ZonedDateTime.with fields cannot include calendar or timeZone",
             ));
         }
-        let fields = self.prepare_zoned_update_fields(fields_value)?;
+        let zoned = self.zoned_date_time_receiver(receiver)?;
+        let fields = self.prepare_zoned_update_fields(fields_value, zoned.calendar())?;
         Self::resolve_zoned_update_fields(&fields, Overflow::Constrain)?;
         let options = self.zoned_options(values.get(1), OffsetDisambiguation::Prefer)?;
-        let zoned = self.zoned_date_time_receiver(receiver)?;
         let result = zoned
             .with(
                 Self::resolve_zoned_update_fields(&fields, options.overflow)?,
@@ -146,6 +148,7 @@ impl Context {
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.temporal_calendar(Some(&calendar_value))?;
         let day = self.zoned_optional_integer(value, "day")?;
+        let (era, era_year) = self.zoned_era_fields(value, &calendar)?;
         let hour = self.zoned_optional_integer(value, "hour")?;
         let microsecond = self.zoned_optional_integer(value, "microsecond")?;
         let millisecond = self.zoned_optional_integer(value, "millisecond")?;
@@ -160,6 +163,8 @@ impl Context {
         Ok(ZonedInputFields {
             calendar,
             day,
+            era,
+            era_year,
             hour,
             microsecond,
             millisecond,
@@ -174,8 +179,13 @@ impl Context {
         })
     }
 
-    fn prepare_zoned_update_fields(&mut self, value: &Value) -> Result<ZonedInputFields> {
+    fn prepare_zoned_update_fields(
+        &mut self,
+        value: &Value,
+        calendar: &Calendar,
+    ) -> Result<ZonedInputFields> {
         let day = self.zoned_optional_integer(value, "day")?;
+        let (era, era_year) = self.zoned_era_fields(value, calendar)?;
         let hour = self.zoned_optional_integer(value, "hour")?;
         let microsecond = self.zoned_optional_integer(value, "microsecond")?;
         let millisecond = self.zoned_optional_integer(value, "millisecond")?;
@@ -187,8 +197,10 @@ impl Context {
         let second = self.zoned_optional_integer(value, "second")?;
         let year = self.zoned_optional_integer(value, "year")?;
         Ok(ZonedInputFields {
-            calendar: Calendar::default(),
+            calendar: calendar.clone(),
             day,
+            era,
+            era_year,
             hour,
             microsecond,
             millisecond,
@@ -246,8 +258,8 @@ impl Context {
             month: Self::zoned_u8(fields.month, "month", overflow)?,
             month_code: fields.month_code,
             day: Self::zoned_u8(fields.day, "day", overflow)?,
-            era: None,
-            era_year: None,
+            era: fields.era,
+            era_year: Self::zoned_i32(fields.era_year, "eraYear")?,
         })
     }
 
@@ -347,6 +359,28 @@ impl Context {
             return Ok(None);
         }
         self.plain_date_month_code(&field).map(Some)
+    }
+
+    fn zoned_era_fields(
+        &mut self,
+        value: &Value,
+        calendar: &Calendar,
+    ) -> Result<(Option<TinyAsciiStr<19>>, Option<i64>)> {
+        if matches!(calendar.identifier(), "iso8601" | "chinese" | "dangi") {
+            return Ok((None, None));
+        }
+        let era_value = self.get_named(value, "era")?;
+        let era = if matches!(era_value, Value::Undefined) {
+            None
+        } else {
+            let text = self.to_string(&era_value)?.to_ascii_lowercase();
+            Some(
+                TinyAsciiStr::<19>::from_str(&text)
+                    .map_err(|_| Error::exception(ErrorName::RangeError, "Invalid Temporal era"))?,
+            )
+        };
+        let era_year = self.zoned_optional_integer(value, "eraYear")?;
+        Ok((era, era_year))
     }
 
     fn zoned_offset(&mut self, value: &Value) -> Result<Option<UtcOffset>> {
