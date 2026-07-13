@@ -211,6 +211,31 @@ fn async_generator_delegates_to_async_and_sync_iterables() -> TestResult {
 }
 
 #[test]
+fn async_generator_awaits_values_from_a_delegated_sync_iterator() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let resolveDelegated;
+        let trace = "pending";
+        const delayed = new Promise(function(resolve) {
+            resolveDelegated = resolve;
+        });
+        async function* values() {
+            yield* [delayed];
+        }
+        values().next().then(function(result) {
+            trace = result.value + ":" + result.done;
+        });
+        "#,
+    )?;
+
+    ensure_value(&context.eval("trace")?, &Value::from("pending"))?;
+    context.eval("resolveDelegated(42)")?;
+    ensure_value(&context.eval("trace")?, &Value::from("42:false"))
+}
+
+#[test]
 fn queued_requests_wait_for_the_current_yield_value() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

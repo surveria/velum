@@ -755,9 +755,7 @@ impl Context {
             Completion::Suspended(_) => Err(Error::runtime(
                 "top-level await module evaluation is not settled yet",
             )),
-            Completion::GeneratorStart
-            | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_) => {
+            Completion::GeneratorStart | Completion::Yielded(_) | Completion::DelegatedYield(_) => {
                 Err(Error::runtime("generator completion escaped module"))
             }
         }

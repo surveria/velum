@@ -1,8 +1,12 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, control::Completion, object::PropertyKey, property::DynamicPropertyKey,
-        roots::VmRootKind, transient_roots::TransientRootScope,
+        Context,
+        control::{Completion, DelegatedYield},
+        object::PropertyKey,
+        property::DynamicPropertyKey,
+        roots::VmRootKind,
+        transient_roots::TransientRootScope,
     },
     value::Value,
 };
@@ -130,7 +134,7 @@ impl YieldDelegateContinuation {
 pub(in crate::runtime) enum YieldDelegateStep {
     Await(crate::runtime::promise::PromiseId),
     Yielded(Value),
-    YieldedIteratorResult(Value),
+    DelegatedYield(DelegatedYield),
     Complete(Value),
     Return(Value),
     Abrupt(Completion),
@@ -383,7 +387,7 @@ impl Context {
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
-                | Completion::YieldedIteratorResult(_),
+                | Completion::DelegatedYield(_),
             ) => Err(Error::runtime("invalid yield delegation resume completion")),
         }
     }
@@ -499,7 +503,9 @@ impl Context {
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
         let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
         if !done {
-            return Ok(YieldDelegateStep::YieldedIteratorResult(result.clone()));
+            return Ok(YieldDelegateStep::DelegatedYield(
+                DelegatedYield::iterator_result(result.clone()),
+            ));
         }
         set_protocol_done(source);
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
@@ -570,7 +576,7 @@ impl Context {
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => Ok(completion),
+            | Completion::DelegatedYield(_)) => Ok(completion),
             Completion::TailCall(_) => {
                 Err(Error::runtime("tail call escaped iterator return method"))
             }
@@ -711,8 +717,8 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Continue { value, .. }
-        | Completion::Yielded(value)
-        | Completion::YieldedIteratorResult(value) => Some(value),
+        | Completion::Yielded(value) => Some(value),
+        Completion::DelegatedYield(delegated) => Some(delegated.root_value()),
         Completion::TailCall(request) => Some(request.callee()),
         Completion::Suspended(_) | Completion::GeneratorStart => None,
     }

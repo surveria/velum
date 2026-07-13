@@ -79,6 +79,59 @@ impl TailCallReturnMode {
     }
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegatedYield {
+    value: Value,
+    mode: DelegatedYieldMode,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum DelegatedYieldMode {
+    IteratorResult,
+    AsyncValue { await_before_yield: bool },
+}
+
+impl DelegatedYield {
+    pub(in crate::runtime) const fn iterator_result(value: Value) -> Self {
+        Self {
+            value,
+            mode: DelegatedYieldMode::IteratorResult,
+        }
+    }
+
+    pub(in crate::runtime) const fn async_value(value: Value, await_before_yield: bool) -> Self {
+        Self {
+            value,
+            mode: DelegatedYieldMode::AsyncValue { await_before_yield },
+        }
+    }
+
+    pub(in crate::runtime) const fn root_value(&self) -> &Value {
+        &self.value
+    }
+
+    pub(in crate::runtime) fn into_iterator_result(self) -> Result<Value> {
+        match self.mode {
+            DelegatedYieldMode::IteratorResult => Ok(self.value),
+            DelegatedYieldMode::AsyncValue { .. } => Err(Error::runtime(
+                "async delegated yield reached a synchronous generator",
+            )),
+        }
+    }
+
+    pub(in crate::runtime) fn into_async_value(self) -> Result<(Value, bool)> {
+        match self.mode {
+            DelegatedYieldMode::AsyncValue { await_before_yield } => {
+                Ok((self.value, await_before_yield))
+            }
+            DelegatedYieldMode::IteratorResult => Err(Error::runtime(
+                "synchronous delegated yield reached an async generator",
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Completion {
     Normal(Value),
@@ -98,17 +151,14 @@ pub enum Completion {
     Suspended(PromiseId),
     GeneratorStart,
     Yielded(Value),
-    YieldedIteratorResult(Value),
+    DelegatedYield(DelegatedYield),
 }
 
 impl Completion {
     pub const fn suspends_execution(&self) -> bool {
         matches!(
             self,
-            Self::Suspended(_)
-                | Self::GeneratorStart
-                | Self::Yielded(_)
-                | Self::YieldedIteratorResult(_)
+            Self::Suspended(_) | Self::GeneratorStart | Self::Yielded(_) | Self::DelegatedYield(_)
         )
     }
 
@@ -125,7 +175,7 @@ impl Completion {
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its execution owner",
             )),
-            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
                 "yielded bytecode escaped its generator owner",
             )),
             Self::GeneratorStart => Err(Error::runtime(
@@ -145,7 +195,7 @@ impl Completion {
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its function owner",
             )),
-            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
                 "yielded bytecode escaped its generator function owner",
             )),
             Self::GeneratorStart => Err(Error::runtime(
@@ -163,7 +213,7 @@ impl Completion {
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
-            Self::Yielded(_) | Self::YieldedIteratorResult(_) => {
+            Self::Yielded(_) | Self::DelegatedYield(_) => {
                 Err(Error::runtime("yielded bytecode escaped its call owner"))
             }
             Self::GeneratorStart => Err(Error::runtime("generator start escaped its call owner")),
@@ -180,7 +230,7 @@ impl Completion {
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its native-call owner",
             )),
-            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+            Self::Yielded(_) | Self::DelegatedYield(_) => Err(Error::runtime(
                 "yielded bytecode escaped its native-call owner",
             )),
             Self::GeneratorStart => Err(Error::runtime(

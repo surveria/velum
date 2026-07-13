@@ -589,7 +589,7 @@ impl Context {
             | Completion::Suspended(_)
             | Completion::GeneratorStart
             | Completion::Yielded(_)
-            | Completion::YieldedIteratorResult(_)) => Ok(PatternStep::Abrupt(completion)),
+            | Completion::DelegatedYield(_)) => Ok(PatternStep::Abrupt(completion)),
         }
     }
 

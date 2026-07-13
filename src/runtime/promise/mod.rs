@@ -270,7 +270,18 @@ impl Context {
                     self.detach_suspended_async_function(function, result_promise)?;
                 self.add_async_await_reaction(awaited, continuation)
             }
-            Completion::Yielded(value) | Completion::YieldedIteratorResult(value) => {
+            Completion::Yielded(value) => {
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::TypeError,
+                        format!("async function yielded unexpected value {value}"),
+                    ),
+                    true,
+                )?;
+                self.reject_promise(result_promise, reason)
+            }
+            Completion::DelegatedYield(delegated) => {
+                let value = delegated.root_value();
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::TypeError,

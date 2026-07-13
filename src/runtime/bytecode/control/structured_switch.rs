@@ -383,7 +383,7 @@ impl Context {
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
-                | Completion::YieldedIteratorResult(_)) => return Ok((control, completion)),
+                | Completion::DelegatedYield(_)) => return Ok((control, completion)),
             }
         }
         let (_, last) = control.switch_state_mut()?;
