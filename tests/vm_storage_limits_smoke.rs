@@ -121,7 +121,7 @@ fn accounts_regexp_compile_replacement_transactionally() -> TestResult {
     const LARGE_PATTERN: &str = "(?:camera|lens|sensor|body|frame|focus|aperture|shutter){4,12}";
 
     let mut small_probe = Engine::new().create_vm();
-    small_probe.eval("/x/;")?;
+    small_probe.eval("/x/g;")?;
     let small_payload = small_probe
         .storage_snapshot()?
         .payload_bytes(VmStorageKind::Object);
@@ -138,7 +138,7 @@ fn accounts_regexp_compile_replacement_transactionally() -> TestResult {
     let limits =
         VmStorageLimits::unlimited().with_max_payload_bytes(VmStorageKind::Object, small_payload);
     let mut constrained = vm_with_storage_limits(limits);
-    constrained.eval("var pattern = /x/;")?;
+    constrained.eval("var pattern = /x/g; pattern.lastIndex = 1;")?;
     let before = constrained.storage_snapshot()?;
     let error = expect_eval_error(
         &mut constrained,
@@ -152,11 +152,15 @@ fn accounts_regexp_compile_replacement_transactionally() -> TestResult {
         VmStorageKind::Object,
         "RegExp replacement limit failure",
     )?;
-    let preserved = constrained.eval("pattern.test('x') && !pattern.test('camera')")?;
+    let preserved = constrained.eval(
+        "pattern.source === 'x' && pattern.flags === 'g' && pattern.lastIndex === 1 && \
+         pattern.test('ax') && pattern.lastIndex === 2",
+    )?;
     if preserved != Value::Bool(true) {
-        return Err(
-            format!("expected rejected replacement to preserve /x/, got {preserved:?}").into(),
-        );
+        return Err(format!(
+            "expected rejected replacement to preserve /x/g and lastIndex, got {preserved:?}"
+        )
+        .into());
     }
 
     let limits =
