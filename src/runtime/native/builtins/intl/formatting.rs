@@ -63,6 +63,7 @@ impl Context {
         }
         let formatter = self.parse_date_time_format(args)?;
         let input = self.intl_date_time_input(&formatter, value)?;
+        validate_styles(&formatter, input.kind)?;
         let parts = format_parts(&formatter, &input)?;
         let text = parts.into_iter().map(|part| part.value).collect::<String>();
         self.heap_string_value(&text)
@@ -323,7 +324,6 @@ pub(super) fn format_parts(
     formatter: &DateTimeFormatValue,
     input: &DateTimeInput,
 ) -> Result<Vec<FormatPart>> {
-    validate_styles(formatter, input.kind)?;
     let (show_date, show_time, show_zone) = selected_groups(formatter, input.kind);
     let mut parts = Vec::new();
     if show_date {
