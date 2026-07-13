@@ -34,7 +34,9 @@ impl LayoutBuilder {
                     self.declare_pattern(pattern, scope)
                 }
             },
-            Stmt::ClassDecl { name, .. } => self.declare(scope, name),
+            Stmt::ImportBinding { name } | Stmt::ClassDecl { name, .. } => {
+                self.declare(scope, name)
+            }
             Stmt::FunctionDecl {
                 name, block_scoped, ..
             } => self.declare(if *block_scoped { scope } else { var_scope }, name),
@@ -164,6 +166,7 @@ impl LayoutBuilder {
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::ImportBinding { .. }
             | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
@@ -186,6 +189,7 @@ impl LayoutBuilder {
                 kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
+            | Stmt::ImportBinding { name }
             | Stmt::ClassDecl { name, .. } => {
                 names.insert(name.name().as_str().to_owned());
             }

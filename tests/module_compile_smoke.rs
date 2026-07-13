@@ -69,6 +69,15 @@ fn enforces_module_specific_early_errors() -> TestResult {
         "unbound local exports must fail during compilation",
     )?;
 
+    let duplicate_import = runtime.compile_module_named(
+        "duplicate-import.js",
+        "import { value } from 'dependency'; const value = 1;",
+    );
+    ensure(
+        duplicate_import.is_err(),
+        "import bindings must conflict with local lexical declarations",
+    )?;
+
     let restricted_import = runtime.compile_module_named("restricted.js", "import eval from 'x';");
     ensure(
         restricted_import.is_err(),

@@ -9,6 +9,7 @@ pub fn for_init_needs_lexical_scope(init: Option<&Statement>) -> bool {
             kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
         }
+        | Stmt::ImportBinding { .. }
         | Stmt::PatternDecl {
             kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
@@ -51,9 +52,10 @@ const fn is_lexical_declaration(statement: &Statement) -> bool {
         Stmt::VarDecl {
             kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
             ..
-        } | Stmt::PatternDecl {
-            kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
-            ..
-        }
+        } | Stmt::ImportBinding { .. }
+            | Stmt::PatternDecl {
+                kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
+            }
     )
 }

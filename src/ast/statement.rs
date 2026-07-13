@@ -87,6 +87,10 @@ pub enum Stmt {
         kind: DeclKind,
         init: Option<Expression>,
     },
+    /// Module-only lexical binding instantiated before dependency linking.
+    ImportBinding {
+        name: StaticBinding,
+    },
     PatternDecl {
         pattern: BindingPattern,
         kind: DeclKind,

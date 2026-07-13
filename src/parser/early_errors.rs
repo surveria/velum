@@ -226,6 +226,7 @@ impl Parser {
                 kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
+            | Stmt::ImportBinding { name: binding }
             | Stmt::ClassDecl { name: binding, .. } => Ok(binding.name().as_str() != name),
             Stmt::PatternDecl {
                 pattern,
@@ -256,6 +257,7 @@ impl Parser {
                 kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
                 ..
             }
+            | Stmt::ImportBinding { name }
             | Stmt::ClassDecl { name, .. } => names.push(name.name().as_str().to_owned()),
             Stmt::PatternDecl {
                 pattern,
@@ -379,6 +381,7 @@ impl Parser {
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::FunctionDecl { .. }
+            | Stmt::ImportBinding { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
