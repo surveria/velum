@@ -2,7 +2,7 @@ use std::{cmp::Ordering, str::FromStr};
 
 use num_traits::ToPrimitive;
 use temporal_rs::{
-    Calendar, MonthCode, PlainDateTime, PlainTime, TimeZone,
+    Calendar, MonthCode, PlainDateTime, PlainTime, TimeZone, TinyAsciiStr,
     fields::{CalendarFields, DateTimeFields},
     options::{Disambiguation, DisplayCalendar, Overflow, ToStringRoundingOptions},
     partial::{PartialDateTime, PartialTime},
@@ -27,6 +27,8 @@ enum PlainDateTimeInput {
 struct PlainDateTimeFields {
     calendar: Calendar,
     day: i64,
+    era: Option<TinyAsciiStr<19>>,
+    era_year: Option<i64>,
     hour: Option<i64>,
     microsecond: Option<i64>,
     millisecond: Option<i64>,
@@ -35,7 +37,7 @@ struct PlainDateTimeFields {
     month_code: Option<MonthCode>,
     nanosecond: Option<i64>,
     second: Option<i64>,
-    year: i64,
+    year: Option<i64>,
 }
 
 pub(super) const STATIC_METHODS: &[(&str, TemporalFunctionKind)] = &[
@@ -384,6 +386,7 @@ impl Context {
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.temporal_calendar(Some(&calendar_value))?;
         let day = self.plain_date_required_i64(value, "day")?;
+        let (era, era_year) = self.temporal_calendar_era_fields(value, &calendar)?;
         let hour = self.plain_date_optional_i64(value, "hour")?;
         let microsecond = self.plain_date_optional_i64(value, "microsecond")?;
         let millisecond = self.plain_date_optional_i64(value, "millisecond")?;
@@ -397,10 +400,12 @@ impl Context {
         };
         let nanosecond = self.plain_date_optional_i64(value, "nanosecond")?;
         let second = self.plain_date_optional_i64(value, "second")?;
-        let year = self.plain_date_required_i64(value, "year")?;
+        let year = self.plain_date_optional_i64(value, "year")?;
         Ok(PlainDateTimeInput::Fields(PlainDateTimeFields {
             calendar,
             day,
+            era,
+            era_year,
             hour,
             microsecond,
             millisecond,
@@ -425,10 +430,24 @@ impl Context {
             PlainDateTimeInput::Fields(fields) => {
                 let year = fields
                     .year
-                    .to_i32()
-                    .ok_or_else(|| Self::plain_date_time_range("year is out of range"))?;
+                    .map(|value| {
+                        value
+                            .to_i32()
+                            .ok_or_else(|| Self::plain_date_time_range("year is out of range"))
+                    })
+                    .transpose()?;
+                let era_year = fields
+                    .era_year
+                    .map(|value| {
+                        value
+                            .to_i32()
+                            .ok_or_else(|| Self::plain_date_time_range("eraYear is out of range"))
+                    })
+                    .transpose()?;
                 let calendar_fields = CalendarFields::new()
-                    .with_year(year)
+                    .with_era(fields.era)
+                    .with_era_year(era_year)
+                    .with_optional_year(year)
                     .with_optional_month(
                         fields
                             .month

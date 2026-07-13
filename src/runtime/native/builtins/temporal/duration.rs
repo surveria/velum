@@ -3,12 +3,13 @@ use std::{cmp::Ordering, str::FromStr};
 use num_traits::ToPrimitive;
 use temporal_rs::{
     Calendar, Duration, PlainDate, Sign,
+    fields::CalendarFields,
     options::{
         DisplayCalendar, RelativeTo, RoundingIncrement, RoundingMode, RoundingOptions,
         ToStringRoundingOptions, Unit,
     },
     parsers::Precision,
-    partial::PartialDuration,
+    partial::{PartialDate, PartialDuration},
 };
 
 use crate::{
@@ -482,6 +483,7 @@ impl Context {
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.duration_relative_calendar(&calendar_value)?;
         let day = self.required_relative_i64(value, "day")?;
+        let (era, era_year) = self.temporal_calendar_era_fields(value, &calendar)?;
         let hour = self.optional_relative_i64(value, "hour")?;
         let microsecond = self.optional_relative_i64(value, "microsecond")?;
         let millisecond = self.optional_relative_i64(value, "millisecond")?;
@@ -509,19 +511,42 @@ impl Context {
         let second = self.optional_relative_i64(value, "second")?;
         let time_zone_value = self.get_named(value, "timeZone")?;
         let time_zone = Self::relative_string_property(&time_zone_value, "timeZone")?;
-        let year = self.required_relative_i64(value, "year")?;
+        let year = self.optional_relative_i64(value, "year")?;
 
         let month = Self::resolve_relative_month(month, month_code.as_deref())?;
-        let year = year.to_i32().ok_or_else(|| {
-            Error::exception(ErrorName::RangeError, "relativeTo year is out of range")
-        })?;
+        let era_year = era_year
+            .map(|value| {
+                value.to_i32().ok_or_else(|| {
+                    Error::exception(ErrorName::RangeError, "relativeTo eraYear is out of range")
+                })
+            })
+            .transpose()?;
+        let year = year
+            .map(|value| {
+                value.to_i32().ok_or_else(|| {
+                    Error::exception(ErrorName::RangeError, "relativeTo year is out of range")
+                })
+            })
+            .transpose()?;
         let month = month.to_u8().ok_or_else(|| {
             Error::exception(ErrorName::RangeError, "relativeTo month is out of range")
         })?;
         let day = day.to_u8().ok_or_else(|| {
             Error::exception(ErrorName::RangeError, "relativeTo day is out of range")
         })?;
-        let date = PlainDate::try_new(year, month, day, calendar).map_err(temporal_error)?;
+        let date = PlainDate::from_partial(
+            PartialDate {
+                calendar_fields: CalendarFields::new()
+                    .with_era(era)
+                    .with_era_year(era_year)
+                    .with_optional_year(year)
+                    .with_month(month)
+                    .with_day(day),
+                calendar,
+            },
+            None,
+        )
+        .map_err(temporal_error)?;
         let Some(time_zone) = time_zone else {
             return Ok(RelativeTo::from(date));
         };
@@ -536,7 +561,7 @@ impl Context {
             .and_then(|zone| zone.identifier())
             .map_err(temporal_error)?;
         let date_text = date.to_ixdtf_string(DisplayCalendar::Never);
-        let offset = offset.unwrap_or_default();
+        let offset = offset.map_or_else(String::new, Self::exact_relative_offset);
         let calendar = date.calendar().identifier();
         let text = format!(
             "{date_text}T{hour:02}:{minute:02}:{second:02}.{millisecond:03}{microsecond:03}{nanosecond:03}{offset}[{time_zone}][u-ca={calendar}]"
@@ -571,7 +596,7 @@ impl Context {
                 "Temporal relativeTo calendar must be a string or Temporal object",
             ));
         };
-        Calendar::try_from_utf8(text.as_bytes()).map_err(temporal_error)
+        Self::temporal_calendar_from_text(text)
     }
 
     fn optional_relative_i64(&mut self, object: &Value, name: &str) -> Result<Option<i64>> {
@@ -599,30 +624,6 @@ impl Context {
             .ok_or_else(|| {
                 Error::type_error(format!("Temporal relativeTo {name} must be a string"))
             })
-    }
-
-    fn resolve_relative_month(month: Option<i64>, month_code: Option<&str>) -> Result<i64> {
-        let code_month = month_code
-            .map(|code| {
-                code.strip_prefix('M')
-                    .and_then(|digits| digits.parse::<i64>().ok())
-                    .filter(|value| (1..=12).contains(value))
-                    .ok_or_else(|| {
-                        Error::exception(ErrorName::RangeError, "Invalid relativeTo monthCode")
-                    })
-            })
-            .transpose()?;
-        match (month, code_month) {
-            (Some(month), Some(code)) if month != code => Err(Error::exception(
-                ErrorName::RangeError,
-                "relativeTo month and monthCode do not agree",
-            )),
-            (Some(month), _) => Ok(month),
-            (None, Some(code)) => Ok(code),
-            (None, None) => Err(Error::type_error(
-                "Temporal relativeTo requires month or monthCode",
-            )),
-        }
     }
 
     fn relative_time_component(value: Option<i64>, name: &str) -> Result<u8> {

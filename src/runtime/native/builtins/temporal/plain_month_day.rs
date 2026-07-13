@@ -1,6 +1,6 @@
 use num_traits::ToPrimitive;
 use temporal_rs::{
-    PlainMonthDay,
+    PlainMonthDay, TinyAsciiStr,
     fields::CalendarFields,
     options::{DisplayCalendar, Overflow},
     partial::PartialDate,
@@ -136,22 +136,7 @@ impl Context {
         let calendar_value = self.get_named(value, "calendar")?;
         let calendar = self.temporal_calendar(Some(&calendar_value))?;
         let day = self.plain_date_required_i64(value, "day")?;
-        if !matches!(calendar.identifier(), "iso8601" | "chinese" | "dangi") {
-            let era = self.get_named(value, "era")?;
-            let era_year = self.get_named(value, "eraYear")?;
-            if matches!(era, Value::Undefined) != matches!(era_year, Value::Undefined) {
-                return Err(Error::type_error(
-                    "PlainMonthDay era and eraYear must be provided together",
-                ));
-            }
-            if !matches!(era, Value::Undefined) {
-                self.to_string(&era)?;
-                let number = self.to_number(&era_year)?;
-                if !number.is_finite() {
-                    return Err(Self::plain_month_day_range("eraYear"));
-                }
-            }
-        }
+        let (era, era_year) = self.temporal_calendar_era_fields(value, &calendar)?;
         let month = self.plain_date_optional_i64(value, "month")?;
         let month_code_value = self.get_named(value, "monthCode")?;
         let month_code = if matches!(month_code_value, Value::Undefined) {
@@ -161,7 +146,8 @@ impl Context {
         };
         let year = self.plain_date_optional_i64(value, "year")?;
         let overflow = self.plain_date_overflow_option(options)?;
-        let fields = Self::plain_month_day_fields(day, month, month_code, year, overflow)?;
+        let fields =
+            Self::plain_month_day_fields(day, era, era_year, month, month_code, year, overflow)?;
         PlainMonthDay::from_partial(
             PartialDate {
                 calendar_fields: fields,
@@ -196,6 +182,7 @@ impl Context {
             }
         }
         let day = self.plain_date_optional_i64(&object, "day")?;
+        let (era, era_year) = self.temporal_calendar_era_fields(&object, month_day.calendar())?;
         let month = self.plain_date_optional_i64(&object, "month")?;
         let month_code_value = self.get_named(&object, "monthCode")?;
         let month_code = if matches!(month_code_value, Value::Undefined) {
@@ -211,7 +198,9 @@ impl Context {
             return Err(Self::plain_month_day_range("month"));
         }
         let overflow = self.plain_date_overflow_option(values.get(1))?;
-        let fields = Self::plain_month_day_optional_fields(day, month, month_code, year, overflow)?;
+        let fields = Self::plain_month_day_optional_fields(
+            day, era, era_year, month, month_code, year, overflow,
+        )?;
         let result = month_day
             .with(fields, Some(overflow))
             .map_err(temporal_error)?;
@@ -249,12 +238,29 @@ impl Context {
                 "PlainMonthDay.toPlainDate requires an object",
             ));
         };
-        let year = self.plain_date_required_i64(value, "year")?;
+        let (era, era_year) = self.temporal_calendar_era_fields(value, month_day.calendar())?;
+        let year = self.plain_date_optional_i64(value, "year")?;
+        let era_year = era_year
+            .map(|value| {
+                value
+                    .to_i32()
+                    .ok_or_else(|| Self::plain_month_day_range("eraYear"))
+            })
+            .transpose()?;
         let year = year
-            .to_i32()
-            .ok_or_else(|| Self::plain_month_day_range("year"))?;
+            .map(|value| {
+                value
+                    .to_i32()
+                    .ok_or_else(|| Self::plain_month_day_range("year"))
+            })
+            .transpose()?;
         let date = month_day
-            .to_plain_date(Some(CalendarFields::new().with_year(year)))
+            .to_plain_date(Some(
+                CalendarFields::new()
+                    .with_era(era)
+                    .with_era_year(era_year)
+                    .with_optional_year(year),
+            ))
             .map_err(temporal_error)?;
         self.create_plain_date_value(date)
     }
@@ -293,22 +299,44 @@ impl Context {
 
     fn plain_month_day_fields(
         day: i64,
+        era: Option<TinyAsciiStr<19>>,
+        era_year: Option<i64>,
         month: Option<i64>,
         month_code: Option<temporal_rs::MonthCode>,
         year: Option<i64>,
         overflow: Overflow,
     ) -> Result<CalendarFields> {
-        Self::plain_month_day_optional_fields(Some(day), month, month_code, year, overflow)
+        Self::plain_month_day_optional_fields(
+            Some(day),
+            era,
+            era_year,
+            month,
+            month_code,
+            year,
+            overflow,
+        )
     }
 
     fn plain_month_day_optional_fields(
         day: Option<i64>,
+        era: Option<TinyAsciiStr<19>>,
+        era_year: Option<i64>,
         month: Option<i64>,
         month_code: Option<temporal_rs::MonthCode>,
         year: Option<i64>,
         overflow: Overflow,
     ) -> Result<CalendarFields> {
         Ok(CalendarFields::new()
+            .with_era(era)
+            .with_era_year(
+                era_year
+                    .map(|value| {
+                        value
+                            .to_i32()
+                            .ok_or_else(|| Self::plain_month_day_range("eraYear"))
+                    })
+                    .transpose()?,
+            )
             .with_optional_year(
                 year.map(|value| {
                     value
