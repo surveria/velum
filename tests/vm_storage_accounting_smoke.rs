@@ -160,10 +160,13 @@ fn ensure_materialized_payload_bytes(snapshot: &VmStorageSnapshot) -> TestResult
         "hostCamera".len(),
         "host callback payload bytes",
     )?;
-    ensure_usize(
-        snapshot.payload_bytes(VmStorageKind::Object),
-        "camera".len() + "g".len(),
-        "RegExp payload bytes",
+    let regexp_pattern_bytes = "camera"
+        .encode_utf16()
+        .count()
+        .saturating_mul(core::mem::size_of::<u16>());
+    ensure(
+        snapshot.payload_bytes(VmStorageKind::Object) > regexp_pattern_bytes,
+        "RegExp payload should include its compiled program",
     )?;
     ensure_usize(
         snapshot.payload_bytes(VmStorageKind::ByteBuffer),

@@ -5,7 +5,7 @@ use crate::{
 };
 
 use super::{
-    REGEXP_RECEIVER_ERROR, parse_regexp_flags, validate_regexp_pattern_utf16, value_is_undefined,
+    REGEXP_RECEIVER_ERROR, compile_regexp_pattern_utf16, parse_regexp_flags, value_is_undefined,
 };
 
 impl Context {
@@ -25,7 +25,7 @@ impl Context {
         }
         let pattern_value = args.as_slice().first();
         let flags_value = args.as_slice().get(1);
-        let (pattern, flags) = if let Some(Value::Object(pattern_id)) = pattern_value
+        let replacement = if let Some(Value::Object(pattern_id)) = pattern_value
             && let Some(regexp) = self.objects.regexp_value(*pattern_id)?.cloned()
         {
             if flags_value.is_some_and(|value| !value_is_undefined(value)) {
@@ -33,7 +33,7 @@ impl Context {
                     "RegExp.prototype.compile flags must be undefined for a RegExp pattern",
                 ));
             }
-            (regexp.pattern_utf16().to_vec(), regexp.flags().to_owned())
+            regexp
         } else {
             let pattern = match pattern_value {
                 None | Some(Value::Undefined) => Vec::new(),
@@ -43,13 +43,17 @@ impl Context {
                 None | Some(Value::Undefined) => String::new(),
                 Some(value) => self.to_string(value)?,
             };
-            (pattern, flags)
+            self.charge_regexp_utf16_work(&pattern, &[])?;
+            self.check_utf16_string_len(&pattern)?;
+            self.check_string_len(&flags)?;
+            let parsed_flags = parse_regexp_flags(&flags)?;
+            let compiled = compile_regexp_pattern_utf16(&pattern, parsed_flags)?;
+            RegExpValue::new_utf16(pattern, parsed_flags, compiled)?
         };
-        let parsed_flags = parse_regexp_flags(&flags)?;
-        validate_regexp_pattern_utf16(&pattern, parsed_flags)?;
         self.objects
-            .replace_regexp_value(*receiver, RegExpValue::new_utf16(pattern, flags))?;
+            .check_regexp_value_replacement(*receiver, &replacement)?;
         self.set_regexp_last_index(this_value, 0)?;
+        self.objects.replace_regexp_value(*receiver, replacement)?;
         Ok(this_value.clone())
     }
 }

@@ -221,3 +221,38 @@ pub struct CompiledRegex {
     // Flags controlling matching.
     pub flags: api::Flags,
 }
+
+impl CompiledRegex {
+    pub(crate) fn retained_payload_bytes(&self) -> Option<usize> {
+        let instruction_bytes = self.insns.len().checked_mul(core::mem::size_of::<Insn>())?;
+        let bracket_record_bytes = self
+            .brackets
+            .len()
+            .checked_mul(core::mem::size_of::<BracketContents>())?;
+        let bracket_interval_bytes = self.brackets.iter().try_fold(0_usize, |total, bracket| {
+            total.checked_add(core::mem::size_of_val(bracket.cps.intervals()))
+        })?;
+        let group_record_bytes = core::mem::size_of_val(self.group_names.as_ref());
+        let group_name_bytes = self
+            .group_names
+            .iter()
+            .try_fold(0_usize, |total, name| total.checked_add(name.len()))?;
+        let start_predicate_bytes = match &self.start_pred {
+            StartPredicate::ByteSeq(finder) => core::mem::size_of::<memmem::Finder<'static>>()
+                .checked_add(finder.needle().len())?,
+            StartPredicate::Arbitrary
+            | StartPredicate::ByteSet1(_)
+            | StartPredicate::ByteSet2(_)
+            | StartPredicate::ByteSet3(_)
+            | StartPredicate::ByteBracket(_)
+            | StartPredicate::StartAnchored => 0,
+        };
+
+        instruction_bytes
+            .checked_add(bracket_record_bytes)
+            .and_then(|bytes| bytes.checked_add(bracket_interval_bytes))
+            .and_then(|bytes| bytes.checked_add(group_record_bytes))
+            .and_then(|bytes| bytes.checked_add(group_name_bytes))
+            .and_then(|bytes| bytes.checked_add(start_predicate_bytes))
+    }
+}

@@ -374,12 +374,37 @@ impl ObjectHeap {
         id: ObjectId,
         value: RegExpValue,
     ) -> Result<()> {
-        let object = self.object_mut(id)?;
-        if object.regexp_value.is_none() {
-            return Err(Error::type_error("object is not a RegExp"));
-        }
-        object.regexp_value = Some(value);
+        let projected_object_bytes = self.projected_regexp_payload_bytes(id, &value)?;
+        self.object_mut(id)?.regexp_value = Some(value);
+        self.object_payload_bytes = projected_object_bytes;
         Ok(())
+    }
+
+    pub(in crate::runtime) fn check_regexp_value_replacement(
+        &self,
+        id: ObjectId,
+        value: &RegExpValue,
+    ) -> Result<()> {
+        self.projected_regexp_payload_bytes(id, value).map(|_| ())
+    }
+
+    fn projected_regexp_payload_bytes(&self, id: ObjectId, value: &RegExpValue) -> Result<usize> {
+        let Some(previous) = self.object(id)?.regexp_value.as_ref() else {
+            return Err(Error::type_error("object is not a RegExp"));
+        };
+        let retained_without_previous = self
+            .object_payload_bytes
+            .checked_sub(previous.storage_payload_bytes())
+            .ok_or_else(|| Error::runtime("object payload bytes underflowed"))?;
+        let projected_object_bytes = retained_without_previous
+            .checked_add(value.storage_payload_bytes())
+            .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
+        ensure_object_storage_limit(
+            VmStorageKind::Object,
+            projected_object_bytes,
+            self.storage_limits.max_payload_bytes(VmStorageKind::Object),
+        )?;
+        Ok(projected_object_bytes)
     }
 
     pub fn has(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {

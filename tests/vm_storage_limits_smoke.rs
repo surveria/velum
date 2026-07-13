@@ -1,5 +1,5 @@
 use rs_quickjs::{
-    Engine, EngineConfig, Error, RuntimeLimits, Vm, VmConfig, VmStorageKind, VmStorageLimits,
+    Engine, EngineConfig, Error, RuntimeLimits, Value, Vm, VmConfig, VmStorageKind, VmStorageLimits,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -91,8 +91,13 @@ fn enforces_object_regexp_and_buffer_limits_before_arena_growth() -> TestResult 
         "object count after rejection",
     )?;
 
-    let regexp_limits =
-        VmStorageLimits::unlimited().with_max_payload_bytes(VmStorageKind::Object, "cam".len());
+    let mut regexp_probe = Engine::new().create_vm();
+    regexp_probe.eval("/cam/;")?;
+    let regexp_payload_limit = regexp_probe
+        .storage_snapshot()?
+        .payload_bytes(VmStorageKind::Object);
+    let regexp_limits = VmStorageLimits::unlimited()
+        .with_max_payload_bytes(VmStorageKind::Object, regexp_payload_limit);
     let mut vm = vm_with_storage_limits(regexp_limits);
     vm.eval("/cam/;")?;
     let before = vm.storage_snapshot()?;
@@ -109,6 +114,69 @@ fn enforces_object_regexp_and_buffer_limits_before_arena_growth() -> TestResult 
     let error = expect_eval_error(&mut vm, "new ArrayBuffer(1);")?;
     ensure_limit(&error, "ByteBuffer")?;
     ensure_snapshot(&vm, &before, "byte buffer limit failure")
+}
+
+#[test]
+fn accounts_regexp_compile_replacement_transactionally() -> TestResult {
+    const LARGE_PATTERN: &str = "(?:camera|lens|sensor|body|frame|focus|aperture|shutter){4,12}";
+
+    let mut small_probe = Engine::new().create_vm();
+    small_probe.eval("/x/;")?;
+    let small_payload = small_probe
+        .storage_snapshot()?
+        .payload_bytes(VmStorageKind::Object);
+
+    let mut large_probe = Engine::new().create_vm();
+    large_probe.eval(&format!("/{LARGE_PATTERN}/;"))?;
+    let large_payload = large_probe
+        .storage_snapshot()?
+        .payload_bytes(VmStorageKind::Object);
+    if large_payload <= small_payload {
+        return Err("expected the large compiled RegExp to retain more payload".into());
+    }
+
+    let limits =
+        VmStorageLimits::unlimited().with_max_payload_bytes(VmStorageKind::Object, small_payload);
+    let mut constrained = vm_with_storage_limits(limits);
+    constrained.eval("var pattern = /x/;")?;
+    let before = constrained.storage_snapshot()?;
+    let error = expect_eval_error(
+        &mut constrained,
+        &format!("pattern.compile('{LARGE_PATTERN}');"),
+    )?;
+    ensure_limit(&error, "Object")?;
+    let after = constrained.storage_snapshot()?;
+    ensure_kind_unchanged(
+        &after,
+        &before,
+        VmStorageKind::Object,
+        "RegExp replacement limit failure",
+    )?;
+    let preserved = constrained.eval("pattern.test('x') && !pattern.test('camera')")?;
+    if preserved != Value::Bool(true) {
+        return Err(
+            format!("expected rejected replacement to preserve /x/, got {preserved:?}").into(),
+        );
+    }
+
+    let limits =
+        VmStorageLimits::unlimited().with_max_payload_bytes(VmStorageKind::Object, large_payload);
+    let mut shrinking = vm_with_storage_limits(limits);
+    shrinking.eval(&format!("var pattern = /{LARGE_PATTERN}/;"))?;
+    let before = shrinking
+        .storage_snapshot()?
+        .payload_bytes(VmStorageKind::Object);
+    shrinking.eval("pattern.compile('x');")?;
+    let after = shrinking
+        .storage_snapshot()?
+        .payload_bytes(VmStorageKind::Object);
+    if after >= before {
+        return Err(format!(
+            "expected RegExp replacement to release object payload: {before} -> {after}"
+        )
+        .into());
+    }
+    Ok(())
 }
 
 #[test]

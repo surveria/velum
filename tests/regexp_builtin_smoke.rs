@@ -68,6 +68,47 @@ fn supports_regexp_constructor_and_preserves_slash_operator() -> TestResult {
 }
 
 #[test]
+fn replaces_cached_regexp_state_transactionally() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let target = /old/g;
+        target.lastIndex = 2;
+        let source = /camera/iy;
+        let returned = target.compile(source);
+        let copied = returned === target &&
+            target.source === "camera" &&
+            target.flags === "iy" &&
+            target.lastIndex === 0 &&
+            target.test("CAMERA") &&
+            target.lastIndex === 6 &&
+            !target.test("old") &&
+            target.lastIndex === 0;
+
+        target.compile("lens", "g");
+        let replaced = target.source === "lens" &&
+            target.flags === "g" &&
+            target.lastIndex === 0 &&
+            target.test("lens lens") &&
+            target.lastIndex === 4;
+
+        let rejected = false;
+        try {
+            target.compile("(");
+        } catch (error) {
+            rejected = error instanceof SyntaxError;
+        }
+        target.lastIndex = 0;
+        copied && replaced && rejected && target.test("lens") ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn selects_regexp_goal_after_statement_boundaries_and_yield() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
