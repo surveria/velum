@@ -7,7 +7,6 @@ use crate::{
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_LENGTH_RANGE_ERROR: &str = "Invalid array length";
-const LEGACY_PROTO_PROPERTY: &str = "__proto__";
 
 impl Context {
     /// Invokes a getter function with the property read receiver as `this`.
@@ -54,9 +53,6 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let lookup = PropertyLookup::from_key(property_name, key);
-        if property_name == LEGACY_PROTO_PROPERTY && !self.objects.has_own(object, lookup)? {
-            self.ensure_object_prototype_intrinsic_for_ordinary_lookup(object, property_name)?;
-        }
         match self.objects.accessor_write_target(object, lookup)? {
             AccessorWriteDisposition::Setter(setter) => {
                 self.call_accessor_function(&setter, Value::Object(object), &[value])?;

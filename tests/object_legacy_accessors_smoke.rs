@@ -113,6 +113,34 @@ fn routes_proto_mutation_and_proxy_failures_through_shared_owners() -> TestResul
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn deleted_proto_accessor_leaves_an_ordinary_data_property_name() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        const descriptor = Object.getOwnPropertyDescriptor(Object.prototype, "__proto__");
+        const target = { marker: 1 };
+        const originalPrototype = Object.getPrototypeOf(target);
+        const removed = delete Object.prototype.__proto__;
+
+        target.__proto__ = 40;
+        target.__proto__ += 1;
+        const name = "__proto__";
+        target[name] += 1;
+
+        const ordinary = removed &&
+            Object.hasOwn(target, name) &&
+            target.__proto__ === 42 &&
+            Object.getPrototypeOf(target) === originalPrototype;
+        Object.defineProperty(Object.prototype, name, descriptor);
+
+        ordinary && target.__proto__ === 42 ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

@@ -21,7 +21,6 @@ use crate::{
     value::{ErrorName, Value},
 };
 
-const LEGACY_PROTO_PROPERTY: &str = "__proto__";
 const CALL_ASSIGNMENT_ERROR: &str = "function call is not a valid assignment target";
 
 pub(in crate::runtime::bytecode) fn web_compat_call_assignment_error() -> Error {
@@ -182,7 +181,7 @@ impl Context {
         value: Value,
         strict: bool,
     ) -> Result<()> {
-        if bytecode_property_set_uses_legacy_path(object, property.as_str(), strict)
+        if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
             || (!strict && self.bytecode_property_target_is_array(object)?)
         {
             return self.set_static_property_value(object, property, access, value);
@@ -205,7 +204,7 @@ impl Context {
         value: Value,
         strict: bool,
     ) -> Result<()> {
-        if bytecode_property_set_uses_legacy_path(object, property.name(), strict)
+        if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
             || (!strict && self.bytecode_property_target_is_array(object)?)
         {
             return self.set_cached_dynamic_property_value(object, property, access, value);
@@ -652,16 +651,8 @@ const fn bytecode_set_failure(strict: bool) -> SetFailureBehavior {
     }
 }
 
-fn bytecode_property_set_uses_legacy_path(object: &Value, property: &str, strict: bool) -> bool {
-    (!strict && !matches!(object, Value::Object(_) | Value::Undefined | Value::Null))
-        || (bytecode_property_target_is_object(object) && property == LEGACY_PROTO_PROPERTY)
-}
-
-const fn bytecode_property_target_is_object(object: &Value) -> bool {
-    matches!(
-        object,
-        Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
-    )
+const fn bytecode_property_set_uses_sloppy_primitive_path(object: &Value, strict: bool) -> bool {
+    !strict && !matches!(object, Value::Object(_) | Value::Undefined | Value::Null)
 }
 
 fn logical_assignment_should_store(op: BinaryOp, value: &Value) -> Result<bool> {

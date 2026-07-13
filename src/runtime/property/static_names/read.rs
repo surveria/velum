@@ -10,8 +10,6 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::PROTOTYPE_PROPERTY;
-
 impl Context {
     /// Validated per-site cache hit for a plain-object read. The cache is
     /// only ever filled from the plain-object tail of the lookup chain and
@@ -53,14 +51,9 @@ impl Context {
         if let Some(read) = self.semantic_property_read(object, lookup)? {
             return match read {
                 SemanticPropertyRead::Resolved(value) => Ok(value),
-                SemanticPropertyRead::ObjectTail(id) if property.as_str() != PROTOTYPE_PROPERTY => {
+                SemanticPropertyRead::ObjectTail(id) => {
                     self.get_cached_object_property_value(id, access, lookup)
                 }
-                SemanticPropertyRead::ObjectTail(id) => self.finish_semantic_property_read(
-                    SemanticPropertyRead::ObjectTail(id),
-                    object,
-                    lookup,
-                ),
             };
         }
         if let Value::String(value) = object {
@@ -99,8 +92,7 @@ impl Context {
             return match read {
                 SemanticPropertyRead::Resolved(value) => Ok(value),
                 SemanticPropertyRead::ObjectTail(id)
-                    if property.name() != PROTOTYPE_PROPERTY
-                        && self.objects.array_len_if_array(id)?.is_none() =>
+                    if self.objects.array_len_if_array(id)?.is_none() =>
                 {
                     self.get_cached_object_property_value(id, access, property.lookup())
                 }

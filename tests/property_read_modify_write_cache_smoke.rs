@@ -39,6 +39,46 @@ fn cached_dynamic_property_update_and_compound_preserve_repeated_state() -> Test
 }
 
 #[test]
+fn cached_proto_name_updates_use_ordinary_accessor_semantics() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let value = vm.eval(
+        r#"
+        let getterHits = 0;
+        let setterHits = 0;
+        let stored = 20;
+        let holder = {};
+        Object.defineProperty(holder, "__proto__", {
+            get() { getterHits = getterHits + 1; return stored; },
+            set(value) { setterHits = setterHits + 1; stored = value; },
+            configurable: true
+        });
+        function key() { return "__proto__"; }
+        0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(0.0))?;
+
+    let static_script = vm.compile("holder.__proto__ += 1; holder.__proto__")?;
+    let value = vm.eval_compiled(&static_script)?;
+    ensure_value(&value, &Value::Number(21.0))?;
+    let value = vm.eval_compiled(&static_script)?;
+    ensure_value(&value, &Value::Number(22.0))?;
+
+    let dynamic_script = vm.compile("holder[key()] += 1; holder[key()]")?;
+    let value = vm.eval_compiled(&dynamic_script)?;
+    ensure_value(&value, &Value::Number(23.0))?;
+    let value = vm.eval_compiled(&dynamic_script)?;
+    ensure_value(&value, &Value::Number(24.0))?;
+
+    let value = vm.eval(
+        "getterHits * 10 + setterHits + \
+         (Object.getPrototypeOf(holder) === Object.prototype ? 0 : 1000)",
+    )?;
+    ensure_value(&value, &Value::Number(84.0))
+}
+
+#[test]
 fn cached_static_compound_falls_back_for_prototype_hits() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

@@ -21,8 +21,6 @@ mod read;
 
 pub(in crate::runtime) use cache::{CallValueCache, StaticNameAtomCacheHandle};
 
-const PROTOTYPE_PROPERTY: &str = "__proto__";
-
 enum CachedPropertyMutation {
     Updated { old_value: Value, new_value: Value },
     NeedsGenericSet { old_value: Value, new_value: Value },
@@ -291,7 +289,6 @@ impl Context {
         };
         if let SemanticPropertyWrite::ObjectTail(id) = write
             && !self.is_global_object_id(id)
-            && property.as_str() != PROTOTYPE_PROPERTY
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
             return Ok(());
@@ -339,7 +336,7 @@ impl Context {
         let Value::Object(object_id) = object else {
             return Ok(None);
         };
-        if self.is_global_object_id(*object_id) || property.as_str() == PROTOTYPE_PROPERTY {
+        if self.is_global_object_id(*object_id) {
             return Ok(None);
         }
 
@@ -381,7 +378,6 @@ impl Context {
         };
         if let SemanticPropertyWrite::ObjectTail(id) = write
             && !self.is_global_object_id(id)
-            && property.name() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
             && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
@@ -433,7 +429,6 @@ impl Context {
             return Ok(None);
         };
         if self.is_global_object_id(*object_id)
-            || property.name() == PROTOTYPE_PROPERTY
             || self.objects.array_len_if_array(*object_id)?.is_some()
         {
             return Ok(None);
@@ -584,7 +579,6 @@ impl Context {
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && !self.is_global_object_id(id)
-            && property.as_str() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
         {
             return self
@@ -607,7 +601,6 @@ impl Context {
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && !self.is_global_object_id(id)
-            && property.name() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(id)?.is_none()
         {
             return self
