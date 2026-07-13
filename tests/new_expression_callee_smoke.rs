@@ -63,16 +63,20 @@ fn supports_call_suffix_after_new_expression() -> TestResult {
 
 #[test]
 fn rejects_import_call_constructor_forms() -> TestResult {
-    let Err(error) = eval("new import.defer('./empty_FIXTURE.js');") else {
-        return Err("expected import constructor form to fail during parsing".into());
-    };
-
-    let message = error.to_string();
-    if message.contains("import call cannot be used as a constructor") {
-        return Ok(());
+    for source in [
+        "new import('./empty_FIXTURE.js');",
+        "new import.defer('./empty_FIXTURE.js');",
+        "new import.meta;",
+    ] {
+        let Err(error) = eval(source) else {
+            return Err(format!("expected import constructor form to fail: {source}").into());
+        };
+        let message = error.to_string();
+        if !message.contains("import call cannot be used as a constructor") {
+            return Err(format!("expected import constructor parse error, got {message}").into());
+        }
     }
-
-    Err(format!("expected import constructor parse error, got {message}").into())
+    Ok(())
 }
 
 fn eval(source: &str) -> rs_quickjs::Result<Value> {

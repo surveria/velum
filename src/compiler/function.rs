@@ -517,7 +517,7 @@ impl CaptureBindingCollector {
                 self.collect_pattern(pattern);
             }
             Stmt::ClassDecl { class, .. } => self.collect_class(class),
-            Stmt::Empty | Stmt::Break(_) | Stmt::Continue(_) => {}
+            Stmt::Empty | Stmt::Debugger | Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }
 

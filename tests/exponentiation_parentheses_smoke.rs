@@ -104,7 +104,15 @@ fn rejects_unparenthesized_unary_left_exponentiation() -> TestResult {
     ensure_error_contains(
         "typeof missing ** 2",
         "unary expression cannot be the left operand",
-    )
+    )?;
+    ensure_error_contains(
+        "async function probe() { return await 2 ** 3; }",
+        "unary expression cannot be the left operand",
+    )?;
+
+    let runtime = Runtime::new();
+    runtime.compile("async function probe() { return (await 2) ** 3; }")?;
+    Ok(())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

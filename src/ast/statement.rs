@@ -17,6 +17,7 @@ pub struct Program {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Empty,
+    Debugger,
     Block(Vec<Statement>),
     DeclList(Vec<Statement>),
     If {

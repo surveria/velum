@@ -318,7 +318,7 @@ impl<'a> BytecodeCompiler<'a> {
                 block_scoped: true,
                 ..
             } => self.compile_annex_b_function_update(name, variable),
-            Stmt::Empty | Stmt::FunctionDecl { .. } => Ok(()),
+            Stmt::Empty | Stmt::Debugger | Stmt::FunctionDecl { .. } => Ok(()),
             Stmt::VarDecl { name, kind, init } => {
                 self.compile_declaration(name, *kind, init.as_ref())
             }
@@ -605,6 +605,7 @@ fn statements_need_lexical_scope(statements: &[Statement]) -> bool {
 fn statements_have_value_completion(statements: &[Statement]) -> bool {
     statements.iter().any(|statement| match statement.kind() {
         Stmt::Empty
+        | Stmt::Debugger
         | Stmt::VarDecl { .. }
         | Stmt::PatternDecl { .. }
         | Stmt::ClassDecl { .. }
@@ -645,6 +646,7 @@ fn statement_needs_lexical_scope(statement: &Statement) -> bool {
         | Stmt::FunctionDecl { .. } => true,
         Stmt::Block(_)
         | Stmt::Empty
+        | Stmt::Debugger
         | Stmt::If { .. }
         | Stmt::While { .. }
         | Stmt::DoWhile { .. }

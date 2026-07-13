@@ -85,6 +85,19 @@ holder.class + holder.import + holder.with + holder['export']
 }
 
 #[test]
+fn debugger_preserves_statement_termination() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval("debugger\n40 + 2")?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let Err(error) = context.eval("debugger 1") else {
+        return Err("expected debugger without a statement terminator to fail".into());
+    };
+    ensure_error_contains(&error, "expected statement terminator after 'debugger'")
+}
+
+#[test]
 fn escaped_reserved_words_are_identifier_names_but_not_keywords() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

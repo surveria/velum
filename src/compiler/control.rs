@@ -137,6 +137,7 @@ impl BytecodeCompiler<'_> {
             Stmt::Block(_)
             | Stmt::DeclList(_)
             | Stmt::Empty
+            | Stmt::Debugger
             | Stmt::If { .. }
             | Stmt::With { .. }
             | Stmt::Label { .. }

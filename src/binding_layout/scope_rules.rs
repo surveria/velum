@@ -25,6 +25,7 @@ pub fn for_init_needs_lexical_scope(init: Option<&Statement>) -> bool {
         | Stmt::ClassDecl { .. }
         | Stmt::FunctionDecl { .. }
         | Stmt::Empty
+        | Stmt::Debugger
         | Stmt::Block(_)
         | Stmt::If { .. }
         | Stmt::While { .. }
