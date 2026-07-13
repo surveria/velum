@@ -503,7 +503,7 @@ impl Context {
         let Some(text) = value.string_text() else {
             return Err(Error::type_error("Temporal calendar must be a string"));
         };
-        Calendar::from_str(text).map_err(temporal_error)
+        Self::temporal_calendar_from_text(text)
     }
 
     fn temporal_calendar_identifier(value: Option<&Value>) -> Result<Calendar> {
@@ -513,7 +513,17 @@ impl Context {
         let Some(text) = value.string_text() else {
             return Err(Error::type_error("Temporal calendar must be a string"));
         };
-        Calendar::try_from_utf8(text.as_bytes()).map_err(temporal_error)
+        Self::temporal_calendar_from_text(text)
+    }
+
+    pub(super) fn temporal_calendar_from_text(text: &str) -> Result<Calendar> {
+        if text.eq_ignore_ascii_case("islamic") {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                "The islamic calendar alias is not valid for Temporal",
+            ));
+        }
+        Calendar::from_str(text).map_err(temporal_error)
     }
 
     pub(super) fn create_plain_date_value(&mut self, date: PlainDate) -> Result<Value> {

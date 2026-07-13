@@ -35,6 +35,7 @@ impl Context {
             }
         }
         let day = self.plain_date_optional_i64(&object, "day")?;
+        let (era, era_year) = self.temporal_calendar_era_fields(&object, date_time.calendar())?;
         let hour = self.plain_date_optional_i64(&object, "hour")?;
         let microsecond = self.plain_date_optional_i64(&object, "microsecond")?;
         let millisecond = self.plain_date_optional_i64(&object, "millisecond")?;
@@ -57,6 +58,16 @@ impl Context {
         }
         let overflow = self.plain_date_overflow_option(values.get(1))?;
         let calendar_fields = CalendarFields::new()
+            .with_era(era)
+            .with_era_year(
+                era_year
+                    .map(|value| {
+                        value
+                            .to_i32()
+                            .ok_or_else(|| Self::plain_date_time_range("eraYear is invalid"))
+                    })
+                    .transpose()?,
+            )
             .with_optional_year(
                 year.map(|value| {
                     value
