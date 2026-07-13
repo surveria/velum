@@ -423,6 +423,13 @@ impl Regex {
         Ok(Regex { cr })
     }
 
+    /// Returns the logical bytes retained by the compiled program's dynamic
+    /// storage, or `None` when the total cannot be represented by `usize`.
+    #[must_use]
+    pub fn retained_payload_bytes(&self) -> Option<usize> {
+        self.cr.retained_payload_bytes()
+    }
+
     /// Searches `text` to find the first match.
     #[inline]
     pub fn find(&self, text: &str) -> Option<Match> {

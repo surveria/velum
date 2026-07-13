@@ -8,7 +8,6 @@ use super::{
     NativeFunctionKind, REGEXP_DOT_ALL_PROPERTY, REGEXP_GLOBAL_PROPERTY,
     REGEXP_HAS_INDICES_PROPERTY, REGEXP_IGNORE_CASE_PROPERTY, REGEXP_MULTILINE_PROPERTY,
     REGEXP_STICKY_PROPERTY, REGEXP_UNICODE_PROPERTY, REGEXP_UNICODE_SETS_PROPERTY,
-    parse_regexp_flags,
 };
 
 impl Context {
@@ -42,7 +41,7 @@ impl Context {
             }
         }
 
-        let flags = parse_regexp_flags(regexp.flags())?;
+        let flags = regexp.parsed_flags();
         let mut text = String::new();
         for (enabled, marker) in [
             (flags.has_indices(), 'd'),

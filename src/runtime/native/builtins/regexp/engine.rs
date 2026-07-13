@@ -12,30 +12,30 @@ pub(super) fn parse_regexp_flags(flags: &str) -> Result<RegExpFlags> {
     RegExpFlags::parse(flags).map_err(|error| regexp_syntax_error(&error))
 }
 
-pub(super) fn validate_regexp_pattern_utf16(pattern: &[u16], flags: RegExpFlags) -> Result<()> {
-    compile_regexp(pattern, flags).map(drop)
+pub(super) fn compile_regexp_pattern_utf16(
+    pattern: &[u16],
+    flags: RegExpFlags,
+) -> Result<regress::Regex> {
+    compile_regexp_syntax(pattern, flags).map_err(|error| regexp_syntax_error(&error))
 }
 
 pub(super) fn regexp_find_utf16(
-    pattern: &[u16],
+    compiled: &regress::Regex,
     flags: RegExpFlags,
     input: &[u16],
     start: usize,
-) -> Result<Option<RegExpMatch>> {
+) -> Option<RegExpMatch> {
     if start > input.len() {
-        return Ok(None);
+        return None;
     }
-    let compiled = compile_regexp(pattern, flags)?;
     let matched = if flags.unicode() || flags.unicode_sets() {
         compiled.find_from_utf16(input, start).next()
     } else {
         compiled.find_from_ucs2(input, start).next()
     };
-    let Some(matched) = matched else {
-        return Ok(None);
-    };
+    let matched = matched?;
     if flags.sticky() && matched.start() != start {
-        return Ok(None);
+        return None;
     }
     let span = regexp_span(matched.range());
     let named_captures = matched
@@ -47,39 +47,32 @@ pub(super) fn regexp_find_utf16(
         .into_iter()
         .map(regexp_optional_span)
         .collect::<Vec<_>>();
-    Ok(Some(RegExpMatch {
+    Some(RegExpMatch {
         span,
         captures,
         named_captures,
-    }))
+    })
 }
 
 pub(super) fn regexp_test_utf16(
-    pattern: &[u16],
+    compiled: &regress::Regex,
     flags: RegExpFlags,
     input: &[u16],
     start: usize,
-) -> Result<Option<Range<usize>>> {
+) -> Option<Range<usize>> {
     if start > input.len() {
-        return Ok(None);
+        return None;
     }
-    let compiled = compile_regexp(pattern, flags)?;
     let matched = if flags.unicode() || flags.unicode_sets() {
         compiled.find_from_utf16(input, start).next()
     } else {
         compiled.find_from_ucs2(input, start).next()
     };
-    let Some(matched) = matched else {
-        return Ok(None);
-    };
+    let matched = matched?;
     if flags.sticky() && matched.start() != start {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(matched.range()))
-}
-
-fn compile_regexp(pattern: &[u16], flags: RegExpFlags) -> Result<regress::Regex> {
-    compile_regexp_syntax(pattern, flags).map_err(|error| regexp_syntax_error(&error))
+    Some(matched.range())
 }
 
 fn regexp_syntax_error(error: &crate::regexp_syntax::RegExpSyntaxError) -> Error {

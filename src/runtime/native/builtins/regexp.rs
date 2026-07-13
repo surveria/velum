@@ -24,8 +24,8 @@ mod replace;
 mod split;
 
 use engine::{
-    escaped_regexp_source_utf16, parse_regexp_flags, regexp_find_utf16,
-    regexp_index_usize_to_number, regexp_test_utf16, validate_regexp_pattern_utf16,
+    compile_regexp_pattern_utf16, escaped_regexp_source_utf16, parse_regexp_flags,
+    regexp_find_utf16, regexp_index_usize_to_number, regexp_test_utf16,
 };
 
 use super::{
@@ -188,12 +188,12 @@ impl Context {
     fn create_regexp_object_from_utf16(&mut self, pattern: &[u16], flags: &str) -> Result<Value> {
         self.charge_regexp_utf16_work(pattern, &[])?;
         let parsed_flags = parse_regexp_flags(flags)?;
-        validate_regexp_pattern_utf16(pattern, parsed_flags)?;
+        let compiled = compile_regexp_pattern_utf16(pattern, parsed_flags)?;
         self.check_utf16_string_len(pattern)?;
         self.check_string_len(flags)?;
         let prototype = self.regexp_constructor_prototype()?;
         let id = self.objects.create_regexp(
-            RegExpValue::new_utf16(pattern.to_vec(), flags.to_owned()),
+            RegExpValue::new_utf16(pattern.to_vec(), parsed_flags, compiled)?,
             prototype,
             self.limits.max_objects,
         )?;
@@ -407,7 +407,7 @@ impl Context {
             return self.eval_regexp_prototype_flags_getter(this_value);
         }
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = parse_regexp_flags(regexp.flags())?;
+        let flags = regexp.parsed_flags();
         match kind {
             NativeFunctionKind::RegExpPrototypeDotAllGetter => Ok(Value::Bool(flags.dot_all())),
             NativeFunctionKind::RegExpPrototypeGlobalGetter => Ok(Value::Bool(flags.global())),
@@ -470,14 +470,14 @@ impl Context {
 
     fn regexp_test_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<bool> {
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = parse_regexp_flags(regexp.flags())?;
+        let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
         let start = if flags.global() || flags.sticky() {
             self.regexp_last_index_utf16(this_value, input)?
         } else {
             0
         };
-        let matched = regexp_test_utf16(regexp.pattern_utf16(), flags, input, start)?;
+        let matched = regexp_test_utf16(regexp.compiled(), flags, input, start);
         let Some(range) = matched else {
             if flags.global() || flags.sticky() {
                 self.set_regexp_last_index(this_value, 0)?;
@@ -492,14 +492,14 @@ impl Context {
 
     fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = parse_regexp_flags(regexp.flags())?;
+        let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
         let start = if flags.global() || flags.sticky() {
             self.regexp_last_index_utf16(this_value, input)?
         } else {
             0
         };
-        let matched = regexp_find_utf16(regexp.pattern_utf16(), flags, input, start)?;
+        let matched = regexp_find_utf16(regexp.compiled(), flags, input, start);
         let Some(matched) = matched else {
             if flags.global() || flags.sticky() {
                 self.set_regexp_last_index(this_value, 0)?;
