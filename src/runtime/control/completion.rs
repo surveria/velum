@@ -11,6 +11,7 @@ pub struct TailCall {
     callee: Value,
     arguments: Vec<Value>,
     this_value: Value,
+    return_mode: TailCallReturnMode,
 }
 
 impl TailCall {
@@ -23,15 +24,58 @@ impl TailCall {
             callee,
             arguments,
             this_value,
+            return_mode: TailCallReturnMode::Ordinary,
         }
     }
 
-    pub(in crate::runtime) fn into_parts(self) -> (Value, Vec<Value>, Value) {
-        (self.callee, self.arguments, self.this_value)
+    pub(in crate::runtime) fn into_parts(self) -> (Value, Vec<Value>, Value, TailCallReturnMode) {
+        (
+            self.callee,
+            self.arguments,
+            self.this_value,
+            self.return_mode,
+        )
     }
 
     pub(in crate::runtime) const fn callee(&self) -> &Value {
         &self.callee
+    }
+
+    pub(in crate::runtime) fn with_derived_constructor_return(
+        mut self,
+        this_value: Option<Value>,
+    ) -> Result<Self> {
+        self.return_mode = self
+            .return_mode
+            .merge(TailCallReturnMode::DerivedConstructor { this_value })?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::runtime) enum TailCallReturnMode {
+    Ordinary,
+    DerivedConstructor { this_value: Option<Value> },
+}
+
+impl TailCallReturnMode {
+    pub(in crate::runtime) fn merge(self, next: Self) -> Result<Self> {
+        match (self, next) {
+            (current, Self::Ordinary) => Ok(current),
+            (Self::Ordinary, derived @ Self::DerivedConstructor { .. }) => Ok(derived),
+            (Self::DerivedConstructor { .. }, Self::DerivedConstructor { .. }) => Err(
+                Error::runtime("tail call acquired two derived constructor return owners"),
+            ),
+        }
+    }
+
+    pub(in crate::runtime) const fn root_value(&self) -> Option<&Value> {
+        match self {
+            Self::Ordinary | Self::DerivedConstructor { this_value: None } => None,
+            Self::DerivedConstructor {
+                this_value: Some(value),
+            } => Some(value),
+        }
     }
 }
 

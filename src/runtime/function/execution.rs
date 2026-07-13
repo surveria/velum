@@ -2,7 +2,11 @@ use crate::{
     bytecode::BytecodeNewTargetMode,
     error::{Error, Result},
     runtime::{
-        Context, call::RuntimeCallArgs, control::Completion, function::FunctionSuperBinding,
+        Context,
+        call::RuntimeCallArgs,
+        control::{Completion, TailCallReturnMode},
+        function::FunctionSuperBinding,
+        roots::VmRootKind,
     },
     value::{FunctionId, Value},
 };
@@ -112,7 +116,10 @@ impl Context {
         mut this_value: Value,
         mut new_target: Value,
     ) -> Result<Completion> {
+        let mut return_mode = TailCallReturnMode::Ordinary;
         loop {
+            let _return_root =
+                self.transient_root_scope(VmRootKind::TransientCall, return_mode.root_value())?;
             let realm = self.function(id)?.realm;
             let completion = self.with_realm(realm, |context| {
                 context.eval_function_completion_with_this_inner::<CAN_SUSPEND>(
@@ -123,14 +130,17 @@ impl Context {
                 )
             })?;
             let Completion::TailCall(request) = completion else {
-                return Ok(completion);
+                return self.normalize_tail_call_return(completion, return_mode);
             };
-            let (callee, next_args, call_this) = request.into_parts();
+            let (callee, next_args, call_this, request_return_mode) = request.into_parts();
+            return_mode = return_mode.merge(request_return_mode)?;
             if CAN_SUSPEND {
-                return tail_call_result(self.call(&callee, &next_args, call_this)?);
+                let completion = tail_call_result(self.call(&callee, &next_args, call_this)?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
             }
             let Value::Function(next_id) = callee else {
-                return tail_call_result(self.call(&callee, &next_args, call_this)?);
+                let completion = tail_call_result(self.call(&callee, &next_args, call_this)?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
             };
             let next_realm = self.function(next_id)?.realm;
             let Some((next_this, next_target)) = self.with_realm(next_realm, |context| {
@@ -146,11 +156,12 @@ impl Context {
                 )))
             })?
             else {
-                return tail_call_result(self.call(
+                let completion = tail_call_result(self.call(
                     &Value::Function(next_id),
                     &next_args,
                     call_this,
-                )?);
+                )?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
             };
             id = next_id;
             args = next_args;
