@@ -466,11 +466,7 @@ impl Context {
             }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
             let reduction = self.run_bytecode_control_action(handle, &control, |context| {
-                context.bind_numeric_array_reduction_plan(
-                    parts.condition,
-                    parts.update,
-                    parts.body,
-                )
+                context.bind_numeric_array_reduction_plan(parts.condition, parts.update, parts.body)
             })?;
             if let Some(reduction) = reduction {
                 match self.eval_numeric_array_reduction_plan(state, next, &reduction) {

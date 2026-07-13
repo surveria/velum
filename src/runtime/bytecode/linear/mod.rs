@@ -5,6 +5,7 @@ mod numeric_chain;
 mod property_chain;
 mod property_numeric;
 mod segment;
+mod window;
 
 use crate::{
     bytecode::{
@@ -22,6 +23,7 @@ use super::state::BytecodeState;
 use numeric_chain::{NumericBindingChain, NumericCompoundBinding, NumericCompoundChain};
 use property_chain::PropertyMutation;
 pub(super) use segment::BytecodeLinearPlan;
+use window::{instruction_window, same_bytecode_binding};
 
 #[derive(Debug)]
 enum BytecodeLinearOp<'a> {
@@ -768,19 +770,6 @@ impl Context {
         }
         Ok(())
     }
-}
-
-fn instruction_window(
-    instructions: &[BytecodeInstruction],
-    start: usize,
-    len: usize,
-) -> Option<&[BytecodeInstruction]> {
-    let end = start.checked_add(len)?;
-    instructions.get(start..end)
-}
-
-fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
-    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }
 
 const fn compile_linear_numeric_member_op(

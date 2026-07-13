@@ -45,6 +45,37 @@ fn numeric_array_reduction_matches_generic_execution() -> TestResult {
 }
 
 #[test]
+fn compiled_linear_templates_are_reused_across_vms() -> TestResult {
+    let compiler = Vm::new();
+    let script = compiler.compile(REDUCTION_SOURCE)?;
+    let usage = script.usage();
+    ensure_at_least(
+        usage.bytecode_linear_peephole_candidate_count(),
+        2,
+        "reusable linear peephole candidates",
+    )?;
+    ensure_at_least(
+        usage.bytecode_numeric_array_reduction_role_count(),
+        3,
+        "reusable numeric-array reduction roles",
+    )?;
+
+    for _ in 0..4 {
+        let mut vm = Vm::new();
+        for _ in 0..3 {
+            let value = vm.eval_compiled_owned(&script)?;
+            ensure_equal(&value, &OwnedValue::Number(42.0))?;
+        }
+        ensure_at_least(
+            vm.optimization_snapshot().bytecode_linear_direct_runs(),
+            54,
+            "cross-VM reusable reduction runs",
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
 fn numeric_array_reduction_declines_observable_array_fallbacks() -> TestResult {
     let cases = [
         r"

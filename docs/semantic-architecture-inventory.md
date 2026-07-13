@@ -685,6 +685,11 @@ prove the common semantic path. Its condition, update, and body roles, together
 with ordinary linear peephole candidates, are recognized once into the
 immutable `BytecodeBlock`. Per-activation plan binding retains current
 `BindingCell` resolution without repeating the structural candidate scan.
+The architecture guard protects this bytecode/template ownership split
+directly. Its source-metadata check asserts the semantic requirement of one
+instruction table and one aligned span table instead of freezing every
+`BytecodeBlock` field, so additional immutable compile artifacts do not weaken
+the source-range invariant.
 
 ## Canonical-Path Decision For New Work
 
