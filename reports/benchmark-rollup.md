@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T190248Z.md`
-- Task: PR #611: runtime: complete Array residual tranche
-- Performance: 5.79x (4/5 >1.00x) (from `rsqjs-test-report-20260713T190248Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T190248Z.md`)
+- `rsqjs-test-report-20260713T194506Z.md`
+- Task: PR #613: runtime: close 201 expression and switch Test262 variants
+- Performance: 5.74x (4/5 >1.00x) (from `rsqjs-test-report-20260713T194506Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T194506Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 100443 passed / 2135 failed (97.92%) (from `rsqjs-test-report-20260713T190248Z.md`)
+- Full Test262: 100797 passed / 1781 failed (98.26%) (from `rsqjs-test-report-20260713T194506Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -554,3 +554,4 @@ Latest report:
 | `20260713T172615Z` `39ac7d7` PR #605: parser: complete literals and numeric whitespace Test262 tranche | 5.42x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 99737 passed / 2841 failed (97.23%) |
 | `20260713T175416Z` `477658a` PR #607: runtime: complete Intl residual tranche | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 100137 passed / 2441 failed (97.62%) |
 | `20260713T190248Z` `daeba4a` PR #611: runtime: complete Array residual tranche | 5.79x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 100443 passed / 2135 failed (97.92%) |
+| `20260713T194506Z` `6346c00` PR #613: runtime: close 201 expression and switch Test262 variants | 5.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 100797 passed / 1781 failed (98.26%) |
