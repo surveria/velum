@@ -420,7 +420,6 @@ impl Context {
         };
         match value {
             Value::Undefined => Ok(None),
-            Value::Symbol(_) => Err(Error::runtime("Cannot convert a Symbol value to a string")),
             value => self.to_string(value).map(Some),
         }
     }
