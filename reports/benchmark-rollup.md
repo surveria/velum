@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T053446Z.md`
-- Task: PR #563: runtime: complete Temporal Intl calendar semantics
-- Performance: 6.12x (4/5 >1.00x) (from `rsqjs-test-report-20260713T053446Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T053446Z.md`)
+- `rsqjs-test-report-20260713T061027Z.md`
+- Task: PR #565: runtime: index keyed collections by SameValueZero
+- Performance: 6.07x (4/5 >1.00x) (from `rsqjs-test-report-20260713T061027Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T061027Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T053446Z.md`)
+- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T061027Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -525,3 +525,4 @@ Latest report:
 | `20260713T050318Z` `c02bdc2` PR #562: parser: remove frontend source and token copies | 6.11x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
 | `20260713T052701Z` `d72cf64` PR #564: bytecode: unify compiled usage metric traversal | 6.24x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94876 passed / 7702 failed (92.49%) |
 | `20260713T053446Z` `ca90f28` PR #563: runtime: complete Temporal Intl calendar semantics | 6.12x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
+| `20260713T061027Z` `a39d436` PR #565: runtime: index keyed collections by SameValueZero | 6.07x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
