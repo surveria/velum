@@ -23,22 +23,7 @@ impl Context {
     ) -> Result<Value> {
         let date_time = self.plain_date_time_receiver(receiver)?;
         let values = args.as_slice();
-        let Some(Value::Object(id)) = values.first() else {
-            return Err(Error::type_error("PlainDateTime.with requires an object"));
-        };
-        if self.objects.temporal_value(*id)?.is_some() {
-            return Err(Error::type_error(
-                "PlainDateTime.with does not accept Temporal objects",
-            ));
-        }
-        let object = Value::Object(*id);
-        for name in ["calendar", "timeZone"] {
-            if !matches!(self.get_named(&object, name)?, Value::Undefined) {
-                return Err(Error::type_error(format!(
-                    "PlainDateTime.with does not accept {name}"
-                )));
-            }
-        }
+        let object = self.plain_date_time_with_object(values.first())?;
         let day = self.plain_date_optional_i64(&object, "day")?;
         let (era, era_year) = self.temporal_calendar_era_fields(&object, date_time.calendar())?;
         let hour = self.plain_date_optional_i64(&object, "hour")?;
@@ -124,6 +109,26 @@ impl Context {
             )
             .map_err(temporal_error)?;
         self.create_plain_date_time_value(result)
+    }
+
+    fn plain_date_time_with_object(&mut self, value: Option<&Value>) -> Result<Value> {
+        let Some(Value::Object(id)) = value else {
+            return Err(Error::type_error("PlainDateTime.with requires an object"));
+        };
+        if self.objects.temporal_value(*id)?.is_some() {
+            return Err(Error::type_error(
+                "PlainDateTime.with does not accept Temporal objects",
+            ));
+        }
+        let object = Value::Object(*id);
+        for name in ["calendar", "timeZone"] {
+            if !matches!(self.get_named(&object, name)?, Value::Undefined) {
+                return Err(Error::type_error(format!(
+                    "PlainDateTime.with does not accept {name}"
+                )));
+            }
+        }
+        Ok(object)
     }
 
     pub(super) fn eval_plain_date_time_round(
