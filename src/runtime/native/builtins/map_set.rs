@@ -463,20 +463,22 @@ impl Context {
             return Err(Error::type_error(FOR_EACH_CALLBACK_ERROR));
         }
         let callback_this = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
-        let mut cursor = 0usize;
-        while let Some((index, key, value)) =
-            self.collection_entry_at_or_after(collection, cursor)?
-        {
-            cursor = index
-                .checked_add(1)
-                .ok_or_else(|| Error::limit("collection forEach cursor overflowed"))?;
-            let call_args = [value, key, this_value.clone()];
-            match self.call(&callback, &call_args, callback_this.clone())? {
-                Completion::Normal(_) => {}
-                completion => return completion.into_result(),
+        self.with_collection_cursor_pin(collection, |context| {
+            let mut cursor = 0usize;
+            while let Some((index, key, value)) =
+                context.collection_entry_at_or_after(collection, cursor)?
+            {
+                cursor = index
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("collection forEach cursor overflowed"))?;
+                let call_args = [value, key, this_value.clone()];
+                match context.call(&callback, &call_args, callback_this.clone())? {
+                    Completion::Normal(_) => {}
+                    completion => return completion.into_result(),
+                }
             }
-        }
-        Ok(Value::Undefined)
+            Ok(Value::Undefined)
+        })
     }
 
     /// Materializes an iterator object over a snapshot of the collection.

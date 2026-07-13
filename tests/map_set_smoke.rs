@@ -73,6 +73,45 @@ fn map_object_keys_compare_by_identity() -> TestResult {
 }
 
 #[test]
+fn map_hashes_every_key_kind_without_changing_identity() -> TestResult {
+    ensure_string(
+        r#"
+        const symbol = Symbol("key");
+        const functionKey = function () {};
+        const nativeKey = Array.prototype.push;
+        const objectKey = {};
+        const loneSurrogate = "\uD800";
+        const map = new Map([
+            [undefined, "undefined"],
+            [null, "null"],
+            [true, "true"],
+            [7n, "bigint"],
+            [loneSurrogate, "string"],
+            [symbol, "symbol"],
+            [functionKey, "function"],
+            [nativeKey, "native"],
+            [objectKey, "object"]
+        ]);
+        [
+            map.size,
+            map.get(undefined),
+            map.get(null),
+            map.get(true),
+            map.get(7n),
+            map.get("\uD800"),
+            map.get(symbol),
+            map.get(functionKey),
+            map.get(nativeKey),
+            map.get(objectKey),
+            map.get(Symbol("key")) === undefined,
+            map.get({}) === undefined
+        ].join(":")
+        "#,
+        "9:undefined:null:true:bigint:string:symbol:function:native:object:true:true",
+    )
+}
+
+#[test]
 fn set_deduplicates_and_mutates() -> TestResult {
     ensure_string(
         r#"
@@ -269,5 +308,82 @@ fn set_for_each_observes_deletion_readdition_and_growth() -> TestResult {
         seen.join("") + ":" + [...set].join("")
         "#,
         "124:124",
+    )
+}
+
+#[test]
+fn for_each_pins_order_history_during_compaction_pressure() -> TestResult {
+    ensure_string(
+        r#"
+        const set = new Set();
+        for (let index = 0; index < 130; index += 1) {
+            set.add(index);
+        }
+        const seen = [];
+        set.forEach(function (value) {
+            seen.push(value);
+            if (value === 0) {
+                for (let index = 1; index < 101; index += 1) {
+                    set.delete(index);
+                }
+                set.add(130);
+            }
+        });
+        "" + seen[0] + ":" + seen[1] + ":" + seen[29] + ":" + seen[30]
+        "#,
+        "0:101:129:130",
+    )
+}
+
+#[test]
+fn collection_compaction_preserves_order_after_many_deletions() -> TestResult {
+    ensure_string(
+        r#"
+        const set = new Set();
+        for (let index = 0; index < 130; index += 1) {
+            set.add(index);
+        }
+        for (let index = 0; index < 100; index += 1) {
+            set.delete(index);
+        }
+        set.add(130);
+        const values = [...set];
+        "" + set.size + ":" + values[0] + ":" + values[29] + ":" + values[30]
+        "#,
+        "31:100:129:130",
+    )
+}
+
+#[test]
+fn live_iterator_pins_history_across_clear_and_compaction_pressure() -> TestResult {
+    ensure_string(
+        r#"
+        const set = new Set();
+        for (let index = 0; index < 130; index += 1) {
+            set.add(index);
+        }
+        const iterator = set.values();
+        const first = iterator.next().value;
+        for (let index = 1; index < 101; index += 1) {
+            set.delete(index);
+        }
+        set.add(130);
+        const afterDeletes = [];
+        for (let step = iterator.next(); !step.done; step = iterator.next()) {
+            afterDeletes.push(step.value);
+        }
+
+        const cleared = new Set([1, 2]);
+        const clearIterator = cleared.values();
+        const clearFirst = clearIterator.next().value;
+        cleared.clear();
+        cleared.add(3);
+        const clearSecond = clearIterator.next();
+
+        "" + first + ":" + afterDeletes[0] + ":" + afterDeletes[28]
+            + ":" + afterDeletes[29] + ":" + clearFirst + ":"
+            + clearSecond.value + ":" + clearSecond.done
+        "#,
+        "0:101:129:130:1:3:false",
     )
 }

@@ -2,9 +2,8 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, VmStorageKind,
-        abstract_operations::same_value_zero,
         async_trace::VmAsyncEdgeKind,
-        trace::{StrongEdgeReference, StrongEdgeVisitor, WeakEdgeReference, WeakEdgeVisitor},
+        trace::{StrongEdgeReference, StrongEdgeVisitor},
     },
     value::{ObjectId, Value},
 };
@@ -13,61 +12,6 @@ use super::collection_array_iterator::LiveArrayIteratorState;
 use super::collection_regexp_iterator::RegExpStringIteratorState;
 
 pub(in crate::runtime) use super::collection_storage::{CollectionData, CollectionKind};
-
-impl CollectionData {
-    pub(in crate::runtime) fn visit_edges<V>(&self, visitor: &mut V) -> Result<()>
-    where
-        V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
-    {
-        if let Some(stack) = &self.async_disposable_stack {
-            return stack.visit_edges(visitor);
-        }
-        if let Some(stack) = &self.disposable_stack {
-            return stack.visit_edges(visitor);
-        }
-        for (key, value) in self.entries.iter().flatten() {
-            match self.kind {
-                CollectionKind::Map | CollectionKind::Set => {
-                    visitor.visit(
-                        VmAsyncEdgeKind::CollectionEntry,
-                        StrongEdgeReference::Value(key),
-                    )?;
-                    visitor.visit(
-                        VmAsyncEdgeKind::CollectionEntry,
-                        StrongEdgeReference::Value(value),
-                    )?;
-                }
-                CollectionKind::WeakMap => visitor.visit_ephemeron(
-                    VmAsyncEdgeKind::WeakCollectionEphemeron,
-                    WeakEdgeReference::Value(key),
-                    WeakEdgeReference::Value(value),
-                )?,
-                CollectionKind::WeakSet => visitor.visit_weak(
-                    VmAsyncEdgeKind::WeakCollectionKey,
-                    WeakEdgeReference::Value(key),
-                )?,
-                CollectionKind::AsyncDisposableStack | CollectionKind::DisposableStack => {}
-            }
-        }
-        Ok(())
-    }
-
-    pub(in crate::runtime) fn sweep_dead_weak_entries(
-        &mut self,
-        mut key_is_reachable: impl FnMut(&Value) -> bool,
-    ) -> usize {
-        if !matches!(self.kind, CollectionKind::WeakMap | CollectionKind::WeakSet) {
-            return 0;
-        }
-        let before = self.entries.iter().flatten().count();
-        self.entries.retain(|entry| {
-            entry
-                .as_ref()
-                .is_some_and(|(key, _value)| key_is_reachable(key))
-        });
-        before.saturating_sub(self.entries.iter().flatten().count())
-    }
-}
 
 const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
 
@@ -202,7 +146,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn collection_len(&self, id: CollectionId) -> Result<usize> {
-        Ok(self.collection(id)?.entries.iter().flatten().count())
+        Ok(self.collection(id)?.logical_entry_count())
     }
 
     pub(in crate::runtime) fn collection_get(
@@ -210,22 +154,15 @@ impl Context {
         id: CollectionId,
         key: &Value,
     ) -> Result<Option<Value>> {
-        Ok(self
-            .collection(id)?
-            .entries
-            .iter()
-            .flatten()
-            .find(|(entry_key, _)| same_value_zero(entry_key, key))
-            .map(|(_, value)| value.clone()))
+        let collection = self.collection(id)?;
+        let Some(index) = collection.entry_index(key) else {
+            return Ok(None);
+        };
+        Ok(Some(collection.entry(index)?.1.clone()))
     }
 
     pub(in crate::runtime) fn collection_has(&self, id: CollectionId, key: &Value) -> Result<bool> {
-        Ok(self
-            .collection(id)?
-            .entries
-            .iter()
-            .flatten()
-            .any(|(entry_key, _)| same_value_zero(entry_key, key)))
+        Ok(self.collection(id)?.entry_index(key).is_some())
     }
 
     /// Inserts or updates an entry, normalizing -0 keys to +0 per spec.
@@ -236,19 +173,20 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = canonicalize_keyed_collection_key(key);
-        if let Some(entry) = self
-            .collection_mut(id)?
-            .entries
-            .iter_mut()
-            .flatten()
-            .find(|(entry_key, _)| same_value_zero(entry_key, &key))
-        {
-            entry.1 = value;
+        if let Some(index) = self.collection(id)?.entry_index(&key) {
+            self.collection_mut(id)?.replace_value(index, value)?;
             return Ok(());
         }
+        let preserves_cursor_history = self.collection_preserves_cursor_history(id);
+        self.collection_mut(id)?
+            .prepare_new_entry(!preserves_cursor_history)?;
         self.storage_ledger
             .grow_count(VmStorageKind::CollectionEntry, 1)?;
-        self.collection_mut(id)?.entries.push(Some((key, value)));
+        if let Err(error) = self.collection_mut(id)?.insert_reserved(key, value) {
+            self.storage_ledger
+                .release_count(VmStorageKind::CollectionEntry, 1)?;
+            return Err(error);
+        }
         Ok(())
     }
 
@@ -257,33 +195,55 @@ impl Context {
         id: CollectionId,
         key: &Value,
     ) -> Result<bool> {
-        let position = self.collection(id)?.entries.iter().position(|entry| {
-            entry
-                .as_ref()
-                .is_some_and(|(entry_key, _)| same_value_zero(entry_key, key))
-        });
-        let Some(position) = position else {
+        let Some(position) = self.collection(id)?.entry_index(key) else {
             return Ok(false);
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, 1)?;
-        let Some(entry) = self.collection_mut(id)?.entries.get_mut(position) else {
-            return Err(Error::runtime(
-                "collection entry disappeared during deletion",
-            ));
-        };
-        *entry = None;
+        if let Err(error) = self.collection_mut(id)?.delete_indexed(key, position) {
+            self.storage_ledger
+                .grow_count(VmStorageKind::CollectionEntry, 1)?;
+            return Err(error);
+        }
         Ok(true)
     }
 
     pub(in crate::runtime) fn collection_clear(&mut self, id: CollectionId) -> Result<()> {
-        let released = self.collection(id)?.entries.iter().flatten().count();
+        let released = self.collection(id)?.logical_entry_count();
+        let preserve_iterator_history = self.collection_preserves_cursor_history(id);
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, released)?;
-        for entry in &mut self.collection_mut(id)?.entries {
-            *entry = None;
-        }
+        self.collection_mut(id)?.clear(preserve_iterator_history);
         Ok(())
+    }
+
+    fn collection_preserves_cursor_history(&self, id: CollectionId) -> bool {
+        self.collection(id)
+            .is_ok_and(CollectionData::cursor_is_pinned)
+            || self.collection_iterators.iter().any(|iterator| {
+                matches!(
+                    iterator,
+                    CollectionIteratorState::LiveCollection(state)
+                        if state.collection == id && !state.done
+                )
+            })
+    }
+
+    pub(in crate::runtime) fn with_collection_cursor_pin<T>(
+        &mut self,
+        id: CollectionId,
+        operation: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.collection_mut(id)?.pin_cursor()?;
+        let operation_result = operation(self);
+        let release_result = self.collection_mut(id).map(CollectionData::unpin_cursor);
+        match (operation_result, release_result) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
+            (Err(operation_error), Err(release_error)) => Err(operation_error.with_context(
+                format!("collection cursor release also failed: {release_error}"),
+            )),
+        }
     }
 
     /// Snapshots the current entries for iteration-style consumers.

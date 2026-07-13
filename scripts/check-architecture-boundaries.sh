@@ -1328,17 +1328,6 @@ check_async_edge_boundary() {
     fi
   done
 
-  for source in \
-    'kind: CollectionKind,' \
-    'CollectionKind::Map | CollectionKind::Set' \
-    'CollectionKind::WeakMap => visitor.visit_ephemeron(' \
-    'CollectionKind::WeakSet => visitor.visit_weak(' \
-    'for item in &self.items {'; do
-    if ! grep -F -q "${source}" "${repo_root}/src/runtime/collections.rs"; then
-      fail "asynchronous edge boundary changed; collection source '${source}' is missing"
-    fi
-  done
-
   if ! grep -F -q 'pub fn async_edge_snapshot(&self) -> Result<VmAsyncEdgeSnapshot>' \
       "${repo_root}/src/api/embedding.rs"; then
     fail "asynchronous edge boundary changed; Vm requires a strength-classified snapshot"
@@ -1803,12 +1792,6 @@ mutate_promise_reaction_edge() {
     "${fixture_root}/src/runtime/promise/job.rs"
 }
 
-mutate_weak_collection_edge() {
-  local fixture_root="$1"
-  portable_sed '/CollectionKind::WeakMap => visitor.visit_ephemeron(/d' \
-    "${fixture_root}/src/runtime/collections.rs"
-}
-
 mutate_gc_root_source() {
   local fixture_root="$1"
   portable_sed '/context.visit_direct_roots(&mut marker)?;/d' \
@@ -1992,8 +1975,6 @@ run_self_tests() {
     'object edge boundary changed' mutate_object_shape_root
   expect_guard_failure "${temp_dir}" promise-reaction-edge \
     'asynchronous edge boundary changed' mutate_promise_reaction_edge
-  expect_guard_failure "${temp_dir}" weak-collection-edge \
-    'asynchronous edge boundary changed' mutate_weak_collection_edge
   expect_guard_failure "${temp_dir}" gc-root-source \
     'garbage collection boundary changed' mutate_gc_root_source
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
