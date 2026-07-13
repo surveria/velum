@@ -247,8 +247,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let key = self.to_string(args.as_slice().first().unwrap_or(&Value::Undefined))?;
-        let values: &[&str] = match key.as_str() {
-            "calendar" => &[
+        let values = match key.as_str() {
+            "calendar" => Self::intl_supported_strings(&[
                 "buddhist",
                 "chinese",
                 "coptic",
@@ -265,18 +265,49 @@ impl Context {
                 "japanese",
                 "persian",
                 "roc",
-            ],
-            "timeZone" => &[
+            ]),
+            "collation" => Self::intl_supported_strings(&["eor", "phonebk"]),
+            "currency" => Self::intl_supported_strings(super::display_names::SUPPORTED_CURRENCIES),
+            "timeZone" => Self::intl_supported_strings(&[
                 "Africa/Monrovia",
                 "America/Los_Angeles",
                 "America/New_York",
                 "Asia/Kolkata",
+                "Etc/GMT+1",
+                "Etc/GMT+10",
+                "Etc/GMT+11",
+                "Etc/GMT+12",
+                "Etc/GMT+2",
+                "Etc/GMT+3",
+                "Etc/GMT+4",
+                "Etc/GMT+5",
+                "Etc/GMT+6",
+                "Etc/GMT+7",
+                "Etc/GMT+8",
+                "Etc/GMT+9",
+                "Etc/GMT-1",
+                "Etc/GMT-10",
+                "Etc/GMT-11",
+                "Etc/GMT-12",
+                "Etc/GMT-13",
+                "Etc/GMT-14",
+                "Etc/GMT-2",
+                "Etc/GMT-3",
+                "Etc/GMT-4",
+                "Etc/GMT-5",
+                "Etc/GMT-6",
+                "Etc/GMT-7",
+                "Etc/GMT-8",
+                "Etc/GMT-9",
                 "Europe/Berlin",
                 "Europe/Vienna",
                 "Pacific/Apia",
                 "UTC",
-            ],
-            "numberingSystem" => super::number_digits::SUPPORTED_NUMBERING_SYSTEMS,
+            ]),
+            "numberingSystem" => {
+                Self::intl_supported_strings(super::number_digits::SUPPORTED_NUMBERING_SYSTEMS)
+            }
+            "unit" => Self::intl_supported_strings(super::number_options::SUPPORTED_SIMPLE_UNITS),
             _ => {
                 return Err(Error::exception(
                     crate::value::ErrorName::RangeError,
@@ -286,9 +317,13 @@ impl Context {
         };
         let mut result = Vec::with_capacity(values.len());
         for value in values {
-            result.push(self.heap_string_value(value)?);
+            result.push(self.heap_string_value(&value)?);
         }
         self.create_array_from_elements(result)
+    }
+
+    fn intl_supported_strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_owned()).collect()
     }
 
     pub(super) fn resolved_hour_cycle(formatter: &DateTimeFormatValue) -> Option<&str> {

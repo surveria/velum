@@ -26,6 +26,11 @@ impl Context {
         let Some(Value::Object(id)) = values.first() else {
             return Err(Error::type_error("PlainDateTime.with requires an object"));
         };
+        if self.objects.temporal_value(*id)?.is_some() {
+            return Err(Error::type_error(
+                "PlainDateTime.with does not accept Temporal objects",
+            ));
+        }
         let object = Value::Object(*id);
         for name in ["calendar", "timeZone"] {
             if !matches!(self.get_named(&object, name)?, Value::Undefined) {

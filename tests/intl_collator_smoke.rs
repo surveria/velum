@@ -47,3 +47,32 @@ fn resolves_unicode_extensions_and_supported_locales() -> TestResult {
         "#,
     )?)
 }
+
+#[test]
+fn locale_string_methods_use_intl_locale_semantics() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        "Iİ".toLocaleLowerCase("tr") === "ıi" &&
+            "iı".toLocaleUpperCase("tr") === "İI" &&
+            "a".localeCompare("A", "en") < 0 &&
+            "a".localeCompare("A", "en") ===
+                new Intl.Collator("en").compare("a", "A")
+        "#,
+    )?)
+}
+
+#[test]
+fn supported_values_cover_each_advertised_intl_domain() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        const collations = Intl.supportedValuesOf("collation");
+        const currencies = Intl.supportedValuesOf("currency");
+        const timeZones = Intl.supportedValuesOf("timeZone");
+        const units = Intl.supportedValuesOf("unit");
+        collations.includes("eor") && collations.includes("phonebk") &&
+            currencies.includes("USD") && currencies.includes("EUR") &&
+            timeZones.includes("Etc/GMT+12") && timeZones.includes("Etc/GMT-14") &&
+            units.includes("meter") && units.includes("year")
+        "#,
+    )?)
+}

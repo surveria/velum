@@ -194,7 +194,10 @@ impl Context {
         }
     }
 
-    pub(super) fn intl_locale_list(&mut self, value: &Value) -> Result<Vec<String>> {
+    pub(in crate::runtime::native) fn intl_locale_list(
+        &mut self,
+        value: &Value,
+    ) -> Result<Vec<String>> {
         if matches!(value, Value::Undefined) {
             return Ok(Vec::new());
         }

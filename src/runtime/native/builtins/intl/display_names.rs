@@ -11,6 +11,10 @@ use crate::{
 
 const DISPLAY_NAMES_TAG: &str = "Intl.DisplayNames";
 const DEFAULT_LOCALE: &str = "en-US";
+pub(super) const SUPPORTED_CURRENCIES: &[&str] = &[
+    "AUD", "BRL", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW", "MXN", "NZD",
+    "SEK", "SGD", "USD", "ZAR",
+];
 const DATE_TIME_FIELDS: &[&str] = &[
     "era",
     "year",
@@ -125,6 +129,12 @@ impl Context {
         let formatter = self.display_names_receiver(this_value)?;
         let code = self.to_string(args.as_slice().first().unwrap_or(&Value::Undefined))?;
         let normalized = normalize_display_name_code(&formatter.display_type, &code)?;
+        if formatter.display_type == "currency"
+            && formatter.missing_code_behavior == "none"
+            && !SUPPORTED_CURRENCIES.contains(&normalized.as_str())
+        {
+            return Ok(Value::Undefined);
+        }
         self.heap_string_value(&normalized)
     }
 

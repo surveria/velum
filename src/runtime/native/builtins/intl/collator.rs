@@ -51,7 +51,10 @@ impl Context {
         Ok(Value::NativeFunction(constructor_id))
     }
 
-    pub(super) fn construct_intl_collator(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn construct_intl_collator(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let locales = self.intl_locale_list(&requested)?;
         let source = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
@@ -150,7 +153,7 @@ impl Context {
         Ok(bound)
     }
 
-    pub(super) fn eval_intl_collator_compare(
+    pub(in crate::runtime::native) fn eval_intl_collator_compare(
         &mut self,
         args: RuntimeCallArgs<'_>,
         collator: ObjectId,
@@ -533,9 +536,9 @@ fn strip_marks(input: &str) -> String {
 
 fn compare_case(formatter: &CollatorValue, left: &str, right: &str) -> Ordering {
     match formatter.case_first.as_str() {
-        "upper" => case_rank(left).cmp(&case_rank(right)).reverse(),
-        "lower" => case_rank(left).cmp(&case_rank(right)),
-        _ => left.cmp(right),
+        "upper" => case_rank(left).cmp(&case_rank(right)),
+        "lower" => case_rank(left).cmp(&case_rank(right)).reverse(),
+        _ => left.cmp(right).reverse(),
     }
 }
 
