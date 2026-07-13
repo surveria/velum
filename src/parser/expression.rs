@@ -407,9 +407,6 @@ impl Parser {
                 break;
             }
             if self.check(&TokenKind::RParen) {
-                if spread {
-                    return Err(self.parse_error("rest argument must not have a trailing comma"));
-                }
                 break;
             }
         }
