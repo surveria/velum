@@ -19,7 +19,7 @@ pub(super) enum TemplatePartPosition {
 
 pub(super) fn template_part_value(
     source: &str,
-    cooked: Vec<u16>,
+    cooked: Option<Vec<u16>>,
     raw_start: usize,
     raw_end: usize,
 ) -> Result<TemplatePart> {
@@ -39,7 +39,7 @@ pub(super) fn template_part_value(
         }
     }
     Ok(TemplatePart {
-        cooked: Rc::from(cooked.into_boxed_slice()),
+        cooked: cooked.map(|value| Rc::from(value.into_boxed_slice())),
         raw: Rc::from(raw.into_boxed_slice()),
     })
 }

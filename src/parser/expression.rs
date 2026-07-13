@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Expr, Expression, FunctionKind, FunctionParam, Statement, Stmt, UnaryOp, UpdateOp},
+    ast::{
+        Expr, Expression, FunctionKind, FunctionParam, ImportPhase, Statement, Stmt, UnaryOp,
+        UpdateOp,
+    },
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -8,6 +11,9 @@ use crate::{
 use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
+const IMPORT_DEFER_PROPERTY_NAME: &str = "defer";
+const IMPORT_META_PROPERTY_NAME: &str = "meta";
+const IMPORT_SOURCE_PROPERTY_NAME: &str = "source";
 
 #[derive(Debug, Clone, Copy)]
 enum ArrowParameters {
@@ -28,6 +34,9 @@ impl Parser {
             && !self.await_starts_identifier_assignment()
             && self.match_kind(&TokenKind::Await)
         {
+            if self.is_module_goal() && self.function_body_depth == 0 {
+                self.top_level_await = true;
+            }
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -150,6 +159,13 @@ impl Parser {
                 expr = self.member_bracket_suffix(expr)?;
                 continue;
             }
+            if matches!(
+                self.peek_kind(0),
+                Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
+            ) {
+                expr = self.tagged_template_suffix(expr)?;
+                continue;
+            }
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }
@@ -221,10 +237,18 @@ impl Parser {
                 expr = self.member_dot_suffix(expr)?;
                 continue;
             }
-            if !self.match_kind(&TokenKind::LBracket) {
-                break;
+            if self.match_kind(&TokenKind::LBracket) {
+                expr = self.member_bracket_suffix(expr)?;
+                continue;
             }
-            expr = self.member_bracket_suffix(expr)?;
+            if matches!(
+                self.peek_kind(0),
+                Some(TokenKind::NoSubstitutionTemplate(_) | TokenKind::TemplateHead(_))
+            ) {
+                expr = self.tagged_template_suffix(expr)?;
+                continue;
+            }
+            break;
         }
         Ok(expr)
     }
@@ -279,58 +303,6 @@ impl Parser {
         ))
     }
 
-    fn template_literal(
-        &mut self,
-        head: crate::lexer::TemplatePart,
-        start: crate::SourceSpan,
-    ) -> Result<Expression> {
-        let (quasis, expressions) = self.template_parts(head)?;
-        Ok(self.expression_node(
-            start,
-            Expr::TemplateLiteral {
-                quasis,
-                expressions,
-            },
-        ))
-    }
-
-    fn template_parts(
-        &mut self,
-        head: crate::lexer::TemplatePart,
-    ) -> Result<(Vec<crate::ast::TemplateElement>, Vec<Expression>)> {
-        let mut quasis = vec![self.template_element(head)?];
-        let mut expressions = Vec::new();
-        loop {
-            expressions.push(self.expression()?);
-            let token = self.advance_token("expected template literal continuation")?;
-            let token_span = token.span;
-            match token.kind {
-                TokenKind::TemplateMiddle(part) => quasis.push(self.template_element(part)?),
-                TokenKind::TemplateTail(part) => {
-                    quasis.push(self.template_element(part)?);
-                    break;
-                }
-                _ => {
-                    return Err(Error::parse_at(
-                        "expected '}' to continue template literal",
-                        token_span,
-                    ));
-                }
-            }
-        }
-        Ok((quasis, expressions))
-    }
-
-    fn template_element(
-        &mut self,
-        part: crate::lexer::TemplatePart,
-    ) -> Result<crate::ast::TemplateElement> {
-        Ok(crate::ast::TemplateElement {
-            cooked: self.static_string_shared(part.cooked)?,
-            raw: self.static_string_shared(part.raw)?,
-        })
-    }
-
     fn string_literal(
         &mut self,
         value: crate::lexer::StringToken,
@@ -340,21 +312,6 @@ impl Parser {
             Expr::StringLiteral {
                 value: self.static_string_shared(value.cooked)?,
                 escape_free: value.escape_free,
-            },
-            span,
-        ))
-    }
-
-    fn no_substitution_template(
-        &mut self,
-        part: crate::lexer::TemplatePart,
-        span: crate::SourceSpan,
-    ) -> Result<Expression> {
-        let quasi = self.template_element(part)?;
-        Ok(Expression::new(
-            Expr::TemplateLiteral {
-                quasis: vec![quasi],
-                expressions: Vec::new(),
             },
             span,
         ))
@@ -372,7 +329,7 @@ impl Parser {
 
     fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
         if self.check(&TokenKind::LParen) {
-            if !self.allow_super_call {
+            if !self.super_context.allows_call() {
                 return Err(Error::parse_at(
                     "super call is only valid inside derived class constructors",
                     start,
@@ -388,7 +345,7 @@ impl Parser {
             return Ok(self.expression_node(start, Expr::SuperCall { args }));
         }
         if self.match_kind(&TokenKind::Dot) {
-            if !self.allow_super_property {
+            if !self.super_context.allows_property() {
                 return Err(Error::parse_at(
                     "super property access is only valid inside class methods",
                     start,
@@ -399,7 +356,7 @@ impl Parser {
             return Ok(self.expression_node(start, Expr::SuperMember { property, access }));
         }
         if self.match_kind(&TokenKind::LBracket) {
-            if !self.allow_super_property {
+            if !self.super_context.allows_property() {
                 return Err(Error::parse_at(
                     "super property access is only valid inside methods",
                     start,
@@ -449,6 +406,55 @@ impl Parser {
         Ok(args)
     }
 
+    fn dynamic_import(&mut self, start: crate::SourceSpan) -> Result<Expression> {
+        let phase = if self.match_kind(&TokenKind::Dot) {
+            let token = self.advance_token("expected import phase after 'import.'")?;
+            if token.is_unescaped_identifier_named(IMPORT_META_PROPERTY_NAME) {
+                if !self.is_module_goal() {
+                    return Err(Error::parse_at(
+                        "import.meta is only valid in modules",
+                        token.span,
+                    ));
+                }
+                return Ok(self.expression_node(start, Expr::ImportMeta));
+            } else if token.is_unescaped_identifier_named(IMPORT_SOURCE_PROPERTY_NAME) {
+                ImportPhase::Source
+            } else if token.is_unescaped_identifier_named(IMPORT_DEFER_PROPERTY_NAME) {
+                ImportPhase::Defer
+            } else {
+                return Err(Error::parse_at("invalid import phase", token.span));
+            }
+        } else {
+            ImportPhase::Evaluation
+        };
+        self.consume(&TokenKind::LParen, "expected '(' after import")?;
+        if self.check(&TokenKind::RParen) || self.check(&TokenKind::DotDotDot) {
+            return Err(self.parse_error("import call requires one specifier expression"));
+        }
+        let specifier = self.assignment_expression()?;
+        let options = if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
+            if self.check(&TokenKind::DotDotDot) {
+                return Err(self.parse_error("import call does not accept spread arguments"));
+            }
+            let options = self.assignment_expression()?;
+            if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
+                return Err(self.parse_error("import call accepts at most two arguments"));
+            }
+            Some(Box::new(options))
+        } else {
+            None
+        };
+        self.consume(&TokenKind::RParen, "expected ')' after import arguments")?;
+        Ok(self.expression_node(
+            start,
+            Expr::DynamicImport {
+                phase,
+                specifier: Box::new(specifier),
+                options,
+            },
+        ))
+    }
+
     fn primary(&mut self) -> Result<Expression> {
         let token = self.advance_primary_token()?;
         let token_span = token.span;
@@ -465,13 +471,9 @@ impl Parser {
                 self.no_substitution_template(part, token_span)?
             }
             TokenKind::TemplateHead(head) => self.template_literal(head, token_span)?,
-            TokenKind::RegExp { pattern, flags } => Expression::new(
-                Expr::RegExpLiteral {
-                    pattern: self.static_string(pattern.encode_utf16().collect())?,
-                    flags: self.static_string(flags.encode_utf16().collect())?,
-                },
-                token_span,
-            ),
+            TokenKind::RegExp { pattern, flags } => {
+                self.regexp_literal(&pattern, &flags, token_span)?
+            }
             TokenKind::True => Expression::new(Expr::Literal(Value::Bool(true)), token_span),
             TokenKind::False => Expression::new(Expr::Literal(Value::Bool(false)), token_span),
             TokenKind::Null => Expression::new(Expr::Literal(Value::Null), token_span),
@@ -483,6 +485,7 @@ impl Parser {
                 ));
             }
             TokenKind::Super => self.super_expression(token_span)?,
+            TokenKind::Import => self.dynamic_import(token_span)?,
             TokenKind::Identifier(name) => {
                 if self.class_arguments_are_restricted() && name.as_ref() == "arguments" {
                     return Err(Error::parse_at(
@@ -550,6 +553,21 @@ impl Parser {
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         })
+    }
+
+    fn regexp_literal(
+        &mut self,
+        pattern: &str,
+        flags: &str,
+        span: crate::SourceSpan,
+    ) -> Result<Expression> {
+        Ok(Expression::new(
+            Expr::RegExpLiteral {
+                pattern: self.static_string(pattern.encode_utf16().collect())?,
+                flags: self.static_string(flags.encode_utf16().collect())?,
+            },
+            span,
+        ))
     }
 
     fn contextual_let(&mut self, span: crate::SourceSpan) -> Result<Expression> {
@@ -658,7 +676,13 @@ impl Parser {
                 if parser.match_kind(&TokenKind::LBrace) {
                     return parser.function_body(inherited_strict);
                 }
-                let value = parser.assignment()?;
+                parser.function_body_depth = parser
+                    .function_body_depth
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("function body nesting overflowed"))?;
+                let value = parser.assignment();
+                parser.function_body_depth = parser.function_body_depth.saturating_sub(1);
+                let value = value?;
                 let span = value.span();
                 Ok(super::ParsedFunctionBody {
                     statements: vec![Statement::new(Stmt::Return(Some(value)), span)],

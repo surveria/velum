@@ -7,6 +7,7 @@ mod control;
 mod control_continuation;
 mod destructure;
 mod destructure_continuation;
+mod dynamic_import;
 mod execution;
 mod for_of;
 mod in_operator;
@@ -18,6 +19,7 @@ mod spread;
 pub(in crate::runtime) mod state;
 mod string_concat;
 mod super_ops;
+mod template;
 
 pub(in crate::runtime) use continuation::BytecodeContinuationFrame;
 pub(in crate::runtime) use destructure::DestructureOutcome;
@@ -56,15 +58,28 @@ impl Context {
             return result;
         }
         match instruction {
+            BytecodeInstruction::DynamicImport {
+                phase,
+                specifier,
+                options,
+            } => self.eval_bytecode_dynamic_import_instruction(
+                state,
+                *phase,
+                specifier,
+                options.as_ref(),
+                next,
+            ),
             BytecodeInstruction::BeginPrivateEnvironment { .. }
             | BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
+            | BytecodeInstruction::GetTemplateObject { .. }
             | BytecodeInstruction::StringConcat { .. }
             | BytecodeInstruction::StringConcatStatic { .. }
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
+            | BytecodeInstruction::ImportMeta
             | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
@@ -114,7 +129,9 @@ impl Context {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
             BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::TailCallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }

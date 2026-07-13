@@ -35,6 +35,7 @@ mod collection_storage;
 pub mod collections;
 pub mod control;
 mod disposable_stack;
+mod dynamic_import;
 pub mod engine;
 mod execution_storage;
 pub mod function;
@@ -114,6 +115,7 @@ pub struct Context {
     module_evaluation_depth: usize,
     dynamic_module_loader: Option<module::DynamicModuleLoader>,
     active_module_name: Option<String>,
+    active_import_meta: Option<Value>,
     activation_frames: Vec<activation::ActivationFrame>,
     functions: SlotArena<Function>,
     native_functions: SlotArena<native::NativeFunction>,
@@ -142,6 +144,7 @@ pub struct Context {
 #[derive(Debug, Clone)]
 struct Function {
     realm: RealmIndex,
+    script_or_module_name: Option<String>,
     self_binding: Option<function::FunctionSelfBinding>,
     arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,
@@ -241,6 +244,17 @@ impl CallReference {
                 strict,
             },
         }
+    }
+
+    fn into_tail_call(self, arguments: Vec<Value>) -> control::TailCall {
+        let (callee, this_value) = match self {
+            Self::Function { id, this_value } => (Value::Function(id), this_value),
+            Self::Generic { callee, this_value } => (callee, this_value),
+            Self::Native { id, this_value, .. } | Self::DirectNative { id, this_value, .. } => {
+                (Value::NativeFunction(id), this_value)
+            }
+        };
+        control::TailCall::new(callee, arguments, this_value)
     }
 }
 
@@ -384,6 +398,7 @@ impl Context {
             module_evaluation_depth: 0,
             dynamic_module_loader: None,
             active_module_name: None,
+            active_import_meta: None,
             activation_frames: Vec::new(),
             functions: SlotArena::new(),
             native_functions: SlotArena::new(),
@@ -477,6 +492,17 @@ impl Context {
     ) -> Result<Completion> {
         let reference = self.eval_bytecode_identifier_call_reference(callee, native, strict)?;
         self.eval_call_reference_completion(reference, args)
+    }
+
+    pub(crate) fn eval_bytecode_identifier_tail_call(
+        &mut self,
+        callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
+        args: &[Value],
+    ) -> Result<control::TailCall> {
+        self.eval_bytecode_identifier_call_reference(callee, native, strict)
+            .map(|reference| reference.into_tail_call(args.to_vec()))
     }
 
     fn eval_call_reference_completion(
@@ -710,6 +736,7 @@ impl Context {
             }
             Completion::Normal(_) => Ok(object),
             Completion::Throw(value) => Err(Error::javascript(value)),
+            Completion::TailCall(_) => Err(Error::runtime("tail call escaped constructor")),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             completion @ (Completion::Suspended(_)

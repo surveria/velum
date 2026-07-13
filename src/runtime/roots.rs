@@ -191,8 +191,16 @@ impl Context {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
         for module in &self.modules {
-            visit_scope(module.scope(), VmRootKind::ModuleBinding, visitor)?;
+            if let Some(scope) = module.scope() {
+                visit_scope(scope, VmRootKind::ModuleBinding, visitor)?;
+            }
             visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
+            if let Some(import_meta) = module.import_meta() {
+                visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
+            }
+        }
+        if let Some(import_meta) = &self.active_import_meta {
+            visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
         }
         for frame in &self.activation_frames {
             if let Some(environments) = frame.with_environments() {
@@ -261,6 +269,11 @@ impl Context {
             for id in realm.native_function_ids() {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
             }
+        }
+        for cache in &self.static_name_atom_caches {
+            cache.visit_template_objects(|value| {
+                visitor.visit_value(VmRootKind::BytecodeFrame, value)
+            })?;
         }
         self.objects.visit_direct_roots(visitor)?;
         for job in &self.promise_jobs {

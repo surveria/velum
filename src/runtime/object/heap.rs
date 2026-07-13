@@ -206,6 +206,15 @@ impl ObjectHeap {
         Ok(self.object(id)?.arguments_brand)
     }
 
+    pub(in crate::runtime) fn mark_module_namespace(&mut self, id: ObjectId) -> Result<()> {
+        self.object_mut(id)?.module_namespace = true;
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn is_module_namespace(&self, id: ObjectId) -> Result<bool> {
+        Ok(self.object(id)?.module_namespace)
+    }
+
     pub(in crate::runtime) fn bind_shadow_realm(
         &mut self,
         id: ObjectId,

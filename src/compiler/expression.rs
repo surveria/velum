@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use super::{
-    BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCompiler, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-    BytecodeNumericUnaryOp, Error, Expr, Expression, NativeCallTarget, Result, StaticBinding,
-    StaticPropertyAccessId, StaticString, TemplateElement, UnaryOp, checked_template_part_count,
-    constructor_binding_expr, has_spread_arg,
+    BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCallSite, BytecodeCompiler,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeTemplateElement, Error, Expr,
+    Expression, NativeCallTarget, Result, StaticBinding, StaticPropertyAccessId, StaticString,
+    TemplateElement, UnaryOp, checked_template_part_count, constructor_binding_expr,
+    has_spread_arg,
 };
 
 impl BytecodeCompiler<'_> {
@@ -41,14 +42,15 @@ impl BytecodeCompiler<'_> {
                 quasis,
                 expressions,
             } => return self.compile_template_literal(quasis, expressions),
+            Expr::TemplateObject { site, quasis } => self.compile_template_object(*site, quasis),
             Expr::RegExpLiteral { pattern, flags } => {
-                self.emit(BytecodeInstruction::CreateRegExp {
-                    pattern: pattern.clone(),
-                    flags: flags.clone(),
-                });
+                self.compile_regexp_literal(pattern, flags);
             }
             Expr::This => {
                 self.emit(BytecodeInstruction::LoadThis);
+            }
+            Expr::ImportMeta => {
+                self.emit(BytecodeInstruction::ImportMeta);
             }
             Expr::NewTarget => {
                 self.emit(BytecodeInstruction::LoadNewTarget);
@@ -117,11 +119,54 @@ impl BytecodeCompiler<'_> {
             } => {
                 return self.compile_call_expr(callee, *site, *strict, args);
             }
+            Expr::DynamicImport {
+                phase,
+                specifier,
+                options,
+            } => self.compile_dynamic_import(*phase, specifier, options.as_deref())?,
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 return self.compile_function_literal(expr);
             }
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
+        Ok(())
+    }
+
+    fn compile_template_object(
+        &mut self,
+        site: crate::syntax::StaticCallSiteId,
+        quasis: &[TemplateElement],
+    ) {
+        let quasis = quasis
+            .iter()
+            .map(|quasi| BytecodeTemplateElement::new(quasi.cooked.clone(), quasi.raw.clone()))
+            .collect::<Vec<_>>();
+        self.emit(BytecodeInstruction::GetTemplateObject {
+            site: BytecodeCallSite::new(site),
+            quasis: quasis.into(),
+        });
+    }
+
+    fn compile_regexp_literal(&mut self, pattern: &StaticString, flags: &StaticString) {
+        self.emit(BytecodeInstruction::CreateRegExp {
+            pattern: pattern.clone(),
+            flags: flags.clone(),
+        });
+    }
+
+    fn compile_dynamic_import(
+        &mut self,
+        phase: crate::syntax::ImportPhase,
+        specifier: &Expression,
+        options: Option<&Expression>,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::DynamicImport {
+            phase,
+            specifier: BytecodeBlock::compile_expression(specifier, self.layout)?,
+            options: options
+                .map(|options| BytecodeBlock::compile_expression(options, self.layout))
+                .transpose()?,
+        });
         Ok(())
     }
 
@@ -284,13 +329,21 @@ impl BytecodeCompiler<'_> {
                     "template literal without substitutions has extra elements",
                 ));
             }
-            self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
+            let cooked = quasi
+                .cooked
+                .as_ref()
+                .ok_or_else(|| Error::runtime("untagged template has invalid cooked text"))?;
+            self.emit(BytecodeInstruction::PushString(cooked.clone()));
             return Ok(());
         }
         let mut part_count = 0usize;
         for (index, quasi) in quasis.iter().enumerate() {
-            if !quasi.cooked.as_str().is_empty() {
-                self.emit(BytecodeInstruction::PushString(quasi.cooked.clone()));
+            let cooked = quasi
+                .cooked
+                .as_ref()
+                .ok_or_else(|| Error::runtime("untagged template has invalid cooked text"))?;
+            if !cooked.as_str().is_empty() {
+                self.emit(BytecodeInstruction::PushString(cooked.clone()));
                 part_count = checked_template_part_count(part_count)?;
             }
             if let Some(expression) = expressions.get(index) {

@@ -73,7 +73,8 @@ impl Context {
                         *last = value;
                         break;
                     }
-                    completion @ (Completion::Break { .. }
+                    completion @ (Completion::TailCall(_)
+                    | Completion::Break { .. }
                     | Completion::Continue { label: Some(_), .. }
                     | Completion::Throw(_)
                     | Completion::Return(_)

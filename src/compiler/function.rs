@@ -586,8 +586,10 @@ impl CaptureBindingCollector {
         match expr.kind() {
             Expr::Literal(_)
             | Expr::StringLiteral { .. }
+            | Expr::TemplateObject { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::ImportMeta
             | Expr::SuperMember { .. }
             | Expr::NewTarget
             | Expr::ArrayHole => {}
@@ -655,11 +657,7 @@ impl CaptureBindingCollector {
                 property,
                 expr,
                 ..
-            } => {
-                self.collect_expr(object);
-                self.collect_expr(property);
-                self.collect_expr(expr);
-            }
+            } => self.collect_computed_property_assignment(object, property, expr),
             Expr::SuperPropertyAssignment { expr, .. } => self.collect_expr(expr),
             Expr::SuperComputedPropertyAssignment { property, expr, .. } => {
                 self.collect_expr(property);
@@ -678,9 +676,30 @@ impl CaptureBindingCollector {
                 self.collect_expr(callee);
                 self.collect_exprs(args);
             }
+            Expr::DynamicImport {
+                specifier, options, ..
+            } => self.collect_dynamic_import(specifier, options.as_deref()),
             Expr::Object(properties) => self.collect_object_properties(properties),
             Expr::Array(elements) => self.collect_exprs(elements),
         }
+    }
+
+    fn collect_dynamic_import(&mut self, specifier: &Expression, options: Option<&Expression>) {
+        self.collect_expr(specifier);
+        if let Some(options) = options {
+            self.collect_expr(options);
+        }
+    }
+
+    fn collect_computed_property_assignment(
+        &mut self,
+        object: &Expression,
+        property: &Expression,
+        expr: &Expression,
+    ) {
+        self.collect_expr(object);
+        self.collect_expr(property);
+        self.collect_expr(expr);
     }
 
     fn collect_web_compat_call_assignment(

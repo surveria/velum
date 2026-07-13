@@ -227,6 +227,9 @@ impl Context {
                 self.resolve_promise(promise, value)?;
             }
             Completion::Throw(value) => self.reject_promise(promise, value)?,
+            Completion::TailCall(_) => {
+                return Err(Error::runtime("tail call escaped async function"));
+            }
             Completion::Break { .. } | Completion::Continue { .. } => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
@@ -518,7 +521,7 @@ impl Context {
         Ok(())
     }
 
-    fn enqueue_promise_job(&mut self, job: PromiseJob) -> Result<()> {
+    pub(in crate::runtime) fn enqueue_promise_job(&mut self, job: PromiseJob) -> Result<()> {
         self.storage_ledger
             .grow_count(VmStorageKind::PromiseJob, 1)?;
         self.promise_jobs.push_back(job);
@@ -533,6 +536,7 @@ impl Context {
                 thenable,
                 then,
             } => self.run_promise_resolve_thenable(promise, thenable, &then),
+            PromiseJob::DynamicImport(job) => self.run_dynamic_import_job(job),
         }
     }
 
@@ -678,6 +682,9 @@ impl Context {
                 self.resolve_promise(result_promise, value)
             }
             Completion::Throw(value) => self.reject_promise(result_promise, value),
+            Completion::TailCall(_) => {
+                Err(Error::runtime("tail call escaped resumed async function"))
+            }
             Completion::Suspended(awaited) => {
                 let continuation =
                     self.detach_suspended_async_function(function, result_promise)?;

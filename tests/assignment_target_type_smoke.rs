@@ -25,6 +25,17 @@ fn script_await_identifier_remains_a_simple_assignment_target() -> TestResult {
 }
 
 #[test]
+fn script_await_identifier_can_be_called_and_indexed() -> TestResult {
+    expect_true(
+        r"
+        function await(value) { return value; }
+        var holder = { await: await };
+        await(20) + [holder.await][0](22) === 42;
+        ",
+    )
+}
+
+#[test]
 fn sloppy_call_assignment_targets_throw_before_rhs_and_conversion() -> TestResult {
     expect_true(
         r"
@@ -73,6 +84,27 @@ fn sloppy_call_loop_targets_throw_after_call_and_strict_code_is_rejected() -> Te
         return Ok(());
     }
     Err(format!("expected parser error, got {error}").into())
+}
+
+#[test]
+fn tagged_templates_are_never_assignment_targets() -> TestResult {
+    for source in [
+        "function tag() {} tag`` = 1;",
+        "var holder = { tag: function () {} }; holder.tag`` = 1;",
+        "function tag() {} (tag``) = 1;",
+        "var holder = { tag: function () {} }; (holder.tag``) = 1;",
+    ] {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        let error = context
+            .eval(source)
+            .err()
+            .ok_or("expected tagged-template assignment target to fail parsing")?;
+        if !error.to_string().contains("parser error") {
+            return Err(format!("expected parser error for {source:?}, got {error}").into());
+        }
+    }
+    Ok(())
 }
 
 #[test]

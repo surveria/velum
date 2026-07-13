@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::{
@@ -18,6 +18,7 @@ pub struct StaticNameAtomCacheHandle {
     property_lookups: Rc<[Cell<Option<CacheablePropertyLookup>>]>,
     native_calls: Rc<[Cell<Option<StaticPropertyNativeCallCache>>]>,
     call_values: Rc<[Cell<Option<CallValueCache>>]>,
+    template_objects: Rc<[RefCell<Option<Value>>]>,
 }
 
 impl StaticNameAtomCacheHandle {
@@ -39,14 +40,17 @@ impl StaticNameAtomCacheHandle {
             native_calls.push(Cell::new(None));
         }
         let mut call_values = Vec::with_capacity(static_call_site_count);
+        let mut template_objects = Vec::with_capacity(static_call_site_count);
         for _ in 0..static_call_site_count {
             call_values.push(Cell::new(None));
+            template_objects.push(RefCell::new(None));
         }
         Self {
             atoms: Rc::from(atoms.into_boxed_slice()),
             property_lookups: Rc::from(property_lookups.into_boxed_slice()),
             native_calls: Rc::from(native_calls.into_boxed_slice()),
             call_values: Rc::from(call_values.into_boxed_slice()),
+            template_objects: Rc::from(template_objects.into_boxed_slice()),
         }
     }
 
@@ -56,7 +60,21 @@ impl StaticNameAtomCacheHandle {
             .checked_add(self.property_lookups.len())
             .and_then(|count| count.checked_add(self.native_calls.len()))
             .and_then(|count| count.checked_add(self.call_values.len()))
+            .and_then(|count| count.checked_add(self.template_objects.len()))
             .ok_or_else(|| Error::limit("static name cache entry count overflowed"))
+    }
+
+    pub(in crate::runtime) fn is_compatible(
+        &self,
+        name: &StaticName,
+        expected_atom: Option<AtomId>,
+    ) -> Result<bool> {
+        let Some(slot) = self.atoms.get(name.id().index()?) else {
+            return Ok(false);
+        };
+        Ok(slot
+            .get()
+            .is_none_or(|atom| expected_atom.is_some_and(|expected| atom == expected)))
     }
 
     pub(in crate::runtime) fn invalidate_identity_caches(&self) {
@@ -164,6 +182,42 @@ impl StaticNameAtomCacheHandle {
             .get(site.index()?)
             .ok_or_else(|| Error::runtime("static call value cache slot is not defined"))?;
         slot.set(Some(cache));
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn template_object(
+        &self,
+        site: StaticCallSiteId,
+    ) -> Result<Option<Value>> {
+        self.template_objects
+            .get(site.index()?)
+            .map(|slot| slot.borrow().clone())
+            .ok_or_else(|| Error::runtime("static template object cache slot is not defined"))
+    }
+
+    pub(in crate::runtime) fn remember_template_object(
+        &self,
+        site: StaticCallSiteId,
+        value: Value,
+    ) -> Result<()> {
+        let slot = self
+            .template_objects
+            .get(site.index()?)
+            .ok_or_else(|| Error::runtime("static template object cache slot is not defined"))?;
+        slot.replace(Some(value));
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn visit_template_objects(
+        &self,
+        mut visit: impl FnMut(&Value) -> Result<()>,
+    ) -> Result<()> {
+        for slot in self.template_objects.iter() {
+            let value = slot.borrow();
+            if let Some(value) = value.as_ref() {
+                visit(value)?;
+            }
+        }
         Ok(())
     }
 }

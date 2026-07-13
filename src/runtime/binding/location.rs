@@ -86,6 +86,16 @@ impl BindingLocation {
         )
     }
 
+    pub(super) fn matches_atom(self, expected: AtomId) -> bool {
+        match self {
+            Self::Global { atom, .. }
+            | Self::ExactGlobal { atom, .. }
+            | Self::BuiltinGlobal { atom, .. }
+            | Self::Local { atom, .. } => atom == expected,
+            Self::ExactLocal { .. } | Self::Upvalue { .. } => false,
+        }
+    }
+
     pub(super) const fn for_compiled_operand(self, operand: BindingOperand) -> Self {
         match (operand, self) {
             (

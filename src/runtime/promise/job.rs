@@ -4,6 +4,7 @@ use crate::{
         async_disposable_stack::AsyncDisposableStackContinuation,
         async_operation::ArrayFromAsyncContinuation,
         async_trace::VmAsyncEdgeKind,
+        dynamic_import::DynamicImportJob,
         function::SuspendedAsyncFunction,
         generator::GeneratorId,
         resource_scope::ResourceScopeContinuation,
@@ -257,6 +258,7 @@ pub(in crate::runtime) enum PromiseJob {
         thenable: Value,
         then: Value,
     },
+    DynamicImport(DynamicImportJob),
 }
 
 impl PromiseJob {
@@ -278,27 +280,28 @@ impl PromiseJob {
                 visitor.visit_value(VmRootKind::QueuedJob, thenable)?;
                 visitor.visit_value(VmRootKind::QueuedJob, then)
             }
+            Self::DynamicImport(job) => visitor.visit_promise(VmRootKind::QueuedJob, job.promise()),
         }
     }
 
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
-            Self::ResolveThenable { .. } => Ok(0),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.cache_entry_count(),
-            Self::ResolveThenable { .. } => Ok(0),
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn into_cancellation(self) -> Option<PromiseContinuationCancellation> {
         match self {
             Self::Reaction { reaction, .. } => reaction.into_cancellation(),
-            Self::ResolveThenable { .. } => None,
+            Self::ResolveThenable { .. } | Self::DynamicImport(_) => None,
         }
     }
 }

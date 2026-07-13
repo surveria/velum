@@ -561,6 +561,7 @@ impl Context {
                 self.create_generator_result(value, true)?,
             )),
             Completion::Throw(value) => Err(Error::javascript(value)),
+            Completion::TailCall(_) => Err(Error::runtime("tail call escaped generator function")),
             Completion::Break { .. } | Completion::Continue { .. } => {
                 Err(Error::runtime("invalid generator completion"))
             }

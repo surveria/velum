@@ -210,7 +210,15 @@ impl Context {
             if result.as_ref().is_ok_and(Completion::suspends_execution) {
                 return result.map(Some);
             }
-            result?
+            match result {
+                Ok(completion) => completion,
+                Err(error) => {
+                    if self.pop_lexical_scope()?.is_none() {
+                        return Err(Error::runtime("bytecode lexical scope disappeared"));
+                    }
+                    return Err(error);
+                }
+            }
         };
         let Some(removed) = self.pop_lexical_scope()? else {
             return Err(Error::runtime("bytecode lexical scope disappeared"));
@@ -351,7 +359,8 @@ impl Context {
                     *last = value;
                     break;
                 }
-                completion @ (Completion::Break { .. }
+                completion @ (Completion::TailCall(_)
+                | Completion::Break { .. }
                 | Completion::Continue { label: Some(_), .. }
                 | Completion::Throw(_)
                 | Completion::Return(_)
@@ -652,7 +661,8 @@ impl Context {
         if let Some(completion) = self.eval_bytecode_linear_direct_condition(condition, plan)? {
             return Ok(match completion {
                 Completion::Normal(value) => BytecodeCondition::Value(to_boolean(&value)),
-                completion @ (Completion::Throw(_)
+                completion @ (Completion::TailCall(_)
+                | Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
@@ -667,7 +677,8 @@ impl Context {
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
             Completion::Normal(value) => Ok(BytecodeCondition::Value(to_boolean(&value))),
-            completion @ (Completion::Throw(_)
+            completion @ (Completion::TailCall(_)
+            | Completion::Throw(_)
             | Completion::Return(_)
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }

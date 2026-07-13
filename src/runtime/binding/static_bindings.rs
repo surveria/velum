@@ -48,6 +48,20 @@ impl StaticBindingCacheHandle {
             .ok_or_else(|| Error::limit("static binding cache entry count overflowed"))
     }
 
+    pub(in crate::runtime) fn is_compatible(
+        &self,
+        binding: &StaticBinding,
+        expected_atom: Option<AtomId>,
+    ) -> Result<bool> {
+        let Some(slot) = self.locations.get(binding.id().index()?) else {
+            return Ok(false);
+        };
+        let Some(location) = slot.get() else {
+            return Ok(true);
+        };
+        Ok(expected_atom.is_some_and(|atom| location.matches_atom(atom)))
+    }
+
     pub(in crate::runtime) fn invalidate_identity_caches(&self) {
         for slot in self.native_calls.iter() {
             slot.set(None);
@@ -148,6 +162,22 @@ impl CompiledBindingFrame {
 }
 
 impl Context {
+    pub(crate) fn active_static_caches_are_compatible(
+        &self,
+        binding: &BytecodeBinding,
+    ) -> Result<bool> {
+        let expected_atom = self.atom(binding.name().as_str());
+        let atom_addressable = match self.current_static_name_atom_cache_owner() {
+            Some(cache) => cache.is_compatible(binding.name().name(), expected_atom)?,
+            None => true,
+        };
+        let binding_addressable = match self.current_static_binding_cache_owner() {
+            Some(cache) => cache.is_compatible(binding.name(), expected_atom)?,
+            None => true,
+        };
+        Ok(atom_addressable && binding_addressable)
+    }
+
     pub(crate) fn current_static_binding_cache_owner(&self) -> Option<StaticBindingCacheHandle> {
         self.static_binding_caches.last().cloned()
     }

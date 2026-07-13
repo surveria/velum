@@ -73,7 +73,8 @@ impl Context {
         } else {
             let iterable = match self.eval_bytecode_block(object)? {
                 Completion::Normal(value) => value,
-                completion @ (Completion::Throw(_)
+                completion @ (Completion::TailCall(_)
+                | Completion::Throw(_)
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)

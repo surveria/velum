@@ -136,6 +136,99 @@ fn regexp_literal_is_allowed_inside_substitution() -> TestResult {
 }
 
 #[test]
+fn tagged_templates_expose_frozen_cooked_and_raw_arrays() -> TestResult {
+    let value = eval(
+        r#"
+        let observed;
+        function tag(strings, value) {
+            observed = strings;
+            return strings[0] + value + strings[1];
+        }
+        const result = tag`line\n${42}tail`;
+        const raw = Object.getOwnPropertyDescriptor(observed, "raw");
+        result === "line\n42tail"
+            && observed[0] === "line\n"
+            && observed.raw[0] === "line\\n"
+            && Object.isFrozen(observed)
+            && Object.isFrozen(observed.raw)
+            && raw.enumerable === false
+            && raw.writable === false
+            && raw.configurable === false;
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn tagged_templates_cache_each_site_and_preserve_call_context() -> TestResult {
+    let value = eval(
+        r#"
+        const templates = [];
+        let receiver;
+        const holder = {
+            tag: function(strings) {
+                receiver = this;
+                templates.push(strings);
+                return function Constructor(value) { this.value = value; };
+            }
+        };
+        function run() { return holder.tag`site`; }
+        run();
+        run();
+        const instance = new holder.tag`constructor`("value");
+        receiver === holder
+            && templates[0] === templates[1]
+            && templates[1] !== templates[2]
+            && instance.value === "value";
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn tagged_template_tail_calls_reuse_the_function_activation() -> TestResult {
+    let value = eval(
+        r#"
+        "use strict";
+        function direct(_, remaining) {
+            if (remaining === 0) {
+                return 1;
+            }
+            return direct`${remaining - 1}`;
+        }
+        function getIndirect() {
+            return indirect;
+        }
+        function indirect(_, remaining) {
+            if (remaining === 0) {
+                return 1;
+            }
+            return getIndirect()`${remaining - 1}`;
+        }
+        direct(null, 400) + indirect(null, 400);
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(2.0))
+}
+
+#[test]
+fn tagged_templates_preserve_invalid_escape_raw_text() -> TestResult {
+    let value = eval(
+        r#"
+        let cooked;
+        let raw;
+        (strings => { cooked = strings[0]; raw = strings.raw[0]; })`\xg`;
+        cooked === undefined && raw === "\\xg";
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))?;
+    ensure_error_contains(
+        r"`\xg`",
+        "invalid escape sequence in untagged template literal",
+    )
+}
+
+#[test]
 fn rejects_empty_substitution() -> TestResult {
     ensure_error_contains("`hello ${}`", "expected expression")
 }

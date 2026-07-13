@@ -326,8 +326,8 @@ fn omits_ambiguous_star_names_but_rejects_indirect_exports() -> TestResult {
         &mut loader,
     );
     ensure(
-        result.is_err(),
-        "ambiguous indirect export unexpectedly linked",
+        matches!(result, Err(Error::Runtime { .. })),
+        "ambiguous indirect export did not fail during static linking",
     )
 }
 

@@ -64,6 +64,11 @@ impl Context {
             ));
         };
         if let Value::Object(id) = object_ref.value
+            && self.objects.is_module_namespace(*id)?
+        {
+            return self.define_module_namespace_property(target, property, &update);
+        }
+        if let Value::Object(id) = object_ref.value
             && let Some(index) = self
                 .objects
                 .typed_array_property_index(*id, property.name())?
@@ -220,6 +225,19 @@ impl Context {
                     .objects
                     .own_property_descriptor(*id, property.lookup())?
                 {
+                    if self.objects.is_module_namespace(*id)?
+                        && matches!(descriptor, OwnPropertyDescriptor::Accessor(_))
+                    {
+                        let value = self.get(target, property.lookup())?;
+                        return Ok(Some(OwnPropertyDescriptor::Data(
+                            DataPropertyDescriptor::new(
+                                value,
+                                PropertyWritable::Yes,
+                                PropertyEnumerable::Yes,
+                                PropertyConfigurable::No,
+                            ),
+                        )));
+                    }
                     return Ok(Some(descriptor));
                 }
                 self.global_object_property_descriptor(*id, property.lookup())
@@ -241,6 +259,39 @@ impl Context {
             | Value::String(_)
             | Value::Symbol(_) => Ok(None),
         }
+    }
+
+    fn define_module_namespace_property(
+        &mut self,
+        target: &Value,
+        property: &DynamicPropertyKey,
+        update: &PropertyUpdate,
+    ) -> Result<bool> {
+        let current = self.semantic_own_property_descriptor(target, property)?;
+        if property.key().is_some_and(|key| key.symbol_id().is_some()) {
+            return Ok(crate::runtime::object::is_compatible_property_update(
+                false,
+                update,
+                current.as_ref(),
+            ));
+        }
+        let Some(OwnPropertyDescriptor::Data(current)) = current else {
+            return Ok(false);
+        };
+        let PropertyUpdate::Data(update) = update else {
+            return Ok(false);
+        };
+        if update
+            .configurable()
+            .is_some_and(PropertyConfigurable::is_yes)
+            || update.enumerable().is_some_and(|value| !value.is_yes())
+            || update.writable().is_some_and(|value| !value.is_yes())
+        {
+            return Ok(false);
+        }
+        Ok(update.value().is_none_or(|value| {
+            crate::runtime::abstract_operations::same_value(current.value_ref(), &value)
+        }))
     }
 
     fn primitive_own_property_descriptor(

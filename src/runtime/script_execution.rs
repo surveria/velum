@@ -32,6 +32,15 @@ impl Context {
         self.eval_compiled(&script)
     }
 
+    /// Evaluates source with a stable embedder-provided diagnostic and module-referrer name.
+    ///
+    /// # Errors
+    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
+    pub fn eval_named(&mut self, source_name: &str, source: &str) -> Result<Value> {
+        let script = self.compile_named(source_name, source)?;
+        self.eval_compiled(&script)
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
@@ -182,10 +191,21 @@ impl Context {
     }
 
     fn eval_compiled_program(&mut self, script: &CompiledScript) -> Result<BytecodeOutcome> {
-        let outcome = self.eval_bytecode_program(script.bytecode())?;
-        if outcome.is_normal() {
-            self.drain_promise_jobs()?;
+        let drain_jobs = self.activation_frames.is_empty();
+        let previous_source = script
+            .source_name()
+            .map(|name| self.active_module_name.replace(name.to_owned()));
+        let result = self
+            .eval_bytecode_program(script.bytecode())
+            .and_then(|outcome| {
+                if drain_jobs && outcome.is_normal() {
+                    self.drain_promise_jobs()?;
+                }
+                Ok(outcome)
+            });
+        if let Some(previous_source) = previous_source {
+            self.active_module_name = previous_source;
         }
-        Ok(outcome)
+        result
     }
 }

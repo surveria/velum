@@ -4,7 +4,7 @@ use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::control::Completion,
+    runtime::control::{Completion, TailCallReturnMode},
     value::{FunctionId, Value},
 };
 
@@ -84,6 +84,33 @@ impl Context {
         completion: Completion,
         binding: &FunctionSuperBinding,
     ) -> Result<Completion> {
+        let this_value = binding.this_value.borrow().clone();
+        let Completion::TailCall(request) = completion else {
+            return self.normalize_derived_constructor_result(completion, this_value);
+        };
+        Ok(Completion::TailCall(
+            request.with_derived_constructor_return(this_value)?,
+        ))
+    }
+
+    pub(super) fn normalize_tail_call_return(
+        &self,
+        completion: Completion,
+        mode: TailCallReturnMode,
+    ) -> Result<Completion> {
+        match mode {
+            TailCallReturnMode::Ordinary => Ok(completion),
+            TailCallReturnMode::DerivedConstructor { this_value } => {
+                self.normalize_derived_constructor_result(completion, this_value)
+            }
+        }
+    }
+
+    fn normalize_derived_constructor_result(
+        &self,
+        completion: Completion,
+        this_value: Option<Value>,
+    ) -> Result<Completion> {
         match completion {
             Completion::Return(value) | Completion::ReturnDirect(value)
                 if self.semantic_object_ref(&value)?.is_some() =>
@@ -92,17 +119,12 @@ impl Context {
             }
             Completion::Return(Value::Undefined)
             | Completion::ReturnDirect(Value::Undefined)
-            | Completion::Normal(_) => binding
-                .this_value
-                .borrow()
-                .clone()
-                .map(Completion::Return)
-                .ok_or_else(|| {
-                    Error::exception(
-                        crate::value::ErrorName::ReferenceError,
-                        "derived constructor did not initialize this",
-                    )
-                }),
+            | Completion::Normal(_) => this_value.map(Completion::Return).ok_or_else(|| {
+                Error::exception(
+                    crate::value::ErrorName::ReferenceError,
+                    "derived constructor did not initialize this",
+                )
+            }),
             Completion::Return(_) | Completion::ReturnDirect(_) => Err(Error::type_error(
                 "derived constructor can only return an object or undefined",
             )),

@@ -23,6 +23,7 @@ pub struct CompiledScript {
     source_id: SourceId,
     source_name: Option<String>,
     strict: bool,
+    top_level_await: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -297,6 +298,7 @@ impl CompiledScript {
             source_id,
             source_name: source_name.map(str::to_owned),
             strict: parsed.strict,
+            top_level_await: parsed.usage.top_level_await,
         };
         Ok((script, module))
     }
@@ -328,6 +330,10 @@ impl CompiledScript {
 
     pub(crate) const fn strict(&self) -> bool {
         self.strict
+    }
+
+    pub(crate) const fn has_top_level_await(&self) -> bool {
+        self.top_level_await
     }
 
     pub(crate) fn ensure_within_limits(&self, limits: &RuntimeLimits) -> Result<()> {

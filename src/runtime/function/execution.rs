@@ -2,7 +2,11 @@ use crate::{
     bytecode::BytecodeNewTargetMode,
     error::{Error, Result},
     runtime::{
-        Context, call::RuntimeCallArgs, control::Completion, function::FunctionSuperBinding,
+        Context,
+        call::RuntimeCallArgs,
+        control::{Completion, TailCallReturnMode},
+        function::FunctionSuperBinding,
+        roots::VmRootKind,
     },
     value::{FunctionId, Value},
 };
@@ -95,10 +99,84 @@ impl Context {
                 self.limits.max_expression_depth
             )));
         }
-        let result = self.eval_function_completion_with_this_inner::<CAN_SUSPEND>(
-            id, args, this_value, new_target,
+        let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
+            id,
+            args.as_slice().to_vec(),
+            this_value,
+            new_target,
         );
         self.call_depth = self.call_depth.saturating_sub(1);
         result
+    }
+
+    fn eval_function_tail_chain<const CAN_SUSPEND: bool>(
+        &mut self,
+        mut id: FunctionId,
+        mut args: Vec<Value>,
+        mut this_value: Value,
+        mut new_target: Value,
+    ) -> Result<Completion> {
+        let mut return_mode = TailCallReturnMode::Ordinary;
+        loop {
+            let _return_root =
+                self.transient_root_scope(VmRootKind::TransientCall, return_mode.root_value())?;
+            let realm = self.function(id)?.realm;
+            let completion = self.with_realm(realm, |context| {
+                context.eval_function_completion_with_this_inner::<CAN_SUSPEND>(
+                    id,
+                    RuntimeCallArgs::values(&args),
+                    this_value.clone(),
+                    new_target.clone(),
+                )
+            })?;
+            let Completion::TailCall(request) = completion else {
+                return self.normalize_tail_call_return(completion, return_mode);
+            };
+            let (callee, next_args, call_this, request_return_mode) = request.into_parts();
+            return_mode = return_mode.merge(request_return_mode)?;
+            if CAN_SUSPEND {
+                let completion = tail_call_result(self.call(&callee, &next_args, call_this)?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
+            }
+            let Value::Function(next_id) = callee else {
+                let completion = tail_call_result(self.call(&callee, &next_args, call_this)?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
+            };
+            let next_realm = self.function(next_id)?.realm;
+            let Some((next_this, next_target)) = self.with_realm(next_realm, |context| {
+                context.reject_class_constructor_call(next_id)?;
+                if context.function(next_id)?.kind.is_async()
+                    || context.function(next_id)?.kind.is_generator()
+                {
+                    return Ok(None);
+                }
+                Ok(Some((
+                    context.function_direct_call_this(next_id, call_this.clone())?,
+                    context.function_direct_call_new_target(next_id)?,
+                )))
+            })?
+            else {
+                let completion = tail_call_result(self.call(
+                    &Value::Function(next_id),
+                    &next_args,
+                    call_this,
+                )?)?;
+                return self.normalize_tail_call_return(completion, return_mode);
+            };
+            id = next_id;
+            args = next_args;
+            this_value = next_this;
+            new_target = next_target;
+        }
+    }
+}
+
+fn tail_call_result(completion: Completion) -> Result<Completion> {
+    match completion {
+        Completion::Normal(value) => Ok(Completion::Return(value)),
+        Completion::Throw(value) => Ok(Completion::Throw(value)),
+        other => Err(Error::runtime(format!(
+            "tail call produced invalid completion {other:?}"
+        ))),
     }
 }

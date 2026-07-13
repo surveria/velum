@@ -77,6 +77,20 @@ impl Context {
             })
             .ok_or_else(|| Error::runtime(format!("Annex B var binding '{name}' is missing")))?;
         let value = self.checked_value(value)?;
+        let object_authoritative = self
+            .realm
+            .globals
+            .get(atom)
+            .is_some_and(|global| global.same_cell(&cell))
+            && self.global_object_name_is_authoritative(name.as_str());
+        if object_authoritative {
+            let global_object = self.global_object_id()?;
+            self.update_global_object_data_property_value(
+                global_object,
+                name.as_str(),
+                value.clone(),
+            )?;
+        }
         cell.assign(name, value)
     }
 

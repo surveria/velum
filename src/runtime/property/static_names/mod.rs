@@ -196,6 +196,27 @@ impl Context {
         cache.remember_call_value(site, cache_value)
     }
 
+    pub(in crate::runtime) fn cached_template_object(
+        &self,
+        site: StaticCallSiteId,
+    ) -> Result<Option<Value>> {
+        let cache = self
+            .current_static_name_atom_cache_owner()
+            .ok_or_else(|| Error::runtime("static template object cache is unavailable"))?;
+        cache.template_object(site)
+    }
+
+    pub(in crate::runtime) fn remember_template_object(
+        &self,
+        site: StaticCallSiteId,
+        value: Value,
+    ) -> Result<()> {
+        let cache = self
+            .current_static_name_atom_cache_owner()
+            .ok_or_else(|| Error::runtime("static template object cache is unavailable"))?;
+        cache.remember_template_object(site, value)
+    }
+
     pub(crate) fn lookup_static_name_atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(self.atom(name));

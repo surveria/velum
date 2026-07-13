@@ -1,18 +1,4 @@
-use std::rc::Rc;
-
 use super::BytecodeCompletion;
-
-use crate::{
-    api::native_call::NativeCallTarget,
-    bytecode::BytecodeHoistPlan,
-    error::{Error, Result},
-    syntax::{
-        AccessorKind, BinaryOp, DeclKind, FunctionKind, StaticCallSiteId, StaticFunctionId,
-        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
-    },
-    value::Value,
-};
-
 use super::block::BytecodeBlock;
 use super::function::BytecodeFunction;
 use super::function_mode::BytecodeNewTargetMode;
@@ -22,10 +8,20 @@ use super::numeric::{
 };
 use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
 use super::super_property::BytecodeSuperProperty;
-use super::{BytecodeAddress, BytecodeDirectThrow};
+use super::{BytecodeAddress, BytecodeCallSite, BytecodeDirectThrow, BytecodeTemplateElement};
+use crate::{
+    api::native_call::NativeCallTarget,
+    bytecode::BytecodeHoistPlan,
+    error::{Error, Result},
+    syntax::{
+        AccessorKind, BinaryOp, DeclKind, FunctionKind, ImportPhase, StaticFunctionId, StaticName,
+        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    },
+    value::Value,
+};
+use std::rc::Rc;
 
 mod binding;
-
 pub use binding::BytecodeBinding;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -174,21 +170,6 @@ impl BytecodeDynamicProperty {
 
     pub const fn access(self) -> StaticPropertyAccessId {
         self.access
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct BytecodeCallSite {
-    site: StaticCallSiteId,
-}
-
-impl BytecodeCallSite {
-    pub(crate) const fn new(site: StaticCallSiteId) -> Self {
-        Self { site }
-    }
-
-    pub const fn site(self) -> StaticCallSiteId {
-        self.site
     }
 }
 
@@ -376,6 +357,10 @@ pub enum BytecodeInstruction {
     TemplateConcat {
         part_count: usize,
     },
+    GetTemplateObject {
+        site: BytecodeCallSite,
+        quasis: Rc<[BytecodeTemplateElement]>,
+    },
     StringConcat {
         final_result: bool,
     },
@@ -407,8 +392,14 @@ pub enum BytecodeInstruction {
         pattern: StaticString,
         flags: StaticString,
     },
+    DynamicImport {
+        phase: ImportPhase,
+        specifier: BytecodeBlock,
+        options: Option<BytecodeBlock>,
+    },
     PushUndefined,
     LoadThis,
+    ImportMeta,
     LoadNewTarget,
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),
@@ -575,8 +566,17 @@ pub enum BytecodeInstruction {
         strict: bool,
         arg_count: usize,
     },
+    TailCallBinding {
+        callee: BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
+        arg_count: usize,
+    },
     CallValue {
         site: BytecodeCallSite,
+        arg_count: usize,
+    },
+    TailCallValue {
         arg_count: usize,
     },
     CallStaticMember {

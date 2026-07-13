@@ -243,6 +243,14 @@ impl Vm {
         self.context.eval_retained(source)
     }
 
+    /// Evaluates source with a stable embedder-provided diagnostic and module-referrer name.
+    ///
+    /// # Errors
+    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
+    pub fn eval_named(&mut self, source_name: &str, source: &str) -> Result<Value> {
+        self.context.eval_named(source_name, source)
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {

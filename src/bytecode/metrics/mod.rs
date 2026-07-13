@@ -179,6 +179,15 @@ impl BytecodeInstruction {
             | Self::NumberCompare(_)
             | Self::NumberEquality(_) => BytecodeMetrics::numeric_instruction(),
             Self::NullishCoalescing { right } => right.metrics(),
+            Self::DynamicImport {
+                specifier, options, ..
+            } => {
+                let mut metrics = specifier.metrics();
+                if let Some(options) = options {
+                    metrics.add(options.metrics());
+                }
+                metrics
+            }
             Self::LogicalAssignment { target, value, .. } => {
                 target.metrics().combine(value.metrics())
             }
@@ -270,6 +279,7 @@ impl BytecodeInstruction {
             | Self::PushLiteral(_)
             | Self::PushString(_)
             | Self::TemplateConcat { .. }
+            | Self::GetTemplateObject { .. }
             | Self::StringConcat { .. }
             | Self::StringConcatStatic { .. }
             | Self::CollectSpreadArgs { .. }
@@ -279,6 +289,7 @@ impl BytecodeInstruction {
             | Self::CreateRegExp { .. }
             | Self::PushUndefined
             | Self::LoadThis
+            | Self::ImportMeta
             | Self::LoadNewTarget
             | Self::StoreAnnexBVar(_)
             | Self::StoreLast
@@ -306,6 +317,8 @@ impl BytecodeInstruction {
             | Self::JumpIfFalse(_)
             | Self::JumpIfFalseKeep(_)
             | Self::JumpIfTrueKeep(_)
+            | Self::TailCallBinding { .. }
+            | Self::TailCallValue { .. }
             | Self::Complete(_) => BytecodeMetrics::empty(),
         };
         metrics.with_instruction()

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    syntax::{BinaryOp, FunctionKind, UnaryOp, UpdateOp},
+    syntax::{BinaryOp, FunctionKind, ImportPhase, UnaryOp, UpdateOp},
     value::Value,
 };
 
@@ -21,7 +21,7 @@ pub struct ObjectProperty {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TemplateElement {
-    pub cooked: StaticString,
+    pub cooked: Option<StaticString>,
     pub raw: StaticString,
 }
 
@@ -66,11 +66,16 @@ pub enum Expr {
         quasis: Vec<TemplateElement>,
         expressions: Vec<Expression>,
     },
+    TemplateObject {
+        site: StaticCallSiteId,
+        quasis: Vec<TemplateElement>,
+    },
     RegExpLiteral {
         pattern: StaticString,
         flags: StaticString,
     },
     This,
+    ImportMeta,
     NewTarget,
     Identifier(StaticBinding),
     Parenthesized(Box<Expression>),
@@ -182,6 +187,11 @@ pub enum Expr {
         site: StaticCallSiteId,
         strict: bool,
         args: Vec<Expression>,
+    },
+    DynamicImport {
+        phase: ImportPhase,
+        specifier: Box<Expression>,
+        options: Option<Box<Expression>>,
     },
     Function {
         id: StaticFunctionId,

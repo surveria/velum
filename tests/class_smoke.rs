@@ -283,6 +283,45 @@ fn constructor_return_object_overrides_instance() -> TestResult {
 }
 
 #[test]
+fn derived_constructor_tail_calls_preserve_return_normalization() -> TestResult {
+    ensure_string(
+        r#"
+        const returnSymbol = () => Symbol();
+        const returnObject = () => ({custom: "yes"});
+        const returnUndefined = () => undefined;
+        class Base {}
+        class Invalid extends Base {
+            constructor() {
+                super();
+                return returnSymbol();
+            }
+        }
+        class Override extends Base {
+            constructor() {
+                super();
+                return returnObject();
+            }
+        }
+        class KeepThis extends Base {
+            constructor() {
+                super();
+                this.custom = "this";
+                return returnUndefined();
+            }
+        }
+        let invalidIsTypeError = false;
+        try {
+            new Invalid();
+        } catch (error) {
+            invalidIsTypeError = error instanceof TypeError;
+        }
+        invalidIsTypeError + ":" + new Override().custom + ":" + new KeepThis().custom
+        "#,
+        "true:yes:this",
+    )
+}
+
+#[test]
 fn rejects_class_early_errors() -> TestResult {
     ensure_error_contains(
         "class Dup { constructor() {} constructor() {} }",

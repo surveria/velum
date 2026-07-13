@@ -3,7 +3,11 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use rs_quickjs::{Error, ModuleLoader, ModuleSource};
+use rs_quickjs::{DynamicModuleRequest, Error, ModuleLoader, ModuleSource};
+
+const MODULE_TYPE_ATTRIBUTE: &str = "type";
+const JSON_MODULE_TYPE: &str = "json";
+const TEXT_MODULE_TYPE: &str = "text";
 
 #[derive(Clone)]
 pub struct Test262ModuleLoader {
@@ -33,10 +37,8 @@ impl Test262ModuleLoader {
         };
         normalize_relative_module_path(&unresolved)
     }
-}
 
-impl ModuleLoader for Test262ModuleLoader {
-    fn load(&mut self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load_source(&self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
         let relative = Self::resolve(referrer, request)?;
         let source = fs::read_to_string(self.test262_dir.join(&relative)).map_err(|error| {
             Error::runtime(format!(
@@ -46,6 +48,63 @@ impl ModuleLoader for Test262ModuleLoader {
         })?;
         let specifier = relative_module_specifier(&relative)?;
         Ok(ModuleSource::new(specifier, source))
+    }
+
+    fn dynamic_source(
+        source: &ModuleSource,
+        request: &DynamicModuleRequest,
+    ) -> rs_quickjs::Result<String> {
+        let module_type = request
+            .attributes()
+            .iter()
+            .find_map(|(name, value)| (name == MODULE_TYPE_ATTRIBUTE).then_some(value.as_str()));
+        match module_type {
+            None => Ok(source.source().to_owned()),
+            Some(JSON_MODULE_TYPE) => {
+                let value: serde_json::Value =
+                    serde_json::from_str(source.source()).map_err(|error| {
+                        Error::runtime(format!(
+                            "failed to parse JSON module '{}': {error}",
+                            source.specifier()
+                        ))
+                    })?;
+                let value = serde_json::to_string(&value).map_err(|error| {
+                    Error::runtime(format!(
+                        "failed to serialize JSON module '{}': {error}",
+                        source.specifier()
+                    ))
+                })?;
+                Ok(format!("export default {value};"))
+            }
+            Some(TEXT_MODULE_TYPE) => {
+                let value = serde_json::to_string(source.source()).map_err(|error| {
+                    Error::runtime(format!(
+                        "failed to serialize text module '{}': {error}",
+                        source.specifier()
+                    ))
+                })?;
+                Ok(format!("export default {value};"))
+            }
+            Some(module_type) => Err(Error::runtime(format!(
+                "unsupported Test262 dynamic module type '{module_type}'"
+            ))),
+        }
+    }
+}
+
+impl ModuleLoader for Test262ModuleLoader {
+    fn load(&mut self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+        self.load_source(referrer, request)
+    }
+
+    fn load_dynamic(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> rs_quickjs::Result<ModuleSource> {
+        let source = self.load_source(referrer, request.specifier())?;
+        let dynamic_source = Self::dynamic_source(&source, request)?;
+        Ok(ModuleSource::new(source.specifier(), dynamic_source))
     }
 }
 

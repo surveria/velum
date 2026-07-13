@@ -201,7 +201,6 @@ check_source_metadata_boundary() {
   local source_type_owners
   local expected_source_type_owners
   local compiled_fields
-  local expected_compiled_fields
   local frontend_diagnostics
 
   source_type_owners="$(
@@ -223,10 +222,16 @@ src/source.rs:pub struct SourceSpan'
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected_compiled_fields='bytecode:BytecodeProgram,binding_layout:BindingLayout,usage:CompiledScriptUsage,source_id:SourceId,source_name:Option<String>,strict:bool,'
-  if [[ "${compiled_fields}" != "${expected_compiled_fields}" ]]; then
-    fail "CompiledScript source metadata boundary changed; AS-04b2 owns source retention"
-  fi
+  for required_field in 'source_id:SourceId,' 'source_name:Option<String>,'; do
+    if [[ "${compiled_fields}" != *"${required_field}"* ]]; then
+      fail "CompiledScript source diagnostic boundary changed; required field '${required_field}' is missing"
+    fi
+  done
+  for retained_source in 'source:String,' 'source_text:String,' 'program:Program,' 'ast:Program,'; do
+    if [[ "${compiled_fields}" == *"${retained_source}"* ]]; then
+      fail "CompiledScript source retention boundary changed; forbidden field '${retained_source}' is present"
+    fi
+  done
 
   frontend_diagnostics="$(
     grep -E '^[[:space:]]*(Lex|Parse)[[:space:]]*\{' \
@@ -718,8 +723,8 @@ check_sequence_expression_boundary() {
     || ! grep -F -q 'pub(super) fn assignment_expression(&mut self)' \
       "${repo_root}/src/parser/sequence.rs" \
     || ! grep -F -q 'self.emit(BytecodeInstruction::Pop);' <<<"${compiler_body}" \
-    || ! grep -F -q 'Expr::Sequence(expressions)' \
-      "${repo_root}/src/binding_layout/builder.rs" \
+    || ! grep -R -F -q --include='*.rs' 'Expr::Sequence(expressions)' \
+      "${repo_root}/src/binding_layout/builder" \
     || ! grep -F -q 'Expr::Sequence(expressions)' \
       "${repo_root}/src/compiler/function.rs" \
     || ! grep -F -q 'ForHeadKind::Of => self.assignment_expression(),' \
@@ -1588,6 +1593,12 @@ mutate_compiler_source_name() {
     >>"${fixture_root}/src/compiler/call.rs"
 }
 
+mutate_compiled_source_retention() {
+  local fixture_root="$1"
+  portable_sed '/    source_name: Option<String>,/a\    source_text: String,' \
+    "${fixture_root}/src/compiled_script/mod.rs"
+}
+
 mutate_equality_duplicate() {
   local fixture_root="$1"
   printf '\nfn same_value_zero_architecture_probe() {}\n' \
@@ -1905,6 +1916,8 @@ run_self_tests() {
     'bytecode source span boundary changed' mutate_bytecode_source_span
   expect_guard_failure "${temp_dir}" compiler-source-name \
     'compiler source-name allowlist changed' mutate_compiler_source_name
+  expect_guard_failure "${temp_dir}" compiled-source-retention \
+    'CompiledScript source retention boundary changed' mutate_compiled_source_retention
   expect_guard_failure "${temp_dir}" test262-source-name \
     'Test262 source-name allowlist changed' mutate_test262_source_name
   expect_guard_failure "${temp_dir}" equality-duplicate \

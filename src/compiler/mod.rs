@@ -14,7 +14,7 @@ use crate::{
         BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
         BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
+        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty, BytecodeTemplateElement,
     },
     error::{Error, Result},
     source::{SourceId, SourceSpan},
@@ -297,18 +297,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Throw));
                 Ok(())
             }
-            Stmt::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.compile_expr(expr)?;
-                    self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
-                } else {
-                    self.emit(BytecodeInstruction::PushUndefined);
-                    self.emit(BytecodeInstruction::Complete(
-                        BytecodeCompletion::ReturnDirect,
-                    ));
-                }
-                Ok(())
-            }
+            Stmt::Return(expr) => self.compile_return_statement(expr.as_ref()),
             Stmt::FunctionDecl {
                 name,
                 annex_b_var_binding: Some(variable),
@@ -328,6 +317,22 @@ impl<'a> BytecodeCompiler<'a> {
                 Ok(())
             }
         }
+    }
+
+    fn compile_return_statement(&mut self, expr: Option<&Expression>) -> Result<()> {
+        let Some(expr) = expr else {
+            self.emit(BytecodeInstruction::PushUndefined);
+            self.emit(BytecodeInstruction::Complete(
+                BytecodeCompletion::ReturnDirect,
+            ));
+            return Ok(());
+        };
+        if self.compile_tail_call_expr(expr)? {
+            return Ok(());
+        }
+        self.compile_expr(expr)?;
+        self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
+        Ok(())
     }
 
     fn compile_declaration(

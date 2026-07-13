@@ -140,7 +140,9 @@ impl Context {
             return Ok(None);
         };
         match object_ref.value {
-            Value::Object(id) if !self.objects.is_proxy(*id) => {
+            Value::Object(id)
+                if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
+            {
                 match level {
                     SemanticIntegrityLevel::Sealed => self.objects.seal(*id)?,
                     SemanticIntegrityLevel::Frozen => self.objects.freeze(*id)?,
@@ -204,7 +206,9 @@ impl Context {
             return Ok(None);
         };
         match object_ref.value {
-            Value::Object(id) if !self.objects.is_proxy(*id) => {
+            Value::Object(id)
+                if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
+            {
                 return match level {
                     SemanticIntegrityLevel::Sealed => self.objects.is_sealed(*id).map(Some),
                     SemanticIntegrityLevel::Frozen => self.objects.is_frozen(*id).map(Some),

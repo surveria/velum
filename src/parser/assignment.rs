@@ -164,7 +164,18 @@ impl Parser {
         if matches!(target.kind(), Expr::Call { .. }) {
             return Ok(self.web_compat_call_assignment(start, target, value));
         }
-        let kind = match target.into_kind() {
+        let kind = self.assignment_kind(target.into_kind(), value, infer_name, operator_span)?;
+        Ok(self.expression_node(start, kind))
+    }
+
+    fn assignment_kind(
+        &self,
+        target: Expr,
+        value: Expression,
+        infer_name: bool,
+        operator_span: crate::SourceSpan,
+    ) -> Result<Expr> {
+        Ok(match target {
             Expr::Identifier(name) => Expr::Assignment {
                 name,
                 strict: self.is_strict_mode(),
@@ -218,8 +229,10 @@ impl Parser {
             | Expr::Class(_)
             | Expr::SuperCall { .. }
             | Expr::TemplateLiteral { .. }
+            | Expr::TemplateObject { .. }
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::ImportMeta
             | Expr::NewTarget
             | Expr::Parenthesized(_)
             | Expr::Sequence(_)
@@ -240,6 +253,7 @@ impl Parser {
             | Expr::PrivateAssignment { .. }
             | Expr::PrivateIn { .. }
             | Expr::Call { .. }
+            | Expr::DynamicImport { .. }
             | Expr::Function { .. }
             | Expr::ArrowFunction { .. }
             | Expr::MethodFunction { .. }
@@ -249,8 +263,7 @@ impl Parser {
             | Expr::New { .. } => {
                 return Err(Error::parse_at("invalid assignment target", operator_span));
             }
-        };
-        Ok(self.expression_node(start, kind))
+        })
     }
 
     fn compound_assignment_expr(

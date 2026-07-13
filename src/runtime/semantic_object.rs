@@ -127,6 +127,7 @@ impl Context {
         };
         let read = match object_ref.value {
             Value::Object(id) => {
+                self.evaluate_deferred_module_namespace_property(*id, property)?;
                 if self.objects.is_proxy(*id) {
                     SemanticPropertyRead::Resolved(self.proxy_get(
                         *id,

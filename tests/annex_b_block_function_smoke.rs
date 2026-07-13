@@ -16,6 +16,22 @@ fn sloppy_eval_initializes_and_updates_the_outer_var_binding() -> TestResult {
 }
 
 #[test]
+fn sloppy_eval_updates_an_authoritative_global_property() -> TestResult {
+    expect_true(
+        r#"
+        Object.defineProperty(globalThis, "f", {
+            value: function () { return "old"; },
+            writable: true,
+            enumerable: true,
+            configurable: false
+        });
+        eval('{ function f() { return "updated"; } }');
+        typeof f === "function" && f() === "updated"
+        "#,
+    )
+}
+
+#[test]
 fn conditional_block_functions_update_only_when_evaluated() -> TestResult {
     expect_true(
         r#"
