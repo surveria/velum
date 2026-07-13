@@ -105,7 +105,7 @@ impl Context {
         })
     }
 
-    fn intl_locale(&mut self, value: Option<&Value>) -> Result<String> {
+    pub(super) fn intl_locale(&mut self, value: Option<&Value>) -> Result<String> {
         let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok("en-US".to_owned());
         };
@@ -177,7 +177,7 @@ impl Context {
             .map_err(|error| Error::exception(ErrorName::RangeError, error.to_string()))
     }
 
-    fn intl_option_string(
+    pub(super) fn intl_option_string(
         &mut self,
         options: &Value,
         name: &str,
@@ -198,7 +198,7 @@ impl Context {
     }
 }
 
-fn unicode_extension(locale: &str, key: &str) -> Option<String> {
+pub(super) fn unicode_extension(locale: &str, key: &str) -> Option<String> {
     let marker = format!("-u-{key}-");
     let lower = locale.to_ascii_lowercase();
     let start = lower.find(&marker)?.checked_add(marker.len())?;

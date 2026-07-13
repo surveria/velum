@@ -21,8 +21,10 @@ impl Context {
             NativeCallTarget::BooleanPrototypeValueOf => {
                 Some(self.eval_direct_boolean_prototype_value_of(this_value))
             }
-            NativeCallTarget::NumberPrototypeToLocaleString
-            | NativeCallTarget::NumberPrototypeToString => {
+            NativeCallTarget::NumberPrototypeToLocaleString => {
+                Some(self.eval_number_to_locale_string(RuntimeCallArgs::values(args), this_value))
+            }
+            NativeCallTarget::NumberPrototypeToString => {
                 Some(self.eval_direct_number_prototype_to_string(args, this_value))
             }
             NativeCallTarget::NumberPrototypeValueOf => {
@@ -63,8 +65,10 @@ impl Context {
             NativeFunctionKind::BigIntPrototypeValueOf => {
                 Some(self.eval_bigint_prototype_value_of(args, this_value))
             }
-            NativeFunctionKind::NumberPrototypeToLocaleString
-            | NativeFunctionKind::NumberPrototypeToString => {
+            NativeFunctionKind::NumberPrototypeToLocaleString => {
+                Some(self.eval_number_to_locale_string(args, this_value))
+            }
+            NativeFunctionKind::NumberPrototypeToString => {
                 Some(self.eval_number_prototype_to_string(args, this_value))
             }
             NativeFunctionKind::NumberPrototypeValueOf => {

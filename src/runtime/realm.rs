@@ -7,7 +7,7 @@ use crate::{
         Context, VmStorageKind,
         abstract_operations::SetFailureBehavior,
         binding::scope::BindingScope,
-        native::{NativeFunctionKind, NativeFunctionRegistry},
+        native::{IntlFunctionKind, NativeFunctionKind, NativeFunctionRegistry},
         storage_ledger::VmStorageLedger,
     },
     storage::atom::AtomId,
@@ -325,6 +325,9 @@ impl Context {
             }
             NativeFunctionKind::GeneratorFunction => self.generator_function_constructor_value()?,
             NativeFunctionKind::ErrorConstructor(name) => self.error_constructor_value(name)?,
+            NativeFunctionKind::Intl(IntlFunctionKind::NumberFormatConstructor) => {
+                self.intl_number_format_constructor_value()?
+            }
             _ => self
                 .builtin_value(kind.name())?
                 .ok_or_else(|| Error::runtime("default intrinsic constructor is unavailable"))?,

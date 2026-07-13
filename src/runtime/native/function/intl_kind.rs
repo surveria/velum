@@ -1,3 +1,5 @@
+use crate::value::ObjectId;
+
 pub(in crate::runtime) const INTL_NAME: &str = "Intl";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -11,6 +13,13 @@ pub(in crate::runtime) enum IntlFunctionKind {
     SupportedValuesOf,
     CollatorConstructor,
     NumberFormatConstructor,
+    NumberFormatFormatGetter,
+    NumberFormatBoundFormat(ObjectId),
+    NumberFormatFormatToParts,
+    NumberFormatResolvedOptions,
+    NumberFormatFormatRange,
+    NumberFormatFormatRangeToParts,
+    NumberFormatSupportedLocalesOf,
     PluralRulesConstructor,
     RelativeTimeFormatConstructor,
 }
@@ -27,8 +36,15 @@ impl IntlFunctionKind {
             Self::SupportedValuesOf => 6,
             Self::CollatorConstructor => 7,
             Self::NumberFormatConstructor => 8,
-            Self::PluralRulesConstructor => 9,
-            Self::RelativeTimeFormatConstructor => 10,
+            Self::NumberFormatFormatGetter => 9,
+            Self::NumberFormatBoundFormat(_) => 10,
+            Self::NumberFormatFormatToParts => 11,
+            Self::NumberFormatResolvedOptions => 12,
+            Self::NumberFormatFormatRange => 13,
+            Self::NumberFormatFormatRangeToParts => 14,
+            Self::NumberFormatSupportedLocalesOf => 15,
+            Self::PluralRulesConstructor => 16,
+            Self::RelativeTimeFormatConstructor => 17,
         }
     }
 
@@ -39,12 +55,18 @@ impl IntlFunctionKind {
             | Self::DateTimeFormatResolvedOptions
             | Self::CollatorConstructor
             | Self::NumberFormatConstructor
+            | Self::NumberFormatFormatGetter
+            | Self::NumberFormatResolvedOptions
             | Self::PluralRulesConstructor
             | Self::RelativeTimeFormatConstructor => 0.0,
             Self::DateTimeFormatFormat
             | Self::DateTimeFormatFormatToParts
             | Self::DurationFormatFormat
-            | Self::SupportedValuesOf => 1.0,
+            | Self::SupportedValuesOf
+            | Self::NumberFormatBoundFormat(_)
+            | Self::NumberFormatFormatToParts
+            | Self::NumberFormatSupportedLocalesOf => 1.0,
+            Self::NumberFormatFormatRange | Self::NumberFormatFormatRangeToParts => 2.0,
         }
     }
 
@@ -52,12 +74,19 @@ impl IntlFunctionKind {
         match self {
             Self::DateTimeFormatConstructor => "DateTimeFormat",
             Self::DateTimeFormatFormat | Self::DurationFormatFormat => "format",
-            Self::DateTimeFormatFormatToParts => "formatToParts",
-            Self::DateTimeFormatResolvedOptions => "resolvedOptions",
+            Self::DateTimeFormatFormatToParts | Self::NumberFormatFormatToParts => "formatToParts",
+            Self::DateTimeFormatResolvedOptions | Self::NumberFormatResolvedOptions => {
+                "resolvedOptions"
+            }
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
             Self::CollatorConstructor => "Collator",
             Self::NumberFormatConstructor => "NumberFormat",
+            Self::NumberFormatFormatGetter => "get format",
+            Self::NumberFormatBoundFormat(_) => "",
+            Self::NumberFormatFormatRange => "formatRange",
+            Self::NumberFormatFormatRangeToParts => "formatRangeToParts",
+            Self::NumberFormatSupportedLocalesOf => "supportedLocalesOf",
             Self::PluralRulesConstructor => "PluralRules",
             Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
         }
