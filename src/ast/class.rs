@@ -8,6 +8,7 @@ use super::{Expression, FunctionParam, ObjectPropertyKey, Statement};
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassLiteral {
     pub name: Option<StaticName>,
+    pub inner_name_binding: Option<StaticBinding>,
     pub heritage: Option<Expression>,
     pub constructor: ClassConstructor,
     pub members: Vec<ClassMember>,
@@ -19,6 +20,7 @@ pub struct ClassLiteral {
 /// its `this` value when the class definition is evaluated.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassStaticBlock {
+    pub source_order: usize,
     pub body: Rc<[Statement]>,
 }
 
@@ -36,6 +38,7 @@ pub enum ClassElementName {
 /// ordinary properties.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassField {
+    pub source_order: usize,
     pub key: ClassElementName,
     pub is_static: bool,
     pub name: Option<StaticName>,

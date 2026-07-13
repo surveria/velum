@@ -193,6 +193,8 @@ pub enum BytecodeForInTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClass {
     pub name: Option<StaticName>,
+    /// Immutable inner class-name binding initialized after heritage evaluation.
+    pub inner_name_binding: Option<BytecodeBinding>,
     /// When true the heritage value sits on the stack below computed keys.
     pub heritage: bool,
     pub constructor_id: StaticFunctionId,
@@ -200,9 +202,16 @@ pub struct BytecodeClass {
     pub members: Rc<[BytecodeClassMember]>,
     pub fields: Rc<[BytecodeClassField]>,
     pub static_blocks: Rc<[BytecodeBlock]>,
+    pub static_element_order: Rc<[BytecodeClassStaticElement]>,
     /// Declared `#name` identifiers in declaration order; class evaluation
     /// allocates one fresh runtime private name per entry.
     pub private_names: Rc<[StaticName]>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeClassStaticElement {
+    Field(usize),
+    Block(usize),
 }
 
 /// A compiled class field with a lazily evaluated initializer block.
@@ -721,6 +730,7 @@ pub enum BytecodeInstruction {
     ScopedBlock {
         block: BytecodeBlock,
         preserve_last: bool,
+        push_result: bool,
     },
     Jump(BytecodeAddress),
     JumpIfFalse(BytecodeAddress),

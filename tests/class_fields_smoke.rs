@@ -80,6 +80,23 @@ fn executes_class_static_blocks_once_with_scoped_bindings() -> TestResult {
 }
 
 #[test]
+fn interleaves_static_fields_and_blocks_in_source_order() -> TestResult {
+    ensure_string(
+        r#"
+        let sequence = "";
+        class Ordered {
+            static first = (sequence = sequence + "f1");
+            static { sequence = sequence + "b1"; }
+            static second = (sequence = sequence + "f2");
+            static { sequence = sequence + "b2"; }
+        }
+        sequence
+        "#,
+        "f1b1f2b2",
+    )
+}
+
+#[test]
 fn rejects_class_static_block_early_errors() -> TestResult {
     for source in [
         "class Sample { static { await; } }",

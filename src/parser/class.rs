@@ -81,6 +81,10 @@ impl Parser {
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
         let previous_strict = self.is_strict_mode();
         self.set_strict_mode(true);
+        let inner_name_binding = name
+            .clone()
+            .map(|name| self.static_binding(name))
+            .transpose()?;
         let heritage = if self.match_kind(&TokenKind::Extends) {
             Some(self.call()?)
         } else {
@@ -88,7 +92,7 @@ impl Parser {
         };
         self.push_class_private_scope();
         let result = self
-            .class_body_literal(name, heritage)
+            .class_body_literal(name, inner_name_binding, heritage)
             .and_then(|class| self.pop_class_private_scope().map(|()| class));
         self.set_strict_mode(previous_strict);
         result
@@ -97,6 +101,7 @@ impl Parser {
     fn class_body_literal(
         &mut self,
         name: Option<StaticName>,
+        inner_name_binding: Option<crate::syntax::StaticBinding>,
         heritage: Option<Expression>,
     ) -> Result<ClassLiteral> {
         self.consume(&TokenKind::LBrace, "expected '{' before class body")?;
@@ -128,6 +133,7 @@ impl Parser {
         };
         Ok(ClassLiteral {
             name,
+            inner_name_binding,
             heritage,
             constructor,
             members,
@@ -171,7 +177,7 @@ impl Parser {
     ) -> Result<()> {
         let member_offset = self.offset();
         if self.class_static_block_start() {
-            return self.class_static_block(static_blocks);
+            return self.class_static_block(member_offset, static_blocks);
         }
         let is_static = self.match_class_static_prefix();
         let function_kind = self.match_class_method_prefix();
@@ -265,7 +271,11 @@ impl Parser {
             && self.peek_kind_is(1, &TokenKind::LBrace)
     }
 
-    fn class_static_block(&mut self, static_blocks: &mut Vec<ClassStaticBlock>) -> Result<()> {
+    fn class_static_block(
+        &mut self,
+        source_order: usize,
+        static_blocks: &mut Vec<ClassStaticBlock>,
+    ) -> Result<()> {
         let static_token = self.advance_token("expected 'static' before class static block")?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
         let mut body = self.with_new_target_scope(|parser| {
@@ -295,7 +305,10 @@ impl Parser {
             ));
         }
         self.validate_static_block_declarations(&body)?;
-        static_blocks.push(ClassStaticBlock { body: body.into() });
+        static_blocks.push(ClassStaticBlock {
+            source_order,
+            body: body.into(),
+        });
         Ok(())
     }
 
@@ -338,6 +351,7 @@ impl Parser {
         };
         self.consume_statement_terminator("expected statement terminator after class field")?;
         fields.push(crate::ast::ClassField {
+            source_order: member_offset,
             key: Self::class_element_name(key),
             is_static,
             name: key_name,

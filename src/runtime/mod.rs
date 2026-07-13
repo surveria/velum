@@ -168,6 +168,7 @@ struct Function {
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
     class_private_slots: Option<Rc<[private::PrivateSlot]>>,
     private_environment: Option<Rc<private::PrivateEnvironment>>,
+    class_field_initializer_context: bool,
     private_slots: Vec<private::PrivateSlot>,
     params_remembered: std::cell::Cell<bool>,
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,

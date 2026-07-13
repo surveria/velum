@@ -78,6 +78,23 @@ impl PrivateEnvironment {
     pub(in crate::runtime) fn parent(&self) -> Option<Rc<Self>> {
         self.parent.clone()
     }
+
+    pub(in crate::runtime) fn visible_names(&self) -> Rc<[StaticName]> {
+        let mut names = self.names.to_vec();
+        let mut parent = self.parent.clone();
+        while let Some(environment) = parent {
+            for name in environment.names.iter() {
+                if !names
+                    .iter()
+                    .any(|candidate| candidate.as_str() == name.as_str())
+                {
+                    names.push(name.clone());
+                }
+            }
+            parent = environment.parent.clone();
+        }
+        names.into()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -273,6 +290,11 @@ impl Context {
         name: PrivateNameId,
         value: PrivateSlotValue,
     ) -> Result<()> {
+        if !self.semantic_is_extensible(receiver)?.unwrap_or(false) {
+            return Err(Error::type_error(
+                "private element receiver is not extensible",
+            ));
+        }
         match receiver {
             Value::Object(id) => {
                 self.objects

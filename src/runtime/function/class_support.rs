@@ -79,6 +79,18 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(in crate::runtime) fn current_class_field_initializer_context(&self) -> Result<bool> {
+        for frame in self.activation_frames.iter().rev() {
+            if let Some(context) = frame.class_field_initializer_context() {
+                return Ok(context);
+            }
+            if let Some(id) = frame.function_id() {
+                return Ok(self.function(id)?.class_field_initializer_context);
+            }
+        }
+        Ok(false)
+    }
+
     pub(super) fn normalize_derived_constructor_completion(
         &self,
         completion: Completion,
@@ -310,6 +322,7 @@ impl Context {
                 instance.clone(),
                 super_binding.clone(),
                 private_environment.clone(),
+                true,
             )?;
             let super_binding = self.current_super_frame();
             let previous_super_call_permission = super_binding

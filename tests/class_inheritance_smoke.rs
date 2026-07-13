@@ -225,6 +225,25 @@ fn non_constructor_heritage_throws_type_error() -> TestResult {
 }
 
 #[test]
+fn null_and_symbol_heritage_preserve_constructor_semantics() -> TestResult {
+    ensure_string(
+        r#"
+        class NullBase extends null {}
+        class SymbolBase extends Symbol {}
+        let rejected = false;
+        try {
+            new SymbolBase();
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        "" + (Object.getPrototypeOf(NullBase.prototype) === null) + ":"
+            + (Object.getPrototypeOf(NullBase) === Function.prototype) + ":" + rejected
+        "#,
+        "true:true:true",
+    )
+}
+
+#[test]
 fn super_outside_class_contexts_is_rejected() -> TestResult {
     let Err(error) = eval("function plain() { super(); }") else {
         return Err("expected super() outside classes to fail".into());

@@ -4,7 +4,7 @@ use crate::runtime::private::{PrivateSlot, PrivateSlotValue};
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey,
-        BytecodeClassMemberKind, BytecodeNewTargetMode,
+        BytecodeClassMemberKind, BytecodeClassStaticElement, BytecodeNewTargetMode,
     },
     error::{Error, Result},
     runtime::Context,
@@ -62,6 +62,13 @@ impl Context {
         let Value::Function(constructor_id) = &constructor else {
             return Err(Error::runtime("class constructor creation failed"));
         };
+        if let Some(binding) = &class.inner_name_binding {
+            self.eval_bytecode_declaration(
+                binding,
+                crate::syntax::DeclKind::Const,
+                Some(constructor.clone()),
+            )?;
+        }
         let Some(prototype_id) = self.function_constructor_prototype(*constructor_id)? else {
             return Err(Error::runtime("class prototype object is not available"));
         };
@@ -72,7 +79,9 @@ impl Context {
             self.objects
                 .set_prototype_value(prototype_id, &Value::Null)?;
         }
-        if let Some(heritage) = &heritage {
+        if let Some(heritage) = &heritage
+            && !matches!(heritage.constructor, Value::Undefined)
+        {
             self.set_function_static_parent(*constructor_id, heritage.constructor.clone())?;
         }
         self.set_function_super_binding(
@@ -101,14 +110,15 @@ impl Context {
         };
         self.install_class_members(class, computed_keys, &targets)?;
 
-        self.install_class_fields(
+        let static_fields =
+            self.install_class_fields(class, *constructor_id, &field_computed_keys)?;
+        self.evaluate_class_static_elements(
             class,
             &constructor,
             *constructor_id,
-            &field_computed_keys,
+            &static_fields,
             &static_super_binding,
         )?;
-        self.evaluate_class_static_blocks(class, &constructor, &static_super_binding)?;
 
         state.stack.push(constructor);
         state.pc = next;
@@ -180,37 +190,103 @@ impl Context {
         Ok(())
     }
 
-    fn evaluate_class_static_blocks(
-        &mut self,
-        class: &BytecodeClass,
-        constructor: &Value,
-        super_binding: &Rc<FunctionSuperBinding>,
-    ) -> Result<()> {
-        for block in class.static_blocks.iter() {
-            self.push_class_evaluation(
-                constructor.clone(),
-                super_binding.clone(),
-                self.current_private_environment(),
-            )?;
-            let completion = self.eval_bytecode_block(block);
-            self.pop_temporary_this()?;
-            completion?.into_result()?;
-        }
-        Ok(())
-    }
-
-    /// Resolves field keys once at class definition time, stores instance
-    /// fields on the constructor for construction-time initialization, and
-    /// evaluates static fields immediately with `this` bound to the
-    /// constructor.
-    fn install_class_fields(
+    fn evaluate_class_static_elements(
         &mut self,
         class: &BytecodeClass,
         constructor: &Value,
         constructor_id: FunctionId,
-        field_computed_keys: &[Value],
-        static_super_binding: &Rc<FunctionSuperBinding>,
+        static_fields: &[ResolvedClassField],
+        super_binding: &Rc<FunctionSuperBinding>,
     ) -> Result<()> {
+        for element in class.static_element_order.iter() {
+            match element {
+                BytecodeClassStaticElement::Field(index) => {
+                    let field = static_fields
+                        .get(*index)
+                        .ok_or_else(|| Error::runtime("static class field disappeared"))?;
+                    self.evaluate_class_static_field(
+                        constructor,
+                        constructor_id,
+                        field,
+                        super_binding,
+                    )?;
+                }
+                BytecodeClassStaticElement::Block(index) => {
+                    let block = class
+                        .static_blocks
+                        .get(*index)
+                        .ok_or_else(|| Error::runtime("class static block disappeared"))?;
+                    self.push_class_evaluation(
+                        constructor.clone(),
+                        super_binding.clone(),
+                        self.current_private_environment(),
+                        false,
+                    )?;
+                    let completion = self.eval_bytecode_block(block);
+                    self.pop_temporary_this()?;
+                    completion?.into_result()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn evaluate_class_static_field(
+        &mut self,
+        constructor: &Value,
+        constructor_id: FunctionId,
+        field: &ResolvedClassField,
+        super_binding: &Rc<FunctionSuperBinding>,
+    ) -> Result<()> {
+        self.push_class_evaluation(
+            constructor.clone(),
+            super_binding.clone(),
+            self.current_private_environment(),
+            true,
+        )?;
+        let initializer = match field {
+            ResolvedClassField::Public { initializer, .. }
+            | ResolvedClassField::Private { initializer, .. } => initializer,
+        };
+        let value = initializer
+            .as_ref()
+            .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
+                self.eval_bytecode_block(initializer)
+            });
+        self.pop_temporary_this()?;
+        let value = value?.into_result()?;
+        match field {
+            ResolvedClassField::Public { key, name, .. } => {
+                let update = DataPropertyUpdate::new(
+                    Some(value),
+                    Some(PropertyWritable::Yes),
+                    Some(PropertyEnumerable::Yes),
+                    Some(PropertyConfigurable::Yes),
+                );
+                self.define_function_property_key(
+                    constructor_id,
+                    name,
+                    *key,
+                    PropertyUpdate::Data(update),
+                )
+            }
+            ResolvedClassField::Private { name, .. } => self.add_private_slot_to_value(
+                constructor,
+                name.clone(),
+                PrivateSlotValue::Field(value),
+            ),
+        }
+    }
+
+    /// Resolves field keys once at class definition time, stores instance
+    /// fields on the constructor for construction-time initialization, and
+    /// returns static fields for source-ordered evaluation with static blocks.
+    fn install_class_fields(
+        &mut self,
+        class: &BytecodeClass,
+        constructor_id: FunctionId,
+        field_computed_keys: &[Value],
+    ) -> Result<Vec<ResolvedClassField>> {
         let mut computed = field_computed_keys.iter();
         let mut instance_fields = Vec::new();
         let mut static_fields = Vec::new();
@@ -247,49 +323,7 @@ impl Context {
         if !instance_fields.is_empty() {
             self.set_function_class_fields(constructor_id, instance_fields.into())?;
         }
-        for field in static_fields {
-            self.push_class_evaluation(
-                constructor.clone(),
-                static_super_binding.clone(),
-                self.current_private_environment(),
-            )?;
-            let initializer = match &field {
-                ResolvedClassField::Public { initializer, .. }
-                | ResolvedClassField::Private { initializer, .. } => initializer,
-            };
-            let value = initializer.as_ref().map_or(
-                Ok(crate::runtime::control::Completion::Normal(
-                    Value::Undefined,
-                )),
-                |initializer| self.eval_bytecode_block(initializer),
-            );
-            self.pop_temporary_this()?;
-            let value = value?.into_result()?;
-            match field {
-                ResolvedClassField::Public { key, name, .. } => {
-                    let update = DataPropertyUpdate::new(
-                        Some(value),
-                        Some(PropertyWritable::Yes),
-                        Some(PropertyEnumerable::Yes),
-                        Some(PropertyConfigurable::Yes),
-                    );
-                    self.define_function_property_key(
-                        constructor_id,
-                        &name,
-                        key,
-                        PropertyUpdate::Data(update),
-                    )?;
-                }
-                ResolvedClassField::Private { name, .. } => {
-                    self.add_private_slot_to_value(
-                        constructor,
-                        name,
-                        PrivateSlotValue::Field(value),
-                    )?;
-                }
-            }
-        }
-        Ok(())
+        Ok(static_fields)
     }
 
     fn install_class_member(

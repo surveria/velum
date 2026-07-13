@@ -157,8 +157,14 @@ impl Context {
         value: Value,
         super_binding: std::rc::Rc<FunctionSuperBinding>,
         private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
+        class_field_initializer: bool,
     ) -> Result<()> {
-        let frame = ActivationFrame::temporary_this(value, super_binding, private_environment);
+        let frame = ActivationFrame::temporary_this(
+            value,
+            super_binding,
+            private_environment,
+            class_field_initializer,
+        );
         self.activate_frame_storage(frame.storage_footprint()?)?;
         self.activation_frames.push(frame);
         Ok(())

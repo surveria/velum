@@ -12,8 +12,10 @@ use crate::{
     parser::{self, ModuleSyntax},
     runtime::limits::RuntimeLimits,
     source::SourceId,
+    syntax::StaticName,
 };
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
@@ -26,13 +28,16 @@ pub struct CompiledScript {
     top_level_await: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum CompileMode {
     Script,
     Module,
     Eval {
         strict: bool,
         super_context: EvalSuperContext,
+        allow_new_target: bool,
+        reject_arguments: bool,
+        private_names: Rc<[StaticName]>,
     },
 }
 
@@ -53,7 +58,14 @@ type CompiledModuleParts = (
 impl CompileMode {
     const SCRIPT: Self = Self::Script;
 
-    const fn eval(strict: bool, allow_super_property: bool, allow_super_call: bool) -> Self {
+    fn eval(
+        strict: bool,
+        allow_super_property: bool,
+        allow_super_call: bool,
+        allow_new_target: bool,
+        reject_arguments: bool,
+        private_names: Rc<[StaticName]>,
+    ) -> Self {
         let super_context = match (allow_super_property, allow_super_call) {
             (_, true) => EvalSuperContext::PropertyAndCall,
             (true, false) => EvalSuperContext::Property,
@@ -62,21 +74,35 @@ impl CompileMode {
         Self::Eval {
             strict,
             super_context,
+            allow_new_target,
+            reject_arguments,
+            private_names,
         }
     }
 
-    const fn strict(self) -> bool {
+    const fn strict(&self) -> bool {
         match self {
             Self::Script => false,
             Self::Module => true,
-            Self::Eval { strict, .. } => strict,
+            Self::Eval { strict, .. } => *strict,
         }
     }
 
-    const fn eval_super_context(self) -> Option<EvalSuperContext> {
+    fn eval_context(&self) -> Option<(EvalSuperContext, bool, bool, &[StaticName])> {
         match self {
             Self::Script | Self::Module => None,
-            Self::Eval { super_context, .. } => Some(super_context),
+            Self::Eval {
+                super_context,
+                allow_new_target,
+                reject_arguments,
+                private_names,
+                ..
+            } => Some((
+                *super_context,
+                *allow_new_target,
+                *reject_arguments,
+                private_names,
+            )),
         }
     }
 }
@@ -100,12 +126,22 @@ impl CompiledScript {
         strict_mode: bool,
         allow_super_property: bool,
         allow_super_call: bool,
+        allow_new_target: bool,
+        reject_arguments: bool,
+        private_names: Rc<[StaticName]>,
     ) -> Result<Self> {
         Self::compile_with_name_and_mode(
             None,
             source,
             limits,
-            CompileMode::eval(strict_mode, allow_super_property, allow_super_call),
+            CompileMode::eval(
+                strict_mode,
+                allow_super_property,
+                allow_super_call,
+                allow_new_target,
+                reject_arguments,
+                private_names,
+            ),
         )
     }
 
@@ -214,11 +250,13 @@ impl CompiledScript {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
-        let allow_html_comments = !matches!(mode, CompileMode::Module);
+        let allow_html_comments = !matches!(&mode, CompileMode::Module);
         let tokens = lexer::TokenStream::new(source, source_id, allow_html_comments);
-        let parsed = if matches!(mode, CompileMode::Module) {
+        let parsed = if matches!(&mode, CompileMode::Module) {
             parser::parse_module_with_usage(tokens, limits)
-        } else if let Some(super_context) = mode.eval_super_context() {
+        } else if let Some((super_context, allow_new_target, reject_arguments, private_names)) =
+            mode.eval_context()
+        {
             let allow_super_property = matches!(
                 super_context,
                 EvalSuperContext::Property | EvalSuperContext::PropertyAndCall
@@ -230,6 +268,9 @@ impl CompiledScript {
                 mode.strict(),
                 allow_super_property,
                 allow_super_call,
+                allow_new_target,
+                reject_arguments,
+                private_names,
             )
         } else if mode.strict() {
             parser::parse_with_usage_in_mode(tokens, limits, true)

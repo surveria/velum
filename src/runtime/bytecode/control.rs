@@ -148,7 +148,14 @@ impl Context {
             BytecodeInstruction::ScopedBlock {
                 block,
                 preserve_last,
-            } => self.eval_bytecode_scoped_block_instruction(state, block, *preserve_last, next),
+                push_result,
+            } => self.eval_bytecode_scoped_block_instruction(
+                state,
+                block,
+                *preserve_last,
+                *push_result,
+                next,
+            ),
             BytecodeInstruction::Jump(target) => {
                 state.pc = *target;
                 Ok(None)
@@ -200,6 +207,7 @@ impl Context {
         state: &mut BytecodeState,
         block: &BytecodeBlock,
         preserve_last: bool,
+        push_result: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let completion = if let Some(completion) = self.take_resumed_bytecode_child(block)? {
@@ -225,6 +233,11 @@ impl Context {
         };
         match self.begin_dispose_binding_scope(removed, completion.clone())? {
             ScopeDisposal::Complete(completion) => {
+                if push_result && let Completion::Normal(value) = completion {
+                    state.stack.push(value);
+                    state.pc = next;
+                    return Ok(None);
+                }
                 if preserve_last && matches!(completion, Completion::Normal(_)) {
                     state.pc = next;
                     return Ok(None);
@@ -235,7 +248,10 @@ impl Context {
                 state.pc = next;
                 state.store_scope_disposal(
                     completion,
-                    ScopeDisposalResumeBehavior::Continue { preserve_last },
+                    ScopeDisposalResumeBehavior::Continue {
+                        preserve_last,
+                        push_result,
+                    },
                 )?;
                 state.mark_await_suspended();
                 Ok(Some(Completion::Suspend(Suspension::Await(awaited))))
@@ -421,6 +437,7 @@ impl Context {
                                 original,
                                 ScopeDisposalResumeBehavior::Continue {
                                     preserve_last: false,
+                                    push_result: false,
                                 },
                             )?;
                             state.mark_await_suspended();

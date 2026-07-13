@@ -329,3 +329,49 @@ fn private_access_keeps_proxy_identity_opaque() -> TestResult {
         "true:false",
     )
 }
+
+#[test]
+fn private_elements_reject_non_extensible_receivers() -> TestResult {
+    ensure_string(
+        r#"
+        class Base {
+            constructor(value) { return value; }
+        }
+        class Derived extends Base {
+            #value;
+        }
+        let rejected = false;
+        try {
+            new Derived(Object.preventExtensions({}));
+        } catch (error) {
+            rejected = error.constructor === TypeError;
+        }
+        "" + rejected
+        "#,
+        "true",
+    )
+}
+
+#[test]
+fn direct_eval_in_class_fields_preserves_initializer_context() -> TestResult {
+    ensure_string(
+        r#"
+        class Box {
+            #value = 44;
+            captured = eval("this.#value");
+            target = eval("new.target");
+            rejected = () => eval("arguments");
+            read() { return eval("this.#value"); }
+        }
+        const box = new Box();
+        let rejected = false;
+        try {
+            box.rejected();
+        } catch (error) {
+            rejected = error.constructor === SyntaxError;
+        }
+        box.captured + ":" + (box.target === undefined) + ":" + box.read() + ":" + rejected
+        "#,
+        "44:true:44:true",
+    )
+}

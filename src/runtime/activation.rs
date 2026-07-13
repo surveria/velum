@@ -33,6 +33,7 @@ pub(in crate::runtime) enum ActivationFrame {
         new_target: Value,
         super_binding: Rc<FunctionSuperBinding>,
         private_environment: Option<Rc<PrivateEnvironment>>,
+        class_field_initializer: bool,
         continuation: Option<BytecodeContinuationFrame>,
     },
     EvalBoundary {
@@ -126,12 +127,14 @@ impl ActivationFrame {
         this_value: Value,
         super_binding: Rc<FunctionSuperBinding>,
         private_environment: Option<Rc<PrivateEnvironment>>,
+        class_field_initializer: bool,
     ) -> Self {
         Self::TemporaryThis {
             this_value,
             new_target: Value::Undefined,
             super_binding,
             private_environment,
+            class_field_initializer,
             continuation: None,
         }
     }
@@ -174,6 +177,17 @@ impl ActivationFrame {
                 private_environment,
                 ..
             } => private_environment.as_ref(),
+        }
+    }
+
+    pub(in crate::runtime) const fn class_field_initializer_context(&self) -> Option<bool> {
+        match self {
+            Self::TemporaryThis {
+                class_field_initializer,
+                ..
+            } => Some(*class_field_initializer),
+            Self::EvalBoundary { .. } => Some(false),
+            Self::Call { .. } | Self::Bytecode { .. } => None,
         }
     }
 

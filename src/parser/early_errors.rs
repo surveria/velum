@@ -9,6 +9,10 @@ use crate::{
 use super::Parser;
 
 impl Parser {
+    pub(super) fn validate_script_declarations(&self, statements: &[Statement]) -> Result<()> {
+        self.validate_lexical_var_declarations(statements, false, false)
+    }
+
     pub(super) fn validate_module_declarations(&self, statements: &[Statement]) -> Result<()> {
         self.validate_lexical_var_declarations(statements, true, false)
     }

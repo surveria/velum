@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     error::Result,
     runtime::{Context, call::RuntimeCallArgs, control::Completion},
@@ -59,12 +61,22 @@ impl Context {
         let allow_super_call = super_binding.as_ref().is_some_and(|binding| {
             binding.constructor.is_some() && binding.allow_direct_eval_super_call.get()
         });
+        let class_field_initializer = direct && self.current_class_field_initializer_context()?;
+        let private_names: Rc<[crate::syntax::StaticName]> = if direct {
+            self.current_private_environment()
+                .map_or_else(|| Rc::from([]), |environment| environment.visible_names())
+        } else {
+            Rc::from([])
+        };
         let script = crate::compiled_script::CompiledScript::compile_eval(
             source,
             self.limits.clone(),
             strict_mode,
             allow_super_property,
             allow_super_call,
+            class_field_initializer,
+            class_field_initializer,
+            private_names,
         )
         .map_err(dynamic_compilation_error)?;
         self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;

@@ -77,9 +77,19 @@ pub fn parse_eval_with_usage_in_context(
     strict_mode: bool,
     allow_super_property: bool,
     allow_super_call: bool,
+    allow_new_target: bool,
+    reject_arguments: bool,
+    private_names: &[StaticName],
 ) -> Result<ParsedProgram> {
     let mut parser = Parser::new(tokens, limits, strict_mode);
     parser.super_context = SuperContext::new(allow_super_property, allow_super_call);
+    parser.new_target_scope_depth = usize::from(allow_new_target);
+    parser.reject_all_arguments = reject_arguments;
+    if !private_names.is_empty() {
+        parser
+            .class_private_scopes
+            .push(ClassPrivateScope::external(private_names));
+    }
     parser.parse()
 }
 
@@ -128,6 +138,7 @@ struct Parser {
     yield_expression_context: YieldExpressionContext,
     yield_identifier_context: YieldIdentifierContext,
     class_arguments: ClassArgumentsContext,
+    reject_all_arguments: bool,
     /// Private-name scopes for the class bodies currently being parsed.
     /// Unlike other contexts this stack must stay visible across nested
     /// function boundaries, so function entry never resets it.
@@ -187,6 +198,7 @@ impl Parser {
             yield_expression_context: YieldExpressionContext::Forbidden,
             yield_identifier_context: YieldIdentifierContext::Allowed,
             class_arguments: ClassArgumentsContext::Allowed,
+            reject_all_arguments: false,
             class_private_scopes: Vec::new(),
             source_goal: SourceGoal::Script,
         }
@@ -230,6 +242,8 @@ impl Parser {
         if let Some(module) = module.as_ref() {
             self.validate_module_declarations(&statements)?;
             Self::validate_module_syntax(module, &statements)?;
+        } else {
+            self.validate_script_declarations(&statements)?;
         }
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),

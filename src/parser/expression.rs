@@ -503,7 +503,9 @@ impl Parser {
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Import => self.dynamic_import(token_span)?,
             TokenKind::Identifier(name) => {
-                if self.class_arguments_are_restricted() && name.as_ref() == "arguments" {
+                if (self.class_arguments_are_restricted() || self.reject_all_arguments)
+                    && name.as_ref() == "arguments"
+                {
                     return Err(Error::parse_at(
                         "arguments is not allowed in a class field or static block",
                         token_span,

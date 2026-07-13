@@ -41,7 +41,10 @@ struct ScopeDisposalResume {
 #[derive(Clone, Copy, Debug)]
 pub(super) enum ScopeDisposalResumeBehavior {
     Complete,
-    Continue { preserve_last: bool },
+    Continue {
+        preserve_last: bool,
+        push_result: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -237,17 +240,20 @@ impl BytecodeState {
             Completion::Throw(reason) => Some(Completion::Throw(reason)),
             Completion::Normal(_) => match disposal.behavior {
                 ScopeDisposalResumeBehavior::Complete => Some(disposal.completion),
-                ScopeDisposalResumeBehavior::Continue { preserve_last } => {
-                    match disposal.completion {
-                        Completion::Normal(value) => {
-                            if !preserve_last {
-                                self.last = value;
-                            }
-                            None
+                ScopeDisposalResumeBehavior::Continue {
+                    preserve_last,
+                    push_result,
+                } => match disposal.completion {
+                    Completion::Normal(value) => {
+                        if push_result {
+                            self.stack.push(value);
+                        } else if !preserve_last {
+                            self.last = value;
                         }
-                        completion => Some(completion),
+                        None
                     }
-                }
+                    completion => Some(completion),
+                },
             },
             completion => return completion.into_result().map(|_| ()),
         };

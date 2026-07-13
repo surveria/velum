@@ -199,6 +199,7 @@ impl Context {
         let script_or_module_name = self.active_script_or_module_name();
         let new_target =
             FunctionNewTarget::from_mode(init.new_target_mode, self.current_new_target()?);
+        let class_field_initializer_context = self.current_class_field_initializer_context()?;
         let mut function_record = super::Function {
             realm: self.active_realm_index(),
             script_or_module_name,
@@ -224,6 +225,7 @@ impl Context {
             class_fields: None,
             class_private_slots: None,
             private_environment: self.current_private_environment(),
+            class_field_initializer_context,
             private_slots: Vec::new(),
             params_remembered: std::cell::Cell::new(false),
             scope_template,

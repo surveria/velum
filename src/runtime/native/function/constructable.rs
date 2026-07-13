@@ -103,6 +103,7 @@ impl NativeFunctionKind {
                 | Self::String
                 | Self::Map
                 | Self::Set
+                | Self::Symbol
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::TypedArrayIntrinsic
