@@ -289,6 +289,65 @@ fn propagates_re_exported_import_bindings_without_ambiguity() -> TestResult {
 }
 
 #[test]
+fn keeps_transitive_indirect_exports_live() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        (
+            "base.js",
+            "export let value = 1; export function increment() { value += 1; }".to_owned(),
+        ),
+        (
+            "first.js",
+            "export { value, increment } from 'base.js';".to_owned(),
+        ),
+        (
+            "second.js",
+            "export { value, increment } from 'first.js';".to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { value, increment } from 'second.js'; increment(); increment(); value;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(3.0),
+        "transitive indirect export did not retain the terminal live binding",
+    )
+}
+
+#[test]
+fn preserves_tdz_through_cyclic_import_aliases() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        (
+            "a.js",
+            "import { value } from 'b.js'; export const mirror = value;".to_owned(),
+        ),
+        (
+            "b.js",
+            "import { mirror } from 'a.js'; export const value = mirror;".to_owned(),
+        ),
+    ]);
+    let result = context.eval_module_named(
+        "main.js",
+        "import { mirror } from 'a.js'; mirror;",
+        &mut loader,
+    );
+    let Err(error) = result else {
+        return Err("cyclic module import read must preserve the temporal dead zone".into());
+    };
+
+    ensure(
+        error.javascript_error_name() == Some("ReferenceError"),
+        "cyclic module temporal-dead-zone read returned the wrong error",
+    )
+}
+
+#[test]
 fn omits_ambiguous_star_names_but_rejects_indirect_exports() -> TestResult {
     let sources = [
         (
