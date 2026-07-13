@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T074844Z.md`
-- Task: PR #570: runtime: cache compiled RegExp programs
-- Performance: 5.75x (4/5 >1.00x) (from `rsqjs-test-report-20260713T074844Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T074844Z.md`)
+- `rsqjs-test-report-20260713T082206Z.md`
+- Task: PR #572: runtime: batch TypedArray backing-store access
+- Performance: 5.98x (4/5 >1.00x) (from `rsqjs-test-report-20260713T082206Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T082206Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T074844Z.md`)
+- Full Test262: 95268 passed / 7310 failed (92.87%) (from `rsqjs-test-report-20260713T082206Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -530,3 +530,4 @@ Latest report:
 | `20260713T065535Z` `cb6ae7f` PR #568: runtime: index canonical atom storage | 5.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
 | `20260713T071424Z` `5c6b95b` PR #569: runtime: bucket transient roots by scope | 5.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
 | `20260713T074844Z` `d24ef43` PR #570: runtime: cache compiled RegExp programs | 5.75x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
+| `20260713T082206Z` `7e8e68e` PR #572: runtime: batch TypedArray backing-store access | 5.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 95268 passed / 7310 failed (92.87%) |
