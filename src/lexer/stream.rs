@@ -51,7 +51,7 @@ impl TokenStream {
             Self::invalidate_conflicting_slash(&mut self.state, index, requested_goal);
         while self.state.tokens.len() <= index {
             if Self::has_terminal_error(&self.state) {
-                return self.state.tokens.last().map(|entry| &entry.token);
+                return None;
             }
             let goal = requested_goal
                 .filter(|_| self.state.tokens.len() == index)
