@@ -252,7 +252,8 @@ impl Parser {
     }
 
     fn class_static_block_start(&mut self) -> bool {
-        matches!(self.peek_kind(0), Some(TokenKind::Identifier(name)) if name == CLASS_STATIC_KEYWORD)
+        self.peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(CLASS_STATIC_KEYWORD))
             && self.peek_kind_is(1, &TokenKind::LBrace)
     }
 
@@ -462,9 +463,10 @@ impl Parser {
 
     /// Consumes a `static` member prefix when it is not itself a member name.
     fn match_class_static_prefix(&mut self) -> bool {
-        let is_prefix = self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(name) if name == CLASS_STATIC_KEYWORD)
-        }) && !self.peek_kind_is(1, &TokenKind::LParen)
+        let is_prefix = self
+            .peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(CLASS_STATIC_KEYWORD))
+            && !self.peek_kind_is(1, &TokenKind::LParen)
             && !self.peek_kind_is(1, &TokenKind::Equal)
             && !self.peek_kind_is(1, &TokenKind::Semicolon)
             && !self.peek_kind_is(1, &TokenKind::RBrace);
@@ -473,14 +475,14 @@ impl Parser {
 
     /// Consumes a `get`/`set` accessor prefix when it precedes a member name.
     fn match_class_accessor_prefix(&mut self) -> Option<ClassMemberKind> {
-        let kind = self.peek().and_then(|token| match &token.kind {
-            TokenKind::Identifier(name) if name == CLASS_GETTER_KEYWORD => {
+        let kind = self.peek().and_then(|token| {
+            if token.is_unescaped_identifier_named(CLASS_GETTER_KEYWORD) {
                 Some(ClassMemberKind::Getter)
-            }
-            TokenKind::Identifier(name) if name == CLASS_SETTER_KEYWORD => {
+            } else if token.is_unescaped_identifier_named(CLASS_SETTER_KEYWORD) {
                 Some(ClassMemberKind::Setter)
+            } else {
+                None
             }
-            _ => None,
         })?;
         if self.peek_kind_is(1, &TokenKind::LParen)
             || self.peek_kind_is(1, &TokenKind::Equal)
@@ -498,9 +500,10 @@ impl Parser {
     /// Consumes the decorators auto-accessor prefix while lowering the
     /// element through the existing field representation.
     fn match_class_auto_accessor_prefix(&mut self) -> bool {
-        let is_prefix = self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(name) if name == CLASS_AUTO_ACCESSOR_KEYWORD)
-        }) && !self.peek_has_line_terminator_before(1)
+        let is_prefix = self
+            .peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(CLASS_AUTO_ACCESSOR_KEYWORD))
+            && !self.peek_has_line_terminator_before(1)
             && !self.peek_kind_is(1, &TokenKind::LParen)
             && !self.peek_kind_is(1, &TokenKind::Equal)
             && !self.peek_kind_is(1, &TokenKind::Semicolon)

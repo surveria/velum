@@ -501,7 +501,11 @@ impl Parser {
             .then_some(LexicalGoal::Div);
         self.tokens
             .get_with_goal(self.cursor, goal)
-            .is_some_and(|token| token_kind_eq(&token.kind, expected))
+            .is_some_and(|token| {
+                token_kind_eq(&token.kind, expected)
+                    && (!token.identifier_escaped
+                        || property_name::keyword_property_name(expected).is_none())
+            })
     }
 
     pub(super) fn advance(&mut self) -> Option<Token> {

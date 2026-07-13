@@ -40,9 +40,8 @@ impl Parser {
     }
 
     fn next_is_yield_identifier(&mut self) -> bool {
-        self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
-        })
+        self.peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(super::YIELD_IDENTIFIER_NAME))
     }
 
     fn yield_expression(&mut self) -> Result<Expression> {

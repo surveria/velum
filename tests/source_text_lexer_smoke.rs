@@ -85,6 +85,45 @@ holder.class + holder.import + holder.with + holder['export']
 }
 
 #[test]
+fn escaped_reserved_words_are_identifier_names_but_not_keywords() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+let holder = { \u0069f: 20, cl\u0061ss: 22 };
+holder.\u0069f + holder.cl\u0061ss
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    for source in [r"\u0069f (true) {}", r"\u0074rue", r"\u0066unction() {}"] {
+        if context.eval(source).is_ok() {
+            return Err(format!("escaped reserved word unexpectedly parsed: {source}").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn escaped_contextual_words_do_not_activate_contextual_grammar() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    for source in [
+        r"function f() { return new.t\u0061rget; }",
+        r"function* f() { y\u0069eld 42; }",
+        r"class C { st\u0061tic {} }",
+        r"({ g\u0065t value() { return 1; } })",
+    ] {
+        if context.eval(source).is_ok() {
+            return Err(format!("escaped contextual word unexpectedly parsed: {source}").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn escaped_async_is_not_contextual_async_keyword() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

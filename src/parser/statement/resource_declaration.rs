@@ -34,10 +34,8 @@ impl Parser {
     }
 
     fn contextual_using_at(&mut self, offset: usize) -> bool {
-        self.peek_token(offset).is_some_and(|token| {
-            !token.identifier_escaped
-                && matches!(&token.kind, TokenKind::Identifier(name) if name == USING_IDENTIFIER_NAME)
-        })
+        self.peek_token(offset)
+            .is_some_and(|token| token.is_unescaped_identifier_named(USING_IDENTIFIER_NAME))
     }
 
     pub(super) fn consume_contextual_using(&mut self) -> Result<()> {
