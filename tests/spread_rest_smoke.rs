@@ -80,6 +80,10 @@ fn rejects_malformed_rest_parameters() -> TestResult {
         "rest parameter cannot have a default value",
     )?;
     ensure_error_contains(
+        "function bad(...r,) {}",
+        "rest parameter must be the last parameter",
+    )?;
+    ensure_error_contains(
         "var o = { set v(...r) {} };",
         "setter parameter cannot be a rest parameter",
     )
@@ -95,6 +99,22 @@ fn spreads_arguments_into_calls() -> TestResult {
         join(...[1, 2], 3, ...[4]) + ":" + Math.max(...[3, 9, 4])
         "#,
         "1234:9",
+    )
+}
+
+#[test]
+fn accepts_trailing_commas_after_spread_arguments() -> TestResult {
+    ensure_string(
+        r#"
+        function collect() {
+            return Array.from(arguments).join(":");
+        }
+        const target = {
+            collect() { return Array.from(arguments).join(":"); }
+        };
+        collect(1, ...[2, 3],) + ";" + target.collect(...[4, 5],)
+        "#,
+        "1:2:3;4:5",
     )
 }
 
