@@ -497,6 +497,9 @@ impl Context {
         if let Some(result) = self.eval_buffer_memory_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_error_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         match kind {
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::AsyncGeneratorFunction => {
@@ -506,10 +509,6 @@ impl Context {
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
             NativeFunctionKind::ShadowRealm(kind) => self.eval_shadow_realm(kind, args, this_value),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
-            NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
-            NativeFunctionKind::ErrorPrototypeToString => {
-                self.eval_error_prototype_to_string(args, this_value)
-            }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::GeneratorFunction => self.eval_generator_function_constructor(args),
             NativeFunctionKind::FunctionPrototypeBind => {

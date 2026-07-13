@@ -28,7 +28,6 @@ const ERROR_MESSAGE_PROPERTY: &str = "message";
 const ERROR_NAME_PROPERTY: &str = "name";
 const ERROR_ERRORS_PROPERTY: &str = "errors";
 const ERROR_CAUSE_PROPERTY: &str = "cause";
-const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const PRINT_NAME: &str = "print";
 
 impl Context {
@@ -315,7 +314,7 @@ impl Context {
             function_name,
         )?;
         if matches!(name, ErrorName::Base) {
-            self.install_error_prototype_methods(prototype_id)?;
+            self.install_error_surface(id, prototype_id)?;
         }
         self.insert_global_builtin(name.as_str(), constructor.clone())?;
         Ok(constructor)
@@ -444,16 +443,6 @@ impl Context {
             message_value,
         )?;
         Ok(())
-    }
-
-    fn install_error_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        let to_string = self
-            .create_native_function(NativeFunctionKind::ErrorPrototypeToString, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ERROR_PROTOTYPE_TO_STRING_NAME,
-            to_string,
-        )
     }
 
     pub(in crate::runtime) fn create_native_function(
@@ -736,9 +725,9 @@ impl Context {
         &mut self,
         this_value: &Value,
     ) -> Result<Value> {
-        if matches!(this_value, Value::Undefined | Value::Null) {
+        if self.semantic_object_ref(this_value)?.is_none() {
             return Err(Error::type_error(
-                "Error.prototype.toString receiver is nullish",
+                "Error.prototype.toString receiver must be an object",
             ));
         }
         let name = self.error_to_string_property(this_value, ERROR_NAME_PROPERTY, "Error")?;

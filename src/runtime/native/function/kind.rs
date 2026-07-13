@@ -44,6 +44,12 @@ const EVAL_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const EVAL_NAME: &str = "eval";
 const ERROR_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
+const ERROR_IS_ERROR_LENGTH: f64 = 1.0;
+const ERROR_IS_ERROR_NAME: &str = "isError";
+const ERROR_STACK_GETTER_LENGTH: f64 = 0.0;
+const ERROR_STACK_GETTER_NAME: &str = "get stack";
+const ERROR_STACK_SETTER_LENGTH: f64 = 1.0;
+const ERROR_STACK_SETTER_NAME: &str = "set stack";
 const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_NAME: &str = "Function";
 const GENERATOR_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
@@ -315,7 +321,10 @@ pub(in crate::runtime) enum NativeFunctionKind {
     IteratorSelf,
     Eval,
     ErrorConstructor(ErrorName),
+    ErrorIsError,
     ErrorPrototypeToString,
+    ErrorStackGetter,
+    ErrorStackSetter,
     Function,
     GeneratorFunction,
     FunctionPrototypeBind,
