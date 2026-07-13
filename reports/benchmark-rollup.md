@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T235715Z.md`
-- Task: PR #546: runtime: establish Temporal Duration foundation
-- Performance: 6.17x (4/5 >1.00x) (from `rsqjs-test-report-20260712T235715Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T235715Z.md`)
+- `rsqjs-test-report-20260713T004201Z.md`
+- Task: PR #547: runtime: complete Temporal PlainDate semantics
+- Performance: 6.86x (4/5 >1.00x) (from `rsqjs-test-report-20260713T004201Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T004201Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 83663 passed / 18915 failed (81.56%) (from `rsqjs-test-report-20260712T235715Z.md`)
+- Full Test262: 85523 passed / 17055 failed (83.37%) (from `rsqjs-test-report-20260713T004201Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -512,3 +512,4 @@ Latest report:
 | `20260712T223836Z` `cb718a5` PR #541: parser: restore identifier and ASI semantics | 6.01x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81455 passed / 21123 failed (79.41%) |
 | `20260712T225435Z` `f02d675` PR #543: runtime: complete String match and search protocol residuals | 6.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81505 passed / 21073 failed (79.46%) |
 | `20260712T235715Z` `3a862c2` PR #546: runtime: establish Temporal Duration foundation | 6.17x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 83663 passed / 18915 failed (81.56%) |
+| `20260713T004201Z` `58dd2b6` PR #547: runtime: complete Temporal PlainDate semantics | 6.86x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 85523 passed / 17055 failed (83.37%) |
