@@ -67,10 +67,7 @@ impl Context {
         original: &Value,
         length: usize,
     ) -> Result<Value> {
-        let is_array = match original {
-            Value::Object(id) => self.objects.array_len_if_array(*id)?.is_some(),
-            _ => false,
-        };
+        let is_array = self.semantic_is_array(original)?;
         if !is_array {
             return self.create_intrinsic_array_with_length(length);
         }
@@ -151,10 +148,7 @@ impl Context {
         if !matches!(spreadable, Value::Undefined) {
             return Ok(to_boolean(&spreadable));
         }
-        let Value::Object(id) = value else {
-            return Ok(false);
-        };
-        Ok(self.objects.array_len_if_array(*id)?.is_some())
+        self.semantic_is_array(value)
     }
 
     pub(super) fn generic_array_push(

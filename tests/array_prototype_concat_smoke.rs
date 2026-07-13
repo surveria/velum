@@ -162,6 +162,38 @@ fn honors_concat_spreadability_and_sparse_array_like_values() -> TestResult {
 }
 
 #[test]
+fn treats_proxy_wrapped_arrays_as_spreadable() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const reads = [];
+        const proxy = new Proxy([1, 2], {
+            get: function (target, property, receiver) {
+                reads.push(property === Symbol.isConcatSpreadable ? "spreadable" : String(property));
+                return Reflect.get(target, property, receiver);
+            }
+        });
+        const result = [0].concat(proxy);
+        const revocable = Proxy.revocable([], {});
+        revocable.revoke();
+        let revokedThrows = false;
+        try {
+            [].concat(revocable.proxy);
+        } catch (error) {
+            revokedThrows = error instanceof TypeError;
+        }
+        result.join(",") === "0,1,2" &&
+            reads.join(",") === "spreadable,length,0,1" &&
+            revokedThrows ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn uses_array_species_before_spreadability_lookup() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
