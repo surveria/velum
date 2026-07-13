@@ -14,8 +14,8 @@ use crate::{
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{
-        AccessorKind, BinaryOp, DeclKind, FunctionKind, ImportPhase, StaticBinding,
-        StaticFunctionId, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+        AccessorKind, BinaryOp, DeclKind, FunctionKind, ImportPhase, StaticFunctionId, StaticName,
+        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     value::Value,
 };
@@ -566,8 +566,17 @@ pub enum BytecodeInstruction {
         strict: bool,
         arg_count: usize,
     },
+    TailCallBinding {
+        callee: BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
+        arg_count: usize,
+    },
     CallValue {
         site: BytecodeCallSite,
+        arg_count: usize,
+    },
+    TailCallValue {
         arg_count: usize,
     },
     CallStaticMember {

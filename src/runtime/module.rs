@@ -165,7 +165,7 @@ impl Context {
         let mut indices = BTreeMap::from([(source_name.to_owned(), 0_usize)]);
         self.load_module_dependencies(0, &mut graph, &mut indices, loader)?;
         self.instantiate_module_graph(&mut graph)?;
-        self.link_module_graph(&mut graph)?;
+        self.link_static_module_graph(&mut graph)?;
         let result =
             self.with_module_evaluation(|context| context.evaluate_module(0, &mut graph))?;
         self.persist_module_graph(graph)?;
@@ -353,6 +353,19 @@ impl Context {
                     .ok_or_else(|| Error::runtime("module import binding is not declared"))?;
                 import_cell.alias_to(cell)?;
             }
+        }
+        Ok(())
+    }
+
+    fn link_static_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
+        let result = self.link_module_graph(graph);
+        if let Err(error) = result {
+            if let Some(metadata) = error.javascript_error_request()
+                && metadata.error_name() == crate::value::ErrorName::SyntaxError
+            {
+                return Err(Error::runtime(metadata.to_string()));
+            }
+            return Err(error);
         }
         Ok(())
     }
@@ -735,6 +748,7 @@ impl Context {
             Completion::Return(_) | Completion::ReturnDirect(_) => {
                 Err(Error::runtime("return completion escaped module"))
             }
+            Completion::TailCall(_) => Err(Error::runtime("tail call escaped module")),
             Completion::Break { .. } | Completion::Continue { .. } => {
                 Err(Error::runtime("invalid abrupt completion escaped module"))
             }

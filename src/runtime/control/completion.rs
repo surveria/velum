@@ -5,12 +5,44 @@ use crate::{
     value::Value,
 };
 
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TailCall {
+    callee: Value,
+    arguments: Vec<Value>,
+    this_value: Value,
+}
+
+impl TailCall {
+    pub(in crate::runtime) const fn new(
+        callee: Value,
+        arguments: Vec<Value>,
+        this_value: Value,
+    ) -> Self {
+        Self {
+            callee,
+            arguments,
+            this_value,
+        }
+    }
+
+    pub(in crate::runtime) fn into_parts(self) -> (Value, Vec<Value>, Value) {
+        (self.callee, self.arguments, self.this_value)
+    }
+
+    pub(in crate::runtime) const fn callee(&self) -> &Value {
+        &self.callee
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Completion {
     Normal(Value),
     Throw(Value),
     Return(Value),
     ReturnDirect(Value),
+    #[doc(hidden)]
+    TailCall(TailCall),
     Break {
         label: Option<StaticName>,
         value: Value,
@@ -43,6 +75,7 @@ impl Completion {
             Self::Return(value) | Self::ReturnDirect(value) => Err(Error::runtime(format!(
                 "return statement outside function returned {value}"
             ))),
+            Self::TailCall(_) => Err(Error::runtime("tail call escaped its function owner")),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
@@ -62,6 +95,7 @@ impl Completion {
             Self::Normal(_) => Ok(Value::Undefined),
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
+            Self::TailCall(_) => Err(Error::runtime("tail call escaped its function owner")),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
@@ -81,6 +115,7 @@ impl Completion {
             Self::Normal(_) => Ok(Self::Normal(Value::Undefined)),
             Self::Throw(value) => Ok(Self::Throw(value)),
             Self::Return(value) | Self::ReturnDirect(value) => Ok(Self::Normal(value)),
+            Self::TailCall(request) => Ok(Self::TailCall(request)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
@@ -94,6 +129,7 @@ impl Completion {
     pub fn into_native_value_result(self) -> Result<Value> {
         match self {
             Self::Normal(value) | Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
+            Self::TailCall(_) => Err(Error::runtime("tail call escaped its function owner")),
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue { .. } => Err(Error::runtime("continue statement outside loop")),

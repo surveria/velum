@@ -250,16 +250,17 @@ impl Context {
     }
 
     pub(in crate::runtime) fn active_script_or_module_name(&self) -> Option<String> {
-        self.activation_frames
-            .iter()
-            .rev()
-            .filter_map(crate::runtime::activation::ActivationFrame::function_id)
-            .find_map(|id| {
-                self.function(id)
-                    .ok()
-                    .and_then(|function| function.script_or_module_name.clone())
-            })
-            .or_else(|| self.active_module_name.clone())
+        self.active_module_name.clone().or_else(|| {
+            self.activation_frames
+                .iter()
+                .rev()
+                .filter_map(crate::runtime::activation::ActivationFrame::function_id)
+                .find_map(|id| {
+                    self.function(id)
+                        .ok()
+                        .and_then(|function| function.script_or_module_name.clone())
+                })
+        })
     }
 
     fn compile_optional_function_fast_path(

@@ -35,6 +35,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
+        Completion::TailCall(request) => Some(request.callee()),
         Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

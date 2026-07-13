@@ -28,15 +28,17 @@ impl Parser {
                 site,
                 strict,
                 args,
-            } if !self.is_strict_mode() => Some(Expression::new(
-                Expr::Call {
-                    callee,
-                    site,
-                    strict,
-                    args,
-                },
-                span,
-            )),
+            } if !self.is_strict_mode() && !call_is_tagged_template(&args) => {
+                Some(Expression::new(
+                    Expr::Call {
+                        callee,
+                        site,
+                        strict,
+                        args,
+                    },
+                    span,
+                ))
+            }
             Expr::Parenthesized(inner) => self.assignment_target(*inner),
             kind => Self::simple_assignment_target(Expression::new(kind, span)),
         }
@@ -46,6 +48,11 @@ impl Parser {
         !self.await_identifier_is_reserved()
             && self.peek_kind(1).is_some_and(await_identifier_continuation)
     }
+}
+
+fn call_is_tagged_template(args: &[Expression]) -> bool {
+    args.first()
+        .is_some_and(|argument| matches!(argument.kind(), Expr::TemplateObject { .. }))
 }
 
 const fn await_identifier_continuation(kind: &TokenKind) -> bool {

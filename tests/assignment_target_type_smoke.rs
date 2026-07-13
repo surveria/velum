@@ -87,6 +87,27 @@ fn sloppy_call_loop_targets_throw_after_call_and_strict_code_is_rejected() -> Te
 }
 
 #[test]
+fn tagged_templates_are_never_assignment_targets() -> TestResult {
+    for source in [
+        "function tag() {} tag`` = 1;",
+        "var holder = { tag: function () {} }; holder.tag`` = 1;",
+        "function tag() {} (tag``) = 1;",
+        "var holder = { tag: function () {} }; (holder.tag``) = 1;",
+    ] {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        let error = context
+            .eval(source)
+            .err()
+            .ok_or("expected tagged-template assignment target to fail parsing")?;
+        if !error.to_string().contains("parser error") {
+            return Err(format!("expected parser error for {source:?}, got {error}").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn destructuring_lookahead_balances_mixed_nested_delimiters() -> TestResult {
     expect_true(
         r"

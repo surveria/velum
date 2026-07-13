@@ -317,6 +317,8 @@ impl BytecodeInstruction {
             | Self::JumpIfFalse(_)
             | Self::JumpIfFalseKeep(_)
             | Self::JumpIfTrueKeep(_)
+            | Self::TailCallBinding { .. }
+            | Self::TailCallValue { .. }
             | Self::Complete(_) => BytecodeMetrics::empty(),
         };
         metrics.with_instruction()

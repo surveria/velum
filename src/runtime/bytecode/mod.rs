@@ -129,7 +129,9 @@ impl Context {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
             BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::TailCallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }

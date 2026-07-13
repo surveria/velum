@@ -11,11 +11,22 @@ use crate::{
     value::Value,
 };
 
+const ARGUMENTS_BINDING_NAME: &str = "arguments";
 const ARGUMENTS_ITERATOR_DISPLAY: &str = "[Symbol.iterator]";
 const ARGUMENTS_LENGTH_PROPERTY: &str = "length";
 const ARGUMENTS_CALLEE_PROPERTY: &str = "callee";
 
 impl Context {
+    pub(super) fn active_function_has_arguments_binding(&self) -> bool {
+        let Some(atom) = self.atom(ARGUMENTS_BINDING_NAME) else {
+            return false;
+        };
+        self.locals
+            .iter()
+            .skip(self.current_local_frame_start())
+            .any(|scope| scope.contains(atom))
+    }
+
     /// Creates the arguments value from the original passed arguments.
     /// Indexed values and `length` are ordinary own properties. The explicit
     /// Arguments builtin-class marker only supplies the internal brand. Mapped

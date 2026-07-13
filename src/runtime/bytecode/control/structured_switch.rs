@@ -374,7 +374,8 @@ impl Context {
                 Completion::Break { label: None, value } => {
                     return Ok((control, Completion::Normal(value)));
                 }
-                completion @ (Completion::Throw(_)
+                completion @ (Completion::TailCall(_)
+                | Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::ReturnDirect(_)
                 | Completion::Break { .. }

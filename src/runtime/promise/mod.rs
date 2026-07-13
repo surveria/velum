@@ -227,6 +227,9 @@ impl Context {
                 self.resolve_promise(promise, value)?;
             }
             Completion::Throw(value) => self.reject_promise(promise, value)?,
+            Completion::TailCall(_) => {
+                return Err(Error::runtime("tail call escaped async function"));
+            }
             Completion::Break { .. } | Completion::Continue { .. } => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
@@ -679,6 +682,9 @@ impl Context {
                 self.resolve_promise(result_promise, value)
             }
             Completion::Throw(value) => self.reject_promise(result_promise, value),
+            Completion::TailCall(_) => {
+                Err(Error::runtime("tail call escaped resumed async function"))
+            }
             Completion::Suspended(awaited) => {
                 let continuation =
                     self.detach_suspended_async_function(function, result_promise)?;

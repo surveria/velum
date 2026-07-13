@@ -245,6 +245,17 @@ impl CallReference {
             },
         }
     }
+
+    fn into_tail_call(self, arguments: Vec<Value>) -> control::TailCall {
+        let (callee, this_value) = match self {
+            Self::Function { id, this_value } => (Value::Function(id), this_value),
+            Self::Generic { callee, this_value } => (callee, this_value),
+            Self::Native { id, this_value, .. } | Self::DirectNative { id, this_value, .. } => {
+                (Value::NativeFunction(id), this_value)
+            }
+        };
+        control::TailCall::new(callee, arguments, this_value)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -483,6 +494,17 @@ impl Context {
         self.eval_call_reference_completion(reference, args)
     }
 
+    pub(crate) fn eval_bytecode_identifier_tail_call(
+        &mut self,
+        callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
+        args: &[Value],
+    ) -> Result<control::TailCall> {
+        self.eval_bytecode_identifier_call_reference(callee, native, strict)
+            .map(|reference| reference.into_tail_call(args.to_vec()))
+    }
+
     fn eval_call_reference_completion(
         &mut self,
         reference: CallReference,
@@ -714,6 +736,7 @@ impl Context {
             }
             Completion::Normal(_) => Ok(object),
             Completion::Throw(value) => Err(Error::javascript(value)),
+            Completion::TailCall(_) => Err(Error::runtime("tail call escaped constructor")),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue { .. } => Err(Error::runtime("continue statement outside loop")),
             completion @ (Completion::Suspended(_)

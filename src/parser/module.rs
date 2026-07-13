@@ -221,7 +221,6 @@ impl Parser {
                 arguments_binding,
                 params,
                 body,
-                parameter_prologue_count,
                 kind,
                 strict,
             } if declaration_like => {
@@ -236,7 +235,6 @@ impl Parser {
                         id,
                         params,
                         body,
-                        parameter_prologue_count,
                         kind,
                         strict,
                     },

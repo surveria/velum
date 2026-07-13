@@ -8,6 +8,64 @@ use crate::{
 use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, has_spread_arg};
 
 impl BytecodeCompiler<'_> {
+    pub(super) fn compile_tail_call_expr(&mut self, expr: &Expression) -> Result<bool> {
+        let Expr::Call {
+            callee,
+            strict: true,
+            args,
+            ..
+        } = expr.kind()
+        else {
+            return Ok(false);
+        };
+        if has_spread_arg(args) {
+            return Ok(false);
+        }
+        match callee.kind() {
+            Expr::Identifier(name) => {
+                let native = NativeCallTarget::from_binding_name(name.as_str());
+                if native == Some(NativeCallTarget::Eval) {
+                    return Ok(false);
+                }
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::TailCallBinding {
+                    callee: self.compile_binding(name)?,
+                    native,
+                    strict: true,
+                    arg_count: args.len(),
+                });
+            }
+            Expr::Parenthesized(callee) => {
+                let nested = Expression::new(
+                    Expr::Call {
+                        callee: callee.clone(),
+                        site: match expr.kind() {
+                            Expr::Call { site, .. } => *site,
+                            _ => return Ok(false),
+                        },
+                        strict: true,
+                        args: args.clone(),
+                    },
+                    expr.span(),
+                );
+                return self.compile_tail_call_expr(&nested);
+            }
+            Expr::Member { .. }
+            | Expr::ComputedMember { .. }
+            | Expr::PrivateMember { .. }
+            | Expr::SuperMember { .. }
+            | Expr::SuperComputedMember { .. } => return Ok(false),
+            _ => {
+                self.compile_expr(callee)?;
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::TailCallValue {
+                    arg_count: args.len(),
+                });
+            }
+        }
+        Ok(true)
+    }
+
     pub(super) fn compile_call_expr(
         &mut self,
         callee: &Expression,

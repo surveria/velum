@@ -186,6 +186,32 @@ fn tagged_templates_cache_each_site_and_preserve_call_context() -> TestResult {
 }
 
 #[test]
+fn tagged_template_tail_calls_reuse_the_function_activation() -> TestResult {
+    let value = eval(
+        r#"
+        "use strict";
+        function direct(_, remaining) {
+            if (remaining === 0) {
+                return 1;
+            }
+            return direct`${remaining - 1}`;
+        }
+        function getIndirect() {
+            return indirect;
+        }
+        function indirect(_, remaining) {
+            if (remaining === 0) {
+                return 1;
+            }
+            return getIndirect()`${remaining - 1}`;
+        }
+        direct(null, 400) + indirect(null, 400);
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(2.0))
+}
+
+#[test]
 fn tagged_templates_preserve_invalid_escape_raw_text() -> TestResult {
     let value = eval(
         r#"

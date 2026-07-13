@@ -20,7 +20,9 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::TailCallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. } => {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
@@ -111,6 +113,24 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
+            BytecodeInstruction::TailCallBinding {
+                callee,
+                native,
+                strict,
+                arg_count,
+            } => {
+                let args = state.stack.tail(*arg_count)?;
+                self.eval_bytecode_identifier_tail_call(callee, *native, *strict, args)
+                    .map(Completion::TailCall)
+                    .map(Some)
+            }
+            BytecodeInstruction::TailCallValue { arg_count } => {
+                let args = state.stack.tail(*arg_count)?.to_vec();
+                let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
+                Ok(Some(Completion::TailCall(
+                    crate::runtime::control::TailCall::new(callee, args, Value::Undefined),
+                )))
+            }
             BytecodeInstruction::CallBinding {
                 callee,
                 native,

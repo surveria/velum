@@ -491,6 +491,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
+        Completion::TailCall(request) => Some(request.callee()),
         Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }
@@ -605,7 +606,8 @@ pub(super) fn bytecode_loop_completion(
             label: Some(target),
             value,
         } if loop_label_matches(labels, &target) => Some(Completion::Normal(value)),
-        completion @ (Completion::Break { .. }
+        completion @ (Completion::TailCall(_)
+        | Completion::Break { .. }
         | Completion::Continue { label: Some(_), .. }
         | Completion::Throw(_)
         | Completion::Return(_)

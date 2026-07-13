@@ -580,7 +580,8 @@ impl Context {
     fn eval_pattern_block(&mut self, block: &BytecodeBlock) -> Result<PatternStep<Value>> {
         match self.eval_bytecode_block(block)? {
             Completion::Normal(value) => Ok(PatternStep::Value(value)),
-            completion @ (Completion::Throw(_)
+            completion @ (Completion::TailCall(_)
+            | Completion::Throw(_)
             | Completion::Return(_)
             | Completion::ReturnDirect(_)
             | Completion::Break { .. }

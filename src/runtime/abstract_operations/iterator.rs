@@ -377,7 +377,8 @@ impl Context {
                 self.yield_delegate_throw(&mut continuation.source, &value)
             }
             Some(
-                Completion::Break { .. }
+                Completion::TailCall(_)
+                | Completion::Break { .. }
                 | Completion::Continue { .. }
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
@@ -570,6 +571,9 @@ impl Context {
             | Completion::GeneratorStart
             | Completion::Yielded(_)
             | Completion::YieldedIteratorResult(_)) => Ok(completion),
+            Completion::TailCall(_) => {
+                Err(Error::runtime("tail call escaped iterator return method"))
+            }
         }
     }
 
@@ -709,6 +713,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Continue { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
+        Completion::TailCall(request) => Some(request.callee()),
         Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

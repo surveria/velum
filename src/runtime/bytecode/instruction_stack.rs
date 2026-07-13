@@ -236,6 +236,7 @@ impl Context {
                 Ok(None)
             }
             Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
+            completion @ Completion::TailCall(_) => Ok(Some(completion)),
             completion @ Completion::Suspended(_) => {
                 state.pc = next;
                 state.mark_await_suspended();
@@ -337,7 +338,8 @@ impl Context {
                     state.stack.pop()?;
                     state.stack.push(value);
                 }
-                completion @ (Completion::Throw(_)
+                completion @ (Completion::TailCall(_)
+                | Completion::Throw(_)
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
                 | Completion::Yielded(_)
