@@ -149,9 +149,13 @@ impl Context {
         let id = self.date_time_format_receiver_id(this_value)?;
         match self.objects.intl_value(id)? {
             Some(IntlValue::DateTime(value)) => Ok(value.as_ref().clone()),
-            Some(IntlValue::Duration | IntlValue::Locale(_) | IntlValue::Number(_)) | None => {
-                Err(Error::type_error("Intl.DateTimeFormat receiver is invalid"))
-            }
+            Some(
+                IntlValue::Duration
+                | IntlValue::List(_)
+                | IntlValue::Locale(_)
+                | IntlValue::Number(_),
+            )
+            | None => Err(Error::type_error("Intl.DateTimeFormat receiver is invalid")),
         }
     }
 

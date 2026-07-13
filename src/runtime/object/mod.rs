@@ -28,7 +28,8 @@ pub use base::ObjectHeap;
 pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
 pub(in crate::runtime) use intl::{
-    DateTimeFormatOptions, DateTimeFormatValue, IntlValue, LocaleValue, NumberFormatValue,
+    DateTimeFormatOptions, DateTimeFormatValue, IntlValue, ListFormatValue, LocaleValue,
+    NumberFormatValue,
 };
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;

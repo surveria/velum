@@ -315,7 +315,7 @@ impl Context {
         }
     }
 
-    fn locale_source_tag(&mut self, value: &Value) -> Result<String> {
+    pub(super) fn locale_source_tag(&mut self, value: &Value) -> Result<String> {
         if let Value::Object(id) = value
             && let Some(IntlValue::Locale(locale)) = self.objects.intl_value(*id)?
         {
@@ -582,6 +582,10 @@ fn parse_and_canonicalize_locale(tag: &str) -> Result<Locale> {
     let mut locale = parse_locale(tag)?;
     canonicalize_locale(&mut locale)?;
     Ok(locale)
+}
+
+pub(super) fn canonicalize_locale_tag(tag: &str) -> Result<String> {
+    parse_and_canonicalize_locale(tag).map(|locale| locale.to_string())
 }
 
 fn parse_locale(tag: &str) -> Result<Locale> {
