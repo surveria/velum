@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T111808Z.md`
-- Task: PR #580: architecture: derive function storage footprint
-- Performance: 6.12x (4/5 >1.00x) (from `rsqjs-test-report-20260713T111808Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T111808Z.md`)
+- `rsqjs-test-report-20260713T114545Z.md`
+- Task: PR #581: architecture: derive activation storage footprint
+- Performance: 6.32x (4/5 >1.00x) (from `rsqjs-test-report-20260713T114545Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T114545Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 96642 passed / 5936 failed (94.21%) (from `rsqjs-test-report-20260713T111808Z.md`)
+- Full Test262: 96642 passed / 5936 failed (94.21%) (from `rsqjs-test-report-20260713T114545Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -536,3 +536,4 @@ Latest report:
 | `20260713T102514Z` `fe5d1d7` PR #577: runtime: support callable weak collection keys | 6.68x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96640 passed / 5938 failed (94.21%) |
 | `20260713T103545Z` `2c6e0a6` PR #571: bytecode: compile reusable linear plan templates | 6.06x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96640 passed / 5938 failed (94.21%) |
 | `20260713T111808Z` `ec12b63` PR #580: architecture: derive function storage footprint | 6.12x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96642 passed / 5936 failed (94.21%) |
+| `20260713T114545Z` `93f837d` PR #581: architecture: derive activation storage footprint | 6.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 96642 passed / 5936 failed (94.21%) |
