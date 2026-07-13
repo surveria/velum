@@ -263,7 +263,6 @@ impl TemporalFunctionKind {
             | Self::PlainDatePrototypeUntil
             | Self::PlainDatePrototypeSince
             | Self::PlainDatePrototypeEquals
-            | Self::PlainDatePrototypeToPlainDateTime
             | Self::PlainDatePrototypeToZonedDateTime
             | Self::PlainDateTimeFrom
             | Self::PlainDateTimePrototypeWith

@@ -716,7 +716,7 @@ impl Context {
         self.heap_string_value(&text)
     }
 
-    fn duration_to_string_options(
+    pub(super) fn duration_to_string_options(
         &mut self,
         value: Option<&Value>,
     ) -> Result<ToStringRoundingOptions> {

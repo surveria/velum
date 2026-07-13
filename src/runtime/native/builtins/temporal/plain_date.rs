@@ -496,7 +496,11 @@ impl Context {
             .ok_or_else(|| Error::runtime("PlainDate field cannot become Number"))
     }
 
-    fn plain_date_optional_i64(&mut self, object: &Value, name: &str) -> Result<Option<i64>> {
+    pub(super) fn plain_date_optional_i64(
+        &mut self,
+        object: &Value,
+        name: &str,
+    ) -> Result<Option<i64>> {
         let value = self.get_named(object, name)?;
         if matches!(value, Value::Undefined) {
             return Ok(None);
@@ -512,12 +516,12 @@ impl Context {
             .ok_or_else(|| Self::plain_date_range(name))
     }
 
-    fn plain_date_required_i64(&mut self, object: &Value, name: &str) -> Result<i64> {
+    pub(super) fn plain_date_required_i64(&mut self, object: &Value, name: &str) -> Result<i64> {
         self.plain_date_optional_i64(object, name)?
             .ok_or_else(|| Error::type_error(format!("PlainDate requires {name}")))
     }
 
-    fn plain_date_u8_field(value: i64, name: &str, overflow: Overflow) -> Result<u8> {
+    pub(super) fn plain_date_u8_field(value: i64, name: &str, overflow: Overflow) -> Result<u8> {
         if value <= 0 {
             return Err(Self::plain_date_range(name));
         }
@@ -530,7 +534,7 @@ impl Context {
             .ok_or_else(|| Self::plain_date_range(name))
     }
 
-    fn plain_date_month_code(&mut self, value: &Value) -> Result<MonthCode> {
+    pub(super) fn plain_date_month_code(&mut self, value: &Value) -> Result<MonthCode> {
         if value.string_text().is_none() && !Self::plain_date_object(value) {
             return Err(Error::type_error("PlainDate monthCode must be a string"));
         }
@@ -634,7 +638,10 @@ impl Context {
         })
     }
 
-    fn plain_date_display_calendar(&mut self, value: Option<&Value>) -> Result<DisplayCalendar> {
+    pub(super) fn plain_date_display_calendar(
+        &mut self,
+        value: Option<&Value>,
+    ) -> Result<DisplayCalendar> {
         let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
             return Ok(DisplayCalendar::Auto);
         };
