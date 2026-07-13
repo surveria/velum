@@ -584,6 +584,7 @@ impl BindingCell {
                 state,
                 mutable,
                 immutable_assignment,
+                is_terminal_alias_target: false,
             }),
             kind,
         }))
@@ -669,15 +670,23 @@ impl BindingCell {
         if self.same_cell(&target) {
             return Err(Error::runtime("binding cannot alias itself"));
         }
-        if matches!(&target.borrow()?.state, BindingState::Alias(_)) {
-            return Err(Error::runtime(
-                "import binding alias target is not terminal",
-            ));
-        }
         let mut binding = self.borrow_mut()?;
         if !matches!(binding.state, BindingState::Uninitialized) {
             return Err(Error::runtime("import binding is already linked"));
         }
+        if binding.is_terminal_alias_target {
+            return Err(Error::runtime(
+                "terminal import binding cannot become an alias",
+            ));
+        }
+        let mut target_binding = target.borrow_mut()?;
+        if matches!(target_binding.state, BindingState::Alias(_)) {
+            return Err(Error::runtime(
+                "import binding alias target is not terminal",
+            ));
+        }
+        target_binding.is_terminal_alias_target = true;
+        drop(target_binding);
         binding.state = BindingState::Alias(target);
         binding.mutable = false;
         binding.immutable_assignment = ImmutableAssignment::AlwaysThrow;
@@ -722,6 +731,7 @@ struct Binding {
     state: BindingState,
     mutable: bool,
     immutable_assignment: ImmutableAssignment,
+    is_terminal_alias_target: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
