@@ -314,6 +314,7 @@ impl Context {
         self.record_object_storage(counter)?;
         self.record_async_storage(counter)?;
         self.record_active_storage(counter)?;
+        self.record_suspended_execution_storage(counter)?;
         self.record_cache_storage(counter)?;
         self.record_association_storage(counter)?;
         counter.record(VmStorageKind::Module, self.modules.len())
@@ -394,7 +395,10 @@ impl Context {
             counter.record(VmStorageKind::Binding, realm.binding_count()?)?;
         }
         for scope in &self.locals {
-            counter.record(VmStorageKind::Binding, scope.len())?;
+            counter.record(
+                VmStorageKind::Binding,
+                scope.storage_footprint()?.binding_count(),
+            )?;
         }
         for frame in &self.activation_frames {
             counter.record(
@@ -402,14 +406,6 @@ impl Context {
                 frame.storage_footprint()?.binding_count(),
             )?;
         }
-        counter.record(
-            VmStorageKind::Binding,
-            self.suspended_async_binding_count()?,
-        )?;
-        counter.record(
-            VmStorageKind::Binding,
-            self.suspended_generator_binding_count()?,
-        )?;
         Ok(())
     }
 
@@ -496,14 +492,6 @@ impl Context {
 
     fn record_active_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         counter.record(VmStorageKind::ExecutionFrame, self.locals.len())?;
-        counter.record(
-            VmStorageKind::ExecutionFrame,
-            self.suspended_async_execution_frame_count()?,
-        )?;
-        counter.record(
-            VmStorageKind::ExecutionFrame,
-            self.suspended_generator_execution_frame_count()?,
-        )?;
         for frame in &self.activation_frames {
             counter.record(
                 VmStorageKind::ExecutionFrame,
@@ -511,6 +499,18 @@ impl Context {
             )?;
         }
         counter.record(VmStorageKind::OutputEntry, self.output.len())
+    }
+
+    fn record_suspended_execution_storage(&self, counter: &mut StorageCounter) -> Result<()> {
+        let footprint = self
+            .suspended_async_execution_storage_footprint()?
+            .checked_add(self.suspended_generator_execution_storage_footprint()?)?;
+        counter.record(VmStorageKind::Binding, footprint.binding_count())?;
+        counter.record(VmStorageKind::CacheEntry, footprint.cache_entry_count())?;
+        counter.record(
+            VmStorageKind::ExecutionFrame,
+            footprint.execution_frame_count(),
+        )
     }
 
     fn record_cache_storage(&self, counter: &mut StorageCounter) -> Result<()> {
@@ -524,12 +524,11 @@ impl Context {
             counter.record(VmStorageKind::CacheEntry, realm.cache_entry_count()?)?;
         }
         for scope in &self.locals {
-            counter.record(VmStorageKind::CacheEntry, scope.index_entry_count()?)?;
+            counter.record(
+                VmStorageKind::CacheEntry,
+                scope.storage_footprint()?.cache_entry_count(),
+            )?;
         }
-        counter.record(
-            VmStorageKind::CacheEntry,
-            self.suspended_async_cache_entry_count()?,
-        )?;
         if let Some(keys) = self.descriptor_property_keys {
             counter.record(VmStorageKind::CacheEntry, keys.keys().count())?;
         }
@@ -542,10 +541,7 @@ impl Context {
         for layout in &self.static_binding_layouts {
             counter.record(VmStorageKind::CacheEntry, layout.storage_entry_count()?)?;
         }
-        counter.record(
-            VmStorageKind::CacheEntry,
-            self.suspended_generator_cache_entry_count()?,
-        )
+        Ok(())
     }
 
     fn record_association_storage(&self, counter: &mut StorageCounter) -> Result<()> {

@@ -4,6 +4,7 @@ use crate::{
         Context, VmStorageKind,
         call::RuntimeCallArgs,
         control::{Completion, Suspension, runtime_exception_value},
+        function::SuspendedExecutionStorageFootprint,
         object::AtomicWaitOutcome,
     },
     value::{ErrorName, FunctionId, ObjectId, Value},
@@ -37,48 +38,19 @@ impl Context {
         })
     }
 
-    pub(in crate::runtime) fn suspended_async_execution_frame_count(&self) -> Result<usize> {
-        let promise_frames = self.promises.iter().try_fold(0_usize, |count, promise| {
-            count
-                .checked_add(promise.suspended_execution_frame_count()?)
-                .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
-        })?;
+    pub(in crate::runtime) fn suspended_async_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
+        let promise_footprint = self.promises.iter().try_fold(
+            SuspendedExecutionStorageFootprint::default(),
+            |footprint, promise| {
+                footprint.checked_add(promise.suspended_execution_storage_footprint()?)
+            },
+        )?;
         self.promise_jobs
             .iter()
-            .try_fold(promise_frames, |count, job| {
-                count
-                    .checked_add(job.execution_frame_count()?)
-                    .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
-            })
-    }
-
-    pub(in crate::runtime) fn suspended_async_binding_count(&self) -> Result<usize> {
-        let promise_bindings = self.promises.iter().try_fold(0_usize, |count, promise| {
-            count
-                .checked_add(promise.suspended_binding_count()?)
-                .ok_or_else(|| Error::limit("suspended binding count overflowed"))
-        })?;
-        self.promise_jobs
-            .iter()
-            .try_fold(promise_bindings, |count, job| {
-                count
-                    .checked_add(job.binding_count()?)
-                    .ok_or_else(|| Error::limit("suspended binding count overflowed"))
-            })
-    }
-
-    pub(in crate::runtime) fn suspended_async_cache_entry_count(&self) -> Result<usize> {
-        let promise_entries = self.promises.iter().try_fold(0_usize, |count, promise| {
-            count
-                .checked_add(promise.suspended_cache_entry_count()?)
-                .ok_or_else(|| Error::limit("suspended cache entry count overflowed"))
-        })?;
-        self.promise_jobs
-            .iter()
-            .try_fold(promise_entries, |count, job| {
-                count
-                    .checked_add(job.cache_entry_count()?)
-                    .ok_or_else(|| Error::limit("suspended cache entry count overflowed"))
+            .try_fold(promise_footprint, |footprint, job| {
+                footprint.checked_add(job.suspended_execution_storage_footprint()?)
             })
     }
 

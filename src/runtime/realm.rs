@@ -6,7 +6,7 @@ use crate::{
     runtime::{
         Context, VmStorageKind,
         abstract_operations::SetFailureBehavior,
-        binding::scope::BindingScope,
+        binding::scope::{BindingScope, BindingScopeStorageFootprint},
         native::{IntlFunctionKind, NativeFunctionKind, NativeFunctionRegistry},
         storage_ledger::VmStorageLedger,
     },
@@ -88,18 +88,20 @@ impl RealmState {
         }
     }
 
-    pub(super) fn binding_count(&self) -> Result<usize> {
+    fn binding_scope_storage_footprint(&self) -> Result<BindingScopeStorageFootprint> {
         self.globals
-            .len()
-            .checked_add(self.builtin_globals.len())
-            .ok_or_else(|| Error::limit("realm binding count overflowed"))
+            .storage_footprint()?
+            .checked_add(self.builtin_globals.storage_footprint()?)
+    }
+
+    pub(super) fn binding_count(&self) -> Result<usize> {
+        Ok(self.binding_scope_storage_footprint()?.binding_count())
     }
 
     pub(super) fn cache_entry_count(&self) -> Result<usize> {
-        self.globals
-            .index_entry_count()?
-            .checked_add(self.builtin_globals.index_entry_count()?)
-            .and_then(|count| count.checked_add(self.object_global_names.len()))
+        self.binding_scope_storage_footprint()?
+            .cache_entry_count()
+            .checked_add(self.object_global_names.len())
             .and_then(|count| count.checked_add(self.native_function_registry.ids().count()))
             .ok_or_else(|| Error::limit("realm cache entry count overflowed"))
     }

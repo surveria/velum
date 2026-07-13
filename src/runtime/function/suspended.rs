@@ -4,7 +4,7 @@ use crate::{
         Context, VmStorageKind,
         activation::{ActivationFrame, ActivationFrameStorageFootprint},
         async_trace::VmAsyncEdgeKind,
-        binding::scope::BindingScope,
+        binding::scope::{BindingScope, BindingScopeStorageFootprint},
         control::Completion,
         promise::PromiseId,
         roots::{DirectRootVisitor, VmRootKind},
@@ -155,6 +155,67 @@ pub(in crate::runtime) struct DetachedFunctionExecution {
     activations: Vec<ActivationFrame>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::runtime) struct SuspendedExecutionStorageFootprint {
+    bindings: usize,
+    cache_entries: usize,
+    execution_frames: usize,
+}
+
+impl SuspendedExecutionStorageFootprint {
+    pub(in crate::runtime) const fn binding_count(self) -> usize {
+        self.bindings
+    }
+
+    pub(in crate::runtime) const fn cache_entry_count(self) -> usize {
+        self.cache_entries
+    }
+
+    pub(in crate::runtime) const fn execution_frame_count(self) -> usize {
+        self.execution_frames
+    }
+
+    pub(in crate::runtime) fn checked_add(self, other: Self) -> Result<Self> {
+        let bindings = self
+            .bindings
+            .checked_add(other.bindings)
+            .ok_or_else(suspended_storage_overflow)?;
+        let cache_entries = self
+            .cache_entries
+            .checked_add(other.cache_entries)
+            .ok_or_else(suspended_storage_overflow)?;
+        let execution_frames = self
+            .execution_frames
+            .checked_add(other.execution_frames)
+            .ok_or_else(suspended_storage_overflow)?;
+        Ok(Self {
+            bindings,
+            cache_entries,
+            execution_frames,
+        })
+    }
+
+    fn with_scope(self, footprint: BindingScopeStorageFootprint) -> Result<Self> {
+        self.checked_add(Self {
+            bindings: footprint.binding_count(),
+            cache_entries: footprint.cache_entry_count(),
+            execution_frames: 1,
+        })
+    }
+
+    fn with_activation(self, footprint: ActivationFrameStorageFootprint) -> Result<Self> {
+        self.checked_add(Self {
+            bindings: footprint.binding_count(),
+            cache_entries: 0,
+            execution_frames: footprint.execution_frame_count(),
+        })
+    }
+}
+
+fn suspended_storage_overflow() -> Error {
+    Error::limit("suspended execution storage footprint overflowed")
+}
+
 impl SuspendedAsyncFunction {
     pub(super) const fn new(
         result_promise: PromiseId,
@@ -178,16 +239,10 @@ impl SuspendedAsyncFunction {
         self.execution
     }
 
-    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
-        self.execution.execution_frame_count()
-    }
-
-    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
-        self.execution.binding_count()
-    }
-
-    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
-        self.execution.cache_entry_count()
+    pub(in crate::runtime) fn storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
+        self.execution.storage_footprint()
     }
 
     pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
@@ -252,31 +307,21 @@ impl DetachedFunctionExecution {
         )
     }
 
-    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
-        let activation_count = self.activation_storage_footprint()?.execution_frame_count();
-        self.locals
-            .len()
-            .checked_add(activation_count)
-            .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
+    fn storage_footprint_with_activations(
+        &self,
+        activations: ActivationFrameStorageFootprint,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
+        let footprint = self.locals.iter().try_fold(
+            SuspendedExecutionStorageFootprint::default(),
+            |footprint, scope| footprint.with_scope(scope.storage_footprint()?),
+        )?;
+        footprint.with_activation(activations)
     }
 
-    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
-        let local_count = self.locals.iter().try_fold(0_usize, |count, scope| {
-            count
-                .checked_add(scope.len())
-                .ok_or_else(|| Error::limit("suspended binding count overflowed"))
-        })?;
-        local_count
-            .checked_add(self.activation_storage_footprint()?.binding_count())
-            .ok_or_else(|| Error::limit("suspended binding count overflowed"))
-    }
-
-    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
-        self.locals.iter().try_fold(0_usize, |count, scope| {
-            count
-                .checked_add(scope.index_entry_count()?)
-                .ok_or_else(|| Error::limit("suspended cache entry count overflowed"))
-        })
+    pub(in crate::runtime) fn storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
+        self.storage_footprint_with_activations(self.activation_storage_footprint()?)
     }
 
     pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
@@ -409,12 +454,16 @@ impl DetachedFunctionExecution {
         mut self,
         storage_ledger: &VmStorageLedger,
     ) -> Result<()> {
-        let execution_frames = self.execution_frame_count()?;
-        let activation_bindings = self.activation_storage_footprint()?.binding_count();
+        let activation_footprint = self.activation_storage_footprint()?;
+        let footprint = self.storage_footprint_with_activations(activation_footprint)?;
         for scope in &mut self.locals {
             scope.deactivate_storage()?;
         }
-        storage_ledger.release_count(VmStorageKind::Binding, activation_bindings)?;
-        storage_ledger.release_count(VmStorageKind::ExecutionFrame, execution_frames)
+        storage_ledger
+            .release_count(VmStorageKind::Binding, activation_footprint.binding_count())?;
+        storage_ledger.release_count(
+            VmStorageKind::ExecutionFrame,
+            footprint.execution_frame_count(),
+        )
     }
 }

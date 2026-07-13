@@ -65,7 +65,9 @@ pub(in crate::runtime) use parameters::{
     FunctionArgumentsBinding, FunctionScopeTemplate, FunctionSelfBinding,
 };
 pub use properties::{FunctionIntrinsicDefaults, FunctionProperties};
-pub(in crate::runtime) use suspended::{DetachedFunctionExecution, SuspendedAsyncFunction};
+pub(in crate::runtime) use suspended::{
+    DetachedFunctionExecution, SuspendedAsyncFunction, SuspendedExecutionStorageFootprint,
+};
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";

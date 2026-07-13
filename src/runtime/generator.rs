@@ -9,7 +9,7 @@ use crate::{
         async_trace::VmAsyncEdgeKind,
         call::RuntimeCallArgs,
         control::{Completion, Suspension},
-        function::DetachedFunctionExecution,
+        function::{DetachedFunctionExecution, SuspendedExecutionStorageFootprint},
         native::NativeFunctionKind,
         object::{
             DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
@@ -62,27 +62,15 @@ struct AsyncGeneratorRequest {
 }
 
 impl GeneratorData {
-    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
+    pub(in crate::runtime) fn suspended_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
         match &self.state {
-            GeneratorState::Awaiting(awaiting) => awaiting.execution_frame_count(),
-            GeneratorState::Suspended(execution) => execution.execution_frame_count(),
-            GeneratorState::Executing | GeneratorState::Completed => Ok(0),
-        }
-    }
-
-    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
-        match &self.state {
-            GeneratorState::Awaiting(awaiting) => awaiting.binding_count(),
-            GeneratorState::Suspended(execution) => execution.binding_count(),
-            GeneratorState::Executing | GeneratorState::Completed => Ok(0),
-        }
-    }
-
-    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
-        match &self.state {
-            GeneratorState::Awaiting(awaiting) => awaiting.cache_entry_count(),
-            GeneratorState::Suspended(execution) => execution.cache_entry_count(),
-            GeneratorState::Executing | GeneratorState::Completed => Ok(0),
+            GeneratorState::Awaiting(awaiting) => awaiting.suspended_execution_storage_footprint(),
+            GeneratorState::Suspended(execution) => execution.storage_footprint(),
+            GeneratorState::Executing | GeneratorState::Completed => {
+                Ok(SuspendedExecutionStorageFootprint::default())
+            }
         }
     }
 
@@ -155,19 +143,11 @@ impl AsyncGeneratorAwaitState {
         }
     }
 
-    fn execution_frame_count(&self) -> Result<usize> {
-        self.execution()
-            .map_or(Ok(0), DetachedFunctionExecution::execution_frame_count)
-    }
-
-    fn binding_count(&self) -> Result<usize> {
-        self.execution()
-            .map_or(Ok(0), DetachedFunctionExecution::binding_count)
-    }
-
-    fn cache_entry_count(&self) -> Result<usize> {
-        self.execution()
-            .map_or(Ok(0), DetachedFunctionExecution::cache_entry_count)
+    fn suspended_execution_storage_footprint(&self) -> Result<SuspendedExecutionStorageFootprint> {
+        self.execution().map_or_else(
+            || Ok(SuspendedExecutionStorageFootprint::default()),
+            DetachedFunctionExecution::storage_footprint,
+        )
     }
 
     fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
@@ -194,34 +174,15 @@ pub(in crate::runtime) enum GeneratorResumeKind {
 }
 
 impl Context {
-    pub(in crate::runtime) fn suspended_generator_binding_count(&self) -> Result<usize> {
-        self.generators
-            .iter()
-            .try_fold(0_usize, |count, generator| {
-                count
-                    .checked_add(generator.binding_count()?)
-                    .ok_or_else(|| Error::limit("generator binding count overflowed"))
-            })
-    }
-
-    pub(in crate::runtime) fn suspended_generator_execution_frame_count(&self) -> Result<usize> {
-        self.generators
-            .iter()
-            .try_fold(0_usize, |count, generator| {
-                count
-                    .checked_add(generator.execution_frame_count()?)
-                    .ok_or_else(|| Error::limit("generator execution frame count overflowed"))
-            })
-    }
-
-    pub(in crate::runtime) fn suspended_generator_cache_entry_count(&self) -> Result<usize> {
-        self.generators
-            .iter()
-            .try_fold(0_usize, |count, generator| {
-                count
-                    .checked_add(generator.cache_entry_count()?)
-                    .ok_or_else(|| Error::limit("generator cache entry count overflowed"))
-            })
+    pub(in crate::runtime) fn suspended_generator_execution_storage_footprint(
+        &self,
+    ) -> Result<SuspendedExecutionStorageFootprint> {
+        self.generators.iter().try_fold(
+            SuspendedExecutionStorageFootprint::default(),
+            |footprint, generator| {
+                footprint.checked_add(generator.suspended_execution_storage_footprint()?)
+            },
+        )
     }
 
     pub(in crate::runtime) fn async_generator_request_count(&self) -> Result<usize> {

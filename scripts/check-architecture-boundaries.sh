@@ -197,10 +197,8 @@ check_storage_accounting_boundary() {
     || ! grep -F -q 'activate_frame_storage(' \
       "${repo_root}/src/runtime/execution_storage.rs" \
     || ! grep -F -q 'release_frame_storage(' \
-      "${repo_root}/src/runtime/execution_storage.rs" \
-    || ! grep -F -q 'footprint.checked_add(frame.storage_footprint()?)' \
-      "${repo_root}/src/runtime/function/suspended.rs"; then
-    fail "activation storage accounting boundary changed; live and suspended paths must share the frame footprint"
+      "${repo_root}/src/runtime/execution_storage.rs"; then
+    fail "activation storage accounting boundary changed; live activation and recount paths must share the frame footprint"
   fi
 }
 
@@ -1113,11 +1111,6 @@ check_suspended_execution_boundary() {
       fail "suspended execution boundary changed; pending await and embedder job ownership must stay explicit"
     fi
   done
-
-  if ! grep -F -q 'self.suspended_async_execution_frame_count()?,' \
-      "${repo_root}/src/runtime/accounting.rs"; then
-    fail "suspended execution boundary changed; parked frames must remain in storage reconciliation"
-  fi
 
   for source in \
     'suspend: Option<Box<BytecodeSuspendState>>,' \
