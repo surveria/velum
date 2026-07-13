@@ -71,8 +71,8 @@ impl Parser {
             return self.continue_statement();
         }
         if self.match_kind(&TokenKind::Debugger) {
-            self.consume_optional_semicolon();
-            return Ok(Stmt::Empty);
+            self.consume_statement_terminator("expected statement terminator after 'debugger'")?;
+            return Ok(Stmt::Debugger);
         }
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
@@ -327,6 +327,7 @@ impl Parser {
             } => true,
             Stmt::Label { body, .. } => Self::invalid_with_body(body),
             Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Block(_)
             | Stmt::DeclList(_)
             | Stmt::If { .. }
@@ -365,6 +366,7 @@ impl Parser {
             Stmt::Block(_)
             | Stmt::DeclList(_)
             | Stmt::Empty
+            | Stmt::Debugger
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::DoWhile { .. }

@@ -39,6 +39,7 @@ impl LayoutBuilder {
                 name, block_scoped, ..
             } => self.declare(if *block_scoped { scope } else { var_scope }, name),
             Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
@@ -158,6 +159,7 @@ impl LayoutBuilder {
             }
             Stmt::FunctionDecl { .. }
             | Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)

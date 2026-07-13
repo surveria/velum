@@ -80,6 +80,7 @@ impl<'a> HoistCollector<'a> {
                 | Stmt::VarDecl { .. }
                 | Stmt::PatternDecl { .. }
                 | Stmt::Empty
+                | Stmt::Debugger
                 | Stmt::Break(_)
                 | Stmt::Continue(_)
                 | Stmt::Expr(_) => {}
@@ -190,20 +191,7 @@ impl<'a> HoistCollector<'a> {
                 Ok(())
             }
             Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
-                match target {
-                    ForInTarget::Binding {
-                        name,
-                        kind: DeclKind::Var,
-                    } => self.var_declarations.push(name.clone()),
-                    ForInTarget::PatternBinding {
-                        pattern,
-                        kind: DeclKind::Var,
-                    } => self.collect_pattern_var_declarations(pattern),
-                    ForInTarget::Binding { .. }
-                    | ForInTarget::PatternBinding { .. }
-                    | ForInTarget::PatternAssignment { .. }
-                    | ForInTarget::Assignment { .. } => {}
-                }
+                self.collect_for_var_declaration(target);
                 self.collect_statement(body)
             }
             Stmt::Switch { cases, .. } => {
@@ -254,6 +242,7 @@ impl<'a> HoistCollector<'a> {
                 self.collect_function_declaration_statement(declaration)
             }
             Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)
@@ -262,6 +251,23 @@ impl<'a> HoistCollector<'a> {
             | Stmt::ClassDecl { .. }
             | Stmt::VarDecl { .. }
             | Stmt::Expr(_) => Ok(()),
+        }
+    }
+
+    fn collect_for_var_declaration(&mut self, target: &ForInTarget) {
+        match target {
+            ForInTarget::Binding {
+                name,
+                kind: DeclKind::Var,
+            } => self.var_declarations.push(name.clone()),
+            ForInTarget::PatternBinding {
+                pattern,
+                kind: DeclKind::Var,
+            } => self.collect_pattern_var_declarations(pattern),
+            ForInTarget::Binding { .. }
+            | ForInTarget::PatternBinding { .. }
+            | ForInTarget::PatternAssignment { .. }
+            | ForInTarget::Assignment { .. } => {}
         }
     }
 

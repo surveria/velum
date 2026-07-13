@@ -204,6 +204,7 @@ impl LayoutBuilder {
             | Stmt::PatternDecl { .. }
             | Stmt::ClassDecl { .. }
             | Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)
@@ -293,7 +294,11 @@ impl LayoutBuilder {
             declaration @ Stmt::FunctionDecl { .. } => {
                 self.analyze_function_declaration(declaration, scope, function)
             }
-            Stmt::Empty | Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
+            Stmt::Empty
+            | Stmt::Debugger
+            | Stmt::Return(None)
+            | Stmt::Break(_)
+            | Stmt::Continue(_) => Ok(()),
             Stmt::VarDecl { name, init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;

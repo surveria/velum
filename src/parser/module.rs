@@ -494,6 +494,7 @@ impl Parser {
                     }
                 }
                 Stmt::Empty
+                | Stmt::Debugger
                 | Stmt::Break(_)
                 | Stmt::Continue(_)
                 | Stmt::Throw(_)

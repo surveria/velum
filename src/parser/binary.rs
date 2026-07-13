@@ -174,7 +174,7 @@ impl Parser {
         if !self.match_kind(&TokenKind::StarStar) {
             return Ok(left);
         }
-        if matches!(left.kind(), Expr::Unary { .. }) {
+        if matches!(left.kind(), Expr::Unary { .. } | Expr::Await(_)) {
             return Err(Error::parse_at(
                 "unary expression cannot be the left operand of '**'",
                 self.previous_span(),

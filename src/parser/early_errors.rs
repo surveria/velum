@@ -263,6 +263,7 @@ impl Parser {
                 names.push(name.name().as_str().to_owned());
             }
             Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
@@ -369,6 +370,7 @@ impl Parser {
                 ..
             } => Self::collect_pattern_names(pattern, names)?,
             Stmt::Empty
+            | Stmt::Debugger
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)

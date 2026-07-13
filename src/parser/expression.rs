@@ -8,7 +8,6 @@ use crate::{
 use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
-const IMPORT_BINDING_NAME: &str = "import";
 
 #[derive(Debug, Clone, Copy)]
 enum ArrowParameters {
@@ -187,18 +186,14 @@ impl Parser {
             let expr = self.new_target_expr(new_span)?;
             return self.call_suffix(expr);
         }
-        let constructor = if self.match_kind(&TokenKind::Import) {
-            self.import_constructor_seed()?
-        } else {
-            self.primary()?
-        };
-        let constructor = self.member_suffix(constructor)?;
-        if Self::constructor_starts_with_import(&constructor) {
+        if self.match_kind(&TokenKind::Import) {
             return Err(Error::parse_at(
                 "import call cannot be used as a constructor",
                 new_span,
             ));
         }
+        let constructor = self.primary()?;
+        let constructor = self.member_suffix(constructor)?;
         let args = if self.match_kind(&TokenKind::LParen) {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
@@ -218,24 +213,6 @@ impl Parser {
             },
         );
         self.call_suffix(expr)
-    }
-
-    fn import_constructor_seed(&mut self) -> Result<Expression> {
-        let start = self.previous_span();
-        let name = self.borrowed_static_name(IMPORT_BINDING_NAME)?;
-        let binding = self.static_binding(name)?;
-        Ok(self.expression_node(start, Expr::Identifier(binding)))
-    }
-
-    fn constructor_starts_with_import(expr: &Expression) -> bool {
-        match expr.kind() {
-            Expr::Identifier(name) => name.as_str() == IMPORT_BINDING_NAME,
-            Expr::Member { object, .. } | Expr::ComputedMember { object, .. } => {
-                Self::constructor_starts_with_import(object)
-            }
-            Expr::Parenthesized(expr) => Self::constructor_starts_with_import(expr),
-            _ => false,
-        }
     }
 
     fn member_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
