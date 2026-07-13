@@ -146,7 +146,7 @@ impl Context {
         )
     }
 
-    fn duration_receiver(&self, value: &Value) -> Result<Duration> {
+    pub(in crate::runtime::native) fn duration_receiver(&self, value: &Value) -> Result<Duration> {
         let Value::Object(id) = value else {
             return Err(Error::type_error(DURATION_RECEIVER_ERROR));
         };

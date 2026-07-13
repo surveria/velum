@@ -56,3 +56,26 @@ fn resolves_options_and_supported_locales() -> TestResult {
         "#,
     )?)
 }
+
+#[test]
+fn temporal_duration_locale_string_checks_receiver_before_options() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        const toLocaleString = Temporal.Duration.prototype.toLocaleString;
+        let optionsRead = false;
+        const options = {
+            get style() {
+                optionsRead = true;
+                return "long";
+            }
+        };
+        let threw = false;
+        try {
+            toLocaleString.call({}, "en", options);
+        } catch (error) {
+            threw = error instanceof TypeError;
+        }
+        threw && !optionsRead
+        "#,
+    )?)
+}
