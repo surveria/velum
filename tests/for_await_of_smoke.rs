@@ -161,6 +161,21 @@ fn allows_for_await_only_in_async_functions() -> TestResult {
 }
 
 #[test]
+fn allows_async_identifier_as_for_await_target() -> TestResult {
+    ensure_string_after(
+        r"
+        let async;
+        async function consume() {
+            for await (async of [7]);
+        }
+        consume();
+        ",
+        "'' + async",
+        "7",
+    )
+}
+
+#[test]
 fn rejects_escaped_for_await_of_keyword() -> TestResult {
     let source = r"async function f() { for await (var value o\u0066 []) {} }";
     if eval(source).is_err() {

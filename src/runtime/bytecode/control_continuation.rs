@@ -9,6 +9,8 @@ use crate::{
 
 use super::state::BytecodeState;
 
+mod for_in;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BytecodeControlStateSlot {
     Condition,
@@ -76,6 +78,7 @@ pub(super) enum BytecodeControlRecord {
     ForIn {
         phase: BytecodeLoopPhase,
         keys: std::vec::IntoIter<String>,
+        source: Option<Value>,
         body_state: BytecodeState,
         last: Value,
     },
@@ -203,15 +206,6 @@ impl BytecodeControlRecord {
         }
     }
 
-    pub(super) fn for_in(keys: Vec<String>) -> Self {
-        Self::ForIn {
-            phase: BytecodeLoopPhase::Initialize,
-            keys: keys.into_iter(),
-            body_state: BytecodeState::new(),
-            last: Value::Undefined,
-        }
-    }
-
     pub(super) const fn for_of(iterator: Option<ForOfIterator>) -> Self {
         Self::ForOf {
             phase: BytecodeLoopPhase::Initialize,
@@ -270,8 +264,14 @@ impl BytecodeControlRecord {
                 roots.push(last);
             }
             Self::ForIn {
-                body_state, last, ..
+                source,
+                body_state,
+                last,
+                ..
             } => {
+                if let Some(source) = source {
+                    roots.push(source);
+                }
                 roots.extend(body_state.root_values());
                 roots.push(last);
             }
@@ -385,22 +385,6 @@ impl BytecodeControlRecord {
         Ok((phase, next_case, default_case, discriminant))
     }
 
-    pub(super) fn for_in_state_mut(
-        &mut self,
-    ) -> Result<(
-        &mut BytecodeLoopPhase,
-        &mut std::vec::IntoIter<String>,
-        &mut Value,
-    )> {
-        let Self::ForIn {
-            phase, keys, last, ..
-        } = self
-        else {
-            return Err(Error::runtime("structured for-in record mismatch"));
-        };
-        Ok((phase, keys, last))
-    }
-
     pub(super) fn for_of_state_mut(&mut self) -> Result<(&mut BytecodeLoopPhase, &mut Value)> {
         let Self::ForOf { phase, last, .. } = self else {
             return Err(Error::runtime("structured for-of record mismatch"));
@@ -450,7 +434,8 @@ impl BytecodeControlRecord {
 
     fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
         let roots = match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } => [Some(last), None, None, None],
+            Self::Loop { last, .. } => [Some(last), None, None, None],
+            Self::ForIn { source, last, .. } => [Some(last), source.as_ref(), None, None],
             Self::Switch {
                 discriminant, last, ..
             } => [Some(last), discriminant.as_ref(), None, None],
@@ -486,8 +471,12 @@ impl BytecodeControlRecord {
 
     fn has_traceable_transient_roots(&self) -> bool {
         match self {
-            Self::Loop { last, .. } | Self::ForIn { last, .. } => {
+            Self::Loop { last, .. } => crate::runtime::transient_roots::is_traceable(last),
+            Self::ForIn { source, last, .. } => {
                 crate::runtime::transient_roots::is_traceable(last)
+                    || source
+                        .as_ref()
+                        .is_some_and(crate::runtime::transient_roots::is_traceable)
             }
             Self::Switch {
                 discriminant, last, ..

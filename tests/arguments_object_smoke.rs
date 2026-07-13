@@ -69,16 +69,50 @@ fn reflects_actual_call_arity() -> TestResult {
 }
 
 #[test]
-fn indexed_writes_do_not_alias_parameters() -> TestResult {
+fn sloppy_simple_arguments_alias_parameters() -> TestResult {
     ensure_string(
         r#"
+        function mapped(a) {
+            arguments[0] = 99;
+            var assignedThroughArguments = a;
+            a = 7;
+            return assignedThroughArguments + ":" + arguments[0];
+        }
         function unmapped(a) {
+            "use strict";
             arguments[0] = 99;
             return a + ":" + arguments[0];
         }
-        unmapped(1)
+        mapped(1) + ":" + unmapped(1)
         "#,
-        "1:99",
+        "99:7:1:99",
+    )
+}
+
+#[test]
+fn mapped_argument_descriptors_detach_parameter_cells() -> TestResult {
+    ensure_string(
+        r#"
+        function probe(value) {
+            Object.defineProperty(arguments, "0", {
+                value: 20,
+                writable: false,
+                enumerable: false,
+                configurable: true
+            });
+            var assignedByDescriptor = value;
+            value = 30;
+            var detachedValue = arguments[0];
+            var descriptor = Object.getOwnPropertyDescriptor(arguments, "0");
+            delete arguments[0];
+            value = 40;
+            return assignedByDescriptor + ":" + detachedValue + ":" +
+                descriptor.writable + ":" + descriptor.enumerable + ":" +
+                (arguments[0] === undefined) + ":" + value;
+        }
+        probe(1)
+        "#,
+        "20:20:false:false:true:40",
     )
 }
 
@@ -209,6 +243,23 @@ fn arguments_iterate_and_spread() -> TestResult {
         total(3, 9, 4)
         "#,
         "16:9",
+    )
+}
+
+#[test]
+fn arguments_share_the_array_values_iterator() -> TestResult {
+    ensure_string(
+        r#"
+        function sloppy() {
+            return arguments[Symbol.iterator] === [][Symbol.iterator];
+        }
+        function strict() {
+            "use strict";
+            return arguments[Symbol.iterator] === [][Symbol.iterator];
+        }
+        sloppy() + ":" + strict()
+        "#,
+        "true:true",
     )
 }
 

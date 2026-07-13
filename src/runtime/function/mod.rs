@@ -467,17 +467,6 @@ impl Context {
                 return Err(error);
             }
         }
-        let arguments_scope = match arguments_binding
-            .map(|binding| self.arguments_binding_scope(id, binding, raw_args))
-            .transpose()
-        {
-            Ok(scope) => scope,
-            Err(error) => {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
-        };
         let scope_result = self.function_call_scope(
             scope_template.as_deref(),
             &param_atoms,
@@ -487,6 +476,17 @@ impl Context {
         );
         let scope = match scope_result {
             Ok(scope) => scope,
+            Err(error) => {
+                self.leave_function_local_frame(local_base)?;
+                self.pop_call_activation(local_base)?;
+                return Err(error);
+            }
+        };
+        let arguments_scope = match arguments_binding
+            .map(|binding| self.arguments_binding_scope(id, binding, raw_args, &scope))
+            .transpose()
+        {
+            Ok(arguments_scope) => arguments_scope,
             Err(error) => {
                 self.leave_function_local_frame(local_base)?;
                 self.pop_call_activation(local_base)?;

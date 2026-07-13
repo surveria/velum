@@ -19,6 +19,7 @@ pub(in crate::runtime) struct BytecodeState {
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
     private_environment: Option<Rc<PrivateEnvironment>>,
+    for_in_of_head_scope_active: bool,
     suspend: Option<Box<BytecodeSuspendState>>,
 }
 
@@ -64,6 +65,7 @@ impl BytecodeState {
             stack: BytecodeStack::new(),
             last: Value::Undefined,
             private_environment: None,
+            for_in_of_head_scope_active: false,
             suspend: None,
         }
     }
@@ -76,6 +78,7 @@ impl BytecodeState {
             stack: BytecodeStack::new(),
             last: Value::Undefined,
             private_environment,
+            for_in_of_head_scope_active: false,
             suspend: None,
         }
     }
@@ -84,6 +87,7 @@ impl BytecodeState {
         self.pc = BytecodeAddress::new(0);
         self.stack.clear();
         self.last = Value::Undefined;
+        self.for_in_of_head_scope_active = false;
         self.suspend = None;
     }
 
@@ -96,6 +100,14 @@ impl BytecodeState {
         environment: Option<Rc<PrivateEnvironment>>,
     ) -> Option<Rc<PrivateEnvironment>> {
         std::mem::replace(&mut self.private_environment, environment)
+    }
+
+    pub(super) const fn for_in_of_head_scope_active(&self) -> bool {
+        self.for_in_of_head_scope_active
+    }
+
+    pub(super) const fn set_for_in_of_head_scope_active(&mut self, active: bool) {
+        self.for_in_of_head_scope_active = active;
     }
 
     pub(super) fn prepare_run(&mut self) -> Result<()> {

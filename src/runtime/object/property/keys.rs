@@ -13,8 +13,15 @@ impl ObjectHeap {
     pub fn keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
         let object = self.object(id)?;
         let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
-        let mut visited = Vec::new();
-        self.collect_keys(id, atoms, &mut keys, &mut visited)?;
+        let mut visited_objects = Vec::new();
+        let mut visited_names = Vec::new();
+        self.collect_keys(
+            id,
+            atoms,
+            &mut keys,
+            &mut visited_objects,
+            &mut visited_names,
+        )?;
         Ok(keys)
     }
 
@@ -45,19 +52,35 @@ impl ObjectHeap {
         id: ObjectId,
         atoms: &AtomTable,
         keys: &mut Vec<String>,
-        visited: &mut Vec<ObjectId>,
+        visited_objects: &mut Vec<ObjectId>,
+        visited_names: &mut Vec<String>,
     ) -> Result<()> {
-        if visited.contains(&id) {
+        if visited_objects.contains(&id) {
             return Err(Error::runtime("prototype cycle detected"));
         }
-        visited.push(id);
+        visited_objects.push(id);
         let prototype = {
             let object = self.object(id)?;
-            object.extend_enumerable_keys(atoms, &self.shapes, keys)?;
+            let mut own_names = Vec::new();
+            object.extend_own_property_names(atoms, &mut own_names)?;
+            let mut newly_visited = Vec::new();
+            for name in own_names {
+                if !visited_names.contains(&name) {
+                    visited_names.push(name.clone());
+                    newly_visited.push(name);
+                }
+            }
+            let mut enumerable_names = Vec::new();
+            object.extend_enumerable_keys(atoms, &self.shapes, &mut enumerable_names)?;
+            for name in enumerable_names {
+                if newly_visited.contains(&name) {
+                    keys.push(name);
+                }
+            }
             object.prototype
         };
         if let Some(prototype) = prototype {
-            self.collect_keys(prototype, atoms, keys, visited)?;
+            self.collect_keys(prototype, atoms, keys, visited_objects, visited_names)?;
         }
         Ok(())
     }

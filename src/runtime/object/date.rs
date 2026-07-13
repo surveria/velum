@@ -68,6 +68,7 @@ impl Object {
             typed_array: None,
             is_raw_json: false,
             arguments_brand: false,
+            argument_parameter_map: Vec::new(),
             function_prototype_brand: super::FunctionPrototypeBrand::Absent,
             module_namespace: false,
             shadow_realm: None,

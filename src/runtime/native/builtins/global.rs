@@ -10,6 +10,7 @@ use crate::{
 
 const PARSE_INT_RADIX_CONTEXT: &str = "parseInt radix";
 const URI_MALFORMED_ESCAPE_ERROR: &str = "malformed URI escape sequence";
+const URI_MALFORMED_SURROGATE_ERROR: &str = "malformed URI surrogate sequence";
 const URI_MALFORMED_UTF8_ERROR: &str = "malformed URI UTF-8 sequence";
 
 #[derive(Clone, Copy)]
@@ -274,7 +275,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = self.global_string_argument(args.first())?;
+        let text = self.global_utf16_string_argument(args.first())?;
         self.encode_uri_value(&text, UriEncodeSet::Uri)
     }
 
@@ -289,7 +290,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = self.global_string_argument(args.first())?;
+        let text = self.global_utf16_string_argument(args.first())?;
         self.encode_uri_value(&text, UriEncodeSet::Component)
     }
 
@@ -327,6 +328,13 @@ impl Context {
         match value {
             Some(value) => self.to_string(value),
             None => self.to_string(&Value::Undefined),
+        }
+    }
+
+    fn global_utf16_string_argument(&mut self, value: Option<&Value>) -> Result<Vec<u16>> {
+        match value {
+            Some(value) => self.to_utf16_string(value),
+            None => self.to_utf16_string(&Value::Undefined),
         }
     }
 
@@ -492,14 +500,50 @@ impl Context {
         *end = exponent_end;
     }
 
-    fn encode_uri_value(&mut self, input: &str, encode_set: UriEncodeSet) -> Result<Value> {
+    fn encode_uri_value(&mut self, input: &[u16], encode_set: UriEncodeSet) -> Result<Value> {
         let mut encoded = String::new();
-        for ch in input.chars() {
+        let mut index = 0_usize;
+        while let Some(unit) = input.get(index).copied() {
+            let ch = match unit {
+                0xD800..=0xDBFF => {
+                    let low_index = index
+                        .checked_add(1)
+                        .ok_or_else(|| Error::limit("URI encode index overflowed"))?;
+                    let Some(low) = input.get(low_index).copied() else {
+                        return Err(Self::uri_error(URI_MALFORMED_SURROGATE_ERROR));
+                    };
+                    if !(0xDC00..=0xDFFF).contains(&low) {
+                        return Err(Self::uri_error(URI_MALFORMED_SURROGATE_ERROR));
+                    }
+                    let high_ten = u32::from(unit)
+                        .checked_sub(0xD800)
+                        .and_then(|value| value.checked_mul(0x400))
+                        .ok_or_else(|| Error::runtime("URI surrogate value overflowed"))?;
+                    let low_ten = u32::from(low)
+                        .checked_sub(0xDC00)
+                        .ok_or_else(|| Error::runtime("URI surrogate value underflowed"))?;
+                    let code_point = 0x1_0000_u32
+                        .checked_add(high_ten)
+                        .and_then(|value| value.checked_add(low_ten))
+                        .ok_or_else(|| Error::runtime("URI code point overflowed"))?;
+                    index = low_index;
+                    char::from_u32(code_point)
+                        .ok_or_else(|| Self::uri_error(URI_MALFORMED_SURROGATE_ERROR))?
+                }
+                0xDC00..=0xDFFF => {
+                    return Err(Self::uri_error(URI_MALFORMED_SURROGATE_ERROR));
+                }
+                _ => char::from_u32(u32::from(unit))
+                    .ok_or_else(|| Self::uri_error(URI_MALFORMED_SURROGATE_ERROR))?,
+            };
             if encode_set.should_leave_unescaped(ch) {
                 encoded.push(ch);
             } else {
                 Self::push_percent_encoded_char(&mut encoded, ch);
             }
+            index = index
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("URI encode index overflowed"))?;
         }
         self.check_string_len(&encoded)?;
         self.heap_string_value(&encoded)

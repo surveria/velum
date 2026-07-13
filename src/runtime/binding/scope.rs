@@ -16,6 +16,8 @@ use crate::{
     value::Value,
 };
 
+mod iteration;
+
 /// Immutable atom-to-slot index shared by every call frame of one
 /// function, so per-call scope construction allocates only the value slots.
 #[derive(Debug)]

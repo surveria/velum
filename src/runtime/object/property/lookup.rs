@@ -542,6 +542,9 @@ impl Object {
     }
 
     fn has_uncacheable_own_property(&self, property: PropertyLookup<'_>) -> Result<bool> {
+        if self.arguments_brand && ArrayIndex::parse(property.name()).is_some() {
+            return Ok(true);
+        }
         if self.has_virtual_string_property(property)? {
             return Ok(true);
         }

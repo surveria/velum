@@ -279,3 +279,45 @@ fn for_of_keyword_stays_contextual() -> TestResult {
         "still-works",
     )
 }
+
+#[test]
+fn parenthesized_and_escaped_async_remain_for_of_targets() -> TestResult {
+    ensure_string(
+        r#"
+        var async = 0;
+        for ((async) of [1]) {}
+        var escaped = 0;
+        for (\u0061sync of [2]) { escaped = async; }
+        var holder = { value: 0 };
+        async = holder;
+        for (async.value of [3]) {}
+        "" + escaped + ":" + async.value
+        "#,
+        "2:3",
+    )
+}
+
+#[test]
+fn lexical_for_of_head_uses_a_tdz_and_iteration_scope() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let x = "outside";
+        let headProbe;
+        let declarationProbe;
+        let bodyProbe;
+        for (
+            let [x, unused = declarationProbe = function() { return x; }]
+            of
+            (headProbe = function() { return typeof x; }, [["inside"]])
+        ) {
+            bodyProbe = function() { return x; };
+        }
+        let headThrows = false;
+        try { headProbe(); } catch (error) { headThrows = error instanceof ReferenceError; }
+        headThrows && declarationProbe() === "inside" && bodyProbe() === "inside" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}

@@ -365,7 +365,6 @@ impl LayoutBuilder {
         var_scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
-        self.analyze_expr(object, scope, function)?;
         match target {
             ForInTarget::Binding {
                 name,
@@ -374,12 +373,14 @@ impl LayoutBuilder {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare(loop_scope, name)?;
                 self.resolve_declaration_if_with_sensitive(name, loop_scope, function)?;
+                self.analyze_expr(object, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
             ForInTarget::Binding {
                 name,
                 kind: DeclKind::Var,
             } => {
+                self.analyze_expr(object, scope, function)?;
                 self.declare(var_scope, name)?;
                 self.resolve_declaration_if_with_sensitive(name, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
@@ -393,6 +394,7 @@ impl LayoutBuilder {
                 pattern.for_each_binding(&mut |binding| {
                     self.resolve_declaration_if_with_sensitive(binding, loop_scope, function)
                 })?;
+                self.analyze_expr(object, loop_scope, function)?;
                 self.analyze_pattern_exprs(pattern, loop_scope, function)?;
                 self.analyze_statement(body, loop_scope, var_scope, function)
             }
@@ -400,6 +402,7 @@ impl LayoutBuilder {
                 pattern,
                 kind: DeclKind::Var,
             } => {
+                self.analyze_expr(object, scope, function)?;
                 self.declare_pattern(pattern, var_scope)?;
                 pattern.for_each_binding(&mut |binding| {
                     self.resolve_declaration_if_with_sensitive(binding, scope, function)
@@ -408,10 +411,12 @@ impl LayoutBuilder {
                 self.analyze_statement(body, scope, var_scope, function)
             }
             ForInTarget::Assignment { target, .. } => {
+                self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
             ForInTarget::PatternAssignment { pattern, .. } => {
+                self.analyze_expr(object, scope, function)?;
                 pattern.for_each_expr(&mut |expr| self.analyze_expr(expr, scope, function))?;
                 self.analyze_statement(body, scope, var_scope, function)
             }

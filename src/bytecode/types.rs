@@ -647,6 +647,7 @@ pub enum BytecodeInstruction {
         update: Option<BytecodeBlock>,
         body: BytecodeBlock,
         scoped: bool,
+        per_iteration: bool,
     },
     ForIn {
         labels: Option<Rc<[StaticName]>>,

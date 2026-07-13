@@ -12,12 +12,21 @@ if (count() !== 0 || count(1) !== 1 || count(1, 2, 3) !== 3) {
   throw new Test262Error("arguments length mismatch");
 }
 
+function mapped(a) {
+  arguments[0] = 99;
+  return a + ":" + arguments[0];
+}
+if (mapped(1) !== "99:99") {
+  throw new Test262Error("sloppy arguments writes must alias simple parameters");
+}
+
 function unmapped(a) {
+  "use strict";
   arguments[0] = 99;
   return a + ":" + arguments[0];
 }
 if (unmapped(1) !== "1:99") {
-  throw new Test262Error("arguments writes must not alias parameters");
+  throw new Test262Error("strict arguments writes must not alias parameters");
 }
 
 function byParam(arguments) {

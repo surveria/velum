@@ -192,6 +192,7 @@ impl BytecodeCompiler<'_> {
                 .transpose()?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
             scoped: crate::binding_layout::for_init_needs_lexical_scope(init),
+            per_iteration: crate::binding_layout::for_init_needs_per_iteration_scope(init),
         });
         Ok(())
     }

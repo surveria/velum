@@ -231,7 +231,7 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "for_in_nullish_error",
             path: PATH_FOR_IN_NULLISH_ERROR,
-            expectation: Expectation::ErrorContains("Cannot convert"),
+            expectation: Expectation::Value("42"),
         },
         EngineCase {
             id: "switch_statements",

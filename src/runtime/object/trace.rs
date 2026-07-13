@@ -103,6 +103,16 @@ impl Object {
                 StrongEdgeReference::Symbol(symbol),
             )?;
         }
+        for cell in self.argument_parameter_map.iter().flatten() {
+            if let Some(result) = cell.with_initialized_value(|value| {
+                visitor.visit(
+                    VmObjectEdgeKind::InternalSlot,
+                    StrongEdgeReference::Value(value),
+                )
+            }) {
+                result?;
+            }
+        }
         if let Some(proxy) = &self.proxy_value {
             proxy.visit_strong_edges(visitor)?;
         }

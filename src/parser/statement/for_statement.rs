@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expression, ForInTarget, Statement, Stmt},
+    ast::{BinaryOp, DeclKind, Expr, Expression, ForInTarget, Statement, Stmt},
     error::Result,
     lexer::TokenKind,
 };
@@ -31,13 +31,13 @@ impl Parser {
         let static_binding_count = self.static_bindings.len();
         let static_function_count = self.static_functions.len();
         let arguments_reference = self.arguments_reference;
-        if let Some((target, object, head)) = self.for_in_header()? {
+        if let Some((target, object, head)) = self.for_in_header(asynchronous)? {
             if asynchronous && head == ForHeadKind::In {
                 return Err(self.parse_error("for-await statement requires an 'of' head"));
             }
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.with_iteration_statement(Self::statement)?);
-            self.reject_invalid_single_statement(&body)?;
+            self.reject_invalid_iteration_statement(&body)?;
             self.validate_for_in_of_declarations(&target, &body)?;
             return Ok(match head {
                 ForHeadKind::In => Stmt::ForIn {
@@ -86,7 +86,8 @@ impl Parser {
         };
         self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_invalid_single_statement(&body)?;
+        self.reject_invalid_iteration_statement(&body)?;
+        self.validate_for_declarations(init.as_deref(), &body)?;
         Ok(Stmt::For {
             init,
             condition,
@@ -95,7 +96,13 @@ impl Parser {
         })
     }
 
-    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
+    fn for_in_header(
+        &mut self,
+        asynchronous: bool,
+    ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
+        if self.async_of_arrow_starts_classic_for() {
+            return Ok(None);
+        }
         if self.await_using_declaration_start() {
             self.consume(&TokenKind::Await, "expected 'await'")?;
             self.consume_contextual_using()?;
@@ -105,7 +112,10 @@ impl Parser {
             self.consume_contextual_using()?;
             return self.for_resource_binding_header(DeclKind::Using);
         }
-        if self.match_kind(&TokenKind::Let) {
+        if self.check(&TokenKind::Let)
+            && (self.is_strict_mode() || self.let_declaration_lookahead())
+            && self.advance().is_some()
+        {
             return self.for_in_binding_header(DeclKind::Let);
         }
         if self.match_kind(&TokenKind::Const) {
@@ -134,6 +144,10 @@ impl Parser {
         if !self.for_in_assignment_target_start() {
             return Ok(None);
         }
+        let bare_async_target = self.check(&TokenKind::Async)
+            && self
+                .peek_token(1)
+                .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD));
         let target = self.call()?;
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
@@ -141,6 +155,9 @@ impl Parser {
         let Some(target) = self.assignment_target(target) else {
             return Err(self.parse_error("invalid for-in assignment target"));
         };
+        if !asynchronous && head == ForHeadKind::Of && bare_async_target {
+            return Err(self.parse_error("async is not a valid for-of assignment target"));
+        }
         let object = self.for_head_rhs(head)?;
         Ok(Some((
             ForInTarget::Assignment {
@@ -227,12 +244,22 @@ impl Parser {
             matches!(
                 &token.kind,
                 TokenKind::Identifier(_)
+                    | TokenKind::Let
                     | TokenKind::Async
                     | TokenKind::This
                     | TokenKind::Super
+                    | TokenKind::LBracket
                     | TokenKind::LParen
             )
         })
+    }
+
+    fn async_of_arrow_starts_classic_for(&mut self) -> bool {
+        self.peek_kind_is(0, &TokenKind::Async)
+            && self
+                .peek_token(1)
+                .is_some_and(|token| token.is_unescaped_identifier_named(FOR_OF_KEYWORD))
+            && self.peek_kind_is_no_line_terminator(2, &TokenKind::Arrow)
     }
 
     fn for_in_assignment_pattern_start(&mut self) -> bool {
@@ -257,7 +284,10 @@ impl Parser {
                 "private brand checks are not allowed in an unparenthesized for initializer",
             ));
         }
-        if self.match_kind(&TokenKind::Let) {
+        if self.check(&TokenKind::Let)
+            && (self.is_strict_mode() || self.let_declaration_lookahead())
+            && self.advance().is_some()
+        {
             let kind = self.for_var_decl(DeclKind::Let)?;
             return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
@@ -285,6 +315,17 @@ impl Parser {
             return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         let expr = self.expression()?;
+        if matches!(
+            expr.kind(),
+            Expr::Binary {
+                op: BinaryOp::In,
+                ..
+            }
+        ) {
+            return Err(
+                self.parse_error("unparenthesized 'in' is not allowed in a for initializer")
+            );
+        }
         self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
         Ok(Some(Box::new(self.statement_node(start, Stmt::Expr(expr)))))
     }

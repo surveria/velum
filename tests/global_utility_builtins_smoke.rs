@@ -93,6 +93,7 @@ fn uri_utility_builtins_encode_decode_and_report_uri_errors() -> TestResult {
         let decodedComponent = decodeURIComponent("front%20camera%3Fx%3D1%26name%3D%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D0%B0");
         let invalidPercent = false;
         let invalidUtf8 = false;
+        let invalidSurrogates = 0;
         try {
             decodeURIComponent("%");
         } catch (error) {
@@ -102,6 +103,16 @@ fn uri_utility_builtins_encode_decode_and_report_uri_errors() -> TestResult {
             decodeURIComponent("%E0%A4%A");
         } catch (error) {
             invalidUtf8 = error.name === "URIError";
+        }
+        try {
+            encodeURI(String.fromCharCode(0xD800));
+        } catch (error) {
+            invalidSurrogates += error instanceof URIError ? 1 : 0;
+        }
+        try {
+            encodeURIComponent(String.fromCharCode(0xDC00));
+        } catch (error) {
+            invalidSurrogates += error instanceof URIError ? 1 : 0;
         }
 
         print(encodedUri);
@@ -116,7 +127,8 @@ fn uri_utility_builtins_encode_decode_and_report_uri_errors() -> TestResult {
             decodedUri === "front camera%3Fx=1%26name=камера" &&
             decodedComponent === "front camera?x=1&name=камера" &&
             invalidPercent &&
-            invalidUtf8 ? 42 : 0
+            invalidUtf8 &&
+            invalidSurrogates === 2 ? 42 : 0
         "#,
     )?;
 

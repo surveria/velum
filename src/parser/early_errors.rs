@@ -35,6 +35,28 @@ impl Parser {
             | ForInTarget::PatternAssignment { .. }
             | ForInTarget::Assignment { .. } => {}
         }
+        self.validate_loop_head_names(&lexical_names, body)
+    }
+
+    pub(super) fn validate_for_declarations(
+        &self,
+        init: Option<&Statement>,
+        body: &Statement,
+    ) -> Result<()> {
+        let mut lexical_names = Vec::new();
+        if let Some(init) = init {
+            Self::collect_direct_lexical_names(init, false, &mut lexical_names)?;
+        }
+        self.validate_loop_head_names(&lexical_names, body)
+    }
+
+    fn validate_loop_head_names(&self, lexical_names: &[String], body: &Statement) -> Result<()> {
+        let mut unique_names = BTreeSet::new();
+        for name in lexical_names {
+            if !unique_names.insert(name) {
+                return Err(self.parse_error("duplicate lexical declaration in for head"));
+            }
+        }
         let mut var_names = Vec::new();
         Self::collect_var_names(body, &mut var_names)?;
         if lexical_names
@@ -47,10 +69,11 @@ impl Parser {
     }
 
     pub(super) fn reject_invalid_single_statement(&self, statement: &Statement) -> Result<()> {
-        if (self.is_strict_mode() && matches!(statement.kind(), Stmt::FunctionDecl { .. }))
+        if matches!(statement.kind(), Stmt::ClassDecl { .. })
             || matches!(
                 statement.kind(),
-                Stmt::FunctionDecl { kind, .. } if kind.is_generator()
+                Stmt::FunctionDecl { kind, .. }
+                    if self.is_strict_mode() || *kind != FunctionKind::Ordinary
             )
             || matches!(
                 statement.kind(),
@@ -66,6 +89,22 @@ impl Parser {
             return Err(self.parse_error("declaration is not allowed as a single statement body"));
         }
         Ok(())
+    }
+
+    pub(super) fn reject_invalid_iteration_statement(&self, statement: &Statement) -> Result<()> {
+        self.reject_invalid_single_statement(statement)?;
+        if Self::is_labelled_function(statement) {
+            return Err(self.parse_error("function declaration is not allowed as a loop body"));
+        }
+        Ok(())
+    }
+
+    fn is_labelled_function(statement: &Statement) -> bool {
+        match statement.kind() {
+            Stmt::FunctionDecl { .. } => true,
+            Stmt::Label { body, .. } => Self::is_labelled_function(body),
+            _ => false,
+        }
     }
 
     pub(super) fn validate_generator_block_declarations(

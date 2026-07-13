@@ -1,15 +1,16 @@
 use crate::{
     error::Result,
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
-    value::{ObjectId, Value},
+    value::Value,
 };
 
 use super::{
-    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup,
+    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, PropertyKey, PropertyLookup,
     ShapePropertyAttributes, ShapeTable,
 };
 
 mod compatibility;
+mod heap;
 mod validation;
 
 pub(in crate::runtime) use compatibility::{
@@ -586,37 +587,6 @@ impl ObjectProperty {
             ObjectPropertyPayload::Data(descriptor) => descriptor.enumerable = enumerable,
             ObjectPropertyPayload::Accessor(descriptor) => descriptor.enumerable = enumerable,
         }
-    }
-}
-
-impl ObjectHeap {
-    pub fn own_property_descriptor(
-        &self,
-        id: ObjectId,
-        property: PropertyLookup<'_>,
-    ) -> Result<Option<OwnPropertyDescriptor>> {
-        self.object(id)
-            .and_then(|object| object.own_property_descriptor(property, &self.shapes))
-    }
-
-    pub fn define_property(
-        &mut self,
-        id: ObjectId,
-        property: PropertyKey,
-        property_name: &str,
-        update: PropertyUpdate,
-        max_properties: usize,
-    ) -> Result<()> {
-        let before = self.object(id)?.structure_snapshot();
-        let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.define_property(property, property_name, update, shapes, max_properties)?;
-        self.bump_prototype_lookup_version()?;
-        self.bump_if_structure_changed(id, before)
-    }
-
-    pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
-        self.object(id)
-            .and_then(|object| object.has_own(property, &self.shapes))
     }
 }
 

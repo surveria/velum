@@ -14,12 +14,32 @@ impl Context {
         target: &Value,
     ) -> Result<Vec<String>> {
         let mut keys = Vec::new();
+        let mut visited = Vec::new();
         let mut current = target.clone();
         loop {
-            for key in self.semantic_own_enumerable_string_keys(&current)? {
+            let own_keys = self.semantic_own_property_keys(&current)?;
+            let roots = self.active_transient_root_scope(
+                crate::runtime::roots::VmRootKind::TransientTemporary,
+            )?;
+            roots.add_values(own_keys.iter())?;
+            for key in own_keys {
                 self.step()?;
-                if !keys.contains(&key) {
-                    keys.push(key);
+                if matches!(key, Value::Symbol(_)) {
+                    continue;
+                }
+                let property = self.dynamic_property_key(&key)?;
+                let name = property.name().to_owned();
+                if visited.contains(&name) {
+                    continue;
+                }
+                visited.push(name.clone());
+                let Some(descriptor) =
+                    self.semantic_own_property_descriptor(&current, &property)?
+                else {
+                    continue;
+                };
+                if Self::semantic_descriptor_is_enumerable(&descriptor) {
+                    keys.push(name);
                 }
             }
             let Some(prototype) = self.semantic_get_prototype(&current)? else {
