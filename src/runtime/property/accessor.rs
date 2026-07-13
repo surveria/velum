@@ -80,7 +80,7 @@ impl Context {
             && self.objects.array_len_if_array(object)?.is_some()
         {
             let length = self.array_length_from_value(&value)?;
-            return self.objects.set_array_length(object, length);
+            return self.objects.set_array_length(object, length).map(|_| ());
         }
         crate::runtime::property::set_property(
             &mut self.objects,
