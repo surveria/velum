@@ -13,6 +13,7 @@ use crate::{
 mod calendar_types;
 mod duration;
 mod install;
+mod plain_date;
 
 use crate::runtime::call::RuntimeCallArgs;
 use crate::runtime::native::{TEMPORAL_NAME, TemporalFunctionKind};

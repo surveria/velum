@@ -51,6 +51,31 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     PlainYearMonthConstructor,
     InstantConstructor,
     PlainTimeConstructor,
+    PlainDateCompare,
+    PlainDatePrototypeMonthCode,
+    PlainDatePrototypeEra,
+    PlainDatePrototypeEraYear,
+    PlainDatePrototypeDayOfWeek,
+    PlainDatePrototypeDayOfYear,
+    PlainDatePrototypeWeekOfYear,
+    PlainDatePrototypeYearOfWeek,
+    PlainDatePrototypeDaysInWeek,
+    PlainDatePrototypeDaysInMonth,
+    PlainDatePrototypeDaysInYear,
+    PlainDatePrototypeMonthsInYear,
+    PlainDatePrototypeInLeapYear,
+    PlainDatePrototypeWith,
+    PlainDatePrototypeWithCalendar,
+    PlainDatePrototypeAdd,
+    PlainDatePrototypeSubtract,
+    PlainDatePrototypeUntil,
+    PlainDatePrototypeSince,
+    PlainDatePrototypeEquals,
+    PlainDatePrototypeToPlainDateTime,
+    PlainDatePrototypeToZonedDateTime,
+    PlainDatePrototypeToPlainYearMonth,
+    PlainDatePrototypeToPlainMonthDay,
+    PlainDatePrototypeToLocaleString,
 }
 
 impl TemporalFunctionKind {
@@ -104,12 +129,38 @@ impl TemporalFunctionKind {
             Self::PlainYearMonthConstructor => 45,
             Self::InstantConstructor => 46,
             Self::PlainTimeConstructor => 47,
+            Self::PlainDateCompare => 48,
+            Self::PlainDatePrototypeMonthCode => 49,
+            Self::PlainDatePrototypeEra => 50,
+            Self::PlainDatePrototypeEraYear => 51,
+            Self::PlainDatePrototypeDayOfWeek => 52,
+            Self::PlainDatePrototypeDayOfYear => 53,
+            Self::PlainDatePrototypeWeekOfYear => 54,
+            Self::PlainDatePrototypeYearOfWeek => 55,
+            Self::PlainDatePrototypeDaysInWeek => 56,
+            Self::PlainDatePrototypeDaysInMonth => 57,
+            Self::PlainDatePrototypeDaysInYear => 58,
+            Self::PlainDatePrototypeMonthsInYear => 59,
+            Self::PlainDatePrototypeInLeapYear => 60,
+            Self::PlainDatePrototypeWith => 61,
+            Self::PlainDatePrototypeWithCalendar => 62,
+            Self::PlainDatePrototypeAdd => 63,
+            Self::PlainDatePrototypeSubtract => 64,
+            Self::PlainDatePrototypeUntil => 65,
+            Self::PlainDatePrototypeSince => 66,
+            Self::PlainDatePrototypeEquals => 67,
+            Self::PlainDatePrototypeToPlainDateTime => 68,
+            Self::PlainDatePrototypeToZonedDateTime => 69,
+            Self::PlainDatePrototypeToPlainYearMonth => 70,
+            Self::PlainDatePrototypeToPlainMonthDay => 71,
+            Self::PlainDatePrototypeToLocaleString => 72,
         }
     }
 
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         match self {
             Self::Compare
+            | Self::PlainDateCompare
             | Self::ZonedDateTimeConstructor
             | Self::PlainMonthDayConstructor
             | Self::PlainYearMonthConstructor => 2.0,
@@ -117,6 +168,15 @@ impl TemporalFunctionKind {
             Self::From
             | Self::InstantConstructor
             | Self::PlainDateFrom
+            | Self::PlainDatePrototypeWith
+            | Self::PlainDatePrototypeWithCalendar
+            | Self::PlainDatePrototypeAdd
+            | Self::PlainDatePrototypeSubtract
+            | Self::PlainDatePrototypeUntil
+            | Self::PlainDatePrototypeSince
+            | Self::PlainDatePrototypeEquals
+            | Self::PlainDatePrototypeToPlainDateTime
+            | Self::PlainDatePrototypeToZonedDateTime
             | Self::ZonedDateTimeFrom
             | Self::PrototypeWith
             | Self::PrototypeAdd
@@ -131,7 +191,7 @@ impl TemporalFunctionKind {
         match self {
             Self::Constructor => TEMPORAL_DURATION_NAME,
             Self::From | Self::PlainDateFrom | Self::ZonedDateTimeFrom => "from",
-            Self::Compare => "compare",
+            Self::Compare | Self::PlainDateCompare => "compare",
             Self::PrototypeYears => "get years",
             Self::PrototypeMonths => "get months",
             Self::PrototypeWeeks => "get weeks",
@@ -144,11 +204,11 @@ impl TemporalFunctionKind {
             Self::PrototypeNanoseconds => "get nanoseconds",
             Self::PrototypeSign => "get sign",
             Self::PrototypeBlank => "get blank",
-            Self::PrototypeWith => "with",
+            Self::PrototypeWith | Self::PlainDatePrototypeWith => "with",
             Self::PrototypeNegated => "negated",
             Self::PrototypeAbs => "abs",
-            Self::PrototypeAdd => "add",
-            Self::PrototypeSubtract => "subtract",
+            Self::PrototypeAdd | Self::PlainDatePrototypeAdd => "add",
+            Self::PrototypeSubtract | Self::PlainDatePrototypeSubtract => "subtract",
             Self::PrototypeRound => "round",
             Self::PrototypeTotal => "total",
             Self::PrototypeToString
@@ -157,7 +217,9 @@ impl TemporalFunctionKind {
             Self::PrototypeToJson
             | Self::PlainDatePrototypeToJson
             | Self::ZonedDateTimePrototypeToJson => "toJSON",
-            Self::PrototypeToLocaleString => "toLocaleString",
+            Self::PrototypeToLocaleString | Self::PlainDatePrototypeToLocaleString => {
+                "toLocaleString"
+            }
             Self::PrototypeValueOf
             | Self::PlainDatePrototypeValueOf
             | Self::ZonedDateTimePrototypeValueOf => "valueOf",
@@ -176,6 +238,66 @@ impl TemporalFunctionKind {
             Self::PlainYearMonthConstructor => "PlainYearMonth",
             Self::InstantConstructor => "Instant",
             Self::PlainTimeConstructor => "PlainTime",
+            Self::PlainDatePrototypeMonthCode => "get monthCode",
+            Self::PlainDatePrototypeEra => "get era",
+            Self::PlainDatePrototypeEraYear => "get eraYear",
+            Self::PlainDatePrototypeDayOfWeek => "get dayOfWeek",
+            Self::PlainDatePrototypeDayOfYear => "get dayOfYear",
+            Self::PlainDatePrototypeWeekOfYear => "get weekOfYear",
+            Self::PlainDatePrototypeYearOfWeek => "get yearOfWeek",
+            Self::PlainDatePrototypeDaysInWeek => "get daysInWeek",
+            Self::PlainDatePrototypeDaysInMonth => "get daysInMonth",
+            Self::PlainDatePrototypeDaysInYear => "get daysInYear",
+            Self::PlainDatePrototypeMonthsInYear => "get monthsInYear",
+            Self::PlainDatePrototypeInLeapYear => "get inLeapYear",
+            Self::PlainDatePrototypeWithCalendar => "withCalendar",
+            Self::PlainDatePrototypeUntil => "until",
+            Self::PlainDatePrototypeSince => "since",
+            Self::PlainDatePrototypeEquals => "equals",
+            Self::PlainDatePrototypeToPlainDateTime => "toPlainDateTime",
+            Self::PlainDatePrototypeToZonedDateTime => "toZonedDateTime",
+            Self::PlainDatePrototypeToPlainYearMonth => "toPlainYearMonth",
+            Self::PlainDatePrototypeToPlainMonthDay => "toPlainMonthDay",
         }
+    }
+
+    pub(in crate::runtime::native) const fn is_plain_date(self) -> bool {
+        matches!(
+            self,
+            Self::PlainDateConstructor
+                | Self::PlainDateFrom
+                | Self::PlainDateCompare
+                | Self::PlainDatePrototypeYear
+                | Self::PlainDatePrototypeMonth
+                | Self::PlainDatePrototypeMonthCode
+                | Self::PlainDatePrototypeDay
+                | Self::PlainDatePrototypeCalendarId
+                | Self::PlainDatePrototypeEra
+                | Self::PlainDatePrototypeEraYear
+                | Self::PlainDatePrototypeDayOfWeek
+                | Self::PlainDatePrototypeDayOfYear
+                | Self::PlainDatePrototypeWeekOfYear
+                | Self::PlainDatePrototypeYearOfWeek
+                | Self::PlainDatePrototypeDaysInWeek
+                | Self::PlainDatePrototypeDaysInMonth
+                | Self::PlainDatePrototypeDaysInYear
+                | Self::PlainDatePrototypeMonthsInYear
+                | Self::PlainDatePrototypeInLeapYear
+                | Self::PlainDatePrototypeWith
+                | Self::PlainDatePrototypeWithCalendar
+                | Self::PlainDatePrototypeAdd
+                | Self::PlainDatePrototypeSubtract
+                | Self::PlainDatePrototypeUntil
+                | Self::PlainDatePrototypeSince
+                | Self::PlainDatePrototypeEquals
+                | Self::PlainDatePrototypeToPlainDateTime
+                | Self::PlainDatePrototypeToZonedDateTime
+                | Self::PlainDatePrototypeToPlainYearMonth
+                | Self::PlainDatePrototypeToPlainMonthDay
+                | Self::PlainDatePrototypeToString
+                | Self::PlainDatePrototypeToJson
+                | Self::PlainDatePrototypeToLocaleString
+                | Self::PlainDatePrototypeValueOf
+        )
     }
 }
