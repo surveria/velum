@@ -135,6 +135,17 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     PlainTimePrototypeToLocaleString,
     PlainTimePrototypeToJson,
     PlainTimePrototypeValueOf,
+    PlainMonthDayFrom,
+    PlainMonthDayPrototypeCalendarId,
+    PlainMonthDayPrototypeMonthCode,
+    PlainMonthDayPrototypeDay,
+    PlainMonthDayPrototypeWith,
+    PlainMonthDayPrototypeEquals,
+    PlainMonthDayPrototypeToPlainDate,
+    PlainMonthDayPrototypeToString,
+    PlainMonthDayPrototypeToLocaleString,
+    PlainMonthDayPrototypeToJson,
+    PlainMonthDayPrototypeValueOf,
 }
 
 impl TemporalFunctionKind {
@@ -284,7 +295,24 @@ impl TemporalFunctionKind {
             Self::PlainTimePrototypeToLocaleString => 129,
             Self::PlainTimePrototypeToJson => 130,
             Self::PlainTimePrototypeValueOf => 131,
-            _ => 47,
+            _ => self.plain_month_day_index(),
+        }
+    }
+
+    const fn plain_month_day_index(self) -> usize {
+        match self {
+            Self::PlainMonthDayFrom => 132,
+            Self::PlainMonthDayPrototypeCalendarId => 133,
+            Self::PlainMonthDayPrototypeMonthCode => 134,
+            Self::PlainMonthDayPrototypeDay => 135,
+            Self::PlainMonthDayPrototypeWith => 136,
+            Self::PlainMonthDayPrototypeEquals => 137,
+            Self::PlainMonthDayPrototypeToPlainDate => 138,
+            Self::PlainMonthDayPrototypeToString => 139,
+            Self::PlainMonthDayPrototypeToLocaleString => 140,
+            Self::PlainMonthDayPrototypeToJson => 141,
+            Self::PlainMonthDayPrototypeValueOf => 142,
+            _ => 44,
         }
     }
 
@@ -327,6 +355,10 @@ impl TemporalFunctionKind {
             | Self::PlainTimePrototypeSince
             | Self::PlainTimePrototypeRound
             | Self::PlainTimePrototypeEquals
+            | Self::PlainMonthDayFrom
+            | Self::PlainMonthDayPrototypeWith
+            | Self::PlainMonthDayPrototypeEquals
+            | Self::PlainMonthDayPrototypeToPlainDate
             | Self::ZonedDateTimeFrom
             | Self::PrototypeWith
             | Self::PrototypeAdd
@@ -338,6 +370,9 @@ impl TemporalFunctionKind {
     }
 
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
+        if self.is_plain_month_day() {
+            return self.plain_month_day_name();
+        }
         match self {
             Self::Constructor => TEMPORAL_DURATION_NAME,
             Self::From
@@ -484,7 +519,24 @@ impl TemporalFunctionKind {
             Self::PlainTimePrototypeUntil => "until",
             Self::PlainTimePrototypeSince => "since",
             Self::PlainTimePrototypeEquals => "equals",
-            _ => "PlainTime",
+            _ => self.plain_month_day_name(),
+        }
+    }
+
+    const fn plain_month_day_name(self) -> &'static str {
+        match self {
+            Self::PlainMonthDayFrom => "from",
+            Self::PlainMonthDayPrototypeCalendarId => "get calendarId",
+            Self::PlainMonthDayPrototypeMonthCode => "get monthCode",
+            Self::PlainMonthDayPrototypeDay => "get day",
+            Self::PlainMonthDayPrototypeWith => "with",
+            Self::PlainMonthDayPrototypeEquals => "equals",
+            Self::PlainMonthDayPrototypeToPlainDate => "toPlainDate",
+            Self::PlainMonthDayPrototypeToString => "toString",
+            Self::PlainMonthDayPrototypeToLocaleString => "toLocaleString",
+            Self::PlainMonthDayPrototypeToJson => "toJSON",
+            Self::PlainMonthDayPrototypeValueOf => "valueOf",
+            _ => "PlainMonthDay",
         }
     }
 
@@ -598,6 +650,24 @@ impl TemporalFunctionKind {
                 | Self::PlainTimePrototypeToLocaleString
                 | Self::PlainTimePrototypeToJson
                 | Self::PlainTimePrototypeValueOf
+        )
+    }
+
+    pub(in crate::runtime::native) const fn is_plain_month_day(self) -> bool {
+        matches!(
+            self,
+            Self::PlainMonthDayConstructor
+                | Self::PlainMonthDayFrom
+                | Self::PlainMonthDayPrototypeCalendarId
+                | Self::PlainMonthDayPrototypeMonthCode
+                | Self::PlainMonthDayPrototypeDay
+                | Self::PlainMonthDayPrototypeWith
+                | Self::PlainMonthDayPrototypeEquals
+                | Self::PlainMonthDayPrototypeToPlainDate
+                | Self::PlainMonthDayPrototypeToString
+                | Self::PlainMonthDayPrototypeToLocaleString
+                | Self::PlainMonthDayPrototypeToJson
+                | Self::PlainMonthDayPrototypeValueOf
         )
     }
 }
