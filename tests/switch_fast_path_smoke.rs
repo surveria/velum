@@ -64,3 +64,24 @@ fn preserves_expression_case_fallback_order() -> TestResult {
         &Value::Number(52.0),
     )
 }
+
+#[test]
+fn preserves_fallthrough_values_and_rejects_declaration_conflicts() -> TestResult {
+    expect_value(
+        r#"eval('switch ("a") { case "a": 40; case "b": 42; case "c": }')"#,
+        &Value::Number(42.0),
+    )?;
+
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let Err(error) = context.eval("switch (0) { case 0: let value; default: var value; }") else {
+        return Err("expected conflicting switch declarations to fail".into());
+    };
+    if error
+        .to_string()
+        .contains("conflicts with a var declaration")
+    {
+        return Ok(());
+    }
+    Err(format!("expected switch declaration parse error, got {error}").into())
+}
