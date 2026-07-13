@@ -187,9 +187,9 @@ impl Context {
         self.temporal_calendar_constructor(
             TemporalFunctionKind::PlainYearMonthConstructor,
             "Temporal.PlainYearMonth",
-            &[],
-            &[],
-            &[],
+            super::plain_year_month::STATIC_METHODS,
+            super::plain_year_month::ACCESSORS,
+            super::plain_year_month::METHODS,
         )
     }
 
@@ -623,6 +623,9 @@ impl Context {
         }
         if kind.is_plain_month_day() {
             return self.eval_plain_month_day_kind(kind, args, receiver);
+        }
+        if kind.is_plain_year_month() {
+            return self.eval_plain_year_month_kind(kind, args, receiver);
         }
         match kind {
             TemporalFunctionKind::PlainDateConstructor => Err(Error::type_error(

@@ -146,6 +146,29 @@ pub(in crate::runtime) enum TemporalFunctionKind {
     PlainMonthDayPrototypeToLocaleString,
     PlainMonthDayPrototypeToJson,
     PlainMonthDayPrototypeValueOf,
+    PlainYearMonthFrom,
+    PlainYearMonthCompare,
+    PlainYearMonthPrototypeYear,
+    PlainYearMonthPrototypeMonth,
+    PlainYearMonthPrototypeMonthCode,
+    PlainYearMonthPrototypeCalendarId,
+    PlainYearMonthPrototypeEra,
+    PlainYearMonthPrototypeEraYear,
+    PlainYearMonthPrototypeDaysInMonth,
+    PlainYearMonthPrototypeDaysInYear,
+    PlainYearMonthPrototypeMonthsInYear,
+    PlainYearMonthPrototypeInLeapYear,
+    PlainYearMonthPrototypeWith,
+    PlainYearMonthPrototypeAdd,
+    PlainYearMonthPrototypeSubtract,
+    PlainYearMonthPrototypeUntil,
+    PlainYearMonthPrototypeSince,
+    PlainYearMonthPrototypeEquals,
+    PlainYearMonthPrototypeToPlainDate,
+    PlainYearMonthPrototypeToString,
+    PlainYearMonthPrototypeToLocaleString,
+    PlainYearMonthPrototypeToJson,
+    PlainYearMonthPrototypeValueOf,
 }
 
 impl TemporalFunctionKind {
@@ -312,7 +335,7 @@ impl TemporalFunctionKind {
             Self::PlainMonthDayPrototypeToLocaleString => 140,
             Self::PlainMonthDayPrototypeToJson => 141,
             Self::PlainMonthDayPrototypeValueOf => 142,
-            _ => 44,
+            _ => self.plain_year_month_index(),
         }
     }
 
@@ -322,6 +345,7 @@ impl TemporalFunctionKind {
             | Self::PlainDateCompare
             | Self::PlainDateTimeCompare
             | Self::PlainTimeCompare
+            | Self::PlainYearMonthCompare
             | Self::ZonedDateTimeConstructor
             | Self::PlainMonthDayConstructor
             | Self::PlainYearMonthConstructor => 2.0,
@@ -359,6 +383,14 @@ impl TemporalFunctionKind {
             | Self::PlainMonthDayPrototypeWith
             | Self::PlainMonthDayPrototypeEquals
             | Self::PlainMonthDayPrototypeToPlainDate
+            | Self::PlainYearMonthFrom
+            | Self::PlainYearMonthPrototypeWith
+            | Self::PlainYearMonthPrototypeAdd
+            | Self::PlainYearMonthPrototypeSubtract
+            | Self::PlainYearMonthPrototypeUntil
+            | Self::PlainYearMonthPrototypeSince
+            | Self::PlainYearMonthPrototypeEquals
+            | Self::PlainYearMonthPrototypeToPlainDate
             | Self::ZonedDateTimeFrom
             | Self::PrototypeWith
             | Self::PrototypeAdd
@@ -525,6 +557,7 @@ impl TemporalFunctionKind {
 
     const fn plain_month_day_name(self) -> &'static str {
         match self {
+            Self::PlainMonthDayConstructor => "PlainMonthDay",
             Self::PlainMonthDayFrom => "from",
             Self::PlainMonthDayPrototypeCalendarId => "get calendarId",
             Self::PlainMonthDayPrototypeMonthCode => "get monthCode",
@@ -536,7 +569,7 @@ impl TemporalFunctionKind {
             Self::PlainMonthDayPrototypeToLocaleString => "toLocaleString",
             Self::PlainMonthDayPrototypeToJson => "toJSON",
             Self::PlainMonthDayPrototypeValueOf => "valueOf",
-            _ => "PlainMonthDay",
+            _ => self.plain_year_month_name(),
         }
     }
 
