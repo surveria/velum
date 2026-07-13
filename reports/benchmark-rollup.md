@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260713T033311Z.md`
-- Task: PR #555: runtime: complete Temporal ZonedDateTime semantics
-- Performance: 6.08x (4/5 >1.00x) (from `rsqjs-test-report-20260713T033311Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T033311Z.md`)
+- `rsqjs-test-report-20260713T035350Z.md`
+- Task: PR #558: runtime: complete Temporal Now semantics
+- Performance: 6.06x (4/5 >1.00x) (from `rsqjs-test-report-20260713T035350Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260713T035350Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 94087 passed / 8491 failed (91.72%) (from `rsqjs-test-report-20260713T033311Z.md`)
+- Full Test262: 94260 passed / 8318 failed (91.89%) (from `rsqjs-test-report-20260713T035350Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -519,3 +519,4 @@ Latest report:
 | `20260713T024923Z` `90342bc` PR #553: runtime: complete Temporal Instant semantics | 6.06x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 91467 passed / 11111 failed (89.17%) |
 | `20260713T032433Z` `56577f9` PR #556: parser: preserve template raw semantics | 6.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 91469 passed / 11109 failed (89.17%) |
 | `20260713T033311Z` `61b1c5c` PR #555: runtime: complete Temporal ZonedDateTime semantics | 6.08x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94087 passed / 8491 failed (91.72%) |
+| `20260713T035350Z` `f641c75` PR #558: runtime: complete Temporal Now semantics | 6.06x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 94260 passed / 8318 failed (91.89%) |
