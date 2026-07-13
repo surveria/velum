@@ -25,6 +25,10 @@ fn exposes_intl_temporal_formatters() -> TestResult {
             duration instanceof Intl.DurationFormat &&
             Intl.DateTimeFormat.length === 0 &&
             Intl.DurationFormat.length === 0 &&
+            typeof Intl.Collator === "function" &&
+            typeof Intl.NumberFormat === "function" &&
+            typeof Intl.PluralRules === "function" &&
+            typeof Intl.RelativeTimeFormat === "function" &&
             Intl.supportedValuesOf("calendar").includes("gregory") &&
             Intl.supportedValuesOf("timeZone").includes("UTC")
         "#,

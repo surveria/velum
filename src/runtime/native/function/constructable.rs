@@ -22,6 +22,10 @@ impl NativeFunctionKind {
                 | Self::Intl(
                     IntlFunctionKind::DateTimeFormatConstructor
                         | IntlFunctionKind::DurationFormatConstructor
+                        | IntlFunctionKind::CollatorConstructor
+                        | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::PluralRulesConstructor
+                        | IntlFunctionKind::RelativeTimeFormatConstructor
                 )
                 | Self::Number
                 | Self::Object
@@ -74,6 +78,10 @@ impl NativeFunctionKind {
                 | Self::Intl(
                     IntlFunctionKind::DateTimeFormatConstructor
                         | IntlFunctionKind::DurationFormatConstructor
+                        | IntlFunctionKind::CollatorConstructor
+                        | IntlFunctionKind::NumberFormatConstructor
+                        | IntlFunctionKind::PluralRulesConstructor
+                        | IntlFunctionKind::RelativeTimeFormatConstructor
                 )
                 | Self::Number
                 | Self::Object

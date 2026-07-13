@@ -38,6 +38,31 @@ impl Context {
         self.define_non_enumerable_object_property(namespace, "DateTimeFormat", date_time_format)?;
         let duration_format = self.intl_duration_format_constructor_value()?;
         self.define_non_enumerable_object_property(namespace, "DurationFormat", duration_format)?;
+        for (name, kind, tag) in [
+            (
+                "Collator",
+                IntlFunctionKind::CollatorConstructor,
+                "Intl.Collator",
+            ),
+            (
+                "NumberFormat",
+                IntlFunctionKind::NumberFormatConstructor,
+                "Intl.NumberFormat",
+            ),
+            (
+                "PluralRules",
+                IntlFunctionKind::PluralRulesConstructor,
+                "Intl.PluralRules",
+            ),
+            (
+                "RelativeTimeFormat",
+                IntlFunctionKind::RelativeTimeFormatConstructor,
+                "Intl.RelativeTimeFormat",
+            ),
+        ] {
+            let constructor = self.intl_constructor_value(kind, tag, &[])?;
+            self.define_non_enumerable_object_property(namespace, name, constructor)?;
+        }
         let supported = self.create_native_function(
             intl_kind(IntlFunctionKind::SupportedValuesOf),
             Value::Undefined,
@@ -59,6 +84,10 @@ impl Context {
                 self.construct_intl_date_time_format(args)
             }
             IntlFunctionKind::DurationFormatConstructor => self.construct_intl_duration_format(),
+            IntlFunctionKind::CollatorConstructor
+            | IntlFunctionKind::NumberFormatConstructor
+            | IntlFunctionKind::PluralRulesConstructor
+            | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
             _ => Err(Error::type_error("Intl method is not a constructor")),
         }
     }
@@ -87,6 +116,10 @@ impl Context {
                 self.eval_intl_duration_format(args, this_value)
             }
             IntlFunctionKind::SupportedValuesOf => self.eval_intl_supported_values_of(args),
+            IntlFunctionKind::CollatorConstructor
+            | IntlFunctionKind::NumberFormatConstructor
+            | IntlFunctionKind::PluralRulesConstructor
+            | IntlFunctionKind::RelativeTimeFormatConstructor => self.construct_intl_stub(kind),
         }
     }
 
@@ -165,6 +198,18 @@ impl Context {
             IntlFunctionKind::DurationFormatConstructor => {
                 self.intl_duration_format_constructor_value()?
             }
+            IntlFunctionKind::CollatorConstructor => {
+                self.intl_constructor_value(kind, "Intl.Collator", &[])?
+            }
+            IntlFunctionKind::NumberFormatConstructor => {
+                self.intl_constructor_value(kind, "Intl.NumberFormat", &[])?
+            }
+            IntlFunctionKind::PluralRulesConstructor => {
+                self.intl_constructor_value(kind, "Intl.PluralRules", &[])?
+            }
+            IntlFunctionKind::RelativeTimeFormatConstructor => {
+                self.intl_constructor_value(kind, "Intl.RelativeTimeFormat", &[])?
+            }
             _ => return Err(Error::runtime("Intl kind has no constructor prototype")),
         };
         let Value::NativeFunction(id) = constructor else {
@@ -176,6 +221,17 @@ impl Context {
                 "Intl constructor prototype is not an object",
             )),
         }
+    }
+
+    fn construct_intl_stub(&mut self, kind: IntlFunctionKind) -> Result<Value> {
+        let prototype = self.intl_constructor_prototype(kind)?;
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_with_prototype(
+            Some(prototype),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
     }
 
     fn define_intl_to_string_tag(&mut self, object: ObjectId, tag: &str) -> Result<()> {

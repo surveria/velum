@@ -9,6 +9,10 @@ pub(in crate::runtime) enum IntlFunctionKind {
     DurationFormatConstructor,
     DurationFormatFormat,
     SupportedValuesOf,
+    CollatorConstructor,
+    NumberFormatConstructor,
+    PluralRulesConstructor,
+    RelativeTimeFormatConstructor,
 }
 
 impl IntlFunctionKind {
@@ -21,6 +25,10 @@ impl IntlFunctionKind {
             Self::DurationFormatConstructor => 4,
             Self::DurationFormatFormat => 5,
             Self::SupportedValuesOf => 6,
+            Self::CollatorConstructor => 7,
+            Self::NumberFormatConstructor => 8,
+            Self::PluralRulesConstructor => 9,
+            Self::RelativeTimeFormatConstructor => 10,
         }
     }
 
@@ -28,7 +36,11 @@ impl IntlFunctionKind {
         match self {
             Self::DateTimeFormatConstructor
             | Self::DurationFormatConstructor
-            | Self::DateTimeFormatResolvedOptions => 0.0,
+            | Self::DateTimeFormatResolvedOptions
+            | Self::CollatorConstructor
+            | Self::NumberFormatConstructor
+            | Self::PluralRulesConstructor
+            | Self::RelativeTimeFormatConstructor => 0.0,
             Self::DateTimeFormatFormat
             | Self::DateTimeFormatFormatToParts
             | Self::DurationFormatFormat
@@ -44,6 +56,10 @@ impl IntlFunctionKind {
             Self::DateTimeFormatResolvedOptions => "resolvedOptions",
             Self::DurationFormatConstructor => "DurationFormat",
             Self::SupportedValuesOf => "supportedValuesOf",
+            Self::CollatorConstructor => "Collator",
+            Self::NumberFormatConstructor => "NumberFormat",
+            Self::PluralRulesConstructor => "PluralRules",
+            Self::RelativeTimeFormatConstructor => "RelativeTimeFormat",
         }
     }
 }
