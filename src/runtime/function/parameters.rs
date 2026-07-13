@@ -2,12 +2,16 @@ use std::rc::Rc;
 
 use crate::{
     binding_metadata::{BindingLayout, BindingOperand, ScopeId},
-    bytecode::{BytecodeBlock, BytecodeFunction, BytecodeFunctionParam},
+    bytecode::{
+        BytecodeDestructureMode, BytecodeFunction, BytecodeFunctionParam,
+        BytecodeFunctionParamTarget,
+    },
     error::{Error, Result},
     runtime::{
         Context,
         binding::scope::{BindingCell, BindingScope, BindingSlot},
         binding::static_bindings::{CompiledBindingFrame, StaticBindingCacheHandle},
+        bytecode::{DestructureOutcome, state::BytecodeState},
         control::Completion,
         property::static_names::StaticNameAtomCacheHandle,
     },
@@ -84,7 +88,10 @@ impl Context {
     ) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
-            atoms.push(self.intern_static_name_atom(param.binding().name())?);
+            param.for_each_binding(&mut |binding| {
+                atoms.push(self.intern_static_name_atom(binding.name().name())?);
+                Ok(())
+            })?;
         }
         Ok(atoms.into())
     }
@@ -113,17 +120,31 @@ impl Context {
         ))
     }
 
+    pub(super) fn function_call_scope(
+        &mut self,
+        template: Option<&FunctionScopeTemplate>,
+        params: &[AtomId],
+        frames: &[Option<CompiledBindingFrame>],
+        args: &[Value],
+        requires_parameter_initialization: bool,
+    ) -> Result<BindingScope> {
+        match template {
+            Some(template) => self.function_scope_from_template(template, args),
+            None => self.function_scope(params, frames, args, requires_parameter_initialization),
+        }
+    }
+
     pub(super) fn function_scope(
         &mut self,
         params: &[AtomId],
         frames: &[Option<CompiledBindingFrame>],
         args: &[Value],
-        has_parameter_defaults: bool,
+        requires_parameter_initialization: bool,
     ) -> Result<BindingScope> {
         if params.len() != frames.len() {
             return Err(Error::runtime("function parameter layout length mismatch"));
         }
-        if !has_parameter_defaults
+        if !requires_parameter_initialization
             && params_have_unique_atoms(params)
             && let Some(scope) = contiguous_parameter_scope(frames)
         {
@@ -148,7 +169,7 @@ impl Context {
             if !scope.contains(atom) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
-            let cell = if has_parameter_defaults {
+            let cell = if requires_parameter_initialization {
                 BindingCell::uninitialized(true, DeclKind::Var)
             } else {
                 let value = args.get(index).cloned().unwrap_or(Value::Undefined);
@@ -207,7 +228,6 @@ impl Context {
                 Some(static_binding_cache),
                 Some(static_binding_layout),
             ) => {
-                let default_layout = static_binding_layout.clone();
                 self.with_static_name_caches(
                     static_name_atom_cache,
                     static_binding_cache,
@@ -222,13 +242,9 @@ impl Context {
                                 parameters.atoms,
                             )?;
                         }
-                        if let Some(completion) = context.apply_function_param_defaults(
-                            parameters.binding_ids,
-                            parameters.atoms,
-                            bytecode.param_defaults(),
-                            parameters.args,
-                            Some(&default_layout),
-                        )? {
+                        if let Some(completion) =
+                            context.apply_function_parameters(bytecode, parameters.args)?
+                        {
                             return Ok(completion);
                         }
                         context
@@ -244,13 +260,9 @@ impl Context {
             }
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
-                    if let Some(completion) = context.apply_function_param_defaults(
-                        parameters.binding_ids,
-                        parameters.atoms,
-                        bytecode.param_defaults(),
-                        parameters.args,
-                        None,
-                    )? {
+                    if let Some(completion) =
+                        context.apply_function_parameters(bytecode, parameters.args)?
+                    {
                         return Ok(completion);
                     }
                     context
@@ -264,13 +276,9 @@ impl Context {
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => {
-                if let Some(completion) = self.apply_function_param_defaults(
-                    parameters.binding_ids,
-                    parameters.atoms,
-                    bytecode.param_defaults(),
-                    parameters.args,
-                    None,
-                )? {
+                if let Some(completion) =
+                    self.apply_function_parameters(bytecode, parameters.args)?
+                {
                     return Ok(completion);
                 }
                 self.hoist_bytecode_declarations(bytecode.hoist_plan())
@@ -313,33 +321,19 @@ impl Context {
         Ok(())
     }
 
-    fn apply_function_param_defaults(
+    fn apply_function_parameters(
         &mut self,
-        binding_ids: &[StaticBindingId],
-        atoms: &[AtomId],
-        defaults: &[Option<BytecodeBlock>],
+        bytecode: &BytecodeFunction,
         args: &[Value],
-        layout: Option<&BindingLayout>,
     ) -> Result<Option<Completion>> {
-        if binding_ids.len() != atoms.len() || binding_ids.len() != defaults.len() {
-            return Err(Error::runtime("function parameter layout length mismatch"));
-        }
-        if !defaults.iter().any(Option::is_some) {
+        if !bytecode.requires_parameter_initialization() {
             return Ok(None);
         }
-        for (index, ((binding, atom), default)) in binding_ids
-            .iter()
-            .copied()
-            .zip(atoms.iter().copied())
-            .zip(defaults.iter())
-            .enumerate()
-        {
-            let cell = self.function_param_cell(binding, atom, layout)?;
+        for (index, parameter) in bytecode.params().iter().enumerate() {
             let argument = args.get(index).cloned().unwrap_or(Value::Undefined);
-            let value = if default.is_some() && matches!(argument, Value::Undefined) {
-                let Some(default) = default else {
-                    return Err(Error::runtime("function parameter default disappeared"));
-                };
+            let value = if matches!(argument, Value::Undefined)
+                && let Some(default) = parameter.default()
+            {
                 match self.eval_bytecode_block(default)? {
                     Completion::Normal(value) => value,
                     completion => return Ok(Some(completion)),
@@ -347,31 +341,33 @@ impl Context {
             } else {
                 self.runtime_value(argument)?
             };
-            cell.initialize(value)?;
+            match parameter.target() {
+                BytecodeFunctionParamTarget::Binding(binding) => {
+                    self.initialize_bytecode_parameter(binding, value)?;
+                }
+                BytecodeFunctionParamTarget::Pattern(pattern) => {
+                    let mut state =
+                        BytecodeState::with_private_environment(self.current_private_environment());
+                    match self.eval_resumable_destructure(
+                        &mut state,
+                        pattern,
+                        BytecodeDestructureMode::Parameter,
+                        Some(value),
+                    )? {
+                        DestructureOutcome::Completed => {}
+                        DestructureOutcome::Abrupt(completion)
+                            if completion.suspends_execution() =>
+                        {
+                            return Err(Error::runtime(
+                                "function parameter destructuring unexpectedly suspended",
+                            ));
+                        }
+                        DestructureOutcome::Abrupt(completion) => return Ok(Some(completion)),
+                    }
+                }
+            }
         }
         Ok(None)
-    }
-
-    fn function_param_cell(
-        &self,
-        binding: StaticBindingId,
-        atom: AtomId,
-        layout: Option<&BindingLayout>,
-    ) -> Result<BindingCell> {
-        if !self.has_visible_local_scope() {
-            return Err(Error::runtime("function parameter scope is not active"));
-        }
-        let Some(scope) = self.locals.last() else {
-            return Err(Error::runtime("function parameter scope is not active"));
-        };
-        if let Some(frame) = function_param_frame(binding, layout)? {
-            return scope
-                .cell_for_slot(atom, frame.slot())
-                .ok_or_else(|| Error::runtime("function parameter binding is not defined"));
-        }
-        scope
-            .get(atom)
-            .ok_or_else(|| Error::runtime("function parameter binding is not defined"))
     }
 }
 
@@ -396,6 +392,9 @@ impl Context {
             Vec::new()
         };
         let packed = self.create_array_from_elements(rest)?;
+        while args.len() < rest_index {
+            args.push(Value::Undefined);
+        }
         args.push(packed);
         Ok(args)
     }
@@ -403,23 +402,29 @@ impl Context {
 
 pub(super) fn function_param_binding_ids(
     params: &[BytecodeFunctionParam],
-) -> Rc<[StaticBindingId]> {
-    params
-        .iter()
-        .map(|param| param.binding().id())
-        .collect::<Vec<_>>()
-        .into()
+) -> Result<Rc<[StaticBindingId]>> {
+    let mut bindings = Vec::with_capacity(params.len());
+    for param in params {
+        param.for_each_binding(&mut |binding| {
+            bindings.push(binding.name().id());
+            Ok(())
+        })?;
+    }
+    Ok(bindings.into())
 }
 
 pub(super) fn function_param_frames(
     params: &[BytecodeFunctionParam],
     layout: Option<&BindingLayout>,
 ) -> Result<Rc<[Option<CompiledBindingFrame>]>> {
-    params
-        .iter()
-        .map(|param| function_param_frame(param.binding().id(), layout))
-        .collect::<Result<Vec<_>>>()
-        .map(Rc::from)
+    let mut frames = Vec::with_capacity(params.len());
+    for param in params {
+        param.for_each_binding(&mut |binding| {
+            frames.push(function_param_frame(binding.name().id(), layout)?);
+            Ok(())
+        })?;
+    }
+    Ok(frames.into())
 }
 
 pub(super) fn function_arity(params: &[BytecodeFunctionParam]) -> super::super::FunctionArity {
@@ -570,9 +575,12 @@ impl FunctionScopeTemplate {
 pub(super) fn function_scope_template(
     params: &[AtomId],
     frames: &[Option<CompiledBindingFrame>],
-    has_parameter_defaults: bool,
+    requires_parameter_initialization: bool,
 ) -> Result<Option<std::rc::Rc<super::FunctionScopeTemplate>>> {
-    if has_parameter_defaults || params.len() != frames.len() || !params_have_unique_atoms(params) {
+    if requires_parameter_initialization
+        || params.len() != frames.len()
+        || !params_have_unique_atoms(params)
+    {
         return Ok(None);
     }
     let Some(scope) = contiguous_parameter_scope(frames) else {

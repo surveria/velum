@@ -1,44 +1,21 @@
 use crate::{
-    ast::{Expr, Expression, FunctionParam, Statement, StaticBinding, Stmt},
+    ast::{FunctionParam, StaticBinding},
     error::Result,
     lexer::TokenKind,
-    syntax::DeclKind,
 };
 
 use super::Parser;
 
-/// Prefix for synthesized parameter names that hold a destructured argument
-/// before the body-prologue pattern declaration unpacks it. The `%` characters
-/// keep the name outside the user identifier space.
-const PATTERN_PARAM_NAME_PREFIX: &str = "%pattern";
-const PATTERN_PARAM_NAME_SUFFIX: &str = "%";
-
-/// Prefix for the synthesized rest parameter that holds the packed argument
-/// array before a body-prologue pattern declaration unpacks it.
-const REST_PATTERN_PARAM_NAME: &str = "%rest%";
-
-/// Parsed parameter list plus the pattern-unpacking statements that must run
-/// before the function body.
+/// Parsed parameter list and its early-error metadata.
 pub(super) struct ParsedParameters {
     pub(super) params: Vec<FunctionParam>,
     pub(super) bound_names: Vec<StaticBinding>,
-    pub(super) pattern_prologue: Vec<Statement>,
     pub(super) is_simple: bool,
 }
 
 impl ParsedParameters {
-    /// Prepends the pattern-unpacking prologue to the parsed body statements.
-    pub(super) fn apply_prologue(
-        self,
-        mut body: Vec<Statement>,
-    ) -> (Vec<FunctionParam>, Vec<Statement>, usize) {
-        let prologue_count = self.pattern_prologue.len();
-        if self.pattern_prologue.is_empty() {
-            return (self.params, body, 0);
-        }
-        let mut statements = self.pattern_prologue;
-        statements.append(&mut body);
-        (self.params, statements, prologue_count)
+    pub(super) fn into_params(self) -> Vec<FunctionParam> {
+        self.params
     }
 }
 
@@ -46,13 +23,11 @@ impl Parser {
     pub(super) fn function_parameters(&mut self) -> Result<ParsedParameters> {
         let mut params = Vec::new();
         let mut bound_names = Vec::new();
-        let mut pattern_prologue = Vec::new();
         let mut is_simple = true;
         if self.check(&TokenKind::RParen) {
             return Ok(ParsedParameters {
                 params,
                 bound_names,
-                pattern_prologue,
                 is_simple,
             });
         }
@@ -63,12 +38,12 @@ impl Parser {
             }
             if self.match_kind(&TokenKind::DotDotDot) {
                 is_simple = false;
-                self.rest_parameter(&mut params, &mut bound_names, &mut pattern_prologue)?;
+                self.rest_parameter(&mut params, &mut bound_names)?;
                 break;
             }
             if self.next_is_binding_pattern() {
                 is_simple = false;
-                self.pattern_parameter(&mut params, &mut bound_names, &mut pattern_prologue)?;
+                self.pattern_parameter(&mut params, &mut bound_names)?;
             } else {
                 let name = self.consume_binding_identifier("expected function parameter name")?;
                 let default = if self.match_kind(&TokenKind::Equal) {
@@ -89,35 +64,20 @@ impl Parser {
         Ok(ParsedParameters {
             params,
             bound_names,
-            pattern_prologue,
             is_simple,
         })
     }
 
-    /// Parses one rest parameter after its consumed `...` marker: identifier
-    /// rests bind directly, pattern rests bind through a synthesized parameter
-    /// plus a body-prologue pattern declaration.
+    /// Parses one rest parameter after its consumed `...` marker.
     fn rest_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
         bound_names: &mut Vec<StaticBinding>,
-        pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
-        let start = self.previous_span();
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
             Self::collect_parameter_pattern_names(&pattern, bound_names)?;
-            let synthetic = self.static_binding_name(REST_PATTERN_PARAM_NAME.to_owned())?;
-            params.push(FunctionParam::rest(synthetic.clone()));
-            let span = self.span_since(start);
-            pattern_prologue.push(Statement::new(
-                Stmt::PatternDecl {
-                    pattern,
-                    kind: DeclKind::Var,
-                    init: Expression::new(Expr::Identifier(synthetic), span),
-                },
-                span,
-            ));
+            params.push(FunctionParam::rest_pattern(pattern));
         } else {
             let name = self.consume_binding_identifier("expected rest parameter name")?;
             bound_names.push(name.clone());
@@ -132,15 +92,12 @@ impl Parser {
         Ok(())
     }
 
-    /// Parses one destructuring parameter as a synthesized plain parameter
-    /// plus a body-prologue `var` pattern declaration that unpacks it.
+    /// Parses one destructuring parameter without lowering it into the body.
     fn pattern_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
         bound_names: &mut Vec<StaticBinding>,
-        pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
-        let start = self.current_span();
         let pattern = self.binding_pattern()?;
         Self::collect_parameter_pattern_names(&pattern, bound_names)?;
         let default = if self.match_kind(&TokenKind::Equal) {
@@ -148,21 +105,7 @@ impl Parser {
         } else {
             None
         };
-        let synthetic_name = format!(
-            "{PATTERN_PARAM_NAME_PREFIX}{}{PATTERN_PARAM_NAME_SUFFIX}",
-            params.len()
-        );
-        let synthetic = self.static_binding_name(synthetic_name)?;
-        params.push(FunctionParam::new(synthetic.clone(), default));
-        let span = self.span_since(start);
-        pattern_prologue.push(Statement::new(
-            Stmt::PatternDecl {
-                pattern,
-                kind: DeclKind::Var,
-                init: Expression::new(Expr::Identifier(synthetic), span),
-            },
-            span,
-        ));
+        params.push(FunctionParam::pattern(pattern, default));
         Ok(())
     }
 

@@ -2,6 +2,7 @@ mod address;
 mod block;
 mod completion;
 mod fast_path;
+mod function;
 mod function_mode;
 mod hoist;
 mod metrics;
@@ -24,6 +25,9 @@ pub use address::BytecodeAddress;
 pub use block::BytecodeBlock;
 pub use completion::BytecodeCompletion;
 pub use fast_path::BytecodeDirectThrow;
+pub use function::{
+    BytecodeFunction, BytecodeFunctionInit, BytecodeFunctionParam, BytecodeFunctionParamTarget,
+};
 pub use function_mode::BytecodeNewTargetMode;
 pub use hoist::BytecodeHoistPlan;
 pub use numeric::{
@@ -35,8 +39,8 @@ pub use super_property::BytecodeSuperProperty;
 pub use types::{
     BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCallSite, BytecodeCatch,
     BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind,
-    BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction,
-    BytecodeFunctionDeclaration, BytecodeFunctionInit, BytecodeFunctionParam, BytecodeInstruction,
-    BytecodeObjectProperty, BytecodePattern, BytecodePatternKey, BytecodePatternProperty,
-    BytecodePatternTarget, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
+    BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
+    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
+    BytecodeProperty, BytecodeSwitchCase,
 };

@@ -12,7 +12,7 @@ pub use class::{
 pub use expression::{
     Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, TemplateElement,
 };
-pub use function::FunctionParam;
+pub use function::{FunctionParam, FunctionParamTarget};
 pub use node::AstNode;
 pub use pattern::{
     ArrayAssignmentElement, ArrayBindingElement, AssignmentPattern, BindingPattern,

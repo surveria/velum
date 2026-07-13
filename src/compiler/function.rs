@@ -3,8 +3,8 @@ use std::{collections::BTreeSet, rc::Rc};
 use crate::{
     ast::{
         AssignmentPattern, BindingPattern, CatchClause, Expr, Expression, ForInTarget,
-        FunctionParam, ObjectProperty, ObjectPropertyKey, PatternPropertyKey, Statement,
-        StaticBinding, Stmt, SwitchCase,
+        FunctionParam, FunctionParamTarget, ObjectProperty, ObjectPropertyKey, PatternPropertyKey,
+        Statement, StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
     bytecode::BytecodeFunctionInit,
@@ -13,8 +13,9 @@ use crate::{
 };
 
 use super::{
-    BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
-    BytecodeInstruction, BytecodeNewTargetMode, FunctionCompileMode,
+    BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam,
+    BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
+    FunctionCompileMode,
 };
 
 struct FunctionCompileSpec<'a> {
@@ -24,7 +25,6 @@ struct FunctionCompileSpec<'a> {
     arguments_binding: Option<StaticBinding>,
     params: &'a Rc<[FunctionParam]>,
     body: &'a [Statement],
-    parameter_prologue_count: usize,
     constructable: bool,
     kind: FunctionKind,
     strict: bool,
@@ -55,7 +55,6 @@ impl BytecodeCompiler<'_> {
                 spec.arguments_binding,
                 spec.params,
                 spec.body,
-                spec.parameter_prologue_count,
                 FunctionCompileMode::new(spec.kind, spec.strict),
                 self.layout,
             )?,
@@ -78,7 +77,6 @@ impl BytecodeCompiler<'_> {
                 id,
                 params,
                 body,
-                parameter_prologue_count,
                 kind,
                 strict,
                 block_scoped: true,
@@ -114,7 +112,6 @@ impl BytecodeCompiler<'_> {
                     arguments_binding.clone(),
                     params,
                     body,
-                    *parameter_prologue_count,
                     FunctionCompileMode::new(*kind, *strict),
                     self.layout,
                 )?,
@@ -239,7 +236,6 @@ impl BytecodeFunction {
         arguments_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
-        parameter_prologue_count: usize,
         mode: FunctionCompileMode,
         layout: &BindingLayout,
     ) -> Result<Self> {
@@ -247,54 +243,55 @@ impl BytecodeFunction {
         Ok(Self::new(BytecodeFunctionInit {
             self_binding,
             arguments_binding,
-            params: compile_params(params),
-            param_defaults: compile_param_defaults(params, layout)?,
-            body: BytecodeBlock::compile_function_statements(
-                statements,
-                mode.kind,
-                parameter_prologue_count,
-                layout,
-            )?,
+            params: compile_params(params, layout)?,
+            body: BytecodeBlock::compile_function_statements(statements, mode.kind, layout)?,
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments: collected.uses_arguments,
             strict: mode.strict,
-            simple_parameters: parameter_prologue_count == 0
-                && params
-                    .iter()
-                    .all(|param| param.default.is_none() && !param.rest),
+            simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
         }))
     }
 }
 
-fn compile_params(params: &[FunctionParam]) -> Rc<[BytecodeFunctionParam]> {
-    params
-        .iter()
-        .map(|param| {
-            BytecodeFunctionParam::new(param.name.clone(), param.default.is_some(), param.rest)
-        })
-        .collect::<Vec<_>>()
-        .into()
-}
-
-fn compile_param_defaults(
+fn compile_params(
     params: &[FunctionParam],
     layout: &BindingLayout,
-) -> Result<std::rc::Rc<[Option<BytecodeBlock>]>> {
+) -> Result<Rc<[BytecodeFunctionParam]>> {
     params
         .iter()
         .map(|param| {
-            param.default.as_ref().map_or(Ok(None), |expr| {
-                BytecodeBlock::compile_expression_with_inferred_name(
-                    expr,
-                    param.name.name(),
-                    layout,
+            let target = match &param.target {
+                FunctionParamTarget::Binding(binding) => BytecodeFunctionParamTarget::Binding(
+                    super::BytecodeBinding::compile(binding, layout)?,
+                ),
+                FunctionParamTarget::Pattern(pattern) => {
+                    let compiler = BytecodeCompiler::new(
+                        layout,
+                        crate::SourceSpan::point(crate::SourceId::UNKNOWN, 0),
+                    );
+                    BytecodeFunctionParamTarget::Pattern(Rc::new(
+                        compiler.compile_pattern(pattern)?,
+                    ))
+                }
+            };
+            let default = param.default.as_ref().map_or(Ok(None), |expr| {
+                param.target.binding().map_or_else(
+                    || BytecodeBlock::compile_expression(expr, layout).map(Some),
+                    |binding| {
+                        BytecodeBlock::compile_expression_with_inferred_name(
+                            expr,
+                            binding.name(),
+                            layout,
+                        )
+                        .map(Some)
+                    },
                 )
-                .map(Some)
-            })
+            })?;
+            Ok(BytecodeFunctionParam::new(target, default, param.rest))
         })
         .collect::<Result<Vec<_>>>()
-        .map(Into::into)
+        .map(Rc::from)
 }
 
 fn function_compile_spec<'a>(
@@ -308,7 +305,6 @@ fn function_compile_spec<'a>(
             arguments_binding,
             params,
             body,
-            parameter_prologue_count,
             kind,
             strict,
             ..
@@ -322,7 +318,6 @@ fn function_compile_spec<'a>(
             arguments_binding: arguments_binding.clone(),
             params,
             body,
-            parameter_prologue_count: *parameter_prologue_count,
             constructable: kind.is_constructable(),
             kind: *kind,
             strict: *strict,
@@ -332,7 +327,6 @@ fn function_compile_spec<'a>(
             id,
             params,
             body,
-            parameter_prologue_count,
             kind,
             strict,
             ..
@@ -343,7 +337,6 @@ fn function_compile_spec<'a>(
             arguments_binding: None,
             params,
             body,
-            parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
             kind: *kind,
             strict: *strict,
@@ -355,7 +348,6 @@ fn function_compile_spec<'a>(
             arguments_binding,
             params,
             body,
-            parameter_prologue_count,
             kind,
             strict,
             ..
@@ -366,7 +358,6 @@ fn function_compile_spec<'a>(
             arguments_binding: arguments_binding.clone(),
             params,
             body,
-            parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
             kind: *kind,
             strict: *strict,
@@ -409,6 +400,9 @@ impl CaptureBindingCollector {
         for param in params {
             if let Some(default) = &param.default {
                 self.collect_expr(default);
+            }
+            if let Some(pattern) = param.target.pattern() {
+                self.collect_pattern(pattern);
             }
         }
     }

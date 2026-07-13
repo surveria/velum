@@ -101,7 +101,7 @@ impl Context {
         if !self
             .function(function_id)?
             .bytecode
-            .has_parameter_defaults()
+            .requires_parameter_initialization()
         {
             return Ok(());
         }

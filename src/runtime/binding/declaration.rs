@@ -187,6 +187,23 @@ impl Context {
         value: Value,
         kind: DeclKind,
     ) -> Result<()> {
+        self.initialize_bytecode_binding(name, value, kind)
+    }
+
+    pub(crate) fn initialize_bytecode_parameter(
+        &mut self,
+        name: &BytecodeBinding,
+        value: Value,
+    ) -> Result<()> {
+        self.initialize_bytecode_binding(name, value, DeclKind::Var)
+    }
+
+    fn initialize_bytecode_binding(
+        &mut self,
+        name: &BytecodeBinding,
+        value: Value,
+        kind: DeclKind,
+    ) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name().name())?;
         let Some(cell) = self.active_bindings().get(atom) else {
             return self.define_static(name.name(), value, kind);

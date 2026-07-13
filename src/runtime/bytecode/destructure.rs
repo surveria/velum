@@ -27,7 +27,7 @@ use super::{
 mod assignment_reference;
 
 /// Result of walking one destructuring pattern against a source value.
-pub(super) enum DestructureOutcome {
+pub(in crate::runtime) enum DestructureOutcome {
     Completed,
     /// An abrupt completion raised by user code (defaults, computed keys, or
     /// iterator protocol calls) that must propagate out of the statement.
@@ -72,7 +72,7 @@ impl Context {
         }
     }
 
-    pub(super) fn eval_resumable_destructure(
+    pub(in crate::runtime) fn eval_resumable_destructure(
         &mut self,
         state: &mut BytecodeState,
         pattern: &BytecodePattern,
@@ -174,14 +174,19 @@ impl Context {
     ) -> Result<Option<Completion>> {
         self.step()?;
         match pattern {
-            BytecodePattern::Binding(name) => {
-                let BytecodeDestructureMode::Declaration(kind) = continuation.mode else {
+            BytecodePattern::Binding(name) => match continuation.mode {
+                BytecodeDestructureMode::Declaration(kind) => {
+                    self.eval_bytecode_declaration(&name, kind, Some(value))?;
+                }
+                BytecodeDestructureMode::Parameter => {
+                    self.initialize_bytecode_parameter(&name, value)?;
+                }
+                BytecodeDestructureMode::Assignment => {
                     return Err(Error::runtime(
                         "binding pattern leaf used by assignment destructuring",
                     ));
-                };
-                self.eval_bytecode_declaration(&name, kind, Some(value))?;
-            }
+                }
+            },
             BytecodePattern::Assignment(target) => {
                 if continuation.mode != BytecodeDestructureMode::Assignment {
                     return Err(Error::runtime(

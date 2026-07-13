@@ -43,6 +43,58 @@ fn default_parameters_initialize_sequentially() -> TestResult {
 }
 
 #[test]
+fn destructured_parameters_initialize_before_later_defaults() -> TestResult {
+    let value = eval(
+        r"
+        function read({left, nested: [right]}, sum = left + right) {
+            return sum;
+        }
+        read({left: 19, nested: [23]});
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn destructured_parameter_defaults_observe_source_order_and_tdz() -> TestResult {
+    let value = eval(
+        r"
+        function ordered([first = 20, second = first + 1], result = second * 2) {
+            return result;
+        }
+        function readsLater({value = later}, later = 1) {
+            return value;
+        }
+
+        let laterError = false;
+        try {
+            readsLater({});
+        } catch (error) {
+            laterError = error instanceof ReferenceError;
+        }
+        ordered([]) === 42 && laterError;
+        ",
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn rest_pattern_keeps_missing_positional_arguments_in_place() -> TestResult {
+    let value = eval(
+        r#"
+        function collect(first, second, ...[head, tail]) {
+            return String(first) + ":" + String(second) + ":" + String(head) + ":" + String(tail);
+        }
+        collect() + ";" + collect(1, 2, 3, 4);
+        "#,
+    )?;
+    ensure_value(
+        &value,
+        &Value::from("undefined:undefined:undefined:undefined;1:2:3:4"),
+    )
+}
+
+#[test]
 fn default_parameter_tdz_rejects_self_and_later_reads() -> TestResult {
     let value = eval(
         r#"

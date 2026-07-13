@@ -20,6 +20,7 @@ mod string_concat;
 mod super_ops;
 
 pub(in crate::runtime) use continuation::BytecodeContinuationFrame;
+pub(in crate::runtime) use destructure::DestructureOutcome;
 pub(in crate::runtime) use execution::BytecodeOutcome;
 
 use crate::{

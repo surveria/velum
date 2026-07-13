@@ -112,7 +112,6 @@ impl<'a> HoistCollector<'a> {
         id: crate::syntax::StaticFunctionId,
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
-        parameter_prologue_count: usize,
         mode: FunctionCompileMode,
     ) -> Result<()> {
         let (name, arguments_binding) = bindings;
@@ -126,7 +125,6 @@ impl<'a> HoistCollector<'a> {
                 arguments_binding.cloned(),
                 params,
                 body,
-                parameter_prologue_count,
                 mode,
                 self.layout,
             )?,
@@ -278,7 +276,6 @@ impl<'a> HoistCollector<'a> {
             id,
             params,
             body,
-            parameter_prologue_count,
             kind,
             strict,
             ..
@@ -293,7 +290,6 @@ impl<'a> HoistCollector<'a> {
             *id,
             params,
             body,
-            *parameter_prologue_count,
             FunctionCompileMode::new(*kind, *strict),
         )
     }

@@ -107,11 +107,17 @@ impl LayoutBuilder {
         let function_scope =
             self.add_scope(Some(function_parent_scope), function, ScopeKind::Local);
         for param in params {
-            self.declare(function_scope, &param.name)?;
+            param
+                .target
+                .for_each_binding(&mut |binding| self.declare(function_scope, binding))?;
         }
         for param in params {
             if let Some(default) = &param.default {
                 self.analyze_expr(default, function_scope, function)?;
+            }
+            if let Some(pattern) = param.target.pattern() {
+                pattern
+                    .for_each_expr(&mut |expr| self.analyze_expr(expr, function_scope, function))?;
             }
         }
         self.collect_annex_b_var_bindings(body, function_scope)?;

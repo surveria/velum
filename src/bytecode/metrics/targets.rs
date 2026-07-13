@@ -1,7 +1,7 @@
 use crate::bytecode::{
     BytecodeAssignmentTarget, BytecodeCatch, BytecodeClass, BytecodeForInTarget, BytecodeFunction,
-    BytecodeFunctionDeclaration, BytecodeHoistPlan, BytecodeMetrics, BytecodePattern,
-    BytecodePatternKey, BytecodeSuperProperty, BytecodeSwitchCase,
+    BytecodeFunctionDeclaration, BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeMetrics,
+    BytecodePattern, BytecodePatternKey, BytecodeSuperProperty, BytecodeSwitchCase,
 };
 
 impl BytecodeAssignmentTarget {
@@ -79,8 +79,18 @@ impl BytecodeSuperProperty {
 impl BytecodeFunction {
     pub(super) fn metrics(&self) -> BytecodeMetrics {
         let mut metrics = self.body().metrics();
-        for default in self.param_defaults().iter().flatten() {
-            metrics.add(default.metrics());
+        for param in self.params() {
+            if let Some(default) = param.default() {
+                metrics.add(default.metrics());
+            }
+            match param.target() {
+                BytecodeFunctionParamTarget::Binding(binding) => metrics.add(
+                    BytecodeMetrics::binding_operands(binding.direct_operand_count()),
+                ),
+                BytecodeFunctionParamTarget::Pattern(pattern) => {
+                    metrics.add(pattern.metrics(true));
+                }
+            }
         }
         metrics.add(self.hoist_plan().metrics());
         metrics

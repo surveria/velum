@@ -62,7 +62,6 @@ pub struct ClassMember {
     pub name: Option<StaticName>,
     pub params: Rc<[FunctionParam]>,
     pub body: Rc<[Statement]>,
-    pub parameter_prologue_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

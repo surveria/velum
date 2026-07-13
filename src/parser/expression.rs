@@ -598,7 +598,6 @@ impl Parser {
                 super::function::ParsedParameters {
                     params: vec![FunctionParam::new(parameter.clone(), None)],
                     bound_names: vec![parameter],
-                    pattern_prologue: Vec::new(),
                     is_simple: true,
                 }
             }
@@ -631,15 +630,14 @@ impl Parser {
         )?;
         let id = self.static_function()?;
         let strict = inherited_strict || body.contains_use_strict;
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
+        let params = parameters.into_params();
+        let statements = body.statements;
         Ok(Some(self.expression_node(
             start,
             Expr::ArrowFunction {
                 id,
                 params: params.into(),
                 body: statements.into(),
-                parameter_prologue_count,
                 kind: if signature.is_async {
                     FunctionKind::Async
                 } else {
