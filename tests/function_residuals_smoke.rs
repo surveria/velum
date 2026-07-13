@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -64,6 +64,16 @@ fn apply_accepts_callable_array_like_values_and_dynamic_html_comments() -> TestR
         applyWorks && commentsWork && invalidParameterThrows ? 42 : 0
         "#,
     )
+}
+
+#[test]
+fn module_code_rejects_html_comments() -> TestResult {
+    let runtime = Runtime::new();
+    let result = runtime.compile_module_named("html-comment.js", "/*\n*/-->");
+    if result.is_err() {
+        return Ok(());
+    }
+    Err("expected module HTML close comment to be rejected".into())
 }
 
 fn assert_script(source: &str) -> TestResult {

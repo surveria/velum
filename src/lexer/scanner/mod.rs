@@ -35,11 +35,12 @@ pub(super) struct Lexer {
     pending: Option<Token>,
     line_terminator_before: bool,
     line_start: bool,
+    allow_html_comments: bool,
     template_substitutions: Vec<TemplateSubstitutionState>,
 }
 
 impl Lexer {
-    pub(super) fn new(source: &str, source_id: SourceId) -> Self {
+    pub(super) fn new(source: &str, source_id: SourceId, allow_html_comments: bool) -> Self {
         Self {
             source: source.to_owned(),
             source_id,
@@ -47,6 +48,7 @@ impl Lexer {
             pending: None,
             line_terminator_before: false,
             line_start: true,
+            allow_html_comments,
             template_substitutions: Vec::new(),
         }
     }
@@ -105,8 +107,13 @@ impl Lexer {
                 '#' => self.private_name(offset)?,
                 '/' if self.peek_next_char() == Some('/') => self.line_comment(),
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
-                '<' if self.remaining_source_starts_with("<!--") => self.line_comment(),
-                '-' if self.line_start && self.remaining_source_starts_with("-->") => {
+                '<' if self.allow_html_comments && self.remaining_source_starts_with("<!--") => {
+                    self.line_comment();
+                }
+                '-' if self.allow_html_comments
+                    && self.line_start
+                    && self.remaining_source_starts_with("-->") =>
+                {
                     self.line_comment();
                 }
                 '0'..='9' => self.number(offset)?,
