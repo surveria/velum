@@ -357,11 +357,20 @@ fn object_define_properties_preserves_array_exotic_invariants() -> TestResult {
         } catch (error) {
             shrinkRejected = error instanceof TypeError;
         }
-        let lengthWriteRejected = false;
+        let sloppyLengthWriteThrew = false;
         try {
             array.length = 5;
         } catch (error) {
-            lengthWriteRejected = error instanceof TypeError;
+            sloppyLengthWriteThrew = true;
+        }
+        let strictLengthWriteRejected = false;
+        try {
+            (function() {
+                "use strict";
+                array.length = 5;
+            })();
+        } catch (error) {
+            strictLengthWriteRejected = error instanceof TypeError;
         }
 
         let setterValue = 0;
@@ -383,7 +392,7 @@ fn object_define_properties_preserves_array_exotic_invariants() -> TestResult {
         let negativeZero = [1, 2];
         Object.defineProperties(negativeZero, { length: { value: -0 } });
 
-        shrinkRejected && lengthWriteRejected &&
+        shrinkRejected && !sloppyLengthWriteThrew && strictLengthWriteRejected &&
             array.length === 2 && array[0] === 0 && array[1] === 1 &&
             !Object.hasOwn(array, "2") &&
             Object.getOwnPropertyDescriptor(array, "length").writable === false &&
