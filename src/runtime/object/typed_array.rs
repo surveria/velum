@@ -1,6 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
-
-use parking_lot::RwLock;
+use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use crate::{
     error::{Error, Result},
@@ -11,6 +9,10 @@ use crate::{
 use super::{Object, ObjectHeap};
 
 mod bulk;
+pub(super) mod waiters;
+
+use waiters::SharedByteBuffer;
+pub(in crate::runtime) use waiters::{AtomicWaitOutcome, AtomicWaitRegistration};
 
 const TYPED_ARRAY_INDEX_ERROR: &str = "typed array byte index is out of bounds";
 const TYPED_ARRAY_RANGE_ERROR: &str = "typed array byte range exceeded supported range";
@@ -33,7 +35,7 @@ pub struct ByteBuffer {
 #[derive(Debug, Clone)]
 enum ByteBufferStorage {
     Local(Rc<RefCell<ByteBufferState>>),
-    Shared(Arc<RwLock<ByteBufferState>>),
+    Shared(Arc<SharedByteBuffer>),
 }
 
 #[derive(Debug)]
@@ -46,14 +48,14 @@ impl ByteBuffer {
     fn with_state<T>(&self, operation: impl FnOnce(&ByteBufferState) -> T) -> T {
         match &self.storage {
             ByteBufferStorage::Local(state) => operation(&state.borrow()),
-            ByteBufferStorage::Shared(state) => operation(&state.read()),
+            ByteBufferStorage::Shared(shared) => operation(&shared.state.read()),
         }
     }
 
     fn with_state_mut<T>(&self, operation: impl FnOnce(&mut ByteBufferState) -> T) -> T {
         match &self.storage {
             ByteBufferStorage::Local(state) => operation(&mut state.borrow_mut()),
-            ByteBufferStorage::Shared(state) => operation(&mut state.write()),
+            ByteBufferStorage::Shared(shared) => operation(&mut shared.state.write()),
         }
     }
 
@@ -99,12 +101,40 @@ impl ByteBuffer {
 
     pub(in crate::runtime) fn new_shared(length: usize, max_byte_length: Option<usize>) -> Self {
         Self {
-            storage: ByteBufferStorage::Shared(Arc::new(RwLock::new(ByteBufferState {
+            storage: ByteBufferStorage::Shared(Arc::new(SharedByteBuffer::new(ByteBufferState {
                 bytes: Some(vec![0; length]),
                 max_byte_length,
             }))),
             origin: ByteBufferOrigin::EngineOwned,
         }
+    }
+
+    pub(in crate::runtime) fn wait_at(
+        &self,
+        byte_offset: usize,
+        timeout: Option<Duration>,
+    ) -> Result<AtomicWaitOutcome> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Err(Error::type_error("Atomics.wait requires shared storage"));
+        };
+        Ok(SharedByteBuffer::register_waiter(shared, byte_offset).wait(timeout))
+    }
+
+    pub(in crate::runtime) fn register_waiter_at(
+        &self,
+        byte_offset: usize,
+    ) -> Result<AtomicWaitRegistration> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Err(Error::type_error("Atomics.wait requires shared storage"));
+        };
+        Ok(SharedByteBuffer::register_waiter(shared, byte_offset))
+    }
+
+    pub(in crate::runtime) fn notify_at(&self, byte_offset: usize, count: usize) -> Result<usize> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return Ok(0);
+        };
+        shared.notify_at(byte_offset, count)
     }
 
     pub fn byte_length(&self) -> usize {
@@ -128,8 +158,22 @@ impl ByteBuffer {
         self.with_state(|state| state.bytes.is_none())
     }
 
-    pub(in crate::runtime) const fn is_shared(&self) -> bool {
+    pub(crate) const fn is_shared(&self) -> bool {
         matches!(&self.storage, ByteBufferStorage::Shared(_))
+    }
+
+    pub(crate) fn shared_storage(&self) -> Option<Arc<SharedByteBuffer>> {
+        let ByteBufferStorage::Shared(shared) = &self.storage else {
+            return None;
+        };
+        Some(shared.clone())
+    }
+
+    pub(crate) const fn from_shared_storage(shared: Arc<SharedByteBuffer>) -> Self {
+        Self {
+            storage: ByteBufferStorage::Shared(shared),
+            origin: ByteBufferOrigin::EngineOwned,
+        }
     }
 
     pub(in crate::runtime) fn resize(&self, new_length: usize) -> Result<()> {

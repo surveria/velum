@@ -4,6 +4,7 @@ use crate::{
         Context, VmStorageKind,
         call::RuntimeCallArgs,
         control::{Completion, runtime_exception_value},
+        object::AtomicWaitOutcome,
     },
     value::{ErrorName, FunctionId, ObjectId, Value},
 };
@@ -552,6 +553,18 @@ impl Context {
                 then,
             } => self.run_promise_resolve_thenable(promise, thenable, &then),
             PromiseJob::DynamicImport(job) => self.run_dynamic_import_job(job),
+            PromiseJob::AtomicsWait {
+                promise,
+                registration,
+                timeout,
+            } => {
+                let outcome = registration.wait(timeout);
+                let value = self.heap_string_value(match outcome {
+                    AtomicWaitOutcome::Notified => "ok",
+                    AtomicWaitOutcome::TimedOut => "timed-out",
+                })?;
+                self.fulfill_promise(promise, value)
+            }
         }
     }
 

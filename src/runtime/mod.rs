@@ -121,7 +121,7 @@ pub struct Context {
     native_functions: SlotArena<native::NativeFunction>,
     bound_functions: SlotArena<BoundFunction>,
     pub(crate) host_functions: SlotArena<HostFunction>,
-    objects: ObjectHeap,
+    pub(crate) objects: ObjectHeap,
     collections: SlotArena<collections::CollectionData>,
     collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
     collection_iterators: SlotArena<collections::CollectionIteratorState>,
@@ -137,6 +137,7 @@ pub struct Context {
     performance_clock: clock::PerformanceClock,
     random_state: u64,
     runtime_steps: usize,
+    agent_can_block: bool,
     optimizer: Optimizer,
     call_depth: usize,
 }
@@ -276,6 +277,15 @@ impl Context {
     #[must_use]
     pub const fn identity(&self) -> &VmIdentity {
         &self.identity
+    }
+
+    /// Configures whether this VM's current agent may block in `Atomics.wait`.
+    pub const fn set_agent_can_block(&mut self, can_block: bool) {
+        self.agent_can_block = can_block;
+    }
+
+    pub(crate) const fn agent_can_block(&self) -> bool {
+        self.agent_can_block
     }
 
     pub(crate) fn current_local_frame_start(&self) -> usize {
@@ -420,6 +430,7 @@ impl Context {
             performance_clock,
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
+            agent_can_block: false,
             optimizer: Optimizer::new(optimization_mode),
             call_depth: 0,
         }

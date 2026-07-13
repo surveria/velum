@@ -351,6 +351,20 @@ impl Parser {
                     shorthand_name: Some(name),
                 })
             }
+            TokenKind::Async => {
+                let name = self.borrowed_static_name("async")?;
+                Ok(ObjectPropertyName::Static {
+                    key: name.clone(),
+                    shorthand_name: Some(name),
+                })
+            }
+            TokenKind::Await if !self.await_identifier_is_reserved() => {
+                let name = self.borrowed_static_name("await")?;
+                Ok(ObjectPropertyName::Static {
+                    key: name.clone(),
+                    shorthand_name: Some(name),
+                })
+            }
             TokenKind::String(name) => {
                 let name = String::from_utf16(&name.cooked).map_err(|_| {
                     Error::parse_at(

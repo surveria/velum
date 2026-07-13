@@ -588,8 +588,11 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   owner identity;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
 - `HostCall` exposes callback-borrowed `LocalValue` arguments containing the
-  active owner identity and the raw Value. Arbitrary host JavaScript throws
-  are created from this local capability rather than an unowned Value;
+  active owner identity, object heap, retained registry, and raw Value. The
+  object heap permits type-checked extraction of an opaque, thread-safe shared
+  backing-store handle without exposing raw object ids. Arbitrary host
+  JavaScript throws are created from this local capability rather than an
+  unowned Value;
 - host return validation rejects Function, NativeFunction, HostFunction, and
   Object. Same-VM `String(JsString)` and `Symbol` values remain permitted,
   portable strings are admitted centrally, and foreign owners are rejected
@@ -848,7 +851,7 @@ without pinning implementation statements.
 | optimization owners | one direct optimizer-state owner, zero loop/catch/try source-shape recognizers, and bytecode-owned structural linear templates separated from activation binding | direct optimizer state access elsewhere, repeated runtime structural recognition, or a compiler/runtime workload-shaped recognizer without reusable plan evidence; splitting, consolidating, replacing, or removing optimization modules and guards is allowed when the invariant and behavioral evidence are updated |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, SymbolTable, and JsSymbol plus owner metadata on every heap-admitted JsString and central admission/checked-value validation | removing an admitted primitive owner stamp/check, retaining a detached string, or accepting a foreign colliding slot |
-| host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
+| host local-value boundary | LocalValue and HostCall borrow the active owner, object heap, and retained registry; shared backing stores cross VM boundaries only through an opaque thread-safe handle; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, exposing a raw object id, sharing mutable VM state with a backing store, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/BigInt/String and copies local heap text; BigInt is an immutable ownerless mathematical payload | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
 | direct-root boundary | one typed visitor, public bounded snapshots, and scoped transient roots cover durable and temporary VM reachability | bypassing the visitor/snapshot contract or losing scoped temporary ownership; root categories and traversal organization may change with behavioral reachability evidence |

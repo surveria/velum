@@ -44,6 +44,7 @@ mod report_schema_tests;
 mod report_schema_validation;
 mod report_text;
 mod runner_cli;
+mod test262_agent;
 mod test262_baseline;
 mod test262_compat_harness;
 mod test262_external;

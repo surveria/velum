@@ -48,10 +48,12 @@ pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
 pub(in crate::runtime) use temporal::TemporalValue;
 use typed_array::typed_array_property_index;
-pub use typed_array::{ByteBuffer, ByteBufferOrigin};
+pub use typed_array::waiters::SharedByteBuffer;
 pub(in crate::runtime) use typed_array::{
-    TypedArrayContentType, TypedArrayElementKind, TypedArrayPropertyIndex, TypedArrayView,
+    AtomicWaitOutcome, AtomicWaitRegistration, TypedArrayContentType, TypedArrayElementKind,
+    TypedArrayPropertyIndex, TypedArrayView,
 };
+pub use typed_array::{ByteBuffer, ByteBufferOrigin};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";

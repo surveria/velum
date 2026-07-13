@@ -885,6 +885,7 @@ dependencies = [
  "anyhow",
  "fs2",
  "human-yaml",
+ "parking_lot",
  "plotters",
  "rayon",
  "rquickjs",

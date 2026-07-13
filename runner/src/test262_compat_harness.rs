@@ -7,6 +7,13 @@ const HOST_SOURCE: &str = r"
 var $262 = {
     global: globalThis,
     detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
+    agent: {
+        start: __rsqjsTest262AgentStart,
+        broadcast: __rsqjsTest262AgentBroadcast,
+        getReport: __rsqjsTest262AgentGetReport,
+        sleep: __rsqjsTest262AgentSleep,
+        monotonicNow: __rsqjsTest262AgentMonotonicNow
+    },
     createRealm: function createRealm() {
         return { global: __rsqjsTest262CreateRealm() };
     },
