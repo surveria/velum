@@ -155,7 +155,7 @@ struct Function {
     fast_path: Option<Rc<function::FunctionFastPath>>,
     source: Option<Rc<str>>,
     upvalues: FunctionUpvalues,
-    with_environments: Rc<[Value]>,
+    dynamic_environments: Rc<[activation::DynamicEnvironment]>,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
     static_binding_layout: Option<BindingLayout>,
@@ -177,7 +177,7 @@ struct Function {
 }
 
 type FunctionUpvalues = Rc<[BindingCell]>;
-type FunctionActivationEnvironment = (FunctionUpvalues, Vec<Value>);
+type FunctionActivationEnvironment = (FunctionUpvalues, Vec<activation::DynamicEnvironment>);
 
 #[derive(Debug, Clone)]
 enum FunctionNewTarget {

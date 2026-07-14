@@ -68,7 +68,7 @@ struct FunctionCallSetup {
     param_frames: Rc<[Option<crate::runtime::binding::static_bindings::CompiledBindingFrame>]>,
     bytecode: crate::bytecode::BytecodeFunction,
     upvalues: super::FunctionUpvalues,
-    with_environments: Rc<[Value]>,
+    dynamic_environments: Rc<[super::activation::DynamicEnvironment]>,
     static_name_atom_cache:
         Option<crate::runtime::property::static_names::StaticNameAtomCacheHandle>,
     static_binding_cache:
@@ -209,7 +209,7 @@ impl Context {
             self.compile_function_self_binding(init.bytecode, static_binding_layout.as_ref())?;
         let arguments_binding =
             self.compile_function_arguments_binding(init.bytecode, static_binding_layout.as_ref())?;
-        let (upvalues, with_environments, fast_path) =
+        let (upvalues, dynamic_environments, fast_path) =
             self.capture_function_environment(init, &param_frames, static_binding_layout.as_ref())?;
         let scope_template = parameters::function_scope_template(
             &param_atoms,
@@ -236,7 +236,7 @@ impl Context {
             fast_path: fast_path.map(Rc::new),
             source: None,
             upvalues: upvalues.cells,
-            with_environments,
+            dynamic_environments,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -404,7 +404,7 @@ impl Context {
             param_frames: Rc::clone(&function.param_frames),
             bytecode: function.bytecode.clone(),
             upvalues: Rc::clone(&function.upvalues),
-            with_environments: Rc::clone(&function.with_environments),
+            dynamic_environments: Rc::clone(&function.dynamic_environments),
             static_name_atom_cache: function.static_name_atom_cache.clone(),
             static_binding_cache: function.static_binding_cache.clone(),
             static_binding_layout: function.static_binding_layout.clone(),
@@ -434,7 +434,7 @@ impl Context {
             param_frames,
             bytecode,
             upvalues,
-            with_environments,
+            dynamic_environments,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -454,9 +454,13 @@ impl Context {
             None
         };
         let args = packed_args.as_deref().unwrap_or(raw_args);
+        let mut dynamic_environments = dynamic_environments.to_vec();
+        if bytecode.requires_parameter_initialization() && !bytecode.strict() {
+            dynamic_environments.push(self.create_parameter_eval_var_environment()?);
+        }
         let local_base = self.push_call_activation(
             id,
-            (upvalues, with_environments.to_vec()),
+            (upvalues, dynamic_environments),
             this_value,
             new_target,
             super_binding,

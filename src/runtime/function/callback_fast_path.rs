@@ -23,7 +23,7 @@ impl Context {
         };
         let Some((fast_path, fast_upvalues)) = ({
             let function = self.function(*id)?;
-            if !function.with_environments.is_empty() {
+            if !function.dynamic_environments.is_empty() {
                 return Ok(None);
             }
             function.fast_path.as_ref().and_then(|fast_path| {

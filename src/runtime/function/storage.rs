@@ -54,7 +54,7 @@ impl Function {
         &self,
     ) -> Result<JavaScriptFunctionStorageFootprint> {
         let binding_count =
-            checked_function_storage_sum([self.upvalues.len(), self.with_environments.len()])?;
+            checked_function_storage_sum([self.upvalues.len(), self.dynamic_environments.len()])?;
         let mut metadata_cache_entry_count = checked_function_storage_sum([
             self.param_binding_ids.len(),
             self.param_atoms.len(),

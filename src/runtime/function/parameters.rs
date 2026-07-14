@@ -9,6 +9,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        activation::DynamicEnvironment,
         binding::scope::{BindingCell, BindingScope, BindingSlot},
         binding::static_bindings::{CompiledBindingFrame, StaticBindingCacheHandle},
         bytecode::{DestructureOutcome, state::BytecodeState},
@@ -45,6 +46,13 @@ impl<'a> FunctionParameterState<'a> {
 }
 
 impl Context {
+    pub(super) fn create_parameter_eval_var_environment(&mut self) -> Result<DynamicEnvironment> {
+        let environment = self
+            .objects
+            .create_with_exact_prototype(None, self.limits.max_objects)?;
+        Ok(DynamicEnvironment::EvalVar(environment))
+    }
+
     pub(super) fn compile_function_self_binding(
         &mut self,
         bytecode: &BytecodeFunction,
@@ -382,7 +390,7 @@ impl Context {
         bytecode: &BytecodeFunction,
     ) -> Result<Completion> {
         if self.optional_optimizations_enabled()
-            && self.current_with_environments().is_empty()
+            && self.current_dynamic_environments().is_empty()
             && let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)?
         {
             self.charge_runtime_steps(bytecode.body().instructions().len())?;

@@ -327,8 +327,8 @@ impl Context {
         }
         let index = self.activation_frames.len();
         let private_environment = self.current_private_environment();
-        let with_environments = self.current_with_environments().to_vec();
-        let frame = ActivationFrame::bytecode(continuation, with_environments);
+        let dynamic_environments = self.current_dynamic_environments().to_vec();
+        let frame = ActivationFrame::bytecode(continuation, dynamic_environments);
         self.activate_frame_storage(frame.storage_footprint()?)?;
         self.activation_frames.push(frame);
         self.set_current_private_environment(private_environment)?;

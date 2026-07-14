@@ -195,9 +195,9 @@ impl Context {
             visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
         }
         for frame in &self.activation_frames {
-            if let Some(environments) = frame.with_environments() {
-                for object in environments {
-                    visitor.visit_value(VmRootKind::CapturedBinding, object)?;
+            if let Some(environments) = frame.dynamic_environments() {
+                for environment in environments {
+                    visitor.visit_value(VmRootKind::CapturedBinding, environment.value())?;
                 }
             }
             if let Some(upvalues) = frame.upvalues() {
