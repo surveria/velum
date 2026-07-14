@@ -531,6 +531,10 @@ impl Context {
             NativeFunctionKind::AsyncGeneratorFunction => {
                 self.eval_async_generator_function_constructor(args)
             }
+            NativeFunctionKind::AsyncIteratorDispose => {
+                self.eval_async_iterator_prototype_dispose(this_value)
+            }
+            NativeFunctionKind::AsyncIteratorSelf => Ok(this_value.clone()),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
             NativeFunctionKind::ShadowRealm(kind) => self.eval_shadow_realm(kind, args, this_value),

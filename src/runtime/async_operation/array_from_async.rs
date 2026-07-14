@@ -327,9 +327,6 @@ impl Context {
             AsyncIteratorStep::Abrupt(completion) => Err(Error::runtime(format!(
                 "invalid Array.fromAsync iterator completion {completion:?}"
             ))),
-            AsyncIteratorStep::AbruptWithOpenIterator(completion) => {
-                self.close_array_from_async_iterator(continuation, completion, None)
-            }
         }
     }
 

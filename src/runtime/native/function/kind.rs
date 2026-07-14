@@ -35,6 +35,8 @@ const ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_BUFFER_NAME: &str = "ArrayBuffer";
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
 pub(in crate::runtime::native) const ASYNC_GENERATOR_FUNCTION_NAME: &str = "AsyncGeneratorFunction";
+const ASYNC_ITERATOR_DISPOSE_NAME: &str = "[Symbol.asyncDispose]";
+const ASYNC_ITERATOR_SELF_NAME: &str = "[Symbol.asyncIterator]";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
 const BIGINT_FUNCTION_LENGTH: f64 = 1.0;
@@ -305,6 +307,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     AsyncGeneratorNext,
     AsyncGeneratorReturn,
     AsyncGeneratorThrow,
+    AsyncIteratorDispose,
+    AsyncIteratorSelf,
     AsyncDisposableStack(super::async_disposable_stack_kind::AsyncDisposableStackFunctionKind),
     Boolean,
     BooleanPrototypeToString,

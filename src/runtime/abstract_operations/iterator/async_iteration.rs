@@ -67,7 +67,6 @@ pub(in crate::runtime) enum AsyncIteratorStep {
     Value(Value),
     Done,
     Abrupt(Completion),
-    AbruptWithOpenIterator(Completion),
 }
 
 pub(in crate::runtime) enum AsyncIteratorCloseStep {
@@ -153,9 +152,10 @@ impl Context {
             (
                 AsyncIteratorPending::SyncIteratorResult { done: false },
                 Some(Completion::Throw(value)),
-            ) => Ok(AsyncIteratorStep::AbruptWithOpenIterator(
-                Completion::Throw(value),
-            )),
+            ) => {
+                set_protocol_done(&mut continuation.source);
+                Ok(AsyncIteratorStep::Abrupt(Completion::Throw(value)))
+            }
             (_, Some(Completion::Throw(value))) => {
                 set_protocol_done(&mut continuation.source);
                 Ok(AsyncIteratorStep::Abrupt(Completion::Throw(value)))
@@ -230,7 +230,8 @@ impl Context {
         value: Value,
         done: bool,
     ) -> Result<AsyncIteratorStep> {
-        let wrapper = self.create_async_from_sync_value_wrapper(value)?;
+        let wrapper =
+            self.create_async_from_sync_value_wrapper(&mut continuation.source, value, !done)?;
         continuation.pending = Some(AsyncIteratorPending::SyncIteratorResult { done });
         let Completion::Suspend(Suspension::Await(awaited)) = self.eval_bytecode_await(wrapper)?
         else {
@@ -241,16 +242,31 @@ impl Context {
         Ok(AsyncIteratorStep::Await(awaited))
     }
 
-    fn create_async_from_sync_value_wrapper(&mut self, value: Value) -> Result<Value> {
+    pub(in crate::runtime) fn create_async_from_sync_value_wrapper(
+        &mut self,
+        source: &mut IteratorSource,
+        value: Value,
+        close_on_rejection: bool,
+    ) -> Result<Value> {
         let (wrapper, object) = self.create_pending_promise()?;
         match self.promise_resolve_for_await(value) {
             Ok(value_promise) => {
-                self.add_promise_reaction(
-                    value_promise,
-                    PromiseReaction::new(wrapper, None, None),
-                )?;
+                let reaction = match source {
+                    IteratorSource::Protocol { iterator, .. } if close_on_rejection => {
+                        PromiseReaction::async_from_sync(wrapper, iterator.clone())
+                    }
+                    IteratorSource::ArrayIndex { .. }
+                    | IteratorSource::Utf16CodePoints { .. }
+                    | IteratorSource::Protocol { .. } => PromiseReaction::new(wrapper, None, None),
+                };
+                self.add_promise_reaction(value_promise, reaction)?;
             }
             Err(error) => {
+                let error = if close_on_rejection {
+                    self.iterator_close_on_error(source, error)
+                } else {
+                    error
+                };
                 let Some(reason) = runtime_exception_value(self, &error)? else {
                     return Err(error);
                 };

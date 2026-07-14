@@ -565,10 +565,7 @@ impl Context {
                         AsyncIteratorStep::Await(awaited) => ForOfNext::Await(awaited),
                         AsyncIteratorStep::Value(value) => ForOfNext::Value(value),
                         AsyncIteratorStep::Done => ForOfNext::Done,
-                        AsyncIteratorStep::Abrupt(completion)
-                        | AsyncIteratorStep::AbruptWithOpenIterator(completion) => {
-                            ForOfNext::Abrupt(completion)
-                        }
+                        AsyncIteratorStep::Abrupt(completion) => ForOfNext::Abrupt(completion),
                     })
                 }
             }

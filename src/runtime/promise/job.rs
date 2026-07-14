@@ -38,6 +38,13 @@ pub(in crate::runtime) enum PromiseReaction {
     AsyncGeneratorAwait {
         generator: GeneratorId,
     },
+    AsyncFromSync {
+        result: PromiseId,
+        iterator: Value,
+    },
+    AsyncIteratorDispose {
+        result: PromiseId,
+    },
     ArrayFromAsync {
         continuation: Box<ArrayFromAsyncContinuation>,
     },
@@ -83,6 +90,14 @@ impl PromiseReaction {
 
     pub(in crate::runtime) const fn awaiting_async_generator(generator: GeneratorId) -> Self {
         Self::AsyncGeneratorAwait { generator }
+    }
+
+    pub(in crate::runtime) const fn async_from_sync(result: PromiseId, iterator: Value) -> Self {
+        Self::AsyncFromSync { result, iterator }
+    }
+
+    pub(in crate::runtime) const fn async_iterator_dispose(result: PromiseId) -> Self {
+        Self::AsyncIteratorDispose { result }
     }
 
     pub(in crate::runtime) fn awaiting_array_from_async(
@@ -150,6 +165,20 @@ impl PromiseReaction {
             }
             Self::Await { continuation } => continuation.visit_strong_edges(visitor)?,
             Self::AsyncGeneratorAwait { .. } => {}
+            Self::AsyncFromSync { result, iterator } => {
+                visitor.visit(
+                    VmAsyncEdgeKind::PromiseReaction,
+                    StrongEdgeReference::Promise(*result),
+                )?;
+                visitor.visit(
+                    VmAsyncEdgeKind::PromiseReaction,
+                    StrongEdgeReference::Value(iterator),
+                )?;
+            }
+            Self::AsyncIteratorDispose { result } => visitor.visit(
+                VmAsyncEdgeKind::PromiseReaction,
+                StrongEdgeReference::Promise(*result),
+            )?,
             Self::ArrayFromAsync { continuation } => {
                 continuation.visit_strong_edges(visitor)?;
             }
@@ -170,6 +199,8 @@ impl PromiseReaction {
             Self::Await { continuation } => continuation.storage_footprint(),
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
+            | Self::AsyncFromSync { .. }
+            | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
             | Self::ResourceScope { .. } => Ok(SuspendedExecutionStorageFootprint::default()),
@@ -202,6 +233,13 @@ impl PromiseReaction {
             }
             Self::Await { continuation } => continuation.visit_direct_roots(visitor),
             Self::AsyncGeneratorAwait { .. } => Ok(()),
+            Self::AsyncFromSync { result, iterator } => {
+                visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
+                visitor.visit_value(VmRootKind::QueuedJob, iterator)
+            }
+            Self::AsyncIteratorDispose { result } => {
+                visitor.visit_promise(VmRootKind::QueuedJob, *result)
+            }
             Self::ArrayFromAsync { continuation } => continuation.visit_direct_roots(visitor),
             Self::AsyncDisposableStack { continuation } => continuation.visit_direct_roots(visitor),
             Self::ResourceScope { continuation } => continuation.visit_direct_roots(visitor),
@@ -217,6 +255,8 @@ impl PromiseReaction {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
             Self::Then { .. }
+            | Self::AsyncFromSync { .. }
+            | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
             | Self::ResourceScope { .. } => None,
@@ -228,6 +268,8 @@ impl PromiseReaction {
             Self::Await { continuation } => Some(*continuation),
             Self::Then { .. }
             | Self::AsyncGeneratorAwait { .. }
+            | Self::AsyncFromSync { .. }
+            | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
             | Self::ResourceScope { .. } => None,

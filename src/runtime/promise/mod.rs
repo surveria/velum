@@ -2,6 +2,7 @@ use crate::{
     error::{Error, JavaScriptErrorMetadata, Result},
     runtime::{
         Context, VmStorageKind,
+        abstract_operations::IteratorSource,
         call::RuntimeCallArgs,
         control::{Completion, Suspension, runtime_exception_value},
         function::SuspendedExecutionStorageFootprint,
@@ -624,6 +625,13 @@ impl Context {
                     };
                     self.resume_async_generator_await(generator, resume)
                 }
+                PromiseReaction::AsyncFromSync { result, iterator } => {
+                    self.settle_async_from_sync_reaction(result, iterator, state)
+                }
+                PromiseReaction::AsyncIteratorDispose { result } => match state.status {
+                    PromiseStatus::Fulfilled => self.resolve_promise(result, Value::Undefined),
+                    PromiseStatus::Rejected => self.reject_promise(result, state.value),
+                },
                 PromiseReaction::ArrayFromAsync { continuation } => {
                     let resume = match state.status {
                         PromiseStatus::Fulfilled => Completion::Normal(state.value),
@@ -668,6 +676,28 @@ impl Context {
                 };
                 self.reject_promise_reaction(result, reason)
             }
+        }
+    }
+
+    fn settle_async_from_sync_reaction(
+        &mut self,
+        result: PromiseId,
+        iterator: Value,
+        state: PromiseSettledState,
+    ) -> Result<()> {
+        if state.status == PromiseStatus::Fulfilled {
+            return self.resolve_promise(result, state.value);
+        }
+        let mut source = IteratorSource::Protocol {
+            iterator,
+            next: Value::Undefined,
+            done: false,
+        };
+        match self.iterator_close(&mut source, Completion::Throw(state.value))? {
+            Completion::Throw(reason) => self.reject_promise(result, reason),
+            completion => Err(Error::runtime(format!(
+                "async-from-sync close returned invalid completion {completion:?}"
+            ))),
         }
     }
 

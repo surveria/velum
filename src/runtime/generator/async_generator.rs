@@ -22,6 +22,9 @@ use super::{
     TO_STRING_TAG_SYMBOL_DISPLAY,
 };
 
+const ASYNC_DISPOSE_SYMBOL_DISPLAY: &str = "[Symbol.asyncDispose]";
+const ASYNC_DISPOSE_SYMBOL_PROPERTY: &str = "asyncDispose";
+
 impl Context {
     pub(in crate::runtime) fn async_generator_function_prototype_value(&mut self) -> Result<Value> {
         let Value::NativeFunction(id) = self.async_generator_function_constructor_value()? else {
@@ -149,8 +152,10 @@ impl Context {
             return Err(Error::runtime("async iterator prototype creation failed"));
         };
         let symbol = self.well_known_symbol(ASYNC_ITERATOR_SYMBOL_PROPERTY)?;
-        let method =
-            self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
+        let method = self.create_ephemeral_native_function(
+            NativeFunctionKind::AsyncIteratorSelf,
+            Value::Undefined,
+        )?;
         self.objects.define_property(
             prototype,
             PropertyKey::symbol(symbol),
@@ -163,10 +168,61 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )?;
+        self.install_async_iterator_dispose(prototype)?;
         self.storage_ledger
             .grow_count(VmStorageKind::Association, 1)?;
         self.realm.async_iterator_prototype = Some(prototype);
         Ok(prototype)
+    }
+
+    fn install_async_iterator_dispose(&mut self, prototype: ObjectId) -> Result<()> {
+        let symbol = self.well_known_symbol(ASYNC_DISPOSE_SYMBOL_PROPERTY)?;
+        let method = self.create_ephemeral_native_function(
+            NativeFunctionKind::AsyncIteratorDispose,
+            Value::Undefined,
+        )?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol),
+            ASYNC_DISPOSE_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(method),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    pub(in crate::runtime) fn eval_async_iterator_prototype_dispose(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let (promise, object) = self.create_pending_promise()?;
+        if let Err(error) = self.begin_async_iterator_dispose(promise, this_value) {
+            let Some(reason) = runtime_exception_value(self, &error)? else {
+                return Err(error);
+            };
+            self.reject_promise(promise, reason)?;
+        }
+        Ok(object)
+    }
+
+    fn begin_async_iterator_dispose(
+        &mut self,
+        promise: PromiseId,
+        this_value: &Value,
+    ) -> Result<()> {
+        let Some(return_method) = self.get_named_method(this_value, ITERATOR_RETURN_NAME)? else {
+            return self.resolve_promise(promise, Value::Undefined);
+        };
+        let result = self.call_value(&return_method, &[], this_value.clone())?;
+        let result_promise = self.promise_resolve_for_await(result)?;
+        self.add_promise_reaction(
+            result_promise,
+            PromiseReaction::async_iterator_dispose(promise),
+        )
     }
 
     fn install_async_generator_prototype(&mut self, prototype: ObjectId) -> Result<()> {
