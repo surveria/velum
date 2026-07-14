@@ -47,7 +47,7 @@ impl Parser {
     }
 
     pub(super) fn resource_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
-        if self.statement_depth <= 1 {
+        if self.statement_depth <= 1 && !self.is_module_goal() {
             return Err(self.parse_error(
                 "resource declarations are not allowed at the top level of a script",
             ));

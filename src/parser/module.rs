@@ -238,13 +238,18 @@ impl Parser {
         let (local_name, default_expression) = match expression.into_kind() {
             Expr::Function {
                 id,
-                name: Some(name),
+                name,
                 arguments_binding,
                 params,
                 body,
                 kind,
                 strict,
             } if declaration_like => {
+                let name = if let Some(name) = name {
+                    name
+                } else {
+                    self.static_binding_name("default".to_owned())?
+                };
                 let local_name = name.name().as_str().to_owned();
                 statements.push(self.statement_node(
                     start,

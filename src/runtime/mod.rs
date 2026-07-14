@@ -655,10 +655,15 @@ impl Context {
     }
 
     pub(crate) fn enumerable_keys(&mut self, object: &Value) -> Result<Vec<String>> {
+        let exotic_object = if let Value::Object(id) = object {
+            self.objects.is_proxy(*id) || self.objects.is_module_namespace(*id)?
+        } else {
+            false
+        };
         if matches!(
             object,
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
-        ) || matches!(object, Value::Object(id) if self.objects.is_proxy(*id))
+        ) || exotic_object
         {
             return self.semantic_enumerable_property_keys(object);
         }

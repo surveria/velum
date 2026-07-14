@@ -211,6 +211,85 @@ fn namespace_import_properties_read_live_export_cells() -> TestResult {
 }
 
 #[test]
+fn hoists_anonymous_default_functions_before_cyclic_module_evaluation() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        (
+            "function.js",
+            r#"
+                import value from "function.js";
+                export const answer = value() + (value.name === "default" ? 1 : 0);
+                export default function() { return 20; }
+            "#
+            .to_owned(),
+        ),
+        (
+            "generator.js",
+            r#"
+                import value from "generator.js";
+                export const answer = value().next().value + (value.name === "default" ? 1 : 0);
+                export default function*() { return 20; }
+            "#
+            .to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        r#"
+            import { answer as functionAnswer } from "function.js";
+            import { answer as generatorAnswer } from "generator.js";
+            functionAnswer + generatorAnswer;
+        "#,
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(42.0),
+        "anonymous default functions were not initialized during module instantiation",
+    )
+}
+
+#[test]
+fn module_namespace_descriptor_queries_observe_uninitialized_bindings() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([(
+        "dependency.js",
+        r#"
+            import * as self from "dependency.js";
+            let observed = 0;
+            try { Object.prototype.hasOwnProperty.call(self, "default"); }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            try { Object.getOwnPropertyDescriptor(self, "default"); }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            try { for (const key in self) { key; } }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            export const result = observed;
+            export default 0;
+        "#
+        .to_owned(),
+    )]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { result } from 'dependency.js'; result;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(3.0),
+        "module namespace descriptor paths did not preserve export TDZ",
+    )
+}
+
+#[test]
+fn accepts_top_level_await_using_in_module_goal() -> TestResult {
+    let runtime = Runtime::new();
+    runtime.compile_module_named("resource.js", "await using resource = null;")?;
+    Ok(())
+}
+
+#[test]
 fn defers_static_namespace_evaluation_until_a_string_property_is_read() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
