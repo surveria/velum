@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260714T020123Z.md`
-- Task: PR #620: runtime: complete staging runtime residual batch
-- Performance: 5.29x (4/5 >1.00x) (from `rsqjs-test-report-20260714T020123Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T020123Z.md`)
+- `rsqjs-test-report-20260714T030348Z.md`
+- Task: PR #621: runtime: complete expression and class Test262 residuals
+- Performance: 5.29x (4/5 >1.00x) (from `rsqjs-test-report-20260714T030348Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T030348Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 101760 passed / 818 failed (99.20%) (from `rsqjs-test-report-20260714T020123Z.md`)
+- Full Test262: 101821 passed / 757 failed (99.26%) (from `rsqjs-test-report-20260714T030348Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -561,3 +561,4 @@ Latest report:
 | `20260714T000620Z` `035533d` PR #618: runtime: complete deferred and formatted module imports | 5.26x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101612 passed / 966 failed (99.06%) |
 | `20260714T005158Z` `a3597a9` PR #619: runtime: complete Annex B IsHTMLDDA residual semantics | 5.27x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101705 passed / 873 failed (99.15%) |
 | `20260714T020123Z` `e5d6492` PR #620: runtime: complete staging runtime residual batch | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101760 passed / 818 failed (99.20%) |
+| `20260714T030348Z` `fb77830` PR #621: runtime: complete expression and class Test262 residuals | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101821 passed / 757 failed (99.26%) |
