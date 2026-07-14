@@ -53,7 +53,7 @@ impl Context {
         self.persist_module_graph(graph)?;
         match phase {
             ImportPhase::Evaluation => {
-                self.with_module_evaluation(|context| context.evaluate_persisted_module(root))?;
+                self.evaluate_persisted_module(root)?;
             }
             ImportPhase::Defer => {
                 let mut asynchronous = Vec::new();
@@ -63,9 +63,7 @@ impl Context {
                     &mut asynchronous,
                 )?;
                 for module in asynchronous {
-                    self.with_module_evaluation(|context| {
-                        context.evaluate_persisted_module(module)
-                    })?;
+                    self.evaluate_persisted_module(module)?;
                 }
             }
             ImportPhase::Source => {
@@ -129,7 +127,7 @@ impl Context {
             Some(EvaluationState::Errored) => {}
             Some(EvaluationState::Evaluated) | None => return Ok(()),
         }
-        self.with_module_evaluation(|context| context.evaluate_persisted_module(module_index))?;
+        self.evaluate_persisted_module(module_index)?;
         Ok(())
     }
 

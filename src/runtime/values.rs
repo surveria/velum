@@ -305,7 +305,7 @@ impl Context {
         if let Some(value) = self.current_activation_this() {
             return self.checked_value(value.clone());
         }
-        if self.module_evaluation_depth > 0 || self.active_module_name.is_some() {
+        if self.module_evaluation_depth > 0 {
             return Ok(Value::Undefined);
         }
         self.global_this_value()

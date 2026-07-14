@@ -463,7 +463,8 @@ impl Context {
         self.push_lexical_scope_with(scope)?;
         let previous_module = self.active_module_name.replace(name);
         let previous_import_meta = self.active_import_meta.replace(import_meta);
-        let outcome = self.evaluate_module_script_suspending(&script);
+        let outcome = self
+            .with_module_evaluation(|context| context.evaluate_module_script_suspending(&script));
         self.active_import_meta = previous_import_meta;
         self.active_module_name = previous_module;
         self.handle_module_outcome(module_index, local_base, activation_base, outcome)
@@ -571,7 +572,10 @@ impl Context {
         let (local_base, activation_base) = execution.attach(self);
         let previous_module = self.active_module_name.replace(name);
         let previous_import_meta = self.active_import_meta.replace(import_meta);
-        let outcome = self.resume_module_script(&script, activation_base, state.into_completion());
+        let completion = state.into_completion();
+        let outcome = self.with_module_evaluation(|context| {
+            context.resume_module_script(&script, activation_base, completion)
+        });
         self.active_import_meta = previous_import_meta;
         self.active_module_name = previous_module;
         self.handle_module_outcome(module_index, local_base, activation_base, outcome)

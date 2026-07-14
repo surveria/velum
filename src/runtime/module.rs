@@ -192,7 +192,7 @@ impl Context {
         self.link_static_module_graph(&mut graph)?;
         let root = self.modules.len();
         self.persist_module_graph(graph)?;
-        self.with_module_evaluation(|context| context.evaluate_persisted_module(root))
+        self.evaluate_persisted_module(root)
     }
 
     pub(in crate::runtime) fn load_dynamic_module_export(
@@ -243,9 +243,7 @@ impl Context {
             .position(|module| module.name == specifier)
         {
             if request.phase() == crate::syntax::ImportPhase::Evaluation {
-                self.with_module_evaluation(|context| {
-                    context.evaluate_persisted_module(module_index)
-                })?;
+                self.evaluate_persisted_module(module_index)?;
             }
             let module = self
                 .modules

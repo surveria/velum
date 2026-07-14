@@ -87,6 +87,16 @@ fn keeps_global_this_isolated_per_context() -> TestResult {
 }
 
 #[test]
+fn named_scripts_keep_script_global_this_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval_named("named-script.js", "this === globalThis ? 42 : 0")?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn lists_unmaterialized_standard_global_properties() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
