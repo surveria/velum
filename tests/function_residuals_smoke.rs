@@ -80,6 +80,32 @@ fn parameter_expression_closures_keep_the_parameter_environment() -> TestResult 
 }
 
 #[test]
+fn annex_b_block_functions_preserve_parameter_bindings() -> TestResult {
+    assert_script(
+        r"
+        var simpleBefore;
+        var simpleAfter;
+        (function (value) {
+            simpleBefore = value;
+            { function value() {} }
+            simpleAfter = value;
+        }(42));
+
+        var defaultBefore;
+        var defaultAfter;
+        (function (value = 42) {
+            defaultBefore = value;
+            if (true) function value() {}
+            defaultAfter = value;
+        }());
+
+        simpleBefore === 42 && simpleAfter === 42 &&
+            defaultBefore === 42 && defaultAfter === 42 ? 42 : 0
+        ",
+    )
+}
+
+#[test]
 fn direct_eval_in_a_function_body_uses_the_body_environment() -> TestResult {
     assert_script(
         r#"
