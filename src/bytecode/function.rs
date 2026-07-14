@@ -13,7 +13,7 @@ pub struct BytecodeFunction {
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
-    strict: bool,
+    eval_mode: BytecodeEvalMode,
     pub(crate) simple_parameters: bool,
 }
 
@@ -25,8 +25,25 @@ pub struct BytecodeFunctionInit {
     pub hoist_plan: BytecodeHoistPlan,
     pub capture_bindings: Rc<[StaticBinding]>,
     pub uses_arguments: bool,
-    pub strict: bool,
+    pub eval_mode: BytecodeEvalMode,
     pub simple_parameters: bool,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeEvalMode {
+    Strict,
+    Sloppy,
+    SloppyDirect,
+}
+
+impl BytecodeEvalMode {
+    pub const fn new(strict: bool, contains_direct_eval: bool) -> Self {
+        match (strict, contains_direct_eval) {
+            (true, _) => Self::Strict,
+            (false, true) => Self::SloppyDirect,
+            (false, false) => Self::Sloppy,
+        }
+    }
 }
 
 impl BytecodeFunction {
@@ -39,7 +56,7 @@ impl BytecodeFunction {
             hoist_plan: init.hoist_plan,
             capture_bindings: init.capture_bindings,
             uses_arguments: init.uses_arguments,
-            strict: init.strict,
+            eval_mode: init.eval_mode,
             simple_parameters: init.simple_parameters,
         }
     }
@@ -56,8 +73,12 @@ impl BytecodeFunction {
         self.uses_arguments
     }
 
+    pub const fn contains_direct_eval(&self) -> bool {
+        matches!(self.eval_mode, BytecodeEvalMode::SloppyDirect)
+    }
+
     pub const fn strict(&self) -> bool {
-        self.strict
+        matches!(self.eval_mode, BytecodeEvalMode::Strict)
     }
 
     pub fn params(&self) -> &[BytecodeFunctionParam] {

@@ -56,7 +56,7 @@ impl LayoutBuilder {
                 (root, root)
             }
             RootLayoutMode::SloppyEval => {
-                let var_scope = self.add_scope(None, root_function, ScopeKind::Global);
+                let var_scope = self.add_scope(None, root_function, ScopeKind::EvalVariable);
                 let lexical_scope =
                     self.add_scope(Some(var_scope), root_function, ScopeKind::Local);
                 (lexical_scope, var_scope)
@@ -584,6 +584,14 @@ impl LayoutBuilder {
                     .ok_or_else(|| Error::limit("global binding slot count overflowed"))?;
                 Ok(BindingOperand::Global { slot })
             }
+            ScopeKind::EvalVariable => {
+                let slot = GlobalSlot::from_index(self.global_slot_count)?;
+                self.global_slot_count = self
+                    .global_slot_count
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("eval binding slot count overflowed"))?;
+                Ok(BindingOperand::EvalVariable { slot })
+            }
             ScopeKind::Local => {
                 let local_count = self.scope(scope)?.declarations.len();
                 let slot = LocalSlot::from_index(local_count)?;
@@ -618,7 +626,7 @@ impl LayoutBuilder {
         while let Some(scope_id) = cursor {
             let scope_ref = self.scope(scope_id)?;
             if let Some(declaration) = scope_ref.declaration(name) {
-                if scope_ref.kind == ScopeKind::Global {
+                if matches!(scope_ref.kind, ScopeKind::Global | ScopeKind::EvalVariable) {
                     return Ok(Some(declaration.operand));
                 }
                 if scope_ref.function == function {

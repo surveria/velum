@@ -197,7 +197,9 @@ impl Context {
         for frame in &self.activation_frames {
             if let Some(environments) = frame.dynamic_environments() {
                 for environment in environments {
-                    visitor.visit_value(VmRootKind::CapturedBinding, environment.value())?;
+                    environment.for_each_value(|value| {
+                        visitor.visit_value(VmRootKind::CapturedBinding, value)
+                    })?;
                 }
             }
             if let Some(upvalues) = frame.upvalues() {

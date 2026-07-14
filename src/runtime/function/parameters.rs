@@ -542,7 +542,9 @@ fn function_param_frame(
             scope,
             BindingSlot::from_index(slot.index()?),
         ))),
-        BindingOperand::Global { .. } | BindingOperand::Upvalue { .. } => Err(Error::runtime(
+        BindingOperand::Global { .. }
+        | BindingOperand::EvalVariable { .. }
+        | BindingOperand::Upvalue { .. } => Err(Error::runtime(
             "function parameter binding layout is not a local slot",
         )),
         BindingOperand::Unresolved => Ok(None),
@@ -626,6 +628,7 @@ pub(super) fn function_self_binding_frame(
             BindingSlot::from_index(slot.index()?),
         )),
         BindingOperand::Global { .. }
+        | BindingOperand::EvalVariable { .. }
         | BindingOperand::Upvalue { .. }
         | BindingOperand::Unresolved => Err(Error::runtime(
             "named function binding layout is not a local slot",
@@ -648,6 +651,7 @@ pub(super) fn function_arguments_binding_frame(
             BindingSlot::from_index(slot.index()?),
         )),
         BindingOperand::Global { .. }
+        | BindingOperand::EvalVariable { .. }
         | BindingOperand::Upvalue { .. }
         | BindingOperand::Unresolved => Err(Error::runtime(
             "arguments binding layout is not a local slot",

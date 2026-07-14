@@ -19,6 +19,13 @@ enum ScriptExecutionMode {
     StrictEval,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum EvalVariableEnvironment {
+    Global,
+    Local(usize),
+    ParameterObject,
+}
+
 impl Context {
     /// # Errors
     /// Fails when lexing, parsing, evaluation, or configured resource limits
@@ -142,19 +149,8 @@ impl Context {
                 self.eval_compiled_program(script)
             }
             ScriptExecutionMode::SloppyEval => {
-                let hoist_result = if self.eval_variable_environment_is_global() {
-                    self.hoist_outcome(|context| {
-                        context.hoist_bytecode_eval_global_var_declarations(plan)
-                    })?
-                } else {
-                    self.hoist_outcome(|context| context.hoist_bytecode_var_declarations(plan))?
-                };
-                if let Some(outcome) = hoist_result {
-                    return Ok(outcome);
-                }
-                self.eval_compiled_in_lexical_scope(script, |context| {
-                    context.hoist_bytecode_lexical_declarations(plan)
-                })
+                let environment = self.eval_variable_environment()?;
+                self.eval_compiled_sloppy_eval(script, environment)
             }
             ScriptExecutionMode::StrictEval => self
                 .eval_compiled_in_lexical_scope(script, |context| {
@@ -163,16 +159,76 @@ impl Context {
         }
     }
 
-    fn eval_variable_environment_is_global(&self) -> bool {
-        for frame in self.activation_frames.iter().rev() {
-            if frame.is_eval_boundary() {
-                return true;
-            }
-            if frame.function_id().is_some() {
-                return false;
-            }
+    fn eval_variable_environment(&self) -> Result<EvalVariableEnvironment> {
+        if self.current_parameter_eval_var_environment().is_some() {
+            return Ok(EvalVariableEnvironment::ParameterObject);
         }
-        true
+        self.current_function_variable_scope_index()?
+            .map_or(Ok(EvalVariableEnvironment::Global), |index| {
+                Ok(EvalVariableEnvironment::Local(index))
+            })
+    }
+
+    fn eval_compiled_sloppy_eval(
+        &mut self,
+        script: &CompiledScript,
+        environment: EvalVariableEnvironment,
+    ) -> Result<BytecodeOutcome> {
+        self.push_lexical_scope()?;
+        let eval_bindings = if matches!(environment, EvalVariableEnvironment::Local(_)) {
+            Some(crate::runtime::activation::EvalBindingEnvironment::default())
+        } else {
+            None
+        };
+        if let Some(bindings) = &eval_bindings
+            && let Err(error) = self.push_eval_binding_environment(bindings.clone())
+        {
+            self.pop_lexical_scope()?;
+            return Err(error);
+        }
+        let outcome =
+            self.eval_compiled_sloppy_eval_in_scope(script, environment, eval_bindings.as_ref());
+        let environment_result = eval_bindings.as_ref().map_or(Ok(()), |bindings| {
+            self.pop_eval_binding_environment(bindings)
+        });
+        let pop_result = self.pop_lexical_scope();
+        environment_result?;
+        pop_result?;
+        outcome
+    }
+
+    fn eval_compiled_sloppy_eval_in_scope(
+        &mut self,
+        script: &CompiledScript,
+        environment: EvalVariableEnvironment,
+        eval_bindings: Option<&crate::runtime::activation::EvalBindingEnvironment>,
+    ) -> Result<BytecodeOutcome> {
+        let plan = script.bytecode().hoist_plan();
+        if let Some(outcome) =
+            self.hoist_outcome(|context| context.hoist_bytecode_lexical_declarations(plan))?
+        {
+            return Ok(outcome);
+        }
+        let var_outcome = match environment {
+            EvalVariableEnvironment::Global => self.hoist_outcome(|context| {
+                context.hoist_bytecode_eval_global_var_declarations(plan)
+            })?,
+            EvalVariableEnvironment::Local(index) => {
+                let Some(bindings) = eval_bindings else {
+                    return Err(Error::runtime("eval binding environment is unavailable"));
+                };
+                self.hoist_outcome(|context| {
+                    context.hoist_bytecode_eval_local_var_declarations(plan, index, bindings)
+                })?
+            }
+            EvalVariableEnvironment::ParameterObject => {
+                self.hoist_outcome(|context| context.hoist_bytecode_var_declarations(plan))?
+            }
+        };
+        if let Some(outcome) = var_outcome {
+            return Ok(outcome);
+        }
+        self.eval_compiled_program(script)
     }
 
     fn eval_compiled_in_lexical_scope(

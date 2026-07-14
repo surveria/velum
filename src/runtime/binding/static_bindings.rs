@@ -230,6 +230,7 @@ impl Context {
                 BindingSlot::from_index(slot.index()?),
             ))),
             BindingOperand::Global { .. }
+            | BindingOperand::EvalVariable { .. }
             | BindingOperand::Upvalue { .. }
             | BindingOperand::Unresolved => Ok(None),
         }
@@ -249,7 +250,7 @@ impl Context {
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
             }
-            BindingOperand::Unresolved => Ok(None),
+            BindingOperand::EvalVariable { .. } | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -282,6 +283,15 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<BindingCell>> {
+        let operand = self.compiled_binding_operand(binding.id())?;
+        if matches!(operand, BindingOperand::Global { .. }) {
+            let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
+                return Ok(None);
+            };
+            if let Some(cell) = self.current_function_eval_variable_binding(atom)? {
+                return Ok(Some(cell));
+            }
+        }
         if !self.optional_optimizations_enabled() {
             return self.get_binding_by_name(binding);
         }
@@ -324,10 +334,28 @@ impl Context {
         self.binding_at_location(location)
     }
 
+    fn current_function_eval_variable_binding(&self, atom: AtomId) -> Result<Option<BindingCell>> {
+        if !self.current_function_contains_sloppy_direct_eval()? {
+            return Ok(None);
+        }
+        let Some(index) = self.current_function_variable_scope_index()? else {
+            return Ok(None);
+        };
+        Ok(self.locals.get(index).and_then(|scope| scope.get(atom)))
+    }
+
     pub(crate) fn get_binding_bytecode(
         &self,
         binding: &BytecodeBinding,
     ) -> Result<Option<BindingCell>> {
+        if matches!(binding.operand(), BindingOperand::Global { .. }) {
+            let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
+                return Ok(None);
+            };
+            if let Some(cell) = self.current_function_eval_variable_binding(atom)? {
+                return Ok(Some(cell));
+            }
+        }
         if matches!(binding.operand(), BindingOperand::Upvalue { .. }) {
             let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
                 return Ok(None);
@@ -470,18 +498,27 @@ impl Context {
         &self,
         binding: &BytecodeBinding,
     ) -> Result<bool> {
-        if matches!(binding.operand(), BindingOperand::Global { .. }) {
+        if matches!(
+            binding.operand(),
+            BindingOperand::Global { .. } | BindingOperand::EvalVariable { .. }
+        ) {
             let Some(cell) = self.get_binding_bytecode(binding)? else {
                 return Ok(false);
             };
             let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
                 return Ok(false);
             };
-            return Ok(self
+            if self
                 .realm
                 .globals
                 .get(atom)
-                .is_some_and(|global| global.same_cell(&cell)));
+                .is_some_and(|global| global.same_cell(&cell))
+            {
+                return self
+                    .global_own_property_is_configurable(binding.name().name())
+                    .map(|configurable| !configurable);
+            }
+            return Ok(false);
         }
         if binding.operand() != BindingOperand::Unresolved {
             if matches!(binding.operand(), BindingOperand::Upvalue { .. })
@@ -499,9 +536,27 @@ impl Context {
         let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
             return Ok(false);
         };
+        if self.realm.globals.contains(atom)
+            && self.global_own_property_is_configurable(binding.name().name())?
+        {
+            return Ok(false);
+        }
         Ok(self
             .resolve_binding_location(atom)
             .is_some_and(|location| !matches!(location, BindingLocation::BuiltinGlobal { .. })))
+    }
+
+    fn global_own_property_is_configurable(&self, name: &str) -> Result<bool> {
+        let Some(global_object) = self.realm.global_object else {
+            return Ok(false);
+        };
+        self.objects
+            .own_property_descriptor(global_object, self.property_lookup(name))
+            .map(|descriptor| {
+                descriptor.is_some_and(|descriptor| {
+                    descriptor.configurable() == PropertyConfigurable::Yes
+                })
+            })
     }
 
     pub(crate) fn resolve_runtime_static_declaration(

@@ -362,9 +362,15 @@ impl Context {
         binding: &BytecodeBinding,
         upvalues: &[BindingCell],
     ) -> Result<Value> {
-        if let BindingOperand::Upvalue { slot, .. } = binding.operand() {
-            let cell = fast_upvalue_cell(upvalues, slot.index()?)?;
-            return self.runtime_value(cell.value(binding.name())?);
+        match binding.operand() {
+            BindingOperand::Upvalue { slot, .. } => {
+                let cell = fast_upvalue_cell(upvalues, slot.index()?)?;
+                return self.runtime_value(cell.value(binding.name())?);
+            }
+            BindingOperand::Global { .. } | BindingOperand::Unresolved => {
+                return self.fast_pre_setup_load_global_binding(binding);
+            }
+            BindingOperand::EvalVariable { .. } | BindingOperand::Local { .. } => {}
         }
         self.fast_function_load_binding(binding)
     }
@@ -718,10 +724,13 @@ fn source_for_binding(
     if let Some(index) = param_index_for_operand(param_frames, binding.operand())? {
         return Ok(Some(FastValueSource::Param(index)));
     }
-    if matches!(binding.operand(), BindingOperand::Local { .. }) {
-        return Ok(None);
+    if matches!(
+        binding.operand(),
+        BindingOperand::Global { .. } | BindingOperand::Upvalue { .. } | BindingOperand::Unresolved
+    ) {
+        return Ok(Some(FastValueSource::Binding(binding.clone())));
     }
-    Ok(Some(FastValueSource::Binding(binding.clone())))
+    Ok(None)
 }
 
 fn store_target_for_binding(
@@ -731,10 +740,10 @@ fn store_target_for_binding(
     if param_index_for_operand(param_frames, binding.operand())?.is_some() {
         return Ok(Some(FastStoreTarget::Param));
     }
-    if matches!(binding.operand(), BindingOperand::Local { .. }) {
-        return Ok(None);
+    if matches!(binding.operand(), BindingOperand::Upvalue { .. }) {
+        return Ok(Some(FastStoreTarget::Binding(binding.clone())));
     }
-    Ok(Some(FastStoreTarget::Binding(binding.clone())))
+    Ok(None)
 }
 
 fn param_index_for_operand(

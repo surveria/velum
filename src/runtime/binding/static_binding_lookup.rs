@@ -48,7 +48,9 @@ impl Context {
                 };
                 Ok(Some((location, cell)))
             }
-            BindingOperand::Global { .. } | BindingOperand::Unresolved => Ok(None),
+            BindingOperand::Global { .. }
+            | BindingOperand::EvalVariable { .. }
+            | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -131,7 +133,9 @@ impl Context {
             BindingOperand::Local { scope, slot } => {
                 self.compiled_declaration_local_binding(scope, slot)
             }
-            BindingOperand::Upvalue { .. } | BindingOperand::Unresolved => Ok(None),
+            BindingOperand::EvalVariable { .. }
+            | BindingOperand::Upvalue { .. }
+            | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -167,7 +171,7 @@ impl Context {
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
             }
-            BindingOperand::Unresolved => Ok(None),
+            BindingOperand::EvalVariable { .. } | BindingOperand::Unresolved => Ok(None),
         }
     }
 

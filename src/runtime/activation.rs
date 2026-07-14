@@ -1,7 +1,9 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    error::Error,
+    error::{Error, Result as EngineResult},
+    runtime::binding::scope::BindingCell,
+    storage::atom::AtomId,
     value::{FunctionId, Value},
 };
 
@@ -14,13 +16,165 @@ use super::{
 pub(in crate::runtime) enum DynamicEnvironment {
     With(Value),
     EvalVar(Value),
+    EvalBindings(EvalBindingEnvironment),
 }
 
 impl DynamicEnvironment {
-    pub(in crate::runtime) const fn value(&self) -> &Value {
+    pub(in crate::runtime) fn storage_binding_count(&self) -> EngineResult<usize> {
         match self {
-            Self::With(value) | Self::EvalVar(value) => value,
+            Self::With(_) | Self::EvalVar(_) => Ok(1),
+            Self::EvalBindings(environment) => environment
+                .len()?
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("eval environment binding count overflowed")),
         }
+    }
+
+    pub(in crate::runtime) fn for_each_value(
+        &self,
+        mut visit: impl FnMut(&Value) -> EngineResult<()>,
+    ) -> EngineResult<()> {
+        match self {
+            Self::With(value) | Self::EvalVar(value) => visit(value),
+            Self::EvalBindings(environment) => environment.for_each_value(visit),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(in crate::runtime) struct EvalBindingEnvironment(Rc<RefCell<Vec<EvalBindingEntry>>>);
+
+#[derive(Clone, Debug)]
+struct EvalBindingEntry {
+    atom: AtomId,
+    cell: BindingCell,
+    deletable: bool,
+    active: bool,
+}
+
+impl EvalBindingEnvironment {
+    pub(in crate::runtime) fn insert(
+        &self,
+        atom: AtomId,
+        cell: BindingCell,
+        deletable: bool,
+    ) -> EngineResult<bool> {
+        let mut entries = self
+            .0
+            .try_borrow_mut()
+            .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
+        match entries.binary_search_by_key(&atom, |entry| entry.atom) {
+            Ok(position) => {
+                let Some(entry) = entries.get_mut(position) else {
+                    return Err(Error::runtime("eval binding entry disappeared"));
+                };
+                if !entry.cell.same_cell(&cell) {
+                    return Err(Error::runtime("eval binding cell identity changed"));
+                }
+                return Ok(false);
+            }
+            Err(position) => entries.insert(
+                position,
+                EvalBindingEntry {
+                    atom,
+                    cell,
+                    deletable,
+                    active: true,
+                },
+            ),
+        }
+        Ok(true)
+    }
+
+    pub(in crate::runtime) fn binding(&self, atom: AtomId) -> EngineResult<Option<BindingCell>> {
+        let entries = self
+            .0
+            .try_borrow()
+            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))?;
+        let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
+            return Ok(None);
+        };
+        Ok(entries
+            .get(position)
+            .filter(|entry| entry.active)
+            .map(|entry| entry.cell.clone()))
+    }
+
+    pub(in crate::runtime) fn delete(&self, atom: AtomId) -> EngineResult<bool> {
+        let mut entries = self
+            .0
+            .try_borrow_mut()
+            .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
+        let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
+            return Ok(true);
+        };
+        let Some(entry) = entries.get_mut(position) else {
+            return Err(Error::runtime("eval binding entry disappeared"));
+        };
+        if !entry.active {
+            return Ok(true);
+        }
+        if !entry.deletable {
+            return Ok(false);
+        }
+        entry.cell.mark_deleted()?;
+        entry.active = false;
+        Ok(true)
+    }
+
+    pub(in crate::runtime) fn assign_annex_b(
+        &self,
+        atom: AtomId,
+        name: &str,
+        value: Value,
+    ) -> EngineResult<bool> {
+        let mut entries = self
+            .0
+            .try_borrow_mut()
+            .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
+        let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
+            return Ok(false);
+        };
+        let Some(entry) = entries.get_mut(position) else {
+            return Err(Error::runtime("eval binding entry disappeared"));
+        };
+        if entry.active {
+            entry.cell.assign(name, value)?;
+        } else {
+            entry.cell.restore_deleted(value)?;
+            entry.active = true;
+        }
+        Ok(true)
+    }
+
+    pub(in crate::runtime) fn same_environment(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+
+    fn len(&self) -> EngineResult<usize> {
+        self.0
+            .try_borrow()
+            .map(|entries| entries.len())
+            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))
+    }
+
+    fn for_each_value(
+        &self,
+        mut visit: impl FnMut(&Value) -> EngineResult<()>,
+    ) -> EngineResult<()> {
+        let entries = self
+            .0
+            .try_borrow()
+            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))?;
+        for entry in entries.iter() {
+            if !entry.active {
+                continue;
+            }
+            if let Some(result) = entry.cell.with_initialized_value(&mut visit) {
+                result?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -33,6 +187,7 @@ impl DynamicEnvironment {
 #[derive(Debug)]
 pub(in crate::runtime) enum ActivationFrame {
     Call {
+        function: FunctionId,
         local_base: usize,
         environment_phase: FunctionEnvironmentPhase,
         upvalues: FunctionUpvalues,
@@ -116,10 +271,13 @@ impl ActivationFrame {
         let binding_count = self
             .upvalues()
             .map_or(0, |upvalues| upvalues.len())
-            .checked_add(
-                self.dynamic_environments()
-                    .map_or(0, <[DynamicEnvironment]>::len),
-            )
+            .checked_add(self.dynamic_environments().map_or(Ok(0), |environments| {
+                environments.iter().try_fold(0_usize, |count, environment| {
+                    count
+                        .checked_add(environment.storage_binding_count()?)
+                        .ok_or_else(activation_storage_overflow)
+                })
+            })?)
             .ok_or_else(activation_storage_overflow)?;
         let control_count = self
             .continuation()
@@ -144,6 +302,7 @@ impl ActivationFrame {
     ) -> Self {
         let (upvalues, dynamic_environments) = environment;
         Self::Call {
+            function,
             local_base,
             environment_phase: FunctionEnvironmentPhase::Setup,
             upvalues,
@@ -343,10 +502,7 @@ impl ActivationFrame {
 
     pub(in crate::runtime) const fn function_id(&self) -> Option<FunctionId> {
         match self {
-            Self::Call { continuation, .. } => match continuation {
-                Some(continuation) => continuation.function_id(),
-                None => None,
-            },
+            Self::Call { function, .. } => Some(*function),
             Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }

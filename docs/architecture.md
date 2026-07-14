@@ -129,11 +129,13 @@ AST remains a compile-time IR only.
 ## Execution Model
 
 `Context::activation_frames` is the single owner for synchronous JavaScript
-call state. One call activation holds its local-scope base, captured upvalues,
-`this`, `new.target`, and optional super binding. Temporary class-field `this`
-and generated-function evaluation boundaries use explicit variants on the
-same stack, so root enumeration, binding visibility, and resource accounting
-observe one coherent owner instead of parallel vectors.
+call state. One call activation holds a stable function id independent of its
+temporarily parked continuation, its local-scope base, captured upvalues,
+dynamic object or eval binding environments, `this`, `new.target`, and an
+optional super binding. Temporary class-field `this` and generated-function
+evaluation boundaries use explicit variants on the same stack, so root
+enumeration, binding visibility, and resource accounting observe one coherent
+owner instead of parallel vectors.
 
 AS-06a2a attaches a `BytecodeContinuationFrame` to the current activation.
 Function calls use their stable `FunctionId` as the program key, while general

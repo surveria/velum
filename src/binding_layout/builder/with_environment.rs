@@ -101,6 +101,14 @@ impl LayoutBuilder {
                 .find(|scope| scope.kind == ScopeKind::Global && scope.declaration(name).is_some())
                 .and_then(|scope| scope.declaration(name))
                 .map(|declaration| declaration.scope)),
+            BindingOperand::EvalVariable { .. } => Ok(self
+                .scopes
+                .iter()
+                .find(|scope| {
+                    scope.kind == ScopeKind::EvalVariable && scope.declaration(name).is_some()
+                })
+                .and_then(|scope| scope.declaration(name))
+                .map(|declaration| declaration.scope)),
             BindingOperand::Upvalue { function, slot } => Ok(self
                 .function(function)?
                 .upvalues
