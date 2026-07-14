@@ -121,18 +121,20 @@ impl Context {
         Ok(false)
     }
 
-    pub(super) fn normalize_derived_constructor_completion(
+    pub(super) fn function_return_mode(
         &self,
-        completion: Completion,
-        binding: &FunctionSuperBinding,
-    ) -> Result<Completion> {
-        let this_value = binding.this_value.borrow().clone();
-        let Completion::TailCall(request) = completion else {
-            return self.normalize_derived_constructor_result(completion, this_value);
+        id: FunctionId,
+        binding: Option<&Rc<FunctionSuperBinding>>,
+    ) -> Result<TailCallReturnMode> {
+        if self.function(id)?.class_constructor != FunctionClassConstructor::Explicit {
+            return Ok(TailCallReturnMode::Ordinary);
+        }
+        let Some(binding) = binding.filter(|binding| binding.constructor.is_some()) else {
+            return Ok(TailCallReturnMode::Ordinary);
         };
-        Ok(Completion::TailCall(
-            request.with_derived_constructor_return(this_value)?,
-        ))
+        Ok(TailCallReturnMode::DerivedConstructor {
+            this_value: binding.this_value.borrow().clone(),
+        })
     }
 
     pub(super) fn normalize_tail_call_return(

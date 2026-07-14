@@ -730,23 +730,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         new_target: Value,
     ) -> Result<Value> {
-        let realm = self.function(id)?.realm;
-        self.with_realm(realm, |context| {
-            context.eval_function_constructor_value_in_active_realm(id, args, new_target)
-        })
-    }
-
-    fn eval_function_constructor_value_in_active_realm(
-        &mut self,
-        id: crate::value::FunctionId,
-        args: RuntimeCallArgs<'_>,
-        new_target: Value,
-    ) -> Result<Value> {
         if let Some(super_constructor) = self.default_derived_constructor_super(id)? {
-            let instance =
-                self.semantic_construct(&super_constructor, args.as_slice(), new_target)?;
-            self.initialize_class_fields(id, &instance)?;
-            return Ok(instance);
+            let realm = self.function(id)?.realm;
+            return self.with_realm(realm, |context| {
+                let instance =
+                    context.semantic_construct(&super_constructor, args.as_slice(), new_target)?;
+                context.initialize_class_fields(id, &instance)?;
+                Ok(instance)
+            });
         }
         let prototype = self.constructor_instance_semantic_prototype_with_default(
             &new_target,

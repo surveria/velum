@@ -90,8 +90,8 @@ impl Context {
         if binding_layout == active_layout {
             return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
         }
-        if !self.active_function_has_arguments_binding() {
-            if !dynamic_source && !fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
+        if !self.active_function_has_arguments_binding() && !dynamic_source {
+            if !fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
                 return Ok(None);
             }
             return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);

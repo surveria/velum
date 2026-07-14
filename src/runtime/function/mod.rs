@@ -4,7 +4,7 @@ use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::control::{Completion, Suspension},
+    runtime::control::{Completion, Suspension, TailCallReturnMode},
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
@@ -430,10 +430,10 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
         new_target: Value,
-    ) -> Result<Completion> {
+    ) -> Result<(Completion, TailCallReturnMode)> {
         let raw_args = args.as_slice();
         if let Some(completion) = self.try_eval_pre_setup_function_fast_path(id, raw_args)? {
-            return Ok(completion);
+            return Ok((completion, TailCallReturnMode::Ordinary));
         }
         let FunctionCallSetup {
             param_atoms,
@@ -513,11 +513,8 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        if let (Ok(completion), Some(binding)) = (&result, &derived_super_binding) {
-            result = self.normalize_derived_constructor_completion(completion.clone(), binding);
-        }
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
-            return result;
+            return result.map(|completion| (completion, TailCallReturnMode::Ordinary));
         }
         if let Ok(completion) = result {
             result = self.dispose_active_binding_scope(completion);
@@ -530,7 +527,8 @@ impl Context {
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
-        result
+        let return_mode = self.function_return_mode(id, derived_super_binding.as_ref())?;
+        result.map(|completion| (completion, return_mode))
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
