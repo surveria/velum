@@ -30,7 +30,7 @@ pub(super) struct AutomaticGcState {
 }
 
 impl AutomaticGcState {
-    pub(super) fn new(object_limit: usize) -> Self {
+    pub(super) const fn new(object_limit: usize) -> Self {
         Self {
             object_limit,
             next_object_count: automatic_gc_initial_object_count(object_limit),

@@ -41,12 +41,10 @@ impl BytecodeCompiler<'_> {
         let end_jump = self.emit_jump();
         let alternate_address = self.current_address();
         self.patch_jump(alternate_jump, alternate_address)?;
+        self.emit_undefined_last();
         if let Some(alternate) = alternate {
-            self.emit_undefined_last();
             self.compile_statement(alternate, value)?;
             self.emit_discard_branch_last(value);
-        } else {
-            self.emit_undefined_last();
         }
         let end_address = self.current_address();
         self.patch_jump(end_jump, end_address)

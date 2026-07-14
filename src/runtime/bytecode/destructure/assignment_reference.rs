@@ -63,6 +63,16 @@ impl Context {
                     ));
                 }
                 let cell = self.get_or_materialize_binding_bytecode(name)?;
+                if cell.is_none()
+                    && let Some(reference) = self.resolve_global_object_binding(name)?
+                {
+                    return Ok(PatternStep::Value(
+                        BytecodeAssignmentReference::WithBinding {
+                            name: name.clone(),
+                            reference,
+                        },
+                    ));
+                }
                 Ok(PatternStep::Value(BytecodeAssignmentReference::Binding {
                     name: name.clone(),
                     cell,

@@ -27,23 +27,19 @@ impl Context {
         if let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? {
             return self.assign_bytecode_cell(binding, &cell, value);
         }
-        if let Some(global_object) = self.realm.global_object {
-            let object = Value::Object(global_object);
-            let lookup = self.property_lookup(binding.name().name());
-            if self.has_property_value_with_lookup(&object, lookup)? {
-                let failure = if binding.strict_write() {
-                    crate::runtime::abstract_operations::SetFailureBehavior::Throw
-                } else {
-                    crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse
-                };
-                self.set(&object, lookup, value, &object, failure)?;
-                return Ok(());
-            }
-        }
         if binding.strict_write() {
             return Err(crate::runtime::control::reference_error_undefined(
                 binding.name(),
             ));
+        }
+        if let Some(global_object) = self.realm.global_object {
+            let object = Value::Object(global_object);
+            let lookup = self.property_lookup(binding.name().name());
+            if self.has_property_value_with_lookup(&object, lookup)? {
+                let failure = crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse;
+                self.set(&object, lookup, value, &object, failure)?;
+                return Ok(());
+            }
         }
         if !matches!(
             binding.operand(),
