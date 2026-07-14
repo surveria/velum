@@ -11,7 +11,11 @@ use super::{Parser, property_name::keyword_property_name};
 impl Parser {
     pub(super) fn is_optional_chain(expr: &Expression) -> bool {
         match expr.kind() {
-            Expr::OptionalMember { .. } => true,
+            Expr::OptionalChain(_)
+            | Expr::OptionalMember { .. }
+            | Expr::OptionalComputedMember { .. }
+            | Expr::OptionalPrivateMember { .. }
+            | Expr::OptionalCall { .. } => true,
             Expr::Member { object, .. }
             | Expr::ComputedMember { object, .. }
             | Expr::PrivateMember { object, .. } => Self::is_optional_chain(object),
@@ -57,6 +61,55 @@ impl Parser {
                 access,
             },
         ))
+    }
+
+    /// Parses the suffix introduced by a consumed `?.` token.
+    pub(super) fn optional_chain_suffix(&mut self, expr: Expression) -> Result<Expression> {
+        let start = expr.span();
+        if self.match_kind(&TokenKind::LParen) {
+            let args = if self.check(&TokenKind::RParen) {
+                Vec::new()
+            } else {
+                self.arguments()?
+            };
+            self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
+            let site = self.static_call_site()?;
+            return Ok(self.expression_node(
+                start,
+                Expr::OptionalCall {
+                    callee: Box::new(expr),
+                    site,
+                    strict: self.is_strict_mode(),
+                    args,
+                },
+            ));
+        }
+        if self.match_kind(&TokenKind::LBracket) {
+            let property = self.expression()?;
+            self.consume(
+                &TokenKind::RBracket,
+                "expected ']' after property expression",
+            )?;
+            let access = self.static_property_access()?;
+            return Ok(self.expression_node(
+                start,
+                Expr::OptionalComputedMember {
+                    object: Box::new(expr),
+                    property: Box::new(property),
+                    access,
+                },
+            ));
+        }
+        if let Some(name) = self.match_private_name()? {
+            return Ok(self.expression_node(
+                start,
+                Expr::OptionalPrivateMember {
+                    object: Box::new(expr),
+                    name,
+                },
+            ));
+        }
+        self.optional_member_dot_suffix(expr)
     }
 
     /// Parses one `[expression]` member suffix after its consumed bracket,

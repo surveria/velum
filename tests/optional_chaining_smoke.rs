@@ -43,6 +43,78 @@ fn optional_member_calls_preserve_receivers_and_skip_nullish_arguments() -> Test
 }
 
 #[test]
+fn optional_calls_preserve_receivers_and_skip_arguments() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let calls = 0;
+        function argument() { calls += 1; return 1; }
+        function add(value) { return 41 + value; }
+        const object = {
+          value: 41,
+          add(value) { return this.value + value; }
+        };
+        const missing = null;
+        [
+          add?.(1),
+          missing?.(argument()),
+          object.add?.(1),
+          object.add?.(...[1]),
+          object.missing?.(argument()),
+          calls
+        ].join("|")
+        "#,
+    )?;
+    ensure_value(&value, &Value::from("42||42|42||0"))
+}
+
+#[test]
+fn optional_computed_and_private_members_short_circuit() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let calls = 0;
+        function key() { calls += 1; return "value"; }
+        class Box {
+          #value = 42;
+          read(value) { return value?.#value; }
+        }
+        const box = new Box();
+        [
+          null?.[key()],
+          null?.[key()].nested(argument),
+          ({ value: 42 })?.[key()],
+          box.read(null),
+          box.read(box),
+          calls
+        ].join("|")
+        "#,
+    )?;
+    ensure_value(&value, &Value::from("||42||42|1"))
+}
+
+#[test]
+fn optional_super_calls_preserve_the_derived_receiver() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        class Base {
+          method(value) { return this.base + value; }
+        }
+        class Derived extends Base {
+          base = 41;
+          call() { return super.method?.(1); }
+        }
+        new Derived().call()
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn question_before_decimal_remains_a_conditional_operator() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

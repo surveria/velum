@@ -93,10 +93,8 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::Pop => {
-                state.stack.pop()?;
-                state.pc = next;
-                Ok(None)
+            BytecodeInstruction::Pop | BytecodeInstruction::Duplicate => {
+                Self::eval_bytecode_stack_shape_instruction(state, instruction, next)
             }
             BytecodeInstruction::Unary(_) | BytecodeInstruction::NumberUnary(_) => {
                 self.eval_bytecode_unary_instruction(state, instruction, next)
@@ -116,6 +114,25 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_stack_shape_instruction(
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::Pop => {
+                state.stack.pop()?;
+            }
+            BytecodeInstruction::Duplicate => {
+                let value = state.stack.peek()?.clone();
+                state.stack.push(value);
+            }
+            _ => return Err(Error::runtime("bytecode stack shape instruction mismatch")),
+        }
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_push_instruction(

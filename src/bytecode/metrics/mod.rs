@@ -332,6 +332,7 @@ impl BytecodeInstruction {
             | Self::StoreAnnexBVar(_)
             | Self::StoreLast
             | Self::Pop
+            | Self::Duplicate
             | Self::Unary(_)
             | Self::Await
             | Self::GeneratorStart
@@ -346,6 +347,8 @@ impl BytecodeInstruction {
             | Self::CallPrivateMemberSpread { .. }
             | Self::PrivateIn { .. }
             | Self::CallValue { .. }
+            | Self::CallValueWithReceiver { .. }
+            | Self::CallValueWithReceiverSpread
             | Self::ArrayLiteral { .. }
             | Self::ObjectLiteral { .. }
             | Self::CallSuper { .. }

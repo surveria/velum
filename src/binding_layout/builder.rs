@@ -452,14 +452,7 @@ impl LayoutBuilder {
         if let Some(heritage) = &class.heritage {
             self.analyze_expr(heritage, class_scope, function)?;
         }
-        self.analyze_function(
-            class.constructor.id,
-            FunctionBindings::new(None, class.constructor.arguments_binding.as_ref()),
-            &class.constructor.params,
-            &class.constructor.body,
-            class_scope,
-            function,
-        )?;
+        self.analyze_class_constructor(class, class_scope, function)?;
         for member in &class.members {
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
@@ -483,7 +476,9 @@ impl LayoutBuilder {
             {
                 self.analyze_expr(key, class_scope, function)?;
             }
-            if let Some(initializer) = &field.initializer {
+            if field.is_static
+                && let Some(initializer) = &field.initializer
+            {
                 self.analyze_expr(initializer, class_scope, function)?;
             }
         }

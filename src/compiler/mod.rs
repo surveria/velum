@@ -29,6 +29,7 @@ mod hoist;
 mod inferred_name;
 mod member;
 mod object_literal;
+mod optional_chain;
 mod pattern;
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -451,11 +452,11 @@ impl<'a> BytecodeCompiler<'a> {
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
                 default_derived_constructor: class.constructor.default_derived,
-                constructor: BytecodeFunction::compile(
-                    None,
+                constructor: BytecodeFunction::compile_class_constructor(
                     class.constructor.arguments_binding.clone(),
                     &class.constructor.params,
                     &class.constructor.body,
+                    &class.fields,
                     FunctionCompileMode::new(crate::syntax::FunctionKind::Ordinary, true),
                     self.layout,
                 )?,

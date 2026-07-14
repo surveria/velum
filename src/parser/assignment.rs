@@ -235,6 +235,7 @@ impl Parser {
             | Expr::ImportMeta
             | Expr::NewTarget
             | Expr::Parenthesized(_)
+            | Expr::OptionalChain(_)
             | Expr::Sequence(_)
             | Expr::Unary { .. }
             | Expr::Await(_)
@@ -253,7 +254,10 @@ impl Parser {
             | Expr::PrivateAssignment { .. }
             | Expr::PrivateIn { .. }
             | Expr::OptionalMember { .. }
+            | Expr::OptionalComputedMember { .. }
+            | Expr::OptionalPrivateMember { .. }
             | Expr::Call { .. }
+            | Expr::OptionalCall { .. }
             | Expr::DynamicImport { .. }
             | Expr::Function { .. }
             | Expr::ArrowFunction { .. }

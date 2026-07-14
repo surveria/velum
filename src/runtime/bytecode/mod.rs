@@ -90,6 +90,7 @@ impl Context {
             | BytecodeInstruction::DeclareBinding { .. }
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
+            | BytecodeInstruction::Duplicate
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
@@ -132,12 +133,14 @@ impl Context {
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::CallValueWithReceiver { .. }
             | BytecodeInstruction::TailCallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }
             | BytecodeInstruction::CallBindingSpread { .. }
             | BytecodeInstruction::CallValueSpread
+            | BytecodeInstruction::CallValueWithReceiverSpread
             | BytecodeInstruction::CallStaticMemberSpread { .. }
             | BytecodeInstruction::CallComputedMemberSpread { .. }
             | BytecodeInstruction::ConstructValueSpread

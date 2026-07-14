@@ -7,7 +7,6 @@ use crate::{
         Statement, StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
-    bytecode::BytecodeFunctionInit,
     error::{Error, Result},
     syntax::{FunctionKind, StaticFunctionId, StaticName},
 };
@@ -17,6 +16,9 @@ use super::{
     BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
     FunctionCompileMode,
 };
+
+mod bytecode_compile;
+mod expression_collector;
 
 struct FunctionCompileSpec<'a> {
     id: StaticFunctionId,
@@ -233,31 +235,6 @@ impl AnnexBFunctionStatement for Stmt {
     }
 }
 
-impl BytecodeFunction {
-    pub(super) fn compile(
-        self_binding: Option<StaticBinding>,
-        arguments_binding: Option<StaticBinding>,
-        params: &[FunctionParam],
-        statements: &[Statement],
-        mode: FunctionCompileMode,
-        layout: &BindingLayout,
-    ) -> Result<Self> {
-        let collected = CaptureBindingCollector::collect_function(params, statements);
-        let uses_arguments = collected.uses_arguments || arguments_binding.is_some();
-        Ok(Self::new(BytecodeFunctionInit {
-            self_binding,
-            arguments_binding,
-            params: compile_params(params, layout)?,
-            body: BytecodeBlock::compile_function_statements(statements, mode.kind, layout)?,
-            hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
-            capture_bindings: collected.bindings,
-            uses_arguments,
-            strict: mode.strict,
-            simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
-        }))
-    }
-}
-
 fn compile_params(
     params: &[FunctionParam],
     layout: &BindingLayout,
@@ -387,19 +364,6 @@ struct CollectedFunctionBindings {
 const ARGUMENTS_BINDING_NAME: &str = "arguments";
 
 impl CaptureBindingCollector {
-    fn collect_function(
-        params: &[FunctionParam],
-        statements: &[Statement],
-    ) -> CollectedFunctionBindings {
-        let mut collector = Self::default();
-        collector.collect_param_defaults(params);
-        collector.collect_statements(statements);
-        CollectedFunctionBindings {
-            bindings: Rc::from(collector.bindings.into_boxed_slice()),
-            uses_arguments: collector.uses_arguments,
-        }
-    }
-
     fn collect_param_defaults(&mut self, params: &[FunctionParam]) {
         for param in params {
             if let Some(default) = &param.default {
@@ -606,11 +570,8 @@ impl CaptureBindingCollector {
             Expr::Class(class) => self.collect_class(class),
             Expr::SuperCall { args } => self.collect_exprs(args),
             Expr::Identifier(binding) => self.collect_binding(binding),
-            Expr::New { constructor, args } => {
-                self.collect_expr(constructor);
-                self.collect_exprs(args);
-            }
             Expr::Parenthesized(expr)
+            | Expr::OptionalChain(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Update { expr, .. }
@@ -630,11 +591,7 @@ impl CaptureBindingCollector {
                 condition,
                 consequent,
                 alternate,
-            } => {
-                self.collect_expr(condition);
-                self.collect_expr(consequent);
-                self.collect_expr(alternate);
-            }
+            } => self.collect_conditional_expr(condition, consequent, alternate),
             Expr::Assignment { name, expr, .. } => {
                 self.collect_binding(name);
                 self.collect_expr(expr);
@@ -669,16 +626,19 @@ impl CaptureBindingCollector {
             Expr::Member { object, .. }
             | Expr::OptionalMember { object, .. }
             | Expr::PrivateMember { object, .. }
+            | Expr::OptionalPrivateMember { object, .. }
             | Expr::PrivateIn { object, .. } => self.collect_expr(object),
             Expr::ComputedMember {
+                object, property, ..
+            }
+            | Expr::OptionalComputedMember {
                 object, property, ..
             } => {
                 self.collect_expr(object);
                 self.collect_expr(property);
             }
-            Expr::Call { callee, args, .. } => {
-                self.collect_expr(callee);
-                self.collect_exprs(args);
+            Expr::Call { .. } | Expr::OptionalCall { .. } | Expr::New { .. } => {
+                self.collect_call_like_expr(expr.kind());
             }
             Expr::DynamicImport {
                 specifier, options, ..

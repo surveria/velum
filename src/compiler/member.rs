@@ -1,12 +1,25 @@
 use super::{
     ARRAY_LENGTH_PROPERTY, BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCompiler,
-    BytecodeInstruction, Error, Expr, Expression, Result, StaticName, StaticPropertyAccessId,
-    UpdateOp,
+    BytecodeInstruction, Error, Expr, Expression, InstructionIndex, Result, StaticName,
+    StaticPropertyAccessId, UpdateOp,
 };
 use crate::bytecode::BytecodePrivateName;
 use crate::bytecode::BytecodeSuperProperty;
 
 impl BytecodeCompiler<'_> {
+    pub(super) fn compile_optional_member_expression(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::OptionalMember { .. } => self.compile_optional_static_member_expr(expr),
+            Expr::OptionalComputedMember {
+                object,
+                property,
+                access,
+            } => self.compile_optional_computed_member_expr(object, property, *access),
+            Expr::OptionalPrivateMember { .. } => self.compile_private_expression(expr),
+            _ => Err(Error::runtime("expression is not an optional member")),
+        }
+    }
+
     pub(super) fn compile_super_property_assignment(
         &mut self,
         property: BytecodeSuperProperty,
@@ -25,6 +38,14 @@ impl BytecodeCompiler<'_> {
         match expr {
             Expr::PrivateMember { object, name } => {
                 self.compile_private_member_expr(object, name)?;
+            }
+            Expr::OptionalPrivateMember { object, name } => {
+                self.compile_expr(object)?;
+                let nullish_jump = self.emit_jump_if_nullish_keep();
+                self.emit(BytecodeInstruction::PrivateMember {
+                    property: BytecodePrivateName::new(name.clone()),
+                });
+                self.finish_optional_member(nullish_jump)?;
             }
             Expr::PrivateAssignment { object, name, expr } => {
                 self.compile_private_assignment(object, name, expr)?;
@@ -108,6 +129,31 @@ impl BytecodeCompiler<'_> {
             property: Self::compile_property(property, *access),
         });
         Ok(())
+    }
+
+    pub(super) fn compile_optional_computed_member_expr(
+        &mut self,
+        object: &Expression,
+        property: &Expression,
+        access: StaticPropertyAccessId,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        let nullish_jump = self.emit_jump_if_nullish_keep();
+        self.compile_expr(property)?;
+        self.emit(BytecodeInstruction::ComputedMember {
+            property: Self::compile_dynamic_property(access),
+        });
+        self.finish_optional_member(nullish_jump)
+    }
+
+    fn finish_optional_member(&mut self, nullish_jump: InstructionIndex) -> Result<()> {
+        let end_jump = self.emit_jump();
+        let nullish_address = self.current_address();
+        self.patch_jump(nullish_jump, nullish_address)?;
+        self.emit(BytecodeInstruction::Pop);
+        self.emit(BytecodeInstruction::PushUndefined);
+        let end_address = self.current_address();
+        self.patch_jump(end_jump, end_address)
     }
 
     pub(super) fn compile_computed_member_expr(
@@ -293,13 +339,7 @@ impl BytecodeCompiler<'_> {
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
         ) || !matches!(expr.kind(), Expr::Literal(_) | Expr::StringLiteral { .. })
         {
-            let target = self.compile_assignment_target_with_strict(target, strict)?;
-            self.emit(BytecodeInstruction::LogicalAssignment {
-                op,
-                target,
-                value: BytecodeBlock::compile_expression(expr, self.layout)?,
-            });
-            return Ok(());
+            return self.compile_deferred_assignment(op, strict, target, expr);
         }
         match target.kind() {
             Expr::Identifier(name) => {
@@ -365,6 +405,34 @@ impl BytecodeCompiler<'_> {
                 "invalid bytecode compound assignment target",
             )),
         }
+    }
+
+    fn compile_deferred_assignment(
+        &mut self,
+        op: BinaryOp,
+        strict: bool,
+        target: &Expression,
+        expr: &Expression,
+    ) -> Result<()> {
+        let logical = matches!(
+            op,
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+        );
+        let value = match target.kind() {
+            Expr::Identifier(name)
+                if logical && BytecodeCompiler::is_anonymous_function_definition(expr) =>
+            {
+                BytecodeBlock::compile_expression_with_inferred_name(
+                    expr,
+                    name.name(),
+                    self.layout,
+                )?
+            }
+            _ => BytecodeBlock::compile_expression(expr, self.layout)?,
+        };
+        let target = self.compile_assignment_target_with_strict(target, strict)?;
+        self.emit(BytecodeInstruction::LogicalAssignment { op, target, value });
+        Ok(())
     }
 
     /// Compiles `obj.#name` reads: the object is pushed and the private

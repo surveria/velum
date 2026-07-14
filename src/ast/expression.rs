@@ -80,6 +80,7 @@ pub enum Expr {
     NewTarget,
     Identifier(StaticBinding),
     Parenthesized(Box<Expression>),
+    OptionalChain(Box<Expression>),
     Sequence(Vec<Expression>),
     Unary {
         op: UnaryOp,
@@ -167,6 +168,11 @@ pub enum Expr {
         property: StaticName,
         access: StaticPropertyAccessId,
     },
+    OptionalComputedMember {
+        object: Box<Expression>,
+        property: Box<Expression>,
+        access: StaticPropertyAccessId,
+    },
     ComputedMember {
         object: Box<Expression>,
         property: Box<Expression>,
@@ -174,6 +180,11 @@ pub enum Expr {
     },
     /// A private member read such as `obj.#name`; the name keeps its `#`.
     PrivateMember {
+        object: Box<Expression>,
+        name: StaticName,
+    },
+    /// An optional private member read such as `obj?.#name`.
+    OptionalPrivateMember {
         object: Box<Expression>,
         name: StaticName,
     },
@@ -189,6 +200,12 @@ pub enum Expr {
         object: Box<Expression>,
     },
     Call {
+        callee: Box<Expression>,
+        site: StaticCallSiteId,
+        strict: bool,
+        args: Vec<Expression>,
+    },
+    OptionalCall {
         callee: Box<Expression>,
         site: StaticCallSiteId,
         strict: bool,

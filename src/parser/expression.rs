@@ -150,13 +150,15 @@ impl Parser {
     }
 
     fn call_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
+        let mut has_optional_chain = false;
         loop {
             if self.match_kind(&TokenKind::Dot) {
                 expr = self.member_dot_suffix(expr)?;
                 continue;
             }
             if self.match_kind(&TokenKind::QuestionDot) {
-                expr = self.optional_member_dot_suffix(expr)?;
+                has_optional_chain = true;
+                expr = self.optional_chain_suffix(expr)?;
                 continue;
             }
             if self.match_kind(&TokenKind::LBracket) {
@@ -200,6 +202,10 @@ impl Parser {
                     args,
                 },
             );
+        }
+        if has_optional_chain {
+            let span = expr.span();
+            expr = self.expression_node(span, Expr::OptionalChain(Box::new(expr)));
         }
         if !self.peek_has_line_terminator_before(0) && self.match_kind(&TokenKind::PlusPlus) {
             return self.update_expr(UpdateOp::Increment, false, expr, self.previous_span());
@@ -407,7 +413,7 @@ impl Parser {
         ))
     }
 
-    fn arguments(&mut self) -> Result<Vec<Expression>> {
+    pub(super) fn arguments(&mut self) -> Result<Vec<Expression>> {
         let mut args = Vec::new();
         loop {
             let spread = self.match_kind(&TokenKind::DotDotDot);
