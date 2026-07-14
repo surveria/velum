@@ -69,6 +69,42 @@ camera.sameDuringConstruction && camera.sameAfterConstruction();
 }
 
 #[test]
+fn nested_direct_eval_inherits_new_target() -> TestResult {
+    let value = eval(
+        r#"
+        function direct(expected) {
+            return eval("new.target") === expected;
+        }
+        function nested(expected) {
+            return eval('eval("new.target")') === expected;
+        }
+        function arrow(expected) {
+            return (() => eval("new.target"))() === expected;
+        }
+        function capture(label, action) {
+            try { return label + ":" + action(); }
+            catch (error) { return label + ":" + error.name; }
+        }
+        [
+            capture("direct", () => direct(undefined)),
+            capture("nested", () => nested(undefined)),
+            capture("arrow", () => arrow(undefined)),
+            capture("new-direct", () => { new direct(direct); return true; }),
+            capture("new-nested", () => { new nested(nested); return true; }),
+            capture("new-arrow", () => { new arrow(arrow); return true; })
+        ].join(";");
+        "#,
+    )?;
+
+    ensure_value(
+        &value,
+        &Value::from(
+            "direct:true;nested:true;arrow:true;new-direct:true;new-nested:true;new-arrow:true",
+        ),
+    )
+}
+
+#[test]
 fn top_level_new_target_is_rejected_during_parse() -> TestResult {
     let Err(error) = eval("new.target") else {
         return Err("expected top-level new.target to be rejected".into());

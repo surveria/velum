@@ -228,8 +228,11 @@ impl Context {
         let lexical_this =
             self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         let script_or_module_name = self.active_script_or_module_name();
-        let new_target =
-            FunctionNewTarget::from_mode(init.new_target_mode, self.current_new_target()?);
+        let new_target = FunctionNewTarget::from_mode(
+            init.new_target_mode,
+            self.current_new_target()?,
+            self.direct_eval_allows_new_target()?,
+        );
         let class_field_initializer_context = self.current_class_field_initializer_context()?;
         let mut function_record = super::Function {
             realm: self.active_realm_index(),
@@ -241,7 +244,7 @@ impl Context {
             param_frames,
             bytecode: init.bytecode.clone(),
             fast_path: fast_path.map(Rc::new),
-            source: None,
+            source: init.bytecode.source().cloned(),
             upvalues: upvalues.cells,
             dynamic_environments,
             static_name_atom_cache,
@@ -399,7 +402,7 @@ impl Context {
     fn function_direct_call_new_target(&self, id: FunctionId) -> Result<Value> {
         match &self.function(id)?.new_target {
             FunctionNewTarget::Own => Ok(Value::Undefined),
-            FunctionNewTarget::Lexical(value) => Ok(value.clone()),
+            FunctionNewTarget::Lexical { value, .. } => Ok(value.clone()),
         }
     }
 
@@ -462,12 +465,14 @@ impl Context {
         };
         let args = packed_args.as_deref().unwrap_or(raw_args);
         let mut dynamic_environments = dynamic_environments.to_vec();
+        let captured_dynamic_environment_count = dynamic_environments.len();
         if bytecode.requires_parameter_initialization() && !bytecode.strict() {
             dynamic_environments.push(self.create_parameter_eval_var_environment()?);
         }
         let local_base = self.push_call_activation(
             id,
             (upvalues, dynamic_environments),
+            captured_dynamic_environment_count,
             this_value,
             new_target,
             super_binding,

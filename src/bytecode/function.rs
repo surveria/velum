@@ -13,7 +13,9 @@ pub struct BytecodeFunction {
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
+    contains_direct_eval: bool,
     eval_mode: BytecodeEvalMode,
+    source: Option<Rc<str>>,
     pub(crate) simple_parameters: bool,
 }
 
@@ -25,7 +27,9 @@ pub struct BytecodeFunctionInit {
     pub hoist_plan: BytecodeHoistPlan,
     pub capture_bindings: Rc<[StaticBinding]>,
     pub uses_arguments: bool,
+    pub contains_direct_eval: bool,
     pub eval_mode: BytecodeEvalMode,
+    pub source: Option<Rc<str>>,
     pub simple_parameters: bool,
 }
 
@@ -56,7 +60,9 @@ impl BytecodeFunction {
             hoist_plan: init.hoist_plan,
             capture_bindings: init.capture_bindings,
             uses_arguments: init.uses_arguments,
+            contains_direct_eval: init.contains_direct_eval,
             eval_mode: init.eval_mode,
+            source: init.source,
             simple_parameters: init.simple_parameters,
         }
     }
@@ -74,11 +80,15 @@ impl BytecodeFunction {
     }
 
     pub const fn contains_direct_eval(&self) -> bool {
-        matches!(self.eval_mode, BytecodeEvalMode::SloppyDirect)
+        self.contains_direct_eval
     }
 
     pub const fn strict(&self) -> bool {
         matches!(self.eval_mode, BytecodeEvalMode::Strict)
+    }
+
+    pub const fn source(&self) -> Option<&Rc<str>> {
+        self.source.as_ref()
     }
 
     pub fn params(&self) -> &[BytecodeFunctionParam] {

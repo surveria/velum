@@ -115,13 +115,15 @@ impl Context {
         .map_err(dynamic_compilation_error)?;
         self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;
         if direct {
-            return eval_completion_result(
-                self.eval_compiled_eval_completion(&script, script.strict())?,
-            );
+            return eval_completion_result(self.eval_compiled_eval_completion(
+                &script,
+                script.strict(),
+                true,
+            )?);
         }
 
         let boundary = self.push_eval_activation_boundary()?;
-        let result = self.eval_compiled_eval_completion(&script, script.strict());
+        let result = self.eval_compiled_eval_completion(&script, script.strict(), false);
         let boundary_result = self.pop_eval_activation_boundary(boundary);
         boundary_result?;
         eval_completion_result(result?)

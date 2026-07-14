@@ -107,6 +107,7 @@ pub struct Context {
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
+    direct_eval_binding_layout_depths: Vec<usize>,
     active_realm: RealmIndex,
     realm: RealmState,
     inactive_realms: Vec<Option<RealmState>>,
@@ -182,14 +183,24 @@ type FunctionActivationEnvironment = (FunctionUpvalues, Vec<activation::DynamicE
 #[derive(Debug, Clone)]
 enum FunctionNewTarget {
     Own,
-    Lexical(Value),
+    Lexical {
+        value: Value,
+        allows_direct_eval: bool,
+    },
 }
 
 impl FunctionNewTarget {
-    fn from_mode(mode: BytecodeNewTargetMode, lexical_value: Value) -> Self {
+    fn from_mode(
+        mode: BytecodeNewTargetMode,
+        lexical_value: Value,
+        allows_direct_eval: bool,
+    ) -> Self {
         match mode {
             BytecodeNewTargetMode::Own => Self::Own,
-            BytecodeNewTargetMode::Lexical => Self::Lexical(lexical_value),
+            BytecodeNewTargetMode::Lexical => Self::Lexical {
+                value: lexical_value,
+                allows_direct_eval,
+            },
         }
     }
 }
@@ -401,6 +412,7 @@ impl Context {
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
+            direct_eval_binding_layout_depths: Vec::new(),
             active_realm: RealmIndex::ROOT,
             realm: RealmState::new(storage_ledger.clone()),
             inactive_realms: vec![None],

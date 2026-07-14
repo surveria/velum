@@ -17,6 +17,7 @@ impl BytecodeFunction {
         statements: &[Statement],
         mode: FunctionCompileMode,
         layout: &BindingLayout,
+        source: Option<std::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
             self_binding,
@@ -26,6 +27,7 @@ impl BytecodeFunction {
             mode,
             layout,
             std::iter::empty(),
+            source,
         )
     }
 
@@ -36,6 +38,7 @@ impl BytecodeFunction {
         fields: &[ClassField],
         mode: FunctionCompileMode,
         layout: &BindingLayout,
+        source: Option<std::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
             None,
@@ -48,6 +51,7 @@ impl BytecodeFunction {
                 .iter()
                 .filter(|field| !field.is_static)
                 .filter_map(|field| field.initializer.as_ref()),
+            source,
         )
     }
 
@@ -59,6 +63,7 @@ impl BytecodeFunction {
         mode: FunctionCompileMode,
         layout: &BindingLayout,
         additional_expressions: impl IntoIterator<Item = &'a crate::ast::Expression>,
+        source: Option<std::rc::Rc<str>>,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function_with_additional(
             params,
@@ -74,8 +79,10 @@ impl BytecodeFunction {
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments,
+            contains_direct_eval: collected.contains_direct_eval,
             eval_mode: BytecodeEvalMode::new(mode.strict, collected.contains_direct_eval),
             simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
+            source,
         }))
     }
 }

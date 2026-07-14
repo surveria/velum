@@ -53,8 +53,36 @@ impl Context {
             init.bytecode.capture_bindings(),
             layout,
         )?;
-        let dynamic_environments = Rc::from(self.current_dynamic_environments());
-        Ok((upvalues, dynamic_environments, fast_path))
+        let mut dynamic_environments = self.current_dynamic_environments().to_vec();
+        if init.bytecode.contains_direct_eval()
+            && let Some(environment) = self.capture_direct_eval_lexical_environment()?
+        {
+            dynamic_environments.insert(0, DynamicEnvironment::CapturedLexical(environment));
+        }
+        Ok((upvalues, dynamic_environments.into(), fast_path))
+    }
+
+    fn capture_direct_eval_lexical_environment(
+        &self,
+    ) -> Result<Option<crate::runtime::activation::EvalBindingEnvironment>> {
+        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        for scope in self
+            .locals
+            .iter()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
+            scope.for_each_active_binding(|atom, cell| {
+                if !environment.contains(atom)? {
+                    environment.insert(atom, cell.clone(), false)?;
+                }
+                Ok(())
+            })?;
+        }
+        if environment.len()? == 0 {
+            return Ok(None);
+        }
+        Ok(Some(environment))
     }
 
     pub(super) fn try_eval_pre_setup_function_fast_path(

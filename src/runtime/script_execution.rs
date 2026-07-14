@@ -112,13 +112,14 @@ impl Context {
         &mut self,
         script: &CompiledScript,
         strict: bool,
+        direct: bool,
     ) -> Result<Completion> {
         let mode = if strict {
             ScriptExecutionMode::StrictEval
         } else {
             ScriptExecutionMode::SloppyEval
         };
-        self.eval_compiled_outcome(script, mode)
+        self.eval_compiled_outcome_with_directness(script, mode, direct)
             .map(BytecodeOutcome::completion)
     }
 
@@ -126,6 +127,15 @@ impl Context {
         &mut self,
         script: &CompiledScript,
         mode: ScriptExecutionMode,
+    ) -> Result<BytecodeOutcome> {
+        self.eval_compiled_outcome_with_directness(script, mode, false)
+    }
+
+    fn eval_compiled_outcome_with_directness(
+        &mut self,
+        script: &CompiledScript,
+        mode: ScriptExecutionMode,
+        direct: bool,
     ) -> Result<BytecodeOutcome> {
         script.ensure_within_limits(&self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(
@@ -138,8 +148,34 @@ impl Context {
             static_name_cache,
             binding_cache,
             script.binding_layout().clone(),
-            |context| context.eval_compiled_with_mode(script, mode),
+            |context| {
+                if direct {
+                    return context.with_direct_eval_binding_layout(|context| {
+                        context.eval_compiled_with_mode(script, mode)
+                    });
+                }
+                context.eval_compiled_with_mode(script, mode)
+            },
         )
+    }
+
+    fn with_direct_eval_binding_layout<T>(
+        &mut self,
+        evaluate: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let depth = self.static_binding_layouts.len();
+        self.direct_eval_binding_layout_depths.push(depth);
+        let result = evaluate(self);
+        let active = self.direct_eval_binding_layout_depths.pop();
+        if active != Some(depth) {
+            return Err(Error::runtime("direct eval binding layout owner mismatch"));
+        }
+        result
+    }
+
+    pub(in crate::runtime) fn direct_eval_binding_layout_is_active(&self) -> bool {
+        self.direct_eval_binding_layout_depths.last().copied()
+            == Some(self.static_binding_layouts.len())
     }
 
     fn eval_compiled_with_mode(

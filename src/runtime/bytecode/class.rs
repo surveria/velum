@@ -72,6 +72,7 @@ impl Context {
                 crate::syntax::DeclKind::Const,
                 Some(constructor.clone()),
             )?;
+            self.retain_function_class_name_environment(*constructor_id, binding)?;
         }
         let Some(prototype_id) = self.function_constructor_prototype(*constructor_id)? else {
             return Err(Error::runtime("class prototype object is not available"));

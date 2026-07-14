@@ -335,7 +335,7 @@ impl CompiledScript {
         .map_err(|error| error.with_source(source_id, &diagnostic_source))?;
         let module = parsed.module;
         let program = parsed.program;
-        let binding_layout = match mode {
+        let mut binding_layout = match mode {
             CompileMode::Eval { .. } => BindingLayout::build_eval(
                 &program,
                 parsed.usage.static_binding_count,
@@ -353,7 +353,9 @@ impl CompiledScript {
                 parsed.usage.static_function_count,
             )?,
         };
+        binding_layout.set_source_text(Rc::from(diagnostic_source.clone().into_boxed_str()));
         let bytecode = compiler::compile_program(&program, &binding_layout)?;
+        binding_layout.clear_source_text();
         let bytecode_metrics = bytecode.metrics();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();

@@ -5,6 +5,7 @@ use crate::{
     binding_metadata::{BindingLayout, BindingOperand},
     bytecode::{BytecodeBinding, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeHoistPlan},
     error::Result,
+    source::SourceSpan,
 };
 
 use super::FunctionCompileMode;
@@ -116,6 +117,7 @@ impl<'a> HoistCollector<'a> {
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
         mode: FunctionCompileMode,
+        span: SourceSpan,
     ) -> Result<()> {
         let (name, arguments_binding) = bindings;
         self.var_declarations.push(name.clone());
@@ -130,6 +132,10 @@ impl<'a> HoistCollector<'a> {
                 body,
                 mode,
                 self.layout,
+                self.layout
+                    .source_text()
+                    .and_then(|source| source.get(span.start()..span.end()))
+                    .map(Rc::from),
             )?,
             mode.kind,
         );
@@ -240,7 +246,7 @@ impl<'a> HoistCollector<'a> {
                 Ok(())
             }
             declaration @ Stmt::FunctionDecl { .. } => {
-                self.collect_function_declaration_statement(declaration)
+                self.collect_function_declaration_statement(declaration, statement.span())
             }
             Stmt::Empty
             | Stmt::Debugger
@@ -273,7 +279,11 @@ impl<'a> HoistCollector<'a> {
         }
     }
 
-    fn collect_function_declaration_statement(&mut self, statement: &Stmt) -> Result<()> {
+    fn collect_function_declaration_statement(
+        &mut self,
+        statement: &Stmt,
+        span: SourceSpan,
+    ) -> Result<()> {
         let Stmt::FunctionDecl {
             name,
             arguments_binding,
@@ -295,6 +305,7 @@ impl<'a> HoistCollector<'a> {
             params,
             body,
             FunctionCompileMode::new(*kind, *strict),
+            span,
         )
     }
 }

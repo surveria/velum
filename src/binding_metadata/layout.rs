@@ -18,6 +18,7 @@ pub struct BindingLayout {
     local_slot_count: usize,
     upvalue_slot_count: usize,
     unresolved_count: usize,
+    source_text: Option<Rc<str>>,
 }
 
 impl BindingLayout {
@@ -32,6 +33,7 @@ impl BindingLayout {
             local_slot_count: parts.local_slot_count,
             upvalue_slot_count: parts.upvalue_slot_count,
             unresolved_count: parts.unresolved_count,
+            source_text: None,
         }
     }
 
@@ -53,6 +55,18 @@ impl BindingLayout {
 
     pub fn operand_count(&self) -> usize {
         self.operands.len()
+    }
+
+    pub(crate) fn set_source_text(&mut self, source: Rc<str>) {
+        self.source_text = Some(source);
+    }
+
+    pub(crate) const fn source_text(&self) -> Option<&Rc<str>> {
+        self.source_text.as_ref()
+    }
+
+    pub(crate) fn clear_source_text(&mut self) {
+        self.source_text = None;
     }
 
     pub fn resolved_count(&self) -> usize {

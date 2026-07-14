@@ -82,6 +82,27 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(in crate::runtime) fn retain_function_class_name_environment(
+        &mut self,
+        id: FunctionId,
+        binding: &crate::bytecode::BytecodeBinding,
+    ) -> Result<()> {
+        let atom = self.intern_static_name_atom(binding.name().name())?;
+        let cell = self
+            .get_binding_bytecode(binding)?
+            .ok_or_else(|| Error::runtime("class name binding disappeared"))?;
+        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        environment.insert(atom, cell, false)?;
+        let dynamic = crate::runtime::activation::DynamicEnvironment::CapturedLexical(environment);
+        let additional_bindings = dynamic.storage_binding_count()?;
+        let mut environments = self.function(id)?.dynamic_environments.to_vec();
+        environments.push(dynamic);
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Binding, additional_bindings)?;
+        self.function_mut(id)?.dynamic_environments = environments.into();
+        Ok(())
+    }
+
     pub(in crate::runtime) fn set_function_default_derived_constructor(
         &mut self,
         id: FunctionId,

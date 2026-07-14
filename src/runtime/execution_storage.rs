@@ -68,6 +68,7 @@ impl Context {
         &mut self,
         function: FunctionId,
         environment: FunctionActivationEnvironment,
+        captured_dynamic_environment_count: usize,
         this_value: Value,
         new_target: Value,
         super_binding: Option<std::rc::Rc<FunctionSuperBinding>>,
@@ -78,6 +79,7 @@ impl Context {
             function,
             base,
             environment,
+            captured_dynamic_environment_count,
             this_value,
             new_target,
             super_binding,
@@ -350,10 +352,12 @@ impl Context {
             let Some(function_id) = frame.function_id() else {
                 continue;
             };
-            return Ok(matches!(
-                self.function(function_id)?.new_target,
-                super::FunctionNewTarget::Own
-            ));
+            return Ok(match self.function(function_id)?.new_target {
+                super::FunctionNewTarget::Own => true,
+                super::FunctionNewTarget::Lexical {
+                    allows_direct_eval, ..
+                } => allows_direct_eval,
+            });
         }
         Ok(false)
     }

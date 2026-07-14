@@ -425,7 +425,7 @@ impl Function {
                 }
             }
         }
-        if let FunctionNewTarget::Lexical(value) = &self.new_target {
+        if let FunctionNewTarget::Lexical { value, .. } = &self.new_target {
             visitor.visit(
                 VmCallableEdgeKind::JavaScriptFunctionInternal,
                 StrongEdgeReference::Value(value),

@@ -177,6 +177,13 @@ impl<'a> BytecodeCompiler<'a> {
         BytecodeBinding::compile(binding, self.layout)
     }
 
+    fn source_text(&self, span: SourceSpan) -> Option<Rc<str>> {
+        self.layout
+            .source_text()?
+            .get(span.start()..span.end())
+            .map(Rc::from)
+    }
+
     fn compile_property(property: &StaticName, access: StaticPropertyAccessId) -> BytecodeProperty {
         BytecodeProperty::new(property.clone(), access)
     }
@@ -460,6 +467,7 @@ impl<'a> BytecodeCompiler<'a> {
                     &class.fields,
                     FunctionCompileMode::new(crate::syntax::FunctionKind::Ordinary, true),
                     self.layout,
+                    None,
                 )?,
                 members: members.into(),
                 fields: fields.into(),
@@ -521,6 +529,7 @@ impl<'a> BytecodeCompiler<'a> {
                     &member.body,
                     FunctionCompileMode::new(member.function_kind, true),
                     self.layout,
+                    None,
                 )?,
             });
         }

@@ -219,6 +219,72 @@ fn field_initializers_capture_the_inner_class_name() -> TestResult {
 }
 
 #[test]
+fn field_initializer_eval_observes_the_inner_class_name() -> TestResult {
+    ensure_string(
+        r#"
+        class Direct {
+            value = eval("Direct");
+            deferred = () => eval("Direct");
+            static value = eval("Direct");
+            static deferred = () => eval("Direct");
+        }
+        let Expression = class Inner {
+            value = eval("Inner");
+            deferred = () => eval("Inner");
+            static value = eval("Inner");
+            static deferred = () => eval("Inner");
+        };
+        const Renamed = Expression;
+        Expression = null;
+        const DirectAlias = Direct;
+        Direct = null;
+        const direct = new DirectAlias();
+        const expression = new Renamed();
+        "" + (
+            direct.value === DirectAlias && direct.deferred() === DirectAlias &&
+            DirectAlias.value === DirectAlias && DirectAlias.deferred() === DirectAlias &&
+            expression.value === Renamed && expression.deferred() === Renamed &&
+            Renamed.value === Renamed && Renamed.deferred() === Renamed
+        )
+        "#,
+        "true",
+    )
+}
+
+#[test]
+fn block_scoped_instance_field_eval_retains_the_class_environment() -> TestResult {
+    ensure_string(
+        r#"
+        let valid = true;
+        {
+            class C { field = eval("C"); }
+            valid = valid && new C().field === C;
+        }
+        {
+            let C = class Inner { field = eval("Inner"); };
+            valid = valid && new C().field === C;
+        }
+        {
+            class C { field = () => eval("C"); }
+            valid = valid && new C().field() === C;
+            const D = C;
+            C = null;
+            valid = valid && new D().field() === D;
+        }
+        {
+            let C = class Inner { field = () => eval("Inner"); };
+            valid = valid && new C().field() === C;
+            const D = C;
+            C = null;
+            valid = valid && new D().field() === D;
+        }
+        "" + valid;
+        "#,
+        "true",
+    )
+}
+
+#[test]
 fn fields_are_enumerable_own_properties() -> TestResult {
     ensure_string(
         r#"
