@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260714T151642Z.md`
-- Task: PR #630: architecture: unify eval environment ownership
-- Performance: 5.64x (4/5 >1.00x) (from `rsqjs-test-report-20260714T151642Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T151642Z.md`)
+- `rsqjs-test-report-20260714T163201Z.md`
+- Task: PR #631: runtime: complete RegExp residual semantics
+- Performance: 5.79x (4/5 >1.00x) (from `rsqjs-test-report-20260714T163201Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T163201Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102160 passed / 418 failed (99.59%) (from `rsqjs-test-report-20260714T151642Z.md`)
+- Full Test262: 102204 passed / 374 failed (99.64%) (from `rsqjs-test-report-20260714T163201Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -566,3 +566,4 @@ Latest report:
 | `20260714T054603Z` `51e3d2e` PR #623: runtime: close Function, primitive, and Array residuals | 5.48x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101973 passed / 605 failed (99.41%) |
 | `20260714T132421Z` `cc02a47` PR #629: ci: publish large reports through git | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102139 passed / 439 failed (99.57%) |
 | `20260714T151642Z` `d22e777` PR #630: architecture: unify eval environment ownership | 5.64x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102160 passed / 418 failed (99.59%) |
+| `20260714T163201Z` `23484af` PR #631: runtime: complete RegExp residual semantics | 5.79x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102204 passed / 374 failed (99.64%) |
