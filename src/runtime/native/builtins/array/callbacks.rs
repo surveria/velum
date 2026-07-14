@@ -115,7 +115,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if to_boolean(&keep) {
+            if to_boolean(context, &keep)? {
                 context.array_from_create_data_property(&result, next_index, value.clone())?;
                 next_index = next_index
                     .checked_add(1)
@@ -155,7 +155,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if to_boolean(&result) {
+            if to_boolean(context, &result)? {
                 matched = true;
                 return Ok(ArrayCallbackAction::Stop);
             }
@@ -193,7 +193,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if !to_boolean(&result) {
+            if !to_boolean(context, &result)? {
                 matched = false;
                 return Ok(ArrayCallbackAction::Stop);
             }
@@ -233,7 +233,7 @@ impl Context {
                     index,
                     this_value,
                 )?;
-                if to_boolean(&result) {
+                if to_boolean(context, &result)? {
                     found = value.clone();
                     return Ok(ArrayCallbackAction::Stop);
                 }
@@ -274,7 +274,7 @@ impl Context {
                     index,
                     this_value,
                 )?;
-                if to_boolean(&result) {
+                if to_boolean(context, &result)? {
                     found = Self::array_like_index_value(index)?;
                     return Ok(ArrayCallbackAction::Stop);
                 }
@@ -340,7 +340,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if to_boolean(&result) {
+            if to_boolean(self, &result)? {
                 return Ok(Some(Value::Bool(true)));
             }
         }
@@ -361,7 +361,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if !to_boolean(&result) {
+            if !to_boolean(self, &result)? {
                 return Ok(Some(Value::Bool(false)));
             }
         }
@@ -382,7 +382,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if to_boolean(&result) {
+            if to_boolean(self, &result)? {
                 return Ok(Some(value.clone()));
             }
         }
@@ -403,7 +403,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if to_boolean(&result) {
+            if to_boolean(self, &result)? {
                 return Self::array_like_index_value(index).map(Some);
             }
         }

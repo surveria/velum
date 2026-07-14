@@ -43,14 +43,14 @@ impl Context {
         &self,
         args: &[Value],
     ) -> Result<Value> {
-        self.checked_value(Value::Bool(Self::eval_boolean_argument(args)))
+        self.checked_value(Value::Bool(self.eval_boolean_argument(args)?))
     }
 
     pub(in crate::runtime::native) fn construct_boolean_object(
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let value = Self::eval_boolean_argument(args.as_slice());
+        let value = self.eval_boolean_argument(args.as_slice())?;
         let prototype = self.boolean_constructor_prototype()?;
         self.objects.create_boxed_primitive(
             ObjectPrimitiveValue::Bool(value),
@@ -178,9 +178,11 @@ impl Context {
         self.define_non_enumerable_object_property(prototype, name, function)
     }
 
-    fn eval_boolean_argument(args: &[Value]) -> bool {
-        let value = args.first();
-        value.is_some_and(to_boolean)
+    fn eval_boolean_argument(&self, args: &[Value]) -> Result<bool> {
+        let Some(value) = args.first() else {
+            return Ok(false);
+        };
+        to_boolean(self, value)
     }
 
     fn boolean_receiver_value(&self, value: &Value) -> Result<bool> {

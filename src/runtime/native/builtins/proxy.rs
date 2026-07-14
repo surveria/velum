@@ -195,7 +195,7 @@ impl Context {
         let result = self
             .call(&trap, &[target.clone(), key], handler)?
             .into_native_value_result()?;
-        let present = to_boolean(&result);
+        let present = to_boolean(self, &result)?;
         if !present {
             let descriptor = self.proxy_target_descriptor(&target, property)?;
             let extensible = self.proxy_target_is_extensible(&target)?;
@@ -253,7 +253,7 @@ impl Context {
                 handler,
             )?
             .into_native_value_result()?;
-        let updated = to_boolean(&result);
+        let updated = to_boolean(self, &result)?;
         if updated {
             let descriptor = self.proxy_target_descriptor(&target, property)?;
             validate_set(descriptor.as_ref(), &value)?;
@@ -276,7 +276,7 @@ impl Context {
         let result = self
             .call(&trap, &[target.clone(), key], handler)?
             .into_native_value_result()?;
-        let deleted = to_boolean(&result);
+        let deleted = to_boolean(self, &result)?;
         if deleted {
             let descriptor = self.proxy_target_descriptor(&target, property)?;
             let extensible = self.proxy_target_is_extensible(&target)?;
@@ -324,7 +324,7 @@ impl Context {
         let result = self
             .call(&trap, &[target.clone(), prototype.clone()], handler)?
             .into_native_value_result()?;
-        let updated = to_boolean(&result);
+        let updated = to_boolean(self, &result)?;
         if !updated {
             return Ok(false);
         }
@@ -349,7 +349,7 @@ impl Context {
         let result = self
             .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
-        let extensible = to_boolean(&result);
+        let extensible = to_boolean(self, &result)?;
         let target_extensible = self.proxy_target_is_extensible(&target)?;
         validate_is_extensible(target_extensible, extensible)?;
         Ok(extensible)
@@ -366,7 +366,7 @@ impl Context {
         let result = self
             .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
-        let prevented = to_boolean(&result);
+        let prevented = to_boolean(self, &result)?;
         if prevented {
             validate_prevent_extensions(self.proxy_target_is_extensible(&target)?)?;
         }
@@ -397,7 +397,7 @@ impl Context {
         let result = self
             .call(&trap, &[target.clone(), key, descriptor], handler)?
             .into_native_value_result()?;
-        let defined = to_boolean(&result);
+        let defined = to_boolean(self, &result)?;
         if !defined {
             return Ok(false);
         }

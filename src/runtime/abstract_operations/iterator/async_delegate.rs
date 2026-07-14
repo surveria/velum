@@ -213,7 +213,8 @@ impl Context {
         }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
-        let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
+        let done_value = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
+        let done = to_boolean(self, &done_value)?;
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
         if !done {
             return Ok(YieldDelegateStep::DelegatedYield(

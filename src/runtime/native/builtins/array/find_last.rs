@@ -33,7 +33,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if to_boolean(&result) {
+            if to_boolean(self, &result)? {
                 return Ok(value);
             }
         }
@@ -66,7 +66,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if to_boolean(&result) {
+            if to_boolean(self, &result)? {
                 return Self::array_like_index_value(index);
             }
         }

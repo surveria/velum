@@ -34,6 +34,8 @@ const FLAG_RAW: &str = "raw";
 const NEGATIVE_PHASE_PARSE: &str = "parse";
 const NEGATIVE_PHASE_RESOLUTION: &str = "resolution";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
+const TEST262_ERROR_NAME: &str = "Test262Error";
+const TEST262_ERROR_SENTINEL_SOURCE: &str = "Test262Error.__rsqjsLastInstance";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
 const TEST262_MAX_OBJECTS: usize = 1_000_000;
@@ -251,7 +253,7 @@ fn execute_variant_result(
         context.eval_named(relative_path, &source)
     };
     if let Some(negative) = &metadata.negative {
-        return ensure_negative_result(relative_path, negative, result);
+        return ensure_negative_result(&mut context, relative_path, negative, result);
     }
 
     result.map_err(|error| {
@@ -362,6 +364,7 @@ fn ensure_async_completion(relative_path: &str, output: &[String]) -> anyhow::Re
 }
 
 fn ensure_negative_result(
+    context: &mut rs_quickjs::Context,
     relative_path: &str,
     negative: &NegativeMetadata,
     result: rs_quickjs::Result<rs_quickjs::Value>,
@@ -373,7 +376,7 @@ fn ensure_negative_result(
         return ensure_negative_resolution_result(relative_path, negative, result);
     }
     if negative.phase == NEGATIVE_PHASE_RUNTIME {
-        return ensure_negative_runtime_result(relative_path, negative, result);
+        return ensure_negative_runtime_result(context, relative_path, negative, result);
     }
     bail!(
         "upstream Test262 case '{}' uses unsupported negative phase '{}'",
@@ -421,6 +424,7 @@ fn ensure_negative_parse_result(
 }
 
 fn ensure_negative_runtime_result(
+    context: &mut rs_quickjs::Context,
     relative_path: &str,
     negative: &NegativeMetadata,
     result: rs_quickjs::Result<rs_quickjs::Value>,
@@ -429,7 +433,9 @@ fn ensure_negative_runtime_result(
         Ok(_) => bail!(
             "upstream negative runtime case '{relative_path}' unexpectedly evaluated successfully"
         ),
-        Err(error) if execution_error_matches(&error, &negative.error_type) => Ok(()),
+        Err(error) if negative_runtime_error_matches(context, &error, &negative.error_type) => {
+            Ok(())
+        }
         Err(error) => bail!(
             "upstream negative runtime case '{}' expected {}, got {}",
             relative_path,
@@ -437,6 +443,26 @@ fn ensure_negative_runtime_result(
             error
         ),
     }
+}
+
+fn negative_runtime_error_matches(
+    context: &mut rs_quickjs::Context,
+    error: &Error,
+    expected_type: &str,
+) -> bool {
+    if execution_error_matches(error, expected_type) {
+        return true;
+    }
+    if expected_type != TEST262_ERROR_NAME {
+        return false;
+    }
+    let Some(thrown) = error.javascript_value() else {
+        return false;
+    };
+    let Ok(sentinel) = context.eval(TEST262_ERROR_SENTINEL_SOURCE) else {
+        return false;
+    };
+    &sentinel == thrown
 }
 
 fn execution_error_matches(error: &Error, expected_type: &str) -> bool {

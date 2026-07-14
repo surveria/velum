@@ -348,7 +348,8 @@ impl Context {
         }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
-        if to_boolean(&self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
+        let done = self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?;
+        if to_boolean(self, &done)? {
             set_protocol_done(source);
             return Ok(IteratorResultStep::Done);
         }
@@ -498,7 +499,8 @@ impl Context {
         }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
-        let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
+        let done_value = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
+        let done = to_boolean(self, &done_value)?;
         if !done {
             return Ok(YieldDelegateStep::DelegatedYield(
                 DelegatedYield::iterator_result(result.clone()),

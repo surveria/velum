@@ -30,6 +30,8 @@ pub enum HostOperation {
     DetachArrayBuffer,
     /// Creates a VM-local realm and returns its global object.
     CreateRealm,
+    /// Creates the callable Annex B host exotic carrying `[[IsHTMLDDA]]`.
+    CreateIsHtmlDda,
 }
 
 pub trait IntoJsValue {
@@ -145,6 +147,7 @@ enum HostFunctionKind {
     },
     Operation(HostOperation),
     RealmEval(RealmId),
+    IsHtmlDda,
 }
 
 impl HostFunction {
@@ -179,6 +182,10 @@ impl HostFunction {
 
     const fn realm_eval(name: String, realm: RealmId) -> Self {
         Self::with_kind(name, HostFunctionKind::RealmEval(realm))
+    }
+
+    const fn is_html_dda(name: String) -> Self {
+        Self::with_kind(name, HostFunctionKind::IsHtmlDda)
     }
 
     fn new_internal<F>(name: String, callback: F) -> Self
@@ -247,15 +254,23 @@ impl HostFunction {
     const fn operation_kind(&self) -> Option<HostOperation> {
         match self.kind {
             HostFunctionKind::Operation(operation) => Some(operation),
-            HostFunctionKind::Callback { .. } | HostFunctionKind::RealmEval(_) => None,
+            HostFunctionKind::Callback { .. }
+            | HostFunctionKind::RealmEval(_)
+            | HostFunctionKind::IsHtmlDda => None,
         }
     }
 
     fn realm_eval_target(&self) -> Option<RealmId> {
         match &self.kind {
             HostFunctionKind::RealmEval(realm) => Some(realm.clone()),
-            HostFunctionKind::Callback { .. } | HostFunctionKind::Operation(_) => None,
+            HostFunctionKind::Callback { .. }
+            | HostFunctionKind::Operation(_)
+            | HostFunctionKind::IsHtmlDda => None,
         }
+    }
+
+    const fn is_html_dda_kind(&self) -> bool {
+        matches!(self.kind, HostFunctionKind::IsHtmlDda)
     }
 
     const fn allows_vm_handles(&self) -> bool {
@@ -263,7 +278,9 @@ impl HostFunction {
             HostFunctionKind::Callback {
                 allow_vm_handles, ..
             } => allow_vm_handles,
-            HostFunctionKind::Operation(_) | HostFunctionKind::RealmEval(_) => false,
+            HostFunctionKind::Operation(_)
+            | HostFunctionKind::RealmEval(_)
+            | HostFunctionKind::IsHtmlDda => false,
         }
     }
 }
@@ -609,6 +626,9 @@ impl Context {
                 .eval_realm_source_value(&realm, values.first().unwrap_or(&Value::Undefined))
                 .map_err(|error| error.with_context(function.context_message()));
         }
+        if function.is_html_dda_kind() {
+            return Ok(Value::Null);
+        }
         let allow_vm_handles = function.allows_vm_handles();
         let roots = self.root_snapshot()?;
         let value = function.call(
@@ -643,7 +663,17 @@ impl Context {
                 let eval = self.create_internal_realm_eval_function("eval".to_owned(), &realm)?;
                 self.install_realm_global_eval(&realm, eval)
             }
+            HostOperation::CreateIsHtmlDda => self.create_internal_host_function_value(
+                HostFunction::is_html_dda("IsHTMLDDA".to_owned()),
+            ),
         }
+    }
+
+    pub(crate) fn is_html_dda(&self, value: &Value) -> Result<bool> {
+        let Value::HostFunction(id) = value else {
+            return Ok(false);
+        };
+        self.host_function(*id).map(HostFunction::is_html_dda_kind)
     }
 
     fn initialize_host_function_object(&mut self, function: &mut HostFunction) -> Result<()> {

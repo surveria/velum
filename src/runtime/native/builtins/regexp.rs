@@ -568,7 +568,8 @@ impl Context {
             (REGEXP_UNICODE_SETS_PROPERTY, 'v'),
             (REGEXP_STICKY_PROPERTY, 'y'),
         ] {
-            if to_boolean(&self.get_named(receiver, property)?) {
+            let enabled = self.get_named(receiver, property)?;
+            if to_boolean(self, &enabled)? {
                 flags.push(marker);
             }
         }
@@ -690,7 +691,7 @@ impl Context {
         let key = self.regexp_well_known_symbol_property_key(SYMBOL_MATCH_PROPERTY)?;
         let matcher = self.get(value, PropertyLookup::from_key(SYMBOL_MATCH_DISPLAY, key))?;
         if !matches!(matcher, Value::Undefined) {
-            return Ok(to_boolean(&matcher));
+            return to_boolean(self, &matcher);
         }
         let Value::Object(id) = value else {
             return Ok(false);

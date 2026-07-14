@@ -197,7 +197,8 @@ impl Context {
         }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
-        if to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?) {
+        let done = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
+        if to_boolean(self, &done)? {
             set_protocol_done(&mut continuation.source);
             return Ok(AsyncIteratorStep::Done);
         }
@@ -217,7 +218,8 @@ impl Context {
         }
         let _result_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
-        let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
+        let done_value = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
+        let done = to_boolean(self, &done_value)?;
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
         self.await_sync_iterator_result(continuation, value, done)
     }

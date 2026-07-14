@@ -326,8 +326,9 @@ impl Context {
         let hour_cycle = self.locale_option_string(options, "hourCycle")?;
         let case_first = self.locale_option_string(options, "caseFirst")?;
         let numeric_value = self.get_named(options, "numeric")?;
-        let numeric =
-            (!matches!(numeric_value, Value::Undefined)).then(|| to_boolean(&numeric_value));
+        let numeric = (!matches!(numeric_value, Value::Undefined))
+            .then(|| to_boolean(self, &numeric_value))
+            .transpose()?;
         let numbering_system = self.locale_option_string(options, "numberingSystem")?;
         Ok(LocaleOptions {
             language,

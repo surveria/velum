@@ -331,9 +331,12 @@ pub(in crate::runtime) fn to_bigint_primitive(value: &Value) -> Result<JsBigInt>
     }
 }
 
-/// ECMAScript `ToBoolean` for the runtime's complete value domain.
-pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
-    match value {
+/// ECMAScript `ToBoolean`, including the Annex B `[[IsHTMLDDA]]` override.
+pub(in crate::runtime) fn to_boolean(context: &Context, value: &Value) -> Result<bool> {
+    if context.is_html_dda(value)? {
+        return Ok(false);
+    }
+    Ok(match value {
         Value::Undefined | Value::Null => false,
         Value::Bool(value) => *value,
         Value::Number(value) => *value != 0.0 && !value.is_nan(),
@@ -344,7 +347,7 @@ pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
         | Value::Object(_) => true,
-    }
+    })
 }
 
 pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {

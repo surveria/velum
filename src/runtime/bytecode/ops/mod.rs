@@ -134,7 +134,7 @@ impl Context {
 
     pub(super) fn eval_bytecode_unary(&mut self, op: UnaryOp, value: &Value) -> Result<Value> {
         match op {
-            UnaryOp::Not => Ok(Value::Bool(!to_boolean(value))),
+            UnaryOp::Not => Ok(Value::Bool(!to_boolean(self, value)?)),
             UnaryOp::Negate => match self.to_numeric(value)? {
                 crate::runtime::abstract_operations::NumericValue::Number(value) => {
                     Ok(Value::Number(-value))
@@ -304,7 +304,7 @@ impl Context {
                 Completion::Normal(value) => value,
                 completion => return completion.into_result(),
             };
-            return Ok(Value::Bool(to_boolean(&result)));
+            return Ok(Value::Bool(to_boolean(self, &result)?));
         }
         if !self.semantic_is_callable(right)? {
             return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));

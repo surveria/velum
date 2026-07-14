@@ -414,7 +414,7 @@ impl Context {
         }
         let matcher = self.string_well_known_value(value, SYMBOL_MATCH_PROPERTY)?;
         if !matches!(matcher, Value::Undefined) {
-            return Ok(to_boolean(&matcher));
+            return to_boolean(self, &matcher);
         }
         let Value::Object(id) = value else {
             return Ok(false);

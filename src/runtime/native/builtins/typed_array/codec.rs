@@ -205,7 +205,7 @@ impl Context {
         let omit_padding = if matches!(omit_padding, Value::Undefined) {
             false
         } else {
-            to_boolean(&omit_padding)
+            to_boolean(self, &omit_padding)?
         };
         Ok((alphabet, omit_padding))
     }

@@ -189,6 +189,6 @@ impl Context {
         }
         let blocked_lookup = self.property_lookup(name);
         let blocked = self.get(&unscopables, blocked_lookup)?;
-        Ok(!to_boolean(&blocked))
+        Ok(!to_boolean(self, &blocked)?)
     }
 }

@@ -3,6 +3,27 @@ use rs_quickjs::{HostOperation, Runtime, Value, VmStorageKind};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 const DETACH_NAME: &str = "hostDetachArrayBuffer";
+const CREATE_IS_HTML_DDA_NAME: &str = "hostCreateIsHTMLDDA";
+
+#[test]
+fn creates_callable_is_html_dda_host_exotics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(CREATE_IS_HTML_DDA_NAME, HostOperation::CreateIsHtmlDda)?;
+    let value = context.eval(
+        "var dda = hostCreateIsHTMLDDA(); \
+         dda.answer = 42; \
+         !dda && typeof dda === 'undefined' && \
+         dda == null && null == dda && dda == undefined && undefined == dda && \
+         dda !== null && dda !== undefined && Object.is(dda, dda) && \
+         dda() === null && dda.answer === 42 && \
+         Object.getPrototypeOf(dda) === Function.prototype ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected IsHTMLDDA semantic invariants, got {value:?}").into())
+}
 
 #[test]
 fn detaches_array_buffers_and_reconciles_storage() -> TestResult {

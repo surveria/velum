@@ -154,7 +154,7 @@ impl Context {
             PropertyLookup::from_key(IS_CONCAT_SPREADABLE_DISPLAY, key),
         )?;
         if !matches!(spreadable, Value::Undefined) {
-            return Ok(to_boolean(&spreadable));
+            return to_boolean(self, &spreadable);
         }
         self.semantic_is_array(value)
     }
