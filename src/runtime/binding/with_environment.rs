@@ -208,6 +208,7 @@ impl Context {
         environment: EvalBindingEnvironment,
     ) -> Result<()> {
         let index = self.current_dynamic_environment_index()?;
+        let captured_count = self.current_captured_dynamic_environment_count();
         self.storage_ledger
             .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
         let Some(environments) = self
@@ -219,9 +220,14 @@ impl Context {
                 .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
             return Err(Error::runtime("eval binding activation disappeared"));
         };
+        let active_start = captured_count.min(environments.len());
         let position = environments
             .iter()
-            .position(|environment| matches!(environment, DynamicEnvironment::With(_)))
+            .enumerate()
+            .skip(active_start)
+            .find_map(|(position, environment)| {
+                matches!(environment, DynamicEnvironment::With(_)).then_some(position)
+            })
             .unwrap_or(environments.len());
         environments.insert(position, DynamicEnvironment::EvalBindings(environment));
         Ok(())
@@ -330,6 +336,22 @@ impl Context {
     ) -> Result<Option<WithBindingReference>> {
         let environments = self.current_dynamic_environments().to_vec();
         if self.direct_eval_binding_layout_is_active() {
+            let frame_start = self.current_local_frame_start();
+            let eval_scope_start = self
+                .direct_eval_local_scope_start()
+                .unwrap_or(self.locals.len())
+                .max(frame_start)
+                .min(self.locals.len());
+            let atom = self.intern_static_name_atom(binding.name().name())?;
+            if self
+                .locals
+                .iter()
+                .skip(eval_scope_start)
+                .rev()
+                .any(|scope| scope.contains(atom))
+            {
+                return Ok(None);
+            }
             let captured_count = self
                 .current_captured_dynamic_environment_count()
                 .min(environments.len());
@@ -341,11 +363,11 @@ impl Context {
             )? {
                 return Ok(Some(reference));
             }
-            let atom = self.intern_static_name_atom(binding.name().name())?;
             if self
                 .locals
                 .iter()
-                .skip(self.current_local_frame_start())
+                .take(eval_scope_start)
+                .skip(frame_start)
                 .rev()
                 .any(|scope| scope.contains(atom))
             {

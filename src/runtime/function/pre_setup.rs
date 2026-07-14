@@ -73,7 +73,7 @@ impl Context {
             .rev()
         {
             scope.for_each_active_binding(|atom, cell| {
-                if !environment.contains(atom)? {
+                if !self.dynamic_eval_environment_contains(atom)? && !environment.contains(atom)? {
                     environment.insert(atom, cell.clone(), false)?;
                 }
                 Ok(())
@@ -83,6 +83,23 @@ impl Context {
             return Ok(None);
         }
         Ok(Some(environment))
+    }
+
+    fn dynamic_eval_environment_contains(
+        &self,
+        atom: crate::storage::atom::AtomId,
+    ) -> Result<bool> {
+        self.current_dynamic_environments()
+            .iter()
+            .try_fold(false, |found, environment| {
+                if found {
+                    return Ok(true);
+                }
+                let DynamicEnvironment::EvalBindings(environment) = environment else {
+                    return Ok(false);
+                };
+                environment.contains(atom)
+            })
     }
 
     pub(super) fn try_eval_pre_setup_function_fast_path(

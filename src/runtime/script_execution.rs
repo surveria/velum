@@ -163,19 +163,32 @@ impl Context {
         &mut self,
         evaluate: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
-        let depth = self.static_binding_layouts.len();
-        self.direct_eval_binding_layout_depths.push(depth);
+        let boundary = crate::runtime::DirectEvalScopeBoundary {
+            binding_layout_depth: self.static_binding_layouts.len(),
+            local_scope_start: self.locals.len(),
+        };
+        self.direct_eval_scope_boundaries.push(boundary);
         let result = evaluate(self);
-        let active = self.direct_eval_binding_layout_depths.pop();
-        if active != Some(depth) {
+        let active = self.direct_eval_scope_boundaries.pop();
+        if active != Some(boundary) {
             return Err(Error::runtime("direct eval binding layout owner mismatch"));
         }
         result
     }
 
     pub(in crate::runtime) fn direct_eval_binding_layout_is_active(&self) -> bool {
-        self.direct_eval_binding_layout_depths.last().copied()
-            == Some(self.static_binding_layouts.len())
+        self.direct_eval_scope_boundaries
+            .last()
+            .is_some_and(|boundary| {
+                boundary.binding_layout_depth == self.static_binding_layouts.len()
+            })
+    }
+
+    pub(in crate::runtime) fn direct_eval_local_scope_start(&self) -> Option<usize> {
+        self.direct_eval_scope_boundaries
+            .last()
+            .filter(|boundary| boundary.binding_layout_depth == self.static_binding_layouts.len())
+            .map(|boundary| boundary.local_scope_start)
     }
 
     fn eval_compiled_with_mode(

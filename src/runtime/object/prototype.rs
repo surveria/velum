@@ -179,9 +179,12 @@ impl ObjectHeap {
         Ok(object.prototype.clone().unwrap_or(Value::Null))
     }
 
-    pub(crate) fn prototype_chain_has_typed_array(&self, id: ObjectId) -> Result<bool> {
+    pub(crate) fn prototype_chain_requires_semantic_index_write(
+        &self,
+        id: ObjectId,
+    ) -> Result<bool> {
         let root = self.object(id)?;
-        if root.has_semantic_prototype() {
+        if root.proxy_value.is_some() || root.has_semantic_prototype() {
             return Ok(true);
         }
         let mut current = root.ordinary_prototype_id();
@@ -189,7 +192,7 @@ impl ObjectHeap {
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
-            if object.typed_array.is_some() {
+            if object.typed_array.is_some() || object.proxy_value.is_some() {
                 return Ok(true);
             }
             if object.has_semantic_prototype() {

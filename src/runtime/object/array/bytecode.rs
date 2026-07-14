@@ -135,6 +135,9 @@ impl ObjectHeap {
         if self.array_length_if_array(id)?.is_none() {
             return Ok(false);
         }
+        if self.prototype_chain_requires_semantic_index_write(id)? {
+            return Ok(false);
+        }
         let index = ArrayIndex::from_usize(index)?;
         if self.array_index_has_accessor_in_chain(id, index)? {
             return Ok(false);

@@ -90,6 +90,12 @@ const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DirectEvalScopeBoundary {
+    binding_layout_depth: usize,
+    local_scope_start: usize,
+}
+
 #[derive(Debug)]
 pub struct Context {
     identity: VmIdentity,
@@ -107,7 +113,7 @@ pub struct Context {
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
-    direct_eval_binding_layout_depths: Vec<usize>,
+    direct_eval_scope_boundaries: Vec<DirectEvalScopeBoundary>,
     active_realm: RealmIndex,
     realm: RealmState,
     inactive_realms: Vec<Option<RealmState>>,
@@ -412,7 +418,7 @@ impl Context {
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
-            direct_eval_binding_layout_depths: Vec::new(),
+            direct_eval_scope_boundaries: Vec::new(),
             active_realm: RealmIndex::ROOT,
             realm: RealmState::new(storage_ledger.clone()),
             inactive_realms: vec![None],

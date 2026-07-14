@@ -16,6 +16,27 @@ fn sloppy_eval_initializes_and_updates_the_outer_var_binding() -> TestResult {
 }
 
 #[test]
+fn eval_block_functions_shadow_active_with_before_updating_the_variable_environment() -> TestResult
+{
+    expect_true(
+        r#"
+        var log = "";
+        function run() {
+            function value() { return "outer"; }
+            var object = { value: function () { return "with"; } };
+            with (object) {
+                eval("{ function value() { return 'eval'; } }");
+            }
+            log += value();
+            log += object.value();
+        }
+        run();
+        log === "evalwith"
+        "#,
+    )
+}
+
+#[test]
 fn sloppy_eval_updates_an_authoritative_global_property() -> TestResult {
     expect_true(
         r#"

@@ -236,7 +236,9 @@ impl Context {
             return Ok(false);
         };
         Ok(self.objects.array_len_if_array(*id)?.is_some()
-            && !self.objects.prototype_chain_has_typed_array(*id)?)
+            && !self
+                .objects
+                .prototype_chain_requires_semantic_index_write(*id)?)
     }
 
     pub(in crate::runtime::bytecode) fn eval_bytecode_update_binding(
