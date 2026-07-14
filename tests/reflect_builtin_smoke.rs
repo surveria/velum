@@ -158,6 +158,33 @@ fn reflect_rejects_invalid_targets_with_type_errors() -> TestResult {
 }
 
 #[test]
+fn reflect_accepts_callable_array_like_argument_lists() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        function argumentsList(first, second) {}
+        argumentsList[0] = 20;
+        argumentsList[1] = 22;
+
+        function add(first, second) {
+            return first + second;
+        }
+        function Box(first, second) {
+            this.value = first + second;
+        }
+
+        let applied = Reflect.apply(add, null, argumentsList);
+        let constructed = Reflect.construct(Box, argumentsList);
+        applied === 42 && constructed.value === 42 ? 42 : 0
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn global_object_access_materializes_shadowed_reflect_binding() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

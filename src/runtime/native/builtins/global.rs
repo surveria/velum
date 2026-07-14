@@ -3,7 +3,8 @@ use std::{iter::Peekable, str::CharIndices};
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, call::RuntimeCallArgs, native::AnnexBGlobalFunctionKind, numeric::number_to_i32,
+        Context, abstract_operations::is_ecmascript_string_whitespace, call::RuntimeCallArgs,
+        native::AnnexBGlobalFunctionKind, numeric::number_to_i32,
     },
     value::{ErrorName, Value},
 };
@@ -355,7 +356,7 @@ impl Context {
     }
 
     fn parse_int_string(input: &str, radix: ParseIntRadix) -> f64 {
-        let trimmed = input.trim_start();
+        let trimmed = input.trim_start_matches(is_ecmascript_string_whitespace);
         let (sign, rest) = Self::strip_numeric_sign(trimmed);
         let (radix, digits) = match radix {
             ParseIntRadix::Infer => Self::parse_int_inferred_digits(rest),
@@ -377,7 +378,7 @@ impl Context {
     }
 
     fn parse_float_string(input: &str) -> f64 {
-        let trimmed = input.trim_start();
+        let trimmed = input.trim_start_matches(is_ecmascript_string_whitespace);
         let (sign, rest) = Self::strip_numeric_sign(trimmed);
         if rest.starts_with("Infinity") {
             return sign * f64::INFINITY;

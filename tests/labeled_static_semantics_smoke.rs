@@ -47,6 +47,31 @@ fn rejects_break_and_continue_to_missing_labels() -> TestResult {
     )
 }
 
+#[test]
+fn rejects_strict_future_reserved_labels() -> TestResult {
+    for label in [
+        "implements",
+        "interface",
+        "let",
+        "package",
+        "private",
+        "protected",
+        "public",
+        "static",
+    ] {
+        let expected = if label == "let" {
+            "expected binding name"
+        } else {
+            "reserved word"
+        };
+        expect_error_contains(
+            &format!("\"use strict\"; {label}: while (false) {{}}"),
+            expected,
+        )?;
+    }
+    Ok(())
+}
+
 fn eval(source: &str) -> rs_quickjs::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -29,7 +29,6 @@ const ITERATOR_RETURN_NAME: &str = "return";
 const ITERATOR_THROW_NAME: &str = "throw";
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
-const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ASYNC_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.asyncIterator]";
 const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
@@ -388,22 +387,6 @@ impl Context {
             self.define_non_enumerable_object_property(prototype, name, method)?;
         }
         let symbol_constructor = self.symbol_constructor_value()?;
-        if let Some(symbol) = self.iterator_symbol() {
-            let method =
-                self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
-            self.objects.define_property(
-                prototype,
-                PropertyKey::symbol(symbol),
-                ITERATOR_SYMBOL_DISPLAY,
-                PropertyUpdate::Data(DataPropertyUpdate::new(
-                    Some(method),
-                    Some(PropertyWritable::Yes),
-                    Some(PropertyEnumerable::No),
-                    Some(PropertyConfigurable::Yes),
-                )),
-                self.limits.max_object_properties,
-            )?;
-        }
         let tag = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
         let Value::Symbol(tag) = tag else {
             return Err(Error::runtime("Symbol.toStringTag is not initialized"));

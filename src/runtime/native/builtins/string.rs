@@ -1,10 +1,7 @@
 use crate::{
     error::{Error, Result},
+    runtime::Context,
     runtime::call::RuntimeCallArgs,
-    runtime::{
-        Context,
-        abstract_operations::{PreferredType, to_string_primitive},
-    },
     value::{ErrorName, ObjectId, Value},
 };
 
@@ -480,15 +477,10 @@ impl Context {
         let Some(value) = args.first() else {
             return Ok(Vec::new());
         };
-        let primitive = self.to_primitive(value, PreferredType::String)?;
-        let units = if let Value::Symbol(symbol) = &primitive {
+        let units = if let Value::Symbol(symbol) = value {
             symbol.display_name().encode_utf16().collect()
-        } else if let Some(units) = primitive.string_units() {
-            units.into_owned()
         } else {
-            to_string_primitive(&primitive)?
-                .encode_utf16()
-                .collect::<Vec<_>>()
+            self.to_utf16_string(value)?
         };
         self.check_utf16_string_len(&units)?;
         Ok(units)

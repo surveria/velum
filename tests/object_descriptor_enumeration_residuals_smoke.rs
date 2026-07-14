@@ -111,6 +111,70 @@ fn applies_integrity_to_functions_and_partial_proxy_descriptors() -> TestResult 
 }
 
 #[test]
+fn normalizes_proxy_define_property_descriptors_without_reusing_input() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let attributes = {
+            value: 42,
+            writable: true,
+            enumerable: true,
+            configurable: true
+        };
+        let seen = null;
+        let proxy = new Proxy({}, {
+            defineProperty(target, key, descriptor) {
+                seen = descriptor;
+                return Reflect.defineProperty(target, key, descriptor);
+            }
+        });
+
+        let result = Reflect.defineProperty(proxy, "answer", attributes);
+        result === true && proxy.answer === 42 && seen !== attributes &&
+            seen.value === 42 && seen.writable === true &&
+            seen.enumerable === true && seen.configurable === true ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn reads_property_descriptor_fields_in_spec_order() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let order = "";
+        let attributes = {};
+        for (let key of [
+            "enumerable", "configurable", "value", "writable", "get", "set"
+        ]) {
+            Object.defineProperty(attributes, key, {
+                get() {
+                    order = order + key + ",";
+                    if (key === "value") return 42;
+                    if (key === "get" || key === "set") return undefined;
+                    return false;
+                }
+            });
+        }
+
+        let typeError = false;
+        try {
+            Object.defineProperty({}, "answer", attributes);
+        } catch (error) {
+            typeError = error instanceof TypeError;
+        }
+        typeError && order === "enumerable,configurable,value,writable,get,set," ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn routes_bound_function_writes_through_function_prototype_accessors() -> TestResult {
     let value = eval(
         r#"

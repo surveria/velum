@@ -70,6 +70,20 @@ fn exposes_constructor_boxing_and_prototype_methods() -> TestResult {
 }
 
 #[test]
+fn bigint_to_string_falls_back_to_object_for_a_non_string_tag() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        Object.defineProperty(BigInt.prototype, Symbol.toStringTag, { value: null });
+        Object.prototype.toString.call(1n) === "[object Object]" &&
+            Object.prototype.toString.call(Object(1n)) === "[object Object]"
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn moves_ownerless_bigints_across_vm_boundaries() -> TestResult {
     let engine = rs_quickjs::Engine::new();
     let mut first = engine.create_vm();

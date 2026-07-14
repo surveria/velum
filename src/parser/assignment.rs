@@ -279,20 +279,28 @@ impl Parser {
         operator_span: crate::SourceSpan,
     ) -> Result<Expression> {
         let start = target.span();
+        let target_was_parenthesized = matches!(target.kind(), Expr::Parenthesized(_));
         let Some(target) = self.assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
         self.validate_assignment_target(&target)?;
-        if matches!(target.kind(), Expr::Call { .. }) {
-            if matches!(
+        if matches!(target.kind(), Expr::Call { .. })
+            && matches!(
                 op,
                 BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
-            ) {
-                return Err(Error::parse_at(
-                    "invalid logical assignment target",
-                    operator_span,
-                ));
-            }
+            )
+        {
+            return Err(Error::parse_at(
+                "invalid logical assignment target",
+                operator_span,
+            ));
+        }
+        let target = if target_was_parenthesized {
+            self.expression_node(start, Expr::Parenthesized(Box::new(target)))
+        } else {
+            target
+        };
+        if matches!(target.kind(), Expr::Call { .. }) {
             return Ok(self.web_compat_call_assignment(start, target, value));
         }
         Ok(self.expression_node(

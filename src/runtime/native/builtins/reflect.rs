@@ -317,7 +317,13 @@ impl Context {
 
     /// Spec `CreateListFromArrayLike` for the default element types.
     fn reflect_argument_list(&mut self, value: &Value) -> Result<Vec<Value>> {
-        if !matches!(value, Value::Object(_)) {
+        if !matches!(
+            value,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
             return Err(Error::type_error(REFLECT_ARGUMENTS_NOT_LIST_ERROR));
         }
         let length_value = self.get_named(value, ARRAY_LIKE_LENGTH_PROPERTY)?;

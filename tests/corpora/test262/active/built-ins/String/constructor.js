@@ -55,8 +55,8 @@ if (
     emptyObject.length !== 0 ||
     String("front").length !== 5 ||
     String("front")[1] !== "r" ||
-    !("1" in "go") ||
-    "2" in "go"
+    !("1" in Object("go")) ||
+    "2" in Object("go")
 ) {
     throw new Test262Error("String constructor behavior was unexpected");
 }

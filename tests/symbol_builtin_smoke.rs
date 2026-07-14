@@ -28,6 +28,8 @@ typeof Symbol === "function" &&
     emptyDescription.description === undefined &&
     first.toString() === "Symbol(slot)" &&
     boxed.toString() === "Symbol(slot)" &&
+    Object.prototype.toString.call(first) === "[object Symbol]" &&
+    Object.prototype.toString.call(boxed) === "[object Symbol]" &&
     first.valueOf() === first &&
     boxed.valueOf() === first &&
     Object(first).valueOf() === first &&
@@ -100,6 +102,43 @@ fn exposes_redefinable_symbol_to_primitive() -> TestResult {
             original.name === "[Symbol.toPrimitive]" &&
             descriptor.writable === false && descriptor.enumerable === false &&
             descriptor.configurable === true && fallback === false
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn symbol_prototype_has_a_tag_and_boxed_symbols_do_not_use_string_special_case() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let descriptor = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);
+        let rejected = false;
+        try {
+            String(Object(Symbol("boxed")));
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        descriptor.value === "Symbol" &&
+            descriptor.writable === false &&
+            descriptor.enumerable === false &&
+            descriptor.configurable === true &&
+            String(Symbol("primitive")) === "Symbol(primitive)" && rejected ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn symbol_to_string_falls_back_to_object_for_a_non_string_tag() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        Object.defineProperty(Symbol.prototype, Symbol.toStringTag, { value: 1 });
+        Object.prototype.toString.call(Symbol()) === "[object Object]" &&
+            Object.prototype.toString.call(Object(Symbol())) === "[object Object]"
         "#,
     )?;
     ensure_value(&value, &Value::Bool(true))

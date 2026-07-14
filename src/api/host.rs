@@ -26,6 +26,8 @@ type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
 /// function name.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HostOperation {
+    /// Runs a full VM garbage-collection cycle and returns `undefined`.
+    CollectGarbage,
     /// Detaches an ordinary `ArrayBuffer` supplied as the first argument.
     DetachArrayBuffer,
     /// Creates a VM-local realm and returns its global object.
@@ -649,6 +651,7 @@ impl Context {
 
     fn eval_host_operation(&mut self, operation: HostOperation, args: &[Value]) -> Result<Value> {
         match operation {
+            HostOperation::CollectGarbage => self.collect_garbage().map(|_| Value::Undefined),
             HostOperation::DetachArrayBuffer => {
                 let Some(Value::Object(id)) = args.first() else {
                     return Err(Error::type_error(

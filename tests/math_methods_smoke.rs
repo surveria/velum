@@ -49,7 +49,8 @@ let hyperOk =
     near(Math.tanh(0), 0) &&
     near(Math.asinh(0), 0) &&
     near(Math.acosh(1), 0) &&
-    near(Math.atanh(0), 0);
+    near(Math.atanh(0), 0) &&
+    Math.abs(Math.atanh(-0.9999983310699463) - (-6.998237084679027)) < 0.00000000000001;
 
 let hypotOk =
     Math.hypot() === 0 &&

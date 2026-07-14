@@ -70,6 +70,28 @@ fn rest_parameter_does_not_count_toward_length() -> TestResult {
 }
 
 #[test]
+fn allows_let_as_a_sloppy_function_parameter_but_not_a_lexical_binding() -> TestResult {
+    ensure_value(
+        &eval("function collect(...let) { return let.length; } collect(1, 2)")?,
+        &Value::Number(2.0),
+    )?;
+    ensure_value(&eval("var let = 42; let")?, &Value::Number(42.0))?;
+
+    for source in [
+        "let let;",
+        "const let = 1;",
+        "let\nlet;",
+        "const\nlet = 1;",
+        "for (let let in {}) {}",
+        "for (const let of []) {}",
+        "let { value: let } = { value: 1 };",
+    ] {
+        ensure_error_contains(source, "let is not a valid lexical binding identifier")?;
+    }
+    Ok(())
+}
+
+#[test]
 fn rejects_malformed_rest_parameters() -> TestResult {
     ensure_error_contains(
         "function bad(...r, x) {}",

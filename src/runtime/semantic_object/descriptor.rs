@@ -24,11 +24,18 @@ impl Context {
         descriptor_value: &Value,
     ) -> Result<bool> {
         let update = self.property_update_from_value(descriptor_value)?;
+        let descriptor = if let Value::Object(id) = target
+            && self.objects.is_proxy(*id)
+        {
+            self.create_property_update_object(&update)?
+        } else {
+            descriptor_value.clone()
+        };
         self.semantic_define_own_property_update_with_descriptor(
             target,
             property,
             update,
-            descriptor_value,
+            &descriptor,
         )
     }
 

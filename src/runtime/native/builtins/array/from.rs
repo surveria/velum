@@ -70,12 +70,7 @@ impl Context {
         let mut index = 0_usize;
         loop {
             self.step()?;
-            let step = match self.iterator_step(&mut iterator) {
-                Ok(step) => step,
-                Err(error) => {
-                    return Err(self.iterator_close_on_error(&mut iterator, error));
-                }
-            };
+            let step = self.iterator_step(&mut iterator)?;
             let value = match step {
                 IteratorStep::Value(value) => value,
                 IteratorStep::Done => {

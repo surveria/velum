@@ -72,6 +72,7 @@ impl Context {
         self.push_native_function_with_id(id, NativeFunctionKind::Symbol, prototype, name)?;
         self.install_symbol_static_methods(id)?;
         self.install_well_known_symbols(id)?;
+        self.define_builtin_to_string_tag(prototype_id, "Symbol")?;
         self.install_symbol_prototype_methods(prototype_id, id)?;
         self.insert_global_builtin(SYMBOL_NAME, constructor.clone())?;
         Ok(constructor)

@@ -1,7 +1,12 @@
 use crate::{
-    bytecode::BytecodeDynamicProperty, error::Result, runtime::Context, syntax::StaticString,
+    bytecode::BytecodeDynamicProperty,
+    error::{Error, Result},
+    runtime::Context,
+    syntax::StaticString,
     value::Value,
 };
+
+const IN_OPERATOR_RECEIVER_ERROR: &str = "right-hand side of operator 'in' is not an object";
 
 impl Context {
     pub(super) fn eval_bytecode_in(
@@ -10,6 +15,7 @@ impl Context {
         right: &Value,
         property_access: Option<BytecodeDynamicProperty>,
     ) -> Result<Value> {
+        Self::require_in_operator_object(right)?;
         let property = self.dynamic_property_key(left)?;
         if let Some(access) = property_access {
             return self
@@ -26,8 +32,22 @@ impl Context {
         property: &StaticString,
         access: BytecodeDynamicProperty,
     ) -> Result<Value> {
+        Self::require_in_operator_object(object)?;
         self.has_cached_property_name_value(object, property.as_str(), access.access())
             .map(Value::Bool)
+    }
+
+    fn require_in_operator_object(value: &Value) -> Result<()> {
+        if matches!(
+            value,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
+            return Ok(());
+        }
+        Err(Error::type_error(IN_OPERATOR_RECEIVER_ERROR))
     }
 
     pub(super) fn has_own_array_index_for_in(

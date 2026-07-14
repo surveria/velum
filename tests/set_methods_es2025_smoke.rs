@@ -59,6 +59,53 @@ fn symmetric_difference_matches_spec() -> TestResult {
 }
 
 #[test]
+fn set_composition_observes_iterator_setup_and_live_mutation_order() -> TestResult {
+    eval_is_42(
+        r#"
+        function values(set) {
+            let result = [];
+            set.forEach(function (value) { result.push(value); });
+            return result.join("|");
+        }
+        function clearingSetLike(receiver) {
+            return {
+                size: 0,
+                has: function () { throw new Error("unexpected has"); },
+                keys: function () {
+                    return {
+                        get next() {
+                            receiver.clear();
+                            receiver.add(4);
+                            return function () { return { done: true }; };
+                        }
+                    };
+                }
+            };
+        }
+        let unionReceiver = new Set([1, 2, 3]);
+        let union = unionReceiver.union(clearingSetLike(unionReceiver));
+        let symmetricReceiver = new Set([1, 2, 3]);
+        let symmetric = symmetricReceiver.symmetricDifference(
+            clearingSetLike(symmetricReceiver)
+        );
+        let intersectionReceiver = new Set([1, 2, 3, 4]);
+        let intersectionLike = {
+            size: 0,
+            has: function () { throw new Error("unexpected has"); },
+            keys: function* () {
+                yield* intersectionReceiver.keys();
+                intersectionReceiver.clear();
+            }
+        };
+        values(union) === "4" && values(symmetric) === "4" &&
+            values(intersectionReceiver.intersection(intersectionLike)) === "1|2|3|4"
+            ? 42
+            : 0
+        "#,
+    )
+}
+
+#[test]
 fn predicate_methods_report_relationships() -> TestResult {
     eval_is_42(
         r"

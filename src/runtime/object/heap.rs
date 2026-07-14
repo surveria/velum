@@ -6,10 +6,11 @@ use crate::{
 };
 
 use super::{
-    AccessorPropertyUpdate, ArrayIndex, ArrayLength, OBJECT_CONSTRUCTOR_PROPERTY, Object,
-    ObjectHeap, ObjectPrimitiveValue, ObjectPropertyInit, ObjectPropertyValue,
-    ObjectStructureSnapshot, PROTOTYPE_PROPERTY, PropertyConfigurable, PropertyEnumerable,
-    PropertyKey, PropertyLookup, PropertyUpdate, RegExpValue, ShapeTable,
+    AccessorPropertyUpdate, ArrayIndex, ArrayLength, DataPropertyUpdate,
+    OBJECT_CONSTRUCTOR_PROPERTY, Object, ObjectHeap, ObjectPrimitiveValue, ObjectPropertyInit,
+    ObjectPropertyValue, ObjectStructureSnapshot, PROTOTYPE_PROPERTY, PropertyConfigurable,
+    PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable, RegExpValue,
+    ShapeTable,
 };
 
 impl ObjectHeap {
@@ -45,7 +46,18 @@ impl ObjectHeap {
                 ));
                 object.define_property(key, name, update, &mut self.shapes, max_properties)?;
             } else {
-                object.set(key, name, value, &mut self.shapes, max_properties)?;
+                object.define_property(
+                    key,
+                    name,
+                    PropertyUpdate::Data(DataPropertyUpdate::new(
+                        Some(value),
+                        Some(PropertyWritable::Yes),
+                        Some(property.enumerable),
+                        Some(PropertyConfigurable::Yes),
+                    )),
+                    &mut self.shapes,
+                    max_properties,
+                )?;
             }
         }
         object.prototype = match literal_prototype {

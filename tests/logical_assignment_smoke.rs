@@ -139,6 +139,30 @@ fn rejects_unparenthesized_nullish_logical_mixing() -> TestResult {
     )
 }
 
+#[test]
+fn parenthesized_logical_assignment_does_not_infer_anonymous_function_names() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let left;
+        let right;
+        (left) ||= function() {};
+        (right) ??= class {};
+        left.name === "" && right.name === "" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_parenthesized_call_logical_assignment_targets() -> TestResult {
+    for source in ["(f()) &&= 1", "(f()) ||= 1", "(f()) ??= 1"] {
+        ensure_error_contains(source, "invalid logical assignment target")?;
+    }
+    Ok(())
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

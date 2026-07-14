@@ -66,6 +66,31 @@ fn array_from_closes_iterators_when_mapping_throws() -> TestResult {
 }
 
 #[test]
+fn array_from_does_not_close_iterators_when_stepping_throws() -> TestResult {
+    ensure_eval(
+        r"
+        let marker = {};
+        let closed = 0;
+        let iterable = {};
+        iterable[Symbol.iterator] = function() {
+            return {
+                next: function() { throw marker; },
+                return: function() { closed = closed + 1; return {}; }
+            };
+        };
+        let caught = false;
+        try {
+            Array.from(iterable);
+        } catch (error) {
+            caught = error === marker;
+        }
+        caught && closed === 0 ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn array_from_redefines_configurable_result_slots_as_data_properties() -> TestResult {
     ensure_eval(
         r#"

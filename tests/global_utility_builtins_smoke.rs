@@ -51,10 +51,13 @@ fn global_numeric_utility_builtins_follow_basic_ecmascript_semantics() -> TestRe
             parseInt("11", 2) === 3 &&
             parseInt("12px", 10) === 12 &&
             parseInt("08") === 8 &&
+            parseInt("\uFEFF9") === 9 &&
+            Number.parseInt("\uFEFF9") === 9 &&
             parseIntInvalid !== parseIntInvalid &&
             parseFloat("  -1.25e2px") === -125 &&
             parseFloat(".5x") === 0.5 &&
             parseFloat("1.e2px") === 100 &&
+            parseFloat("\uFEFF1.5") === 1.5 &&
             parseFloat("Infinity!") === Infinity &&
             parseFloatInvalid !== parseFloatInvalid &&
             globalNaN === true &&

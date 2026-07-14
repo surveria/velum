@@ -92,8 +92,8 @@ fn exposes_string_constructor_and_wrapper_properties() -> TestResult {
             emptyObject.length === 0 &&
             String("front").length === 5 &&
             String("front")[1] === "r" &&
-            "1" in "go" &&
-            !("2" in "go") ? 42 : 0
+            "1" in Object("go") &&
+            !("2" in Object("go")) ? 42 : 0
         "#,
     )?;
 
