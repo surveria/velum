@@ -1,7 +1,7 @@
 use crate::{
     ast::{ClassField, FunctionParam, Statement, StaticBinding},
     binding_metadata::BindingLayout,
-    bytecode::{BytecodeFunction, BytecodeFunctionInit},
+    bytecode::{BytecodeEvalMode, BytecodeFunction, BytecodeFunctionInit},
     error::Result,
 };
 
@@ -74,8 +74,7 @@ impl BytecodeFunction {
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments,
-            contains_direct_eval: collected.contains_direct_eval,
-            strict: mode.strict,
+            eval_mode: BytecodeEvalMode::new(mode.strict, collected.contains_direct_eval),
             simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
         }))
     }

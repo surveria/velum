@@ -188,11 +188,9 @@ impl Context {
         }
         let outcome =
             self.eval_compiled_sloppy_eval_in_scope(script, environment, eval_bindings.as_ref());
-        let environment_result = if let Some(bindings) = &eval_bindings {
+        let environment_result = eval_bindings.as_ref().map_or(Ok(()), |bindings| {
             self.pop_eval_binding_environment(bindings)
-        } else {
-            Ok(())
-        };
+        });
         let pop_result = self.pop_lexical_scope();
         environment_result?;
         pop_result?;

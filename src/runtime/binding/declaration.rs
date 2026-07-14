@@ -69,7 +69,7 @@ impl Context {
     ) -> Result<()> {
         let atom = self.intern_static_name_atom(name)?;
         let value = self.checked_value(value)?;
-        if self.assign_eval_annex_b_var(atom, name.as_str(), value.clone())? {
+        if self.assign_eval_annex_b_var(atom, name.as_str(), &value)? {
             return Ok(());
         }
         let cell = self

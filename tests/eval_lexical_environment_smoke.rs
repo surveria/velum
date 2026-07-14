@@ -60,7 +60,7 @@ fn strict_eval_keeps_vars_local_and_preserves_captured_lexicals() -> TestResult 
 #[test]
 fn sloppy_eval_functions_capture_eval_lexical_and_variable_bindings() -> TestResult {
     expect_true(
-        r#"
+        r"
         function createReader() {
             var value = 2;
             return eval(`
@@ -72,7 +72,7 @@ fn sloppy_eval_functions_capture_eval_lexical_and_variable_bindings() -> TestRes
         }
         var read = createReader();
         read() === 44
-        "#,
+        ",
     )
 }
 
@@ -96,7 +96,7 @@ fn sloppy_eval_var_declarations_target_the_function_variable_environment() -> Te
 #[test]
 fn eval_created_vars_shadow_globals_only_inside_the_owning_function() -> TestResult {
     expect_true(
-        r#"
+        r"
         var value = 42;
         function readGlobal() { return value; }
         function updateLocal() {
@@ -110,7 +110,7 @@ fn eval_created_vars_shadow_globals_only_inside_the_owning_function() -> TestRes
             return readLocal() === 8 && value === 8 && readGlobal() === 42;
         }
         updateLocal() && value === 42
-        "#,
+        ",
     )
 }
 

@@ -60,10 +60,10 @@ impl WithBindingReference {
     }
 
     pub(in crate::runtime) fn call_this_value(&self) -> Value {
-        if self.provides_implicit_this {
-            if let DynamicBindingTarget::Object(object) = &self.target {
-                return object.clone();
-            }
+        if self.provides_implicit_this
+            && let DynamicBindingTarget::Object(object) = &self.target
+        {
+            return object.clone();
         }
         Value::Undefined
     }
@@ -253,7 +253,7 @@ impl Context {
         &self,
         atom: AtomId,
         name: &str,
-        value: Value,
+        value: &Value,
     ) -> Result<bool> {
         for environment in self.current_dynamic_environments().iter().rev() {
             let DynamicEnvironment::EvalBindings(environment) = environment else {

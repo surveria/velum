@@ -16,6 +16,7 @@ use crate::{
     value::Value,
 };
 
+mod deletion;
 mod iteration;
 
 /// Immutable atom-to-slot index shared by every call frame of one
@@ -248,15 +249,6 @@ impl BindingScope {
 
     pub(in crate::runtime) fn take_resource_stacks(&mut self) -> Vec<BindingResourceStack> {
         std::mem::take(&mut self.resource_stacks)
-    }
-
-    pub(crate) fn contains(&self, atom: AtomId) -> bool {
-        self.get(atom).is_some()
-    }
-
-    pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
-        let slot = self.slot_of(atom)?;
-        self.cell(slot).filter(|cell| !cell.is_deleted()).cloned()
     }
 
     pub(crate) const fn compiled_scope(&self) -> Option<ScopeId> {
@@ -750,29 +742,6 @@ impl BindingCell {
         binding.immutable_assignment = ImmutableAssignment::AlwaysThrow;
         drop(binding);
         Ok(())
-    }
-
-    pub(in crate::runtime) fn mark_deleted(&self) -> Result<()> {
-        let mut binding = self.borrow_mut()?;
-        if binding.is_terminal_alias_target {
-            return Err(Error::runtime("terminal import binding cannot be deleted"));
-        }
-        binding.state = BindingState::Deleted;
-        Ok(())
-    }
-
-    pub(in crate::runtime) fn restore_deleted(&self, value: Value) -> Result<()> {
-        let mut binding = self.borrow_mut()?;
-        if !matches!(binding.state, BindingState::Deleted) {
-            return Err(Error::runtime("eval binding is not deleted"));
-        }
-        binding.state = BindingState::Initialized(value);
-        Ok(())
-    }
-
-    pub(in crate::runtime) fn is_deleted(&self) -> bool {
-        self.borrow()
-            .is_ok_and(|binding| matches!(binding.state, BindingState::Deleted))
     }
 
     pub(crate) fn same_cell(&self, other: &Self) -> bool {
