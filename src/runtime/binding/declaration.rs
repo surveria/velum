@@ -114,6 +114,10 @@ impl Context {
     }
 
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
+        let global = !self.has_visible_local_scope();
+        if global {
+            self.validate_global_declaration_instantiation(plan)?;
+        }
         let mut declarations = Vec::new();
         for (binding, kind) in plan.lexical_declarations() {
             let slot = self
@@ -132,6 +136,7 @@ impl Context {
         declarations.sort_by_key(|(slot, _, _)| slot.unwrap_or(usize::MAX));
         for (_, binding, kind) in declarations {
             match kind {
+                DeclKind::Var if global => self.hoist_global_var(binding)?,
                 DeclKind::Var => self.hoist_var(binding)?,
                 DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing => {
                     self.hoist_lexical(binding, kind)?;
@@ -142,6 +147,64 @@ impl Context {
             self.hoist_function(declaration)?;
         }
         Ok(())
+    }
+
+    fn validate_global_declaration_instantiation(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+    ) -> Result<()> {
+        for (binding, _) in plan.lexical_declarations() {
+            let name = binding.as_str();
+            if self.global_name_has_lexical_declaration(name)
+                || self
+                    .global_own_property_descriptor(name)?
+                    .is_some_and(|descriptor| !descriptor.configurable().is_yes())
+            {
+                return Err(Error::exception(
+                    ErrorName::SyntaxError,
+                    format!("'{name}' has already been declared"),
+                ));
+            }
+        }
+        for binding in plan.var_declarations() {
+            self.ensure_global_name_is_not_lexical(binding.as_str())?;
+            if !self.can_declare_global_var(binding.as_str())? {
+                return Err(Error::exception(
+                    ErrorName::TypeError,
+                    format!("global variable '{binding}' cannot be declared"),
+                ));
+            }
+        }
+        for declaration in plan.function_declarations() {
+            let name = declaration.name().name().as_str();
+            self.ensure_global_name_is_not_lexical(name)?;
+            if !self.can_declare_global_function(name)? {
+                return Err(Error::exception(
+                    ErrorName::TypeError,
+                    format!("global function '{name}' cannot be declared"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn global_name_has_lexical_declaration(&self, name: &str) -> bool {
+        self.atom(name).is_some_and(|atom| {
+            self.realm
+                .globals
+                .get(atom)
+                .is_some_and(|binding| binding.kind() != DeclKind::Var)
+        })
+    }
+
+    fn ensure_global_name_is_not_lexical(&self, name: &str) -> Result<()> {
+        if !self.global_name_has_lexical_declaration(name) {
+            return Ok(());
+        }
+        Err(Error::exception(
+            ErrorName::SyntaxError,
+            format!("'{name}' has already been declared"),
+        ))
     }
 
     pub(crate) fn hoist_bytecode_lexical_declarations(
@@ -277,7 +340,7 @@ impl Context {
                 continue;
             }
             self.ensure_eval_global_name_is_not_lexical(name)?;
-            if !self.can_declare_eval_global_function(name)? {
+            if !self.can_declare_global_function(name)? {
                 return Err(Error::exception(
                     ErrorName::TypeError,
                     format!("global function '{name}' cannot be declared"),
@@ -299,7 +362,7 @@ impl Context {
                 continue;
             }
             self.ensure_eval_global_name_is_not_lexical(name)?;
-            if !self.can_declare_eval_global_var(name)? {
+            if !self.can_declare_global_var(name)? {
                 return Err(Error::exception(
                     ErrorName::TypeError,
                     format!("global variable '{name}' cannot be declared"),
@@ -325,7 +388,7 @@ impl Context {
                 .get(atom)
                 .is_some_and(|binding| binding.kind() == DeclKind::Var)
         {
-            self.eval_global_own_property_descriptor(name.as_str())?
+            self.global_own_property_descriptor(name.as_str())?
                 .is_some_and(|descriptor| match descriptor {
                     OwnPropertyDescriptor::Data(descriptor) => descriptor.configurable().is_yes(),
                     OwnPropertyDescriptor::Accessor(descriptor) => {
@@ -351,7 +414,11 @@ impl Context {
                 frame.map(CompiledBindingFrame::slot),
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
-        self.remember_active_static_binding(name, atom)
+        self.remember_active_static_binding(name, atom)?;
+        if !self.has_visible_local_scope() {
+            self.clear_global_object_property_authority(name.as_str())?;
+        }
+        Ok(())
     }
 
     pub(crate) fn initialize_bytecode_lexical(
@@ -430,25 +497,11 @@ impl Context {
     }
 
     fn ensure_eval_global_name_is_not_lexical(&self, name: &str) -> Result<()> {
-        let Some(atom) = self.atom(name) else {
-            return Ok(());
-        };
-        if self
-            .realm
-            .globals
-            .get(atom)
-            .is_some_and(|binding| binding.kind() != DeclKind::Var)
-        {
-            return Err(Error::exception(
-                ErrorName::SyntaxError,
-                format!("'{name}' has already been declared"),
-            ));
-        }
-        Ok(())
+        self.ensure_global_name_is_not_lexical(name)
     }
 
-    fn can_declare_eval_global_function(&mut self, name: &str) -> Result<bool> {
-        let Some(descriptor) = self.eval_global_own_property_descriptor(name)? else {
+    fn can_declare_global_function(&mut self, name: &str) -> Result<bool> {
+        let Some(descriptor) = self.global_own_property_descriptor(name)? else {
             let global_object = self.global_object_id()?;
             return self.objects.is_extensible(global_object);
         };
@@ -459,15 +512,15 @@ impl Context {
         }
     }
 
-    fn can_declare_eval_global_var(&mut self, name: &str) -> Result<bool> {
-        if self.eval_global_own_property_descriptor(name)?.is_some() {
+    fn can_declare_global_var(&mut self, name: &str) -> Result<bool> {
+        if self.global_own_property_descriptor(name)?.is_some() {
             return Ok(true);
         }
         let global_object = self.global_object_id()?;
         self.objects.is_extensible(global_object)
     }
 
-    fn eval_global_own_property_descriptor(
+    fn global_own_property_descriptor(
         &mut self,
         name: &str,
     ) -> Result<Option<OwnPropertyDescriptor>> {
@@ -487,7 +540,7 @@ impl Context {
         declaration: &crate::bytecode::BytecodeFunctionDeclaration,
     ) -> Result<()> {
         let name = declaration.name().name().name();
-        let existing = self.eval_global_own_property_descriptor(name)?;
+        let existing = self.global_own_property_descriptor(name)?;
         let function = self.instantiate_hoisted_function(declaration)?;
         let global_object = self.global_object_id()?;
         let replace_descriptor = existing.as_ref().is_none_or(|descriptor| match descriptor {
@@ -511,7 +564,7 @@ impl Context {
 
     fn create_eval_global_var(&mut self, binding: &StaticBinding) -> Result<()> {
         let name = binding.as_str();
-        if let Some(descriptor) = self.eval_global_own_property_descriptor(name)? {
+        if let Some(descriptor) = self.global_own_property_descriptor(name)? {
             if let OwnPropertyDescriptor::Data(descriptor) = descriptor {
                 self.materialize_eval_global_binding(binding, descriptor.value(), false)?;
             }
@@ -611,6 +664,29 @@ impl Context {
             )?;
         }
         Ok(())
+    }
+
+    fn hoist_global_var(&mut self, name: &StaticBinding) -> Result<()> {
+        let atom = self.intern_static_name_atom(name.name())?;
+        if let Some(binding) = self.realm.globals.get(atom) {
+            if binding.kind() == DeclKind::Var {
+                self.remember_active_static_binding(name, atom)?;
+                return Ok(());
+            }
+            return Err(Error::exception(
+                ErrorName::SyntaxError,
+                format!("'{name}' has already been declared"),
+            ));
+        }
+        if self
+            .global_own_property_descriptor(name.as_str())?
+            .is_some()
+        {
+            let global_object = self.global_object_id()?;
+            self.mark_global_object_property_authoritative(global_object, name.as_str())?;
+            return Ok(());
+        }
+        self.hoist_var(name)
     }
 
     pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {

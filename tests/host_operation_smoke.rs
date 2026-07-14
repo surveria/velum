@@ -98,6 +98,43 @@ fn eval_script_operation_uses_global_script_environment() -> TestResult {
 }
 
 #[test]
+fn eval_script_preflights_global_declarations_atomically() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(EVAL_SCRIPT_NAME, HostOperation::EvalScript)?;
+    let value = context.eval(
+        "hostEvalScript('var declared; function declaredFunction() {}'); \
+         var lexicalCollision = false; \
+         try { hostEvalScript('var leaked; let declared;'); } \
+         catch (error) { lexicalCollision = error instanceof SyntaxError; } \
+         Object.defineProperty(globalThis, 'configurableGlobal', { \
+             value: 7, configurable: true \
+         }); \
+         hostEvalScript('let configurableGlobal = 8;'); \
+         var configurableLexical = configurableGlobal === 8 && \
+             globalThis.configurableGlobal === 7; \
+         Object.defineProperty(globalThis, 'existingVar', { \
+             value: 9, writable: false, enumerable: false, configurable: true \
+         }); \
+         hostEvalScript('var existingVar;'); \
+         var descriptor = Object.getOwnPropertyDescriptor(globalThis, 'existingVar'); \
+         var descriptorPreserved = descriptor.value === 9 && !descriptor.writable && \
+             !descriptor.enumerable && descriptor.configurable; \
+         Object.preventExtensions(globalThis); \
+         hostEvalScript('var existingVar;'); \
+         var rejectedNewVar = false; \
+         try { hostEvalScript('var brandNew;'); } \
+         catch (error) { rejectedNewVar = error instanceof TypeError; } \
+         lexicalCollision && typeof leaked === 'undefined' && configurableLexical && \
+             descriptorPreserved && rejectedNewVar ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected atomic global declaration instantiation, got {value:?}").into())
+}
+
+#[test]
 fn detaches_array_buffers_and_reconciles_storage() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
