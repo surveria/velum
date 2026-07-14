@@ -274,7 +274,7 @@ impl Context {
 
     fn alias_canonical_module_bindings(
         &mut self,
-        pending: &mut PendingModule,
+        pending: &PendingModule,
         canonical: usize,
     ) -> Result<()> {
         for export in pending.module.exports() {

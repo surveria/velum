@@ -24,6 +24,12 @@ enum ExportResolution {
     Ambiguous,
 }
 
+#[derive(Clone, Copy)]
+enum NamespaceBindingKind {
+    Eager,
+    Deferred,
+}
+
 impl Context {
     pub(super) fn validate_indirect_exports(&mut self, graph: &[PendingModule]) -> Result<()> {
         for module_index in 0..graph.len() {
@@ -292,15 +298,12 @@ impl Context {
                     export_name: candidate,
                     request,
                 } if candidate == export_name => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("namespace export dependency is missing"))?;
-                    let namespace = graph
-                        .get(dependency)
-                        .and_then(|pending| pending.namespace_binding.clone())
-                        .ok_or_else(|| {
-                            Error::runtime("exported module namespace binding is missing")
-                        })?;
+                    let namespace = Self::exported_namespace_binding(
+                        graph,
+                        module_index,
+                        request,
+                        NamespaceBindingKind::Eager,
+                    )?;
                     resolving.remove(&key);
                     return Ok(ExportResolution::Found(namespace));
                 }
@@ -308,15 +311,12 @@ impl Context {
                     export_name: candidate,
                     request,
                 } if candidate == export_name => {
-                    let dependency = module.dependency_for_specifier(request).ok_or_else(|| {
-                        Error::runtime("deferred namespace export dependency is missing")
-                    })?;
-                    let namespace = graph
-                        .get(dependency)
-                        .and_then(|pending| pending.deferred_namespace_binding.clone())
-                        .ok_or_else(|| {
-                            Error::runtime("exported deferred namespace binding is missing")
-                        })?;
+                    let namespace = Self::exported_namespace_binding(
+                        graph,
+                        module_index,
+                        request,
+                        NamespaceBindingKind::Deferred,
+                    )?;
                     resolving.remove(&key);
                     return Ok(ExportResolution::Found(namespace));
                 }
@@ -335,25 +335,16 @@ impl Context {
                     return Ok(ExportResolution::Found(source));
                 }
                 ModuleExport::Star { request } if export_name != "default" => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("star export dependency is missing"))?;
-                    match self.resolve_export(graph, dependency, export_name, resolving)? {
-                        ExportResolution::Found(cell) => {
-                            if star_result
-                                .as_ref()
-                                .is_some_and(|existing: &BindingCell| !existing.same_cell(&cell))
-                            {
-                                resolving.remove(&key);
-                                return Ok(ExportResolution::Ambiguous);
-                            }
-                            star_result = Some(cell);
-                        }
-                        ExportResolution::Ambiguous => {
-                            resolving.remove(&key);
-                            return Ok(ExportResolution::Ambiguous);
-                        }
-                        ExportResolution::NotFound => {}
+                    if let Some(resolution) = self.merge_star_export(
+                        graph,
+                        module_index,
+                        export_name,
+                        request,
+                        &mut star_result,
+                        resolving,
+                    )? {
+                        resolving.remove(&key);
+                        return Ok(resolution);
                     }
                 }
                 ModuleExport::Local { .. }
@@ -366,5 +357,54 @@ impl Context {
         }
         resolving.remove(&key);
         Ok(star_result.map_or(ExportResolution::NotFound, ExportResolution::Found))
+    }
+
+    fn exported_namespace_binding(
+        graph: &[PendingModule],
+        module_index: usize,
+        request: &str,
+        kind: NamespaceBindingKind,
+    ) -> Result<BindingCell> {
+        let dependency = graph
+            .get(module_index)
+            .and_then(|module| module.dependency_for_specifier(request))
+            .ok_or_else(|| Error::runtime("namespace export dependency is missing"))?;
+        let pending = graph
+            .get(dependency)
+            .ok_or_else(|| Error::runtime("namespace export module is missing"))?;
+        match kind {
+            NamespaceBindingKind::Eager => pending.namespace_binding.clone(),
+            NamespaceBindingKind::Deferred => pending.deferred_namespace_binding.clone(),
+        }
+        .ok_or_else(|| Error::runtime("exported module namespace binding is missing"))
+    }
+
+    fn merge_star_export(
+        &mut self,
+        graph: &[PendingModule],
+        module_index: usize,
+        export_name: &str,
+        request: &str,
+        star_result: &mut Option<BindingCell>,
+        resolving: &mut BTreeSet<(usize, String)>,
+    ) -> Result<Option<ExportResolution>> {
+        let dependency = graph
+            .get(module_index)
+            .and_then(|module| module.dependency_for_specifier(request))
+            .ok_or_else(|| Error::runtime("star export dependency is missing"))?;
+        match self.resolve_export(graph, dependency, export_name, resolving)? {
+            ExportResolution::Found(cell) => {
+                if star_result
+                    .as_ref()
+                    .is_some_and(|existing| !existing.same_cell(&cell))
+                {
+                    return Ok(Some(ExportResolution::Ambiguous));
+                }
+                *star_result = Some(cell);
+                Ok(None)
+            }
+            ExportResolution::Ambiguous => Ok(Some(ExportResolution::Ambiguous)),
+            ExportResolution::NotFound => Ok(None),
+        }
     }
 }

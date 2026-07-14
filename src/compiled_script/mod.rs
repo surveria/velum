@@ -59,6 +59,8 @@ type CompiledModuleParts = (
     Box<[ModuleExport]>,
 );
 
+type ImportedModuleExports = BTreeMap<String, (ModuleRequest, parser::ModuleImportName)>;
+
 fn compile_module_requests(module: &ModuleSyntax) -> (Box<[String]>, Box<[ModuleRequest]>) {
     let module_requests = module
         .requests
@@ -79,6 +81,90 @@ fn compile_module_requests(module: &ModuleSyntax) -> (Box<[String]>, Box<[Module
         }
     }
     (requests.into_boxed_slice(), module_requests)
+}
+
+fn compile_module_imports(imports: Vec<parser::ModuleImportEntry>) -> Box<[ModuleImport]> {
+    imports
+        .into_iter()
+        .map(|entry| {
+            ModuleImport::new(
+                ModuleRequest::new(
+                    entry.request.specifier,
+                    entry.request.phase,
+                    entry.request.attributes,
+                ),
+                match entry.import_name {
+                    parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
+                    parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
+                    parser::ModuleImportName::Source => ModuleImportName::Source,
+                },
+                entry.local_name,
+            )
+        })
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
+}
+
+fn compile_module_exports(
+    exports: Vec<parser::ModuleExportEntry>,
+    imported_exports: &ImportedModuleExports,
+) -> Box<[ModuleExport]> {
+    exports
+        .into_iter()
+        .map(|entry| match entry {
+            parser::ModuleExportEntry::Local {
+                export_name,
+                local_name,
+            } => match imported_exports.get(&local_name) {
+                Some((request, parser::ModuleImportName::Name(import_name))) => {
+                    ModuleExport::Indirect {
+                        export_name,
+                        import_name: import_name.clone(),
+                        request: request.specifier().to_owned(),
+                    }
+                }
+                Some((request, parser::ModuleImportName::Namespace)) => {
+                    if request.phase() == crate::syntax::ImportPhase::Defer {
+                        ModuleExport::DeferredNamespace {
+                            export_name,
+                            request: request.specifier().to_owned(),
+                        }
+                    } else {
+                        ModuleExport::Namespace {
+                            export_name,
+                            request: request.specifier().to_owned(),
+                        }
+                    }
+                }
+                Some((request, parser::ModuleImportName::Source)) => ModuleExport::Source {
+                    export_name,
+                    request: request.specifier().to_owned(),
+                },
+                None => ModuleExport::Local {
+                    export_name,
+                    local_name,
+                },
+            },
+            parser::ModuleExportEntry::Indirect {
+                export_name,
+                import_name,
+                request,
+            } => ModuleExport::Indirect {
+                export_name,
+                import_name,
+                request,
+            },
+            parser::ModuleExportEntry::Namespace {
+                export_name,
+                request,
+            } => ModuleExport::Namespace {
+                export_name,
+                request,
+            },
+            parser::ModuleExportEntry::Star { request } => ModuleExport::Star { request },
+        })
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 impl CompileMode {
@@ -209,83 +295,8 @@ impl CompiledScript {
                 )
             })
             .collect::<BTreeMap<_, _>>();
-        let imports = module
-            .imports
-            .into_iter()
-            .map(|entry| {
-                ModuleImport::new(
-                    ModuleRequest::new(
-                        entry.request.specifier,
-                        entry.request.phase,
-                        entry.request.attributes,
-                    ),
-                    match entry.import_name {
-                        parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
-                        parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
-                        parser::ModuleImportName::Source => ModuleImportName::Source,
-                    },
-                    entry.local_name,
-                )
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        let exports = module
-            .exports
-            .into_iter()
-            .map(|entry| match entry {
-                parser::ModuleExportEntry::Local {
-                    export_name,
-                    local_name,
-                } => match imported_exports.get(&local_name) {
-                    Some((request, parser::ModuleImportName::Name(import_name))) => {
-                        ModuleExport::Indirect {
-                            export_name,
-                            import_name: import_name.clone(),
-                            request: request.specifier().to_owned(),
-                        }
-                    }
-                    Some((request, parser::ModuleImportName::Namespace)) => {
-                        if request.phase() == crate::syntax::ImportPhase::Defer {
-                            ModuleExport::DeferredNamespace {
-                                export_name,
-                                request: request.specifier().to_owned(),
-                            }
-                        } else {
-                            ModuleExport::Namespace {
-                                export_name,
-                                request: request.specifier().to_owned(),
-                            }
-                        }
-                    }
-                    Some((request, parser::ModuleImportName::Source)) => ModuleExport::Source {
-                        export_name,
-                        request: request.specifier().to_owned(),
-                    },
-                    None => ModuleExport::Local {
-                        export_name,
-                        local_name,
-                    },
-                },
-                parser::ModuleExportEntry::Indirect {
-                    export_name,
-                    import_name,
-                    request,
-                } => ModuleExport::Indirect {
-                    export_name,
-                    import_name,
-                    request,
-                },
-                parser::ModuleExportEntry::Namespace {
-                    export_name,
-                    request,
-                } => ModuleExport::Namespace {
-                    export_name,
-                    request,
-                },
-                parser::ModuleExportEntry::Star { request } => ModuleExport::Star { request },
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+        let imports = compile_module_imports(module.imports);
+        let exports = compile_module_exports(module.exports, &imported_exports);
         Ok((script, requests, module_requests, imports, exports))
     }
 

@@ -10,7 +10,6 @@ use crate::runtime::binding::scope::{BindingCell, BindingScope};
 use crate::runtime::control::{Completion, reference_error_undefined};
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::object::ObjectHeap;
-use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
 use crate::storage::symbol::{SymbolId, SymbolTable};
@@ -652,22 +651,6 @@ impl Context {
             callee: function,
             this_value: Value::Undefined,
         })
-    }
-
-    pub(crate) fn enumerable_keys(&mut self, object: &Value) -> Result<Vec<String>> {
-        let exotic_object = if let Value::Object(id) = object {
-            self.objects.is_proxy(*id) || self.objects.is_module_namespace(*id)?
-        } else {
-            false
-        };
-        if matches!(
-            object,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
-        ) || exotic_object
-        {
-            return self.semantic_enumerable_property_keys(object);
-        }
-        enumerable_property_keys(&self.objects, &self.atoms, object)
     }
 
     pub(crate) fn eval_print_call(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {

@@ -208,9 +208,10 @@ impl PromiseReaction {
                     StrongEdgeReference::Value(namespace),
                 )?;
             }
-            Self::ModuleAwait { .. } | Self::ModuleDependency { .. } | Self::ModuleAlias { .. } => {
-            }
-            Self::AsyncGeneratorAwait { .. } => {}
+            Self::ModuleAwait { .. }
+            | Self::ModuleDependency { .. }
+            | Self::ModuleAlias { .. }
+            | Self::AsyncGeneratorAwait { .. } => {}
             Self::AsyncFromSync { result, iterator } => {
                 visitor.visit(
                     VmAsyncEdgeKind::PromiseReaction,
@@ -311,10 +312,9 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
-            Self::ModuleAwait { module } | Self::ModuleDependency { module, .. } => {
-                Some(PromiseContinuationCancellation::ModuleEvaluation(module))
-            }
-            Self::ModuleAlias { module, .. } => {
+            Self::ModuleAwait { module }
+            | Self::ModuleDependency { module, .. }
+            | Self::ModuleAlias { module, .. } => {
                 Some(PromiseContinuationCancellation::ModuleEvaluation(module))
             }
             Self::Then { .. }

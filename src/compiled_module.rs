@@ -50,7 +50,7 @@ pub type DynamicModuleRequest = ModuleRequest;
 pub struct ModuleSource {
     specifier: String,
     source: String,
-    module_source_class_name: Option<String>,
+    source_class_name: Option<String>,
 }
 
 impl ModuleSource {
@@ -59,7 +59,7 @@ impl ModuleSource {
         Self {
             specifier: specifier.into(),
             source: source.into(),
-            module_source_class_name: None,
+            source_class_name: None,
         }
     }
 
@@ -67,7 +67,7 @@ impl ModuleSource {
     /// representation with the supplied `@@toStringTag` class name.
     #[must_use]
     pub fn with_module_source_class_name(mut self, class_name: impl Into<String>) -> Self {
-        self.module_source_class_name = Some(class_name.into());
+        self.source_class_name = Some(class_name.into());
         self
     }
 
@@ -83,7 +83,7 @@ impl ModuleSource {
 
     #[must_use]
     pub fn module_source_class_name(&self) -> Option<&str> {
-        self.module_source_class_name.as_deref()
+        self.source_class_name.as_deref()
     }
 }
 

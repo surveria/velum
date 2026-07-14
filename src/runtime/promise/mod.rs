@@ -623,10 +623,10 @@ impl Context {
                 }
                 PromiseReaction::ModuleAwait { module } => self.resume_module_await(module, state),
                 PromiseReaction::ModuleDependency { module, dependency } => {
-                    self.resume_module_dependency(module, dependency, state)
+                    self.resume_module_dependency(module, dependency, &state)
                 }
                 PromiseReaction::ModuleAlias { module, canonical } => {
-                    self.resume_module_alias(module, canonical, state)
+                    self.resume_module_alias(module, canonical, &state)
                 }
                 PromiseReaction::DynamicImportModule { result, namespace } => {
                     if let Some(reason) = state.rejection_value() {

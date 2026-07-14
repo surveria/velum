@@ -14,7 +14,12 @@ use crate::{
     value::Value,
 };
 
-use super::{EvaluationState, ModuleRecord};
+use super::{EvaluationState, ModuleDependency, ModuleRecord};
+
+enum StartedModuleDependencies {
+    Pending(Vec<(PromiseId, usize)>),
+    Rejected(Error),
+}
 
 #[derive(Debug)]
 pub(in crate::runtime) struct DetachedModuleExecution {
@@ -240,6 +245,41 @@ impl Context {
             .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
             .dependencies
             .to_vec();
+        let dependency_state =
+            self.start_module_dependencies(module_index, visiting, dependencies)?;
+        if visiting.pop() != Some(module_index) {
+            return Err(Error::runtime("module evaluation stack mismatch"));
+        }
+        let pending = match dependency_state {
+            StartedModuleDependencies::Pending(pending) => pending,
+            StartedModuleDependencies::Rejected(error) => {
+                self.reject_module_with_error(module_index, error)?;
+                return Ok(promise);
+            }
+        };
+        let pending_count = pending.len();
+        self.modules
+            .get_mut(module_index)
+            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
+            .pending_async_dependencies = pending_count;
+        for (dependency_promise, dependency) in pending {
+            self.add_promise_reaction(
+                dependency_promise,
+                PromiseReaction::module_dependency(module_index, dependency),
+            )?;
+        }
+        if pending_count == 0 {
+            self.execute_module_body(module_index)?;
+        }
+        Ok(promise)
+    }
+
+    fn start_module_dependencies(
+        &mut self,
+        module_index: usize,
+        visiting: &mut Vec<usize>,
+        dependencies: Vec<ModuleDependency>,
+    ) -> Result<StartedModuleDependencies> {
         let mut pending = Vec::new();
         for dependency in dependencies {
             match dependency.phase {
@@ -278,11 +318,7 @@ impl Context {
                                 dependency_module.evaluation_error.clone().ok_or_else(|| {
                                     Error::runtime("dependency evaluation error is missing")
                                 })?;
-                            if visiting.pop() != Some(module_index) {
-                                return Err(Error::runtime("module evaluation stack mismatch"));
-                            }
-                            self.reject_module_with_error(module_index, error)?;
-                            return Ok(promise);
+                            return Ok(StartedModuleDependencies::Rejected(error));
                         }
                         EvaluationState::Evaluating => {
                             pending.push((dependency_promise, wait_index));
@@ -296,24 +332,7 @@ impl Context {
                 }
             }
         }
-        if visiting.pop() != Some(module_index) {
-            return Err(Error::runtime("module evaluation stack mismatch"));
-        }
-        let pending_count = pending.len();
-        self.modules
-            .get_mut(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .pending_async_dependencies = pending_count;
-        for (dependency_promise, dependency) in pending {
-            self.add_promise_reaction(
-                dependency_promise,
-                PromiseReaction::module_dependency(module_index, dependency),
-            )?;
-        }
-        if pending_count == 0 {
-            self.execute_module_body(module_index)?;
-        }
-        Ok(promise)
+        Ok(StartedModuleDependencies::Pending(pending))
     }
 
     fn mark_module_cycle(
@@ -562,7 +581,7 @@ impl Context {
         &mut self,
         module_index: usize,
         dependency_index: usize,
-        state: PromiseSettledState,
+        state: &PromiseSettledState,
     ) -> Result<()> {
         if self
             .modules
@@ -602,7 +621,7 @@ impl Context {
         &mut self,
         module_index: usize,
         canonical: usize,
-        state: PromiseSettledState,
+        state: &PromiseSettledState,
     ) -> Result<()> {
         if self
             .modules
