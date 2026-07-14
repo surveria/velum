@@ -401,6 +401,8 @@ impl Context {
                 | BindingOperand::EvalVariable { .. }
                 | BindingOperand::Unresolved
         );
+        let resolves_captured_lexical =
+            resolves_eval_var || matches!(binding.operand(), BindingOperand::Upvalue { .. });
         let mut remaining_with_environments = count;
         for environment in environments.iter().rev().cloned() {
             match environment {
@@ -422,7 +424,7 @@ impl Context {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
                     }
                 }
-                DynamicEnvironment::CapturedLexical(environment) if resolves_eval_var => {
+                DynamicEnvironment::CapturedLexical(environment) if resolves_captured_lexical => {
                     let atom = self.intern_static_name_atom(binding.name().name())?;
                     if environment.binding(atom)?.is_some() {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));

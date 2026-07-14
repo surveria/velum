@@ -26,6 +26,33 @@ fn sloppy_eval_vars_update_the_outer_environment() -> TestResult {
 }
 
 #[test]
+fn sloppy_eval_destructuring_vars_target_the_outer_environment() -> TestResult {
+    expect_true(
+        r#"
+        function outer() {
+            function Fallback() { this.value = 40; }
+            function evaluate() {
+                var direct = eval("new Fallback().value");
+                eval("var [captured = 1] = [];");
+                var Reader = eval(
+                    "(class { read() { return new Fallback().value + captured; } })"
+                );
+                eval("var [value = [created = 42] = []] = [];");
+                var Holder = eval(
+                    "(class { constructor() { [created = 43] = []; } })"
+                );
+                new Holder();
+                return direct === 40 && new Reader().read() === 41 &&
+                    value.length === 0 && created === 43;
+            }
+            return evaluate();
+        }
+        outer() && created === 43 && typeof captured === "undefined"
+        "#,
+    )
+}
+
+#[test]
 fn sloppy_eval_extends_shared_parameter_indexes_per_call() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

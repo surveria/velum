@@ -205,6 +205,9 @@ impl Context {
         &mut self,
         name: &BytecodeBinding,
     ) -> Result<Option<Value>> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            return reference.get(self, name).map(Some);
+        }
         if let Some(binding) = self.get_or_materialize_binding_bytecode(name)? {
             return Ok(Some(binding.value(name.name())?));
         }
