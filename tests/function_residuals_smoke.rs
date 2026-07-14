@@ -119,6 +119,83 @@ fn direct_eval_in_a_function_body_uses_the_body_environment() -> TestResult {
 }
 
 #[test]
+fn sloppy_parameter_eval_vars_are_visible_to_early_and_body_closures() -> TestResult {
+    assert_script(
+        r#"
+        var x = "outside";
+        var beforeEval;
+        var afterEval;
+        var fromBody;
+        function evaluate(
+            first = beforeEval = function() { return x; },
+            second = (eval('var x = "inside";'), afterEval = function() { return x; })
+        ) {
+            fromBody = function() { return x; };
+        }
+        evaluate();
+        beforeEval() === "inside" && afterEval() === "inside" &&
+            fromBody() === "inside" && x === "outside" ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn parameter_eval_var_environment_keeps_dynamic_scope_order() -> TestResult {
+    assert_script(
+        r#"
+        var evalProbe;
+        var innerWithProbe;
+        var outerWith = { x: "outer-with" };
+        with (outerWith) {
+            (function(
+                first = eval('var x = "eval";'),
+                second = evalProbe = function() { return x; }
+            ) {
+                with ({ x: "inner-with" }) {
+                    innerWithProbe = function() { return x; };
+                }
+            }());
+        }
+        evalProbe() === "eval" && innerWithProbe() === "inner-with" &&
+            outerWith.x === "outer-with" ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn parameter_eval_var_bindings_do_not_supply_an_implicit_this() -> TestResult {
+    assert_script(
+        r#"
+        function evaluate(result = eval(`
+            function strictReceiver() {
+                "use strict";
+                return this;
+            }
+            with ({}) {
+                strictReceiver();
+            }
+        `)) {
+            return result;
+        }
+        evaluate() === undefined ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn parameter_eval_var_bindings_are_deletable() -> TestResult {
+    assert_script(
+        r#"
+        function capture(remove = eval("var value; () => delete value")) {
+            return remove;
+        }
+        var remove = capture();
+        remove() && remove() ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn direct_eval_parameter_arguments_conflicts_are_syntax_errors() -> TestResult {
     assert_script(
         r#"

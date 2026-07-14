@@ -204,6 +204,10 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
+            Expr::SuperMember { .. } | Expr::SuperComputedMember { .. } => {
+                self.emit(BytecodeInstruction::DeleteSuperProperty);
+                Ok(())
+            }
             Expr::PrivateMember { .. } => Err(Error::runtime("private members cannot be deleted")),
             _ => {
                 self.compile_expr(expr)?;

@@ -25,11 +25,10 @@ impl Context {
     }
 
     pub(crate) fn delete_unresolved_global_property(&mut self, name: &str) -> Result<bool> {
-        let Some(global_object) = self.realm.global_object else {
-            return Ok(true);
-        };
+        let global_object = self.global_object_id()?;
         let object = Value::Object(global_object);
-        let lookup = self.property_lookup(name);
+        let key = self.intern_property_key(name)?;
+        let lookup = PropertyLookup::from_key(name, key);
         self.delete_property_value_with_lookup(&object, lookup)
     }
 
@@ -349,37 +348,82 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<OwnPropertyDescriptor>> {
-        if self.global_object_name_is_authoritative(lookup.name()) {
-            return Ok(None);
-        }
-        let Some(value) = self.global_binding_property_value(lookup.name())? else {
+        let Some(descriptor) = self.global_binding_property_descriptor(lookup.name())? else {
             return Ok(None);
         };
-        let writable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
+        let OwnPropertyDescriptor::Data(data) = &descriptor else {
+            return Ok(Some(descriptor));
+        };
+        self.define_global_object_data_property(
+            id,
+            lookup.name(),
+            data.value(),
+            data.writable(),
+            data.enumerable(),
+            data.configurable(),
+        )?;
+        Ok(Some(descriptor))
+    }
+
+    pub(in crate::runtime) fn delete_virtual_global_object_property(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<bool>> {
+        if lookup.key().is_some_and(|key| key.symbol_id().is_some()) {
+            return Ok(None);
+        }
+        let Some(realm) = self.global_object_realm(id) else {
+            return Ok(None);
+        };
+        self.with_realm(realm, |context| {
+            let Some(descriptor) = context.global_binding_property_descriptor(lookup.name())?
+            else {
+                return Ok(None);
+            };
+            if !descriptor.configurable().is_yes() {
+                return Ok(Some(false));
+            }
+            context.mark_global_object_property_authoritative_in_active_realm(lookup.name())?;
+            Ok(Some(true))
+        })
+    }
+
+    fn global_binding_property_descriptor(
+        &mut self,
+        name: &str,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        if self.global_object_name_is_authoritative(name) {
+            return Ok(None);
+        }
+        let Some(value) = self.global_binding_property_value(name)? else {
+            return Ok(None);
+        };
+        let declared_global = self.atom(name).is_some_and(|atom| {
+            self.realm
+                .globals
+                .get(atom)
+                .is_some_and(|binding| binding.kind() == DeclKind::Var)
+        });
+        let writable = if matches!(name, NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
             PropertyWritable::No
         } else {
             PropertyWritable::Yes
         };
-        let configurable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
-            PropertyConfigurable::No
+        let configurable =
+            if declared_global || matches!(name, NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
+                PropertyConfigurable::No
+            } else {
+                PropertyConfigurable::Yes
+            };
+        let enumerable = if declared_global {
+            PropertyEnumerable::Yes
         } else {
-            PropertyConfigurable::Yes
+            PropertyEnumerable::No
         };
-        let descriptor = DataPropertyDescriptor::new(
-            value.clone(),
-            writable,
-            PropertyEnumerable::No,
-            configurable,
-        );
-        self.define_global_object_data_property(
-            id,
-            lookup.name(),
-            value,
-            writable,
-            PropertyEnumerable::No,
-            configurable,
-        )?;
-        Ok(Some(OwnPropertyDescriptor::Data(descriptor)))
+        Ok(Some(OwnPropertyDescriptor::Data(
+            DataPropertyDescriptor::new(value, writable, enumerable, configurable),
+        )))
     }
 
     pub(in crate::runtime) fn mark_global_object_property_authoritative(

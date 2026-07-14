@@ -482,6 +482,25 @@ impl Context {
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {
+        if let Some(environment) = self.current_parameter_eval_var_environment() {
+            let Value::Object(environment) = environment else {
+                return Err(Error::runtime(
+                    "parameter eval variable environment is not an object",
+                ));
+            };
+            let lookup = self.property_lookup(name.name());
+            if !self.has_property_value_with_lookup(&Value::Object(environment), lookup)? {
+                self.define_global_object_data_property(
+                    environment,
+                    name.name(),
+                    Value::Undefined,
+                    PropertyWritable::Yes,
+                    PropertyEnumerable::Yes,
+                    PropertyConfigurable::Yes,
+                )?;
+            }
+            return Ok(());
+        }
         let global = self.locals.is_empty();
         let atom = self.intern_static_name_atom(name.name())?;
         if let Some(binding) = self.active_bindings().get(atom) {

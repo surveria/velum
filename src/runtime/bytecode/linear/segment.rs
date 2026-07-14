@@ -28,6 +28,9 @@ impl Context {
         if !self.optional_optimizations_enabled() {
             return Ok(None);
         }
+        if !self.current_dynamic_environments().is_empty() {
+            return Ok(None);
+        }
         let instructions = block.instructions();
         let template = block.linear_template();
         if template.uses_with_environment() {

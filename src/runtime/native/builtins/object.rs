@@ -779,13 +779,6 @@ impl Context {
         self.semantic_own_property_descriptor(target, property)
     }
 
-    pub(in crate::runtime) fn own_enumerable_keys(
-        &mut self,
-        target: &Value,
-    ) -> Result<Vec<String>> {
-        self.semantic_own_enumerable_string_keys(target)
-    }
-
     pub(in crate::runtime::native) fn create_object_from_constructor(&mut self) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(

@@ -24,8 +24,6 @@ const MATH_BUILTIN_SCRIPT: &str = r#"
         let minNaN = Math.min(NaN, 1);
         let maxPositiveZero = 1 / Math.max(-0, 0);
         let minNegativeZero = 1 / Math.min(0, -0);
-        let deleteMath = delete Math;
-
         print(
             typeof Math,
             Math.__proto__ === Object.prototype,
@@ -89,9 +87,9 @@ const MATH_BUILTIN_SCRIPT: &str = r#"
             minNaN !== minNaN &&
             maxPositiveZero === Infinity &&
             minNegativeZero === -Infinity &&
-            deleteMath === false &&
             keys === "" &&
-            shadow === 42 ? 42 : 0
+            shadow === 42 &&
+            delete Math === true ? 42 : 0
 "#;
 
 const MATH_RESIDUAL_SCRIPT: &str = r#"

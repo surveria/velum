@@ -365,6 +365,90 @@ fn evaluates_array_target_reference_before_iterator_and_default() -> TestResult 
 }
 
 #[test]
+fn defers_destructuring_target_key_conversion_until_assignment() -> TestResult {
+    ensure_string(
+        r#"
+        let log = [];
+        let target = {
+            set value(next) { log.push("set:" + next); }
+        };
+        function targetKey() {
+            log.push("target-key");
+            return {
+                toString: function () {
+                    log.push("target-key-string");
+                    return "value";
+                }
+            };
+        }
+        let source = {
+            get item() {
+                log.push("get-source");
+                return 7;
+            }
+        };
+        ({item: target[targetKey()]} = source);
+        log.join("|")
+        "#,
+        "target-key|get-source|target-key-string|set:7",
+    )
+}
+
+#[test]
+fn resolves_var_destructuring_targets_before_reading_source_values() -> TestResult {
+    ensure_string(
+        r#"
+        var log = [];
+        var source = {
+            get value() {
+                log.push("get-source");
+                return 1;
+            }
+        };
+        var target;
+        var environment = new Proxy({}, {
+            has: function(object, key) {
+                log.push("binding:" + key);
+                return false;
+            }
+        });
+        with (environment) {
+            var {value: target} = source;
+        }
+        log.join("|")
+        "#,
+        "binding:source|binding:target|get-source",
+    )
+}
+
+#[test]
+fn object_rest_preserves_own_key_order_and_symbols() -> TestResult {
+    ensure_string(
+        r#"
+        let calls = [];
+        let symbol = Symbol("key");
+        let source = {
+            get z() { calls.push("z"); },
+            get a() { calls.push("a"); }
+        };
+        Object.defineProperty(source, 1, {
+            get: function () { calls.push("1"); },
+            enumerable: true
+        });
+        Object.defineProperty(source, symbol, {
+            get: function () { calls.push("symbol"); },
+            enumerable: true
+        });
+        let rest;
+        ({...rest} = source);
+        calls.join("|") + ":" + Object.keys(rest).join(",") + ":" +
+            Object.getOwnPropertySymbols(rest).length
+        "#,
+        "1|z|a|symbol:1,z,a:1",
+    )
+}
+
+#[test]
 fn creates_sloppy_globals_and_rejects_strict_targets() -> TestResult {
     ensure_string(
         r#"

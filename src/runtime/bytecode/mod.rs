@@ -36,6 +36,7 @@ use crate::{
 use state::BytecodeState;
 
 const STRICT_DELETE_FAILURE: &str = "Cannot delete non-configurable property";
+const DELETE_SUPER_PROPERTY_ERROR: &str = "Cannot delete a super property";
 
 fn strict_delete_result(result: Value, strict: bool) -> Result<Value> {
     if strict && result == Value::Bool(false) {
@@ -130,6 +131,10 @@ impl Context {
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
+            BytecodeInstruction::DeleteSuperProperty => Err(Error::exception(
+                crate::value::ErrorName::ReferenceError,
+                DELETE_SUPER_PROPERTY_ERROR,
+            )),
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
@@ -344,7 +349,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let deleted = if let Some(reference) = self.resolve_with_binding(binding)? {
             reference.delete(self, binding)?
-        } else if self.binding_exists_or_materialize_bytecode(binding)? {
+        } else if self.bytecode_binding_is_declarative(binding)? {
             false
         } else {
             self.delete_unresolved_global_property(binding.name().name())?

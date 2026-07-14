@@ -21,6 +21,7 @@ use crate::{
     syntax::{StaticName, StaticString},
 };
 
+mod binding_effects;
 mod call;
 mod control;
 mod expression;

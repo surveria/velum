@@ -19,8 +19,6 @@ let maxNaN = Math.max(1, NaN);
 let minNaN = Math.min(NaN, 1);
 let maxPositiveZero = 1 / Math.max(-0, 0);
 let minNegativeZero = 1 / Math.min(0, -0);
-let deleteMath = delete Math;
-
 if (
   mathObject !== Math ||
   typeof Math !== "object" ||
@@ -55,9 +53,9 @@ if (
   minNaN === minNaN ||
   maxPositiveZero !== Infinity ||
   minNegativeZero !== -Infinity ||
-  deleteMath !== false ||
   keys !== "" ||
-  shadow !== 42
+  shadow !== 42 ||
+  delete Math !== true
 ) {
   throw new Test262Error("Math object behavior was unexpected");
 }

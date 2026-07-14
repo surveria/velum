@@ -11,7 +11,7 @@ use crate::{
     value::Value,
 };
 
-use super::destructure_continuation::DestructureContinuation;
+use super::{destructure_continuation::DestructureContinuation, ops::BytecodeAssignmentReference};
 
 #[derive(Debug)]
 pub(in crate::runtime) struct BytecodeState {
@@ -20,6 +20,7 @@ pub(in crate::runtime) struct BytecodeState {
     pub(super) last: Value,
     private_environment: Option<Rc<PrivateEnvironment>>,
     for_in_of_head_scope_active: bool,
+    resolved_bindings: Vec<BytecodeAssignmentReference>,
     suspend: Option<Box<BytecodeSuspendState>>,
 }
 
@@ -66,6 +67,7 @@ impl BytecodeState {
             last: Value::Undefined,
             private_environment: None,
             for_in_of_head_scope_active: false,
+            resolved_bindings: Vec::new(),
             suspend: None,
         }
     }
@@ -79,6 +81,7 @@ impl BytecodeState {
             last: Value::Undefined,
             private_environment,
             for_in_of_head_scope_active: false,
+            resolved_bindings: Vec::new(),
             suspend: None,
         }
     }
@@ -88,6 +91,7 @@ impl BytecodeState {
         self.stack.clear();
         self.last = Value::Undefined;
         self.for_in_of_head_scope_active = false;
+        self.resolved_bindings.clear();
         self.suspend = None;
     }
 
@@ -110,11 +114,22 @@ impl BytecodeState {
         self.for_in_of_head_scope_active = active;
     }
 
+    pub(super) fn push_resolved_binding(&mut self, reference: BytecodeAssignmentReference) {
+        self.resolved_bindings.push(reference);
+    }
+
+    pub(super) fn pop_resolved_binding(&mut self) -> Result<BytecodeAssignmentReference> {
+        self.resolved_bindings
+            .pop()
+            .ok_or_else(|| Error::runtime("resolved binding stack is empty"))
+    }
+
     pub(super) fn prepare_run(&mut self) -> Result<()> {
         if self.suspend.is_none() {
             self.pc = BytecodeAddress::new(0);
             self.stack.clear();
             self.last = Value::Undefined;
+            self.resolved_bindings.clear();
             return Ok(());
         }
         self.prepare_suspended_run()
@@ -437,6 +452,9 @@ impl BytecodeState {
                 cold.push(value);
             }
         }
+        for reference in &self.resolved_bindings {
+            cold.extend(reference.root_values());
+        }
         self.root_values_with_cold(cold)
     }
 
@@ -445,6 +463,11 @@ impl BytecodeState {
             .values()
             .iter()
             .chain(std::iter::once(&self.last))
+            .chain(
+                self.resolved_bindings
+                    .iter()
+                    .flat_map(BytecodeAssignmentReference::root_values),
+            )
     }
 
     fn root_values_with_cold<'state>(

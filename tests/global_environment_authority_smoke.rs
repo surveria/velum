@@ -76,6 +76,38 @@ fn global_object_mutations_control_bare_identifier_semantics() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn delete_observes_global_property_configurability() -> TestResult {
+    let source = r#"
+        var declared = 1;
+        let declaredBinding = delete declared;
+        let declaredProperty = delete globalThis.declared;
+        let constantProperty = delete globalThis.NaN;
+        let builtinBinding = delete JSON;
+        !declaredBinding &&
+            !declaredProperty &&
+            !constantProperty &&
+            builtinBinding &&
+            typeof JSON === "undefined" ? 42 : 0
+    "#;
+    let mut vm = Vm::new();
+    let value = vm.eval_owned(source)?;
+    ensure_equal(&value, &OwnedValue::Number(42.0))
+}
+
+#[test]
+fn deleting_a_lazy_builtin_does_not_extend_the_global_object() -> TestResult {
+    let source = r#"
+        Object.preventExtensions(globalThis);
+        let deleted = delete Function;
+        deleted && typeof Function === "undefined" &&
+            Array.isArray(Object.getOwnPropertyNames(globalThis)) ? 42 : 0
+    "#;
+    let mut vm = Vm::new();
+    let value = vm.eval_owned(source)?;
+    ensure_equal(&value, &OwnedValue::Number(42.0))
+}
+
 fn ensure_equal(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
     if actual == expected {
         return Ok(());

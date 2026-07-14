@@ -10,6 +10,20 @@ use super::{
     function::FunctionSuperBinding, private::PrivateEnvironment,
 };
 
+#[derive(Clone, Debug)]
+pub(in crate::runtime) enum DynamicEnvironment {
+    With(Value),
+    EvalVar(Value),
+}
+
+impl DynamicEnvironment {
+    pub(in crate::runtime) const fn value(&self) -> &Value {
+        match self {
+            Self::With(value) | Self::EvalVar(value) => value,
+        }
+    }
+}
+
 /// One VM-owned synchronous execution activation.
 ///
 /// Call frames own every value needed to make the current invocation
@@ -22,7 +36,7 @@ pub(in crate::runtime) enum ActivationFrame {
         local_base: usize,
         environment_phase: FunctionEnvironmentPhase,
         upvalues: FunctionUpvalues,
-        with_environments: Vec<Value>,
+        dynamic_environments: Vec<DynamicEnvironment>,
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
@@ -39,12 +53,12 @@ pub(in crate::runtime) enum ActivationFrame {
     },
     EvalBoundary {
         local_base: usize,
-        with_environments: Vec<Value>,
+        dynamic_environments: Vec<DynamicEnvironment>,
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
     Bytecode {
-        with_environments: Vec<Value>,
+        dynamic_environments: Vec<DynamicEnvironment>,
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
@@ -102,7 +116,10 @@ impl ActivationFrame {
         let binding_count = self
             .upvalues()
             .map_or(0, |upvalues| upvalues.len())
-            .checked_add(self.with_environments().map_or(0, <[Value]>::len))
+            .checked_add(
+                self.dynamic_environments()
+                    .map_or(0, <[DynamicEnvironment]>::len),
+            )
             .ok_or_else(activation_storage_overflow)?;
         let control_count = self
             .continuation()
@@ -125,12 +142,12 @@ impl ActivationFrame {
         super_binding: Option<Rc<FunctionSuperBinding>>,
         private_environment: Option<Rc<PrivateEnvironment>>,
     ) -> Self {
-        let (upvalues, with_environments) = environment;
+        let (upvalues, dynamic_environments) = environment;
         Self::Call {
             local_base,
             environment_phase: FunctionEnvironmentPhase::Setup,
             upvalues,
-            with_environments,
+            dynamic_environments,
             this_value,
             new_target,
             super_binding,
@@ -158,7 +175,7 @@ impl ActivationFrame {
     pub(in crate::runtime) const fn eval_boundary(local_base: usize) -> Self {
         Self::EvalBoundary {
             local_base,
-            with_environments: Vec::new(),
+            dynamic_environments: Vec::new(),
             private_environment: None,
             continuation: None,
         }
@@ -166,10 +183,10 @@ impl ActivationFrame {
 
     pub(in crate::runtime) const fn bytecode(
         continuation: BytecodeContinuationFrame,
-        with_environments: Vec<Value>,
+        dynamic_environments: Vec<DynamicEnvironment>,
     ) -> Self {
         Self::Bytecode {
-            with_environments,
+            dynamic_environments,
             private_environment: None,
             continuation: Some(continuation),
         }
@@ -286,32 +303,40 @@ impl ActivationFrame {
         }
     }
 
-    pub(in crate::runtime) fn with_environments(&self) -> Option<&[Value]> {
+    pub(in crate::runtime) fn dynamic_environments(&self) -> Option<&[DynamicEnvironment]> {
         match self {
             Self::Call {
-                with_environments, ..
+                dynamic_environments,
+                ..
             }
             | Self::Bytecode {
-                with_environments, ..
+                dynamic_environments,
+                ..
             }
             | Self::EvalBoundary {
-                with_environments, ..
-            } => Some(with_environments),
+                dynamic_environments,
+                ..
+            } => Some(dynamic_environments),
             Self::TemporaryThis { .. } => None,
         }
     }
 
-    pub(in crate::runtime) const fn with_environments_mut(&mut self) -> Option<&mut Vec<Value>> {
+    pub(in crate::runtime) const fn dynamic_environments_mut(
+        &mut self,
+    ) -> Option<&mut Vec<DynamicEnvironment>> {
         match self {
             Self::Call {
-                with_environments, ..
+                dynamic_environments,
+                ..
             }
             | Self::Bytecode {
-                with_environments, ..
+                dynamic_environments,
+                ..
             }
             | Self::EvalBoundary {
-                with_environments, ..
-            } => Some(with_environments),
+                dynamic_environments,
+                ..
+            } => Some(dynamic_environments),
             Self::TemporaryThis { .. } => None,
         }
     }

@@ -110,6 +110,39 @@ fn checks_compound_assignment_reference_before_rhs() -> TestResult {
 }
 
 #[test]
+fn preserves_binding_references_across_rhs_environment_changes() -> TestResult {
+    ensure_source_value(
+        r#"
+        var outer = 0;
+        var inner = (function () {
+            outer = (eval("var outer = 2;"), 1);
+            return outer;
+        }());
+
+        var withOuter = 0;
+        var scope = {};
+        with (scope) {
+            withOuter = (scope.withOuter = 2, 1);
+        }
+
+        var compoundOuter = 4;
+        var compoundInner = (function () {
+            compoundOuter *= (eval("var compoundOuter = 2;"), 3);
+            return compoundOuter;
+        }());
+
+        outer === 1 &&
+            inner === 2 &&
+            withOuter === 1 &&
+            scope.withOuter === 2 &&
+            compoundOuter === 12 &&
+            compoundInner === 2
+        "#,
+        &Value::Bool(true),
+    )
+}
+
+#[test]
 fn supports_extended_compound_assignment_operators() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -451,6 +451,7 @@ pub enum BytecodeInstruction {
         property: BytecodeDynamicProperty,
         strict: bool,
     },
+    DeleteSuperProperty,
     DeleteValue,
     UpdateBinding {
         name: BytecodeBinding,

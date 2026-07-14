@@ -155,7 +155,7 @@ struct Function {
     fast_path: Option<Rc<function::FunctionFastPath>>,
     source: Option<Rc<str>>,
     upvalues: FunctionUpvalues,
-    with_environments: Rc<[Value]>,
+    dynamic_environments: Rc<[activation::DynamicEnvironment]>,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
     static_binding_layout: Option<BindingLayout>,
@@ -177,7 +177,7 @@ struct Function {
 }
 
 type FunctionUpvalues = Rc<[BindingCell]>;
-type FunctionActivationEnvironment = (FunctionUpvalues, Vec<Value>);
+type FunctionActivationEnvironment = (FunctionUpvalues, Vec<activation::DynamicEnvironment>);
 
 #[derive(Debug, Clone)]
 enum FunctionNewTarget {
@@ -565,7 +565,7 @@ impl Context {
     ) -> Result<CallReference> {
         if let Some(reference) = self.resolve_with_binding(callee)? {
             let function = reference.get(self, callee)?;
-            let this_value = reference.object().clone();
+            let this_value = reference.call_this_value();
             return self
                 .call_reference_from_value(callee, native, strict, function)
                 .map(|reference| reference.with_this(this_value));

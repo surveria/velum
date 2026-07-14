@@ -339,10 +339,10 @@ impl Function {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        for object in self.with_environments.iter() {
+        for environment in self.dynamic_environments.iter() {
             visitor.visit(
                 VmCallableEdgeKind::JavaScriptFunctionInternal,
-                StrongEdgeReference::Value(object),
+                StrongEdgeReference::Value(environment.value()),
             )?;
         }
         for cell in self.upvalues.iter() {

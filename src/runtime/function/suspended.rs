@@ -343,9 +343,9 @@ impl DetachedFunctionExecution {
             }
         }
         for frame in &self.activations {
-            if let Some(environments) = frame.with_environments() {
-                for object in environments {
-                    visitor.visit_value(kind, object)?;
+            if let Some(environments) = frame.dynamic_environments() {
+                for environment in environments {
+                    visitor.visit_value(kind, environment.value())?;
                 }
             }
             if let Some(upvalues) = frame.upvalues() {
@@ -409,9 +409,9 @@ impl DetachedFunctionExecution {
             }
         }
         for frame in &self.activations {
-            if let Some(environments) = frame.with_environments() {
-                for object in environments {
-                    visitor.visit(kind, StrongEdgeReference::Value(object))?;
+            if let Some(environments) = frame.dynamic_environments() {
+                for environment in environments {
+                    visitor.visit(kind, StrongEdgeReference::Value(environment.value()))?;
                 }
             }
             if let Some(upvalues) = frame.upvalues() {

@@ -33,7 +33,7 @@ fn exposes_global_numeric_constants_as_immutable_bindings() -> TestResult {
           -Infinity < -1e300 &&
           deleteNaN === false &&
           deleteInfinity === false &&
-          deleteObject === false &&
+            deleteObject === true &&
           deleteMissing === true &&
           shadow === 42
             ? 42
@@ -44,7 +44,7 @@ fn exposes_global_numeric_constants_as_immutable_bindings() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
     ensure_output(
         context.output(),
-        &["number true true true", "false false false true"],
+        &["number true true true", "false false true true"],
     )?;
 
     let value = context.eval("NaN = 7; Infinity += 1; NaN !== NaN && Infinity > 1e300")?;

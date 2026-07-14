@@ -3,8 +3,9 @@ use std::rc::Rc;
 use crate::{
     binding_metadata::{BindingLayout, BindingOperand},
     error::Result,
+    runtime::activation::DynamicEnvironment,
     runtime::{CompiledBindingFrame, Context, control::Completion},
-    value::{FunctionId, Value},
+    value::FunctionId,
 };
 
 use super::{
@@ -20,10 +21,10 @@ impl Context {
         layout: Option<&BindingLayout>,
     ) -> Result<(
         crate::runtime::CapturedFunctionUpvalues,
-        Rc<[Value]>,
+        Rc<[DynamicEnvironment]>,
         Option<FunctionFastPath>,
     )> {
-        let fast_path = if self.current_with_environments().is_empty() {
+        let fast_path = if self.current_dynamic_environments().is_empty() {
             self.compile_optional_function_fast_path(init, param_frames)?
         } else {
             None
@@ -33,8 +34,8 @@ impl Context {
             init.bytecode.capture_bindings(),
             layout,
         )?;
-        let with_environments = Rc::from(self.current_with_environments());
-        Ok((upvalues, with_environments, fast_path))
+        let dynamic_environments = Rc::from(self.current_dynamic_environments());
+        Ok((upvalues, dynamic_environments, fast_path))
     }
 
     pub(super) fn try_eval_pre_setup_function_fast_path(
@@ -45,7 +46,7 @@ impl Context {
         let Some((fast_path, upvalues, atom_cache, binding_cache, binding_layout, dynamic_source)) =
             ({
                 let function = self.function(id)?;
-                if !function.with_environments.is_empty() {
+                if !function.dynamic_environments.is_empty() {
                     return Ok(None);
                 }
                 function.fast_path.as_ref().map(|fast_path| {

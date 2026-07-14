@@ -6,7 +6,7 @@ use crate::{
     error::{Error, Result},
     runtime::binding::scope::BindingScope,
     runtime::control::{Completion, Suspension},
-    runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::PropertyKey,
     runtime::{
         Context,
         abstract_operations::{IteratorSource, IteratorStep},
@@ -25,6 +25,7 @@ use super::{
 };
 
 mod assignment_reference;
+mod object_rest;
 
 /// Result of walking one destructuring pattern against a source value.
 pub(in crate::runtime) enum DestructureOutcome {
@@ -220,7 +221,7 @@ impl Context {
         rest: Option<std::rc::Rc<BytecodePattern>>,
         source: Value,
         next: usize,
-        consumed: Vec<String>,
+        consumed: Vec<PropertyKey>,
     ) -> Result<Option<Completion>> {
         if let Some(property) = properties.get(next).cloned() {
             let next = next
@@ -242,19 +243,20 @@ impl Context {
             return Ok(None);
         }
         if let Some(rest_pattern) = rest.as_ref() {
-            let reference = match self.assignment_reference_for_pattern(rest_pattern)? {
-                PatternStep::Value(reference) => reference,
-                PatternStep::Abrupt(completion) => {
-                    continuation.tasks.push(DestructureTask::Object {
-                        properties,
-                        rest,
-                        source,
-                        next,
-                        consumed,
-                    });
-                    return Ok(Some(completion));
-                }
-            };
+            let reference =
+                match self.assignment_reference_for_pattern(rest_pattern, continuation.mode)? {
+                    PatternStep::Value(reference) => reference,
+                    PatternStep::Abrupt(completion) => {
+                        continuation.tasks.push(DestructureTask::Object {
+                            properties,
+                            rest,
+                            source,
+                            next,
+                            consumed,
+                        });
+                        return Ok(Some(completion));
+                    }
+                };
             let rest_value = self.destructure_rest_object(&source, &consumed)?;
             if let Some(reference) = reference {
                 reference.set(self, rest_value)?;
@@ -278,7 +280,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match phase {
             ObjectPropertyPhase::Read => {
-                let resolved_key = match self.resolve_resumable_pattern_property_key(&key)? {
+                let mut resolved_key = match self.resolve_resumable_pattern_property_key(&key)? {
                     PatternStep::Value(key) => key,
                     PatternStep::Abrupt(completion) => {
                         continuation.tasks.push(DestructureTask::ObjectProperty {
@@ -290,11 +292,11 @@ impl Context {
                         return Ok(Some(completion));
                     }
                 };
-                Self::record_destructure_consumed_name(
-                    continuation,
-                    resolved_key.name().to_owned(),
-                )?;
-                let reference = match self.assignment_reference_for_pattern(&target.pattern)? {
+                let resolved_property_key = self.intern_dynamic_property_key(&mut resolved_key)?;
+                Self::record_destructure_consumed_key(continuation, resolved_property_key)?;
+                let reference = match self
+                    .assignment_reference_for_pattern(&target.pattern, continuation.mode)?
+                {
                     PatternStep::Value(reference) => reference,
                     PatternStep::Abrupt(completion) => {
                         continuation.tasks.push(DestructureTask::ObjectProperty {
@@ -363,13 +365,13 @@ impl Context {
             .map(PatternStep::Value)
     }
 
-    fn record_destructure_consumed_name(
+    fn record_destructure_consumed_key(
         continuation: &mut DestructureContinuation,
-        name: String,
+        key: PropertyKey,
     ) -> Result<()> {
         for task in continuation.tasks.iter_mut().rev() {
             if let DestructureTask::Object { consumed, .. } = task {
-                consumed.push(name);
+                consumed.push(key);
                 return Ok(());
             }
         }
@@ -391,7 +393,7 @@ impl Context {
         if let Some(element) = elements.get(next).cloned() {
             self.step()?;
             let reference = if let Some(target) = element.as_ref() {
-                match self.assignment_reference_for_pattern(&target.pattern)? {
+                match self.assignment_reference_for_pattern(&target.pattern, continuation.mode)? {
                     PatternStep::Value(reference) => reference,
                     PatternStep::Abrupt(completion) => {
                         continuation.tasks.push(DestructureTask::Array {
@@ -439,19 +441,20 @@ impl Context {
             return Ok(None);
         }
         if let Some(rest_pattern) = rest.as_ref() {
-            let reference = match self.assignment_reference_for_pattern(rest_pattern)? {
-                PatternStep::Value(reference) => reference,
-                PatternStep::Abrupt(completion) => {
-                    continuation.tasks.push(DestructureTask::Array {
-                        elements,
-                        rest,
-                        source,
-                        next,
-                        exhausted,
-                    });
-                    return Ok(Some(completion));
-                }
-            };
+            let reference =
+                match self.assignment_reference_for_pattern(rest_pattern, continuation.mode)? {
+                    PatternStep::Value(reference) => reference,
+                    PatternStep::Abrupt(completion) => {
+                        continuation.tasks.push(DestructureTask::Array {
+                            elements,
+                            rest,
+                            source,
+                            next,
+                            exhausted,
+                        });
+                        return Ok(Some(completion));
+                    }
+                };
             let mut items = Vec::new();
             while !exhausted {
                 self.step()?;
@@ -527,40 +530,6 @@ impl Context {
             }
         }
         Ok(completion)
-    }
-
-    fn destructure_rest_object(&mut self, source: &Value, consumed: &[String]) -> Result<Value> {
-        let keys = match source {
-            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Vec::new(),
-            _ => self.own_enumerable_keys(source)?,
-        };
-        let mut entries = Vec::new();
-        for key in keys {
-            if consumed.iter().any(|used| used == &key) {
-                continue;
-            }
-            let value = self.get_named(source, &key)?;
-            let property_key = self.intern_property_key(&key)?;
-            entries.push((property_key, key, value));
-        }
-        let inits = entries
-            .iter()
-            .map(|(key, name, value)| {
-                ObjectPropertyInit::new_data(
-                    *key,
-                    name.as_str(),
-                    value.clone(),
-                    PropertyEnumerable::Yes,
-                )
-            })
-            .collect::<Vec<_>>();
-        let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
-        self.objects.create(
-            inits,
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
     }
 
     fn apply_pattern_default(

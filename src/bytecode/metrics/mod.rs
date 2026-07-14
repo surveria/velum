@@ -338,6 +338,7 @@ impl BytecodeInstruction {
             | Self::GeneratorStart
             | Self::Yield { .. }
             | Self::TypeOfValue
+            | Self::DeleteSuperProperty
             | Self::DeleteValue
             | Self::PrivateMember { .. }
             | Self::PrivateAssign { .. }
