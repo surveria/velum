@@ -9,6 +9,8 @@ default_tested_source_archive_ref="refs/rsqjs/ci-tested-sources"
 default_legacy_tested_source_archive_ref="refs/heads/ci-tested-sources"
 tested_source_archive_local_branch="rsqjs-tested-source-archive"
 null_workflow_conclusion="__RSQJS_NULL_CONCLUSION__"
+default_artifact_wait_attempts=37
+default_artifact_wait_seconds=10
 
 fail() {
   printf 'publish-report-artifact: %s\n' "$*" >&2
@@ -189,7 +191,10 @@ download_matching_artifact() {
   local artifact_lines
   artifact_lines="$(gh api "/repos/${repository}/actions/artifacts?name=${artifact_name}&per_page=100" \
     --jq '.artifacts | sort_by(.created_at) | reverse | .[] | select(.expired == false) | [.id, .workflow_run.id] | @tsv')"
-  [[ -n "${artifact_lines}" ]] || fail "no non-expired artifact named '${artifact_name}'"
+  if [[ -z "${artifact_lines}" ]]; then
+    printf 'no non-expired artifact named %q\n' "${artifact_name}" >&2
+    return 1
+  fi
 
   local artifact_id run_id candidate metadata_file
   while IFS=$'\t' read -r artifact_id run_id; do
@@ -318,7 +323,43 @@ download_matching_artifact() {
     return 0
   done <<< "${artifact_lines}"
 
-  fail "no artifact named '${artifact_name}' matched tree ${expected_tree}"
+  printf 'no artifact named %q matched tree %s\n' "${artifact_name}" "${expected_tree}" >&2
+  return 1
+}
+
+download_matching_artifact_with_retry() {
+  local repository="$1"
+  local artifact_name="$2"
+  local expected_tree="$3"
+  local expected_mode="$4"
+  local target_dir="$5"
+  local expected_run_id="${6:-}"
+  local attempts="${RSQJS_ARTIFACT_WAIT_ATTEMPTS:-${default_artifact_wait_attempts}}"
+  local wait_seconds="${RSQJS_ARTIFACT_WAIT_SECONDS:-${default_artifact_wait_seconds}}"
+
+  [[ "${attempts}" =~ ^[1-9][0-9]*$ ]] ||
+    fail "RSQJS_ARTIFACT_WAIT_ATTEMPTS must be a positive decimal integer"
+  [[ "${wait_seconds}" =~ ^(0|[1-9][0-9]*)$ ]] ||
+    fail "RSQJS_ARTIFACT_WAIT_SECONDS must be a non-negative decimal integer"
+  [[ -n "${target_dir}" ]] || fail "artifact retry target directory is empty"
+
+  local attempt=1 artifact_dir
+  while ((attempt <= attempts)); do
+    if artifact_dir="$(download_matching_artifact "${repository}" "${artifact_name}" \
+      "${expected_tree}" "${expected_mode}" "${target_dir}" "${expected_run_id}")"; then
+      printf '%s\n' "${artifact_dir}"
+      return 0
+    fi
+    rm -rf -- "${target_dir}"
+    if ((attempt == attempts)); then
+      fail "artifact '${artifact_name}' was not ready after ${attempts} attempts"
+    fi
+    printf 'artifact %q is not ready; retrying in %s seconds (attempt %s/%s)\n' \
+      "${artifact_name}" "${wait_seconds}" "${attempt}" "${attempts}" >&2
+    sleep "${wait_seconds}"
+    attempt=$((attempt + 1))
+  done
+  fail "artifact retry loop ended unexpectedly"
 }
 
 checkout_latest_main() {
@@ -721,7 +762,8 @@ performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
 source_pull_request="${RSQJS_ARTIFACT_PR_NUMBER:-}"
 source_task="${RSQJS_ARTIFACT_TASK:-}"
 
-correctness_artifact_dir="$(download_matching_artifact "${repository}" "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
+correctness_artifact_dir="$(download_matching_artifact_with_retry "${repository}" \
+  "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
 correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env"
 read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
 correctness_component="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
