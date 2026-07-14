@@ -6,6 +6,7 @@ use crate::{
         BytecodePatternTarget,
     },
     runtime::abstract_operations::IteratorSource,
+    runtime::object::PropertyKey,
     value::Value,
 };
 
@@ -45,7 +46,7 @@ pub(super) enum DestructureTask {
         rest: Option<Rc<BytecodePattern>>,
         source: Value,
         next: usize,
-        consumed: Vec<String>,
+        consumed: Vec<PropertyKey>,
     },
     ObjectProperty {
         key: BytecodePatternKey,

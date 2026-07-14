@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::{BytecodeAssignmentTarget, BytecodePattern},
+    bytecode::{BytecodeAssignmentTarget, BytecodeDestructureMode, BytecodePattern},
     error::Result,
     runtime::Context,
 };
@@ -13,15 +13,39 @@ impl Context {
     pub(super) fn assignment_reference_for_pattern(
         &mut self,
         pattern: &BytecodePattern,
+        mode: BytecodeDestructureMode,
     ) -> Result<PatternStep<Option<BytecodeAssignmentReference>>> {
-        let BytecodePattern::Assignment(target) = pattern else {
-            return Ok(PatternStep::Value(None));
+        let step = match pattern {
+            BytecodePattern::Assignment(target) => {
+                self.eval_resumable_assignment_reference(target)?
+            }
+            BytecodePattern::Binding(name)
+                if matches!(
+                    mode,
+                    BytecodeDestructureMode::Declaration(crate::syntax::DeclKind::Var)
+                ) =>
+            {
+                if let Some(reference) = self.resolve_with_binding(name)? {
+                    PatternStep::Value(BytecodeAssignmentReference::WithBinding {
+                        name: name.clone(),
+                        reference,
+                    })
+                } else {
+                    let cell = self.get_or_materialize_binding_bytecode(name)?;
+                    PatternStep::Value(BytecodeAssignmentReference::Binding {
+                        name: name.clone(),
+                        cell,
+                    })
+                }
+            }
+            BytecodePattern::Binding(_)
+            | BytecodePattern::Object { .. }
+            | BytecodePattern::Array { .. } => return Ok(PatternStep::Value(None)),
         };
-        self.eval_resumable_assignment_reference(target)
-            .map(|step| match step {
-                PatternStep::Value(reference) => PatternStep::Value(Some(reference)),
-                PatternStep::Abrupt(completion) => PatternStep::Abrupt(completion),
-            })
+        Ok(match step {
+            PatternStep::Value(reference) => PatternStep::Value(Some(reference)),
+            PatternStep::Abrupt(completion) => PatternStep::Abrupt(completion),
+        })
     }
 
     fn eval_resumable_assignment_reference(
@@ -105,12 +129,11 @@ impl Context {
                         return Ok(PatternStep::Abrupt(completion));
                     }
                 };
-                let property = self.dynamic_property_key(&property_value)?;
                 Ok(PatternStep::Value(
                     BytecodeAssignmentReference::ComputedProperty {
                         object,
                         property_value,
-                        property,
+                        property: None,
                         access: operand.access(),
                         strict: *strict,
                     },

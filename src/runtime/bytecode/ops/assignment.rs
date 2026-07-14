@@ -51,7 +51,7 @@ pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
     ComputedProperty {
         object: Value,
         property_value: Value,
-        property: DynamicPropertyKey,
+        property: Option<DynamicPropertyKey>,
         access: StaticPropertyAccessId,
         strict: bool,
     },
@@ -94,7 +94,11 @@ impl BytecodeAssignmentReference {
                 {
                     return Ok(value);
                 }
-                context.get_cached_dynamic_property_value(object, property, *access)
+                let property = match property {
+                    Some(property) => property.clone(),
+                    None => context.dynamic_property_key(property_value)?,
+                };
+                context.get_cached_dynamic_property_value(object, &property, *access)
             }
             Self::PrivateProperty { object, name } => context.read_private_slot(object, name),
         }
@@ -134,12 +138,15 @@ impl BytecodeAssignmentReference {
             }
             Self::ComputedProperty {
                 object,
-                property_value: _,
+                property_value,
                 property,
                 access,
                 strict,
             } => {
-                let mut property = property.clone();
+                let mut property = match property {
+                    Some(property) => property.clone(),
+                    None => context.dynamic_property_key(property_value)?,
+                };
                 context.set_bytecode_dynamic_property_reference(
                     object,
                     &mut property,
@@ -577,7 +584,7 @@ impl Context {
                 Ok(BytecodeAssignmentReference::ComputedProperty {
                     object,
                     property_value,
-                    property,
+                    property: Some(property),
                     access: operand.access(),
                     strict: *strict,
                 })
