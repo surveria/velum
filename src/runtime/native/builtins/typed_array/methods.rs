@@ -191,8 +191,8 @@ impl Context {
 
     fn eval_typed_array_at(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (id, view) = self.typed_array_receiver(this_value)?;
-        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
         let length = view.length();
+        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
         let length_number = Self::typed_array_usize_number(length)?;
         let target = if relative >= 0.0 {
             relative

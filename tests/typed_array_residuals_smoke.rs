@@ -16,6 +16,25 @@ fn typed_array_at_uses_internal_length() -> TestResult {
 }
 
 #[test]
+fn typed_array_at_snapshots_length_before_index_coercion() -> TestResult {
+    ensure_eval(
+        r"
+        let buffer = new ArrayBuffer(4, { maxByteLength: 8 });
+        let array = new Uint8Array(buffer);
+        array[3] = 7;
+        let index = {
+            valueOf() {
+                buffer.resize(2);
+                return -1;
+            }
+        };
+        array.at(index) === undefined ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn typed_array_integrity_accounts_for_indexed_elements() -> TestResult {
     ensure_eval(
         r"
