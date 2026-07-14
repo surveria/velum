@@ -59,7 +59,7 @@ impl Parser {
         let mut quasis = vec![self.template_element(head)?];
         let mut expressions = Vec::new();
         loop {
-            expressions.push(self.expression()?);
+            expressions.push(self.with_in_operator_allowed(true, Self::expression)?);
             let token = self.advance_token("expected template literal continuation")?;
             let token_span = token.span;
             match token.kind {

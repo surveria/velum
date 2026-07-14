@@ -29,6 +29,7 @@ impl Context {
         for property in properties.iter() {
             match property {
                 BytecodeObjectProperty::Static(name)
+                | BytecodeObjectProperty::StaticData(name)
                 | BytecodeObjectProperty::StaticMethod(name) => {
                     let value = next_object_literal_stack_value(&mut values)?;
                     let key = self.intern_static_property_key(name)?;
@@ -38,6 +39,7 @@ impl Context {
                         value,
                         accessor: None,
                         method: matches!(property, BytecodeObjectProperty::StaticMethod(_)),
+                        ordinary_data: matches!(property, BytecodeObjectProperty::StaticData(_)),
                     });
                 }
                 BytecodeObjectProperty::StaticAccessor { key: name, kind } => {
@@ -50,6 +52,7 @@ impl Context {
                         value,
                         accessor: Some(*kind),
                         method: true,
+                        ordinary_data: false,
                     });
                 }
                 BytecodeObjectProperty::Spread => {
@@ -90,6 +93,7 @@ impl Context {
                         value,
                         accessor,
                         method,
+                        ordinary_data: false,
                     });
                 }
             }
@@ -123,7 +127,7 @@ impl Context {
             };
             let init = if let Some(kind) = entry.accessor {
                 ObjectPropertyInit::new_accessor(entry.key, name, entry.value, kind)
-            } else if is_dynamic {
+            } else if is_dynamic || entry.ordinary_data {
                 ObjectPropertyInit::new_data(entry.key, name, entry.value, PropertyEnumerable::Yes)
             } else {
                 ObjectPropertyInit::new(entry.key, name, entry.value, PropertyEnumerable::Yes)
@@ -186,6 +190,7 @@ impl Context {
                 value,
                 accessor: None,
                 method: false,
+                ordinary_data: true,
             });
         }
         Ok(())
@@ -211,6 +216,7 @@ struct RuntimeObjectLiteralEntry<'a> {
     value: Value,
     accessor: Option<AccessorKind>,
     method: bool,
+    ordinary_data: bool,
 }
 
 fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {

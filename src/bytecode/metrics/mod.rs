@@ -203,6 +203,9 @@ impl BytecodeInstruction {
             Self::CallStaticMember { native, .. } | Self::CallComputedMember { native, .. } => {
                 BytecodeMetrics::property_operands(1).combine(BytecodeMetrics::native_call(*native))
             }
+            Self::CallValueWithReceiver { native, .. } => {
+                BytecodeMetrics::native_call(native.map(|(target, _)| target))
+            }
             Self::NumberUnary(_)
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
@@ -349,7 +352,6 @@ impl BytecodeInstruction {
             | Self::CallPrivateMemberSpread { .. }
             | Self::PrivateIn { .. }
             | Self::CallValue { .. }
-            | Self::CallValueWithReceiver { .. }
             | Self::CallValueWithReceiverSpread
             | Self::ArrayLiteral { .. }
             | Self::ObjectLiteral { .. }

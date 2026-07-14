@@ -25,10 +25,10 @@ const QUOTE: u16 = b'"' as u16;
 
 #[derive(Debug)]
 pub(super) enum ParsedJson {
-    Null,
-    Bool(bool),
-    Number(f64),
-    String(Vec<u16>),
+    Null { source: Vec<u16> },
+    Bool { value: bool, source: Vec<u16> },
+    Number { value: f64, source: Vec<u16> },
+    String { value: Vec<u16>, source: Vec<u16> },
     Array(Vec<Self>),
     Object(Vec<(Vec<u16>, Self)>),
 }
@@ -37,7 +37,7 @@ impl ParsedJson {
     pub(super) const fn is_scalar(&self) -> bool {
         matches!(
             self,
-            Self::Null | Self::Bool(_) | Self::Number(_) | Self::String(_)
+            Self::Null { .. } | Self::Bool { .. } | Self::Number { .. } | Self::String { .. }
         )
     }
 }
@@ -72,21 +72,36 @@ impl<'input> JsonParser<'input> {
     }
 
     fn parse_value(&mut self, depth: usize) -> Result<ParsedJson> {
+        let start = self.position;
         match self.current() {
             Some(OBJECT_OPEN) => self.parse_object(depth),
             Some(ARRAY_OPEN) => self.parse_array(depth),
-            Some(QUOTE) => self.parse_string().map(ParsedJson::String),
+            Some(QUOTE) => {
+                let value = self.parse_string()?;
+                Ok(ParsedJson::String {
+                    value,
+                    source: self.source_since(start),
+                })
+            }
             Some(value) if value == u16::from(b't') => {
                 self.expect_keyword("true")?;
-                Ok(ParsedJson::Bool(true))
+                Ok(ParsedJson::Bool {
+                    value: true,
+                    source: self.source_since(start),
+                })
             }
             Some(value) if value == u16::from(b'f') => {
                 self.expect_keyword("false")?;
-                Ok(ParsedJson::Bool(false))
+                Ok(ParsedJson::Bool {
+                    value: false,
+                    source: self.source_since(start),
+                })
             }
             Some(value) if value == u16::from(b'n') => {
                 self.expect_keyword("null")?;
-                Ok(ParsedJson::Null)
+                Ok(ParsedJson::Null {
+                    source: self.source_since(start),
+                })
             }
             Some(value) if value == MINUS || is_ascii_digit(value) => self.parse_number(),
             Some(_) => Err(self.syntax_error("unexpected JSON token")),
@@ -227,7 +242,10 @@ impl<'input> JsonParser<'input> {
         let value = text
             .parse::<f64>()
             .map_err(|_| self.syntax_error("invalid JSON number"))?;
-        Ok(ParsedJson::Number(value))
+        Ok(ParsedJson::Number {
+            value,
+            source: self.source_since(start),
+        })
     }
 
     fn expect_keyword(&mut self, keyword: &str) -> Result<()> {
@@ -286,6 +304,12 @@ impl<'input> JsonParser<'input> {
 
     fn current(&self) -> Option<u16> {
         self.input.get(self.position).copied()
+    }
+
+    fn source_since(&self, start: usize) -> Vec<u16> {
+        self.input
+            .get(start..self.position)
+            .map_or_else(Vec::new, <[u16]>::to_vec)
     }
 
     const fn advance(&mut self) {

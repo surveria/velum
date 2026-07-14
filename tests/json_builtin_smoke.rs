@@ -306,6 +306,33 @@ fn parse_reviver_preserves_non_configurable_array_elements() -> TestResult {
 }
 
 #[test]
+fn parse_reviver_context_tracks_original_sources() -> TestResult {
+    ensure_string(
+        r#"
+        const seen = [];
+        let sourceDescriptorOk = false;
+        JSON.parse('{"a":1.0,"b":"x","c":[true,null]}', function (key, value, context) {
+            const source = "source" in context ? context.source : "-";
+            seen.push(key + ":" + source);
+            if (key === "a") {
+                const descriptor = Object.getOwnPropertyDescriptor(context, "source");
+                sourceDescriptorOk =
+                    Object.getPrototypeOf(context) === Object.prototype &&
+                    descriptor.writable && descriptor.enumerable && descriptor.configurable;
+                this.b = "x";
+            }
+            if (key === "b") {
+                this.c = { added: 3 };
+            }
+            return value;
+        });
+        String(sourceDescriptorOk) + ":" + seen.join("|")
+        "#,
+        "true:a:1.0|b:\"x\"|added:-|c:-|:-",
+    )
+}
+
+#[test]
 fn stringify_replacer_array_filters_keys() -> TestResult {
     ensure_string(
         r#"

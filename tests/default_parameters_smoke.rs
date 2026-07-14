@@ -201,6 +201,12 @@ fn async_function_uses_default_parameter_before_body() -> TestResult {
 }
 
 #[test]
+fn async_declaration_name_uses_the_outer_await_context() -> TestResult {
+    let value = eval("async function await() { return 42; } await instanceof Function")?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn async_default_parameter_tdz_rejects_returned_promise() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

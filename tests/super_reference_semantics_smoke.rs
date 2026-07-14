@@ -25,7 +25,7 @@ fn object_methods_use_the_home_object_and_actual_receiver() -> TestResult {
 #[test]
 fn super_writes_updates_and_compound_assignments_target_the_receiver() -> TestResult {
     expect_true(
-        r"
+        r#"
         var proto = { count: 1 };
         var object = {
             __proto__: proto,
@@ -36,7 +36,24 @@ fn super_writes_updates_and_compound_assignments_target_the_receiver() -> TestRe
             }
         };
         object.update() === 2 && object.count === 2 && proto.count === 1
-        ",
+        "#,
+    )
+}
+
+#[test]
+fn super_assignment_evaluates_the_rhs_before_rejecting_a_null_base() -> TestResult {
+    expect_true(
+        r#"
+        var count = 0;
+        class Camera {
+            static assign() { super.value = count += 1; }
+            static computed() { super["value"] = count += 1; }
+        }
+        Object.setPrototypeOf(Camera, null);
+        try { Camera.assign(); } catch (error) {}
+        try { Camera.computed(); } catch (error) {}
+        count === 2
+        "#,
     )
 }
 

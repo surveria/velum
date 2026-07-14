@@ -102,6 +102,26 @@ fn computed_proto_object_literal_property_is_data_property() -> TestResult {
 }
 
 #[test]
+fn proto_shorthand_is_data_and_duplicate_proto_setters_are_rejected() -> TestResult {
+    let value = eval(
+        r#"
+        let __proto__ = 42;
+        let object = { __proto__, __proto__ };
+        Object.hasOwn(object, "__proto__") && object.__proto__
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let Err(error) = eval("({ __proto__: null, '__proto__': null })") else {
+        return Err("expected duplicate __proto__ setters to fail".into());
+    };
+    if error.to_string().contains("duplicate __proto__") {
+        return Ok(());
+    }
+    Err(format!("expected duplicate __proto__ parse error, got {error}").into())
+}
+
+#[test]
 fn object_literal_data_properties_replace_prior_accessor_descriptors() -> TestResult {
     let value = eval(
         r#"
@@ -155,6 +175,22 @@ fn supports_computed_object_literal_methods() -> TestResult {
             order === "kam" &&
             object.read.name === "read" &&
             !("prototype" in object.read) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn object_method_parameter_defaults_can_access_super() -> TestResult {
+    let value = eval(
+        r#"
+        let base = { value: 40 };
+        let object = {
+            answer(value = super.value) { return value + 2; }
+        };
+        Object.setPrototypeOf(object, base);
+        object.answer()
         "#,
     )?;
 

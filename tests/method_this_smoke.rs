@@ -60,6 +60,22 @@ fn applies_callee_strictness_to_direct_call_this() -> TestResult {
 }
 
 #[test]
+fn resolves_member_callees_before_evaluating_arguments() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let argumentEvaluated = false;
+        function argument() { argumentEvaluated = true; }
+        let object = {};
+        try { object.missing.call(argument()); } catch (error) {}
+        argumentEvaluated ? 0 : 42
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_assignment_to_this_expression() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -166,8 +166,12 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CallValueWithReceiver { site, arg_count } => {
-                self.eval_bytecode_call_value_with_receiver(state, *site, *arg_count, next)
+            BytecodeInstruction::CallValueWithReceiver {
+                site,
+                native,
+                arg_count,
+            } => {
+                self.eval_bytecode_call_value_with_receiver(state, *site, *native, *arg_count, next)
             }
             BytecodeInstruction::CallStaticMember {
                 property,
@@ -216,13 +220,19 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         site: BytecodeCallSite,
+        native: Option<(NativeCallTarget, crate::syntax::StaticPropertyAccessId)>,
         arg_count: usize,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let args = state.stack.tail(arg_count)?;
         let callee = state.stack.value_before_tail(arg_count, 0)?.clone();
         let receiver = state.stack.value_before_tail(arg_count, 1)?.clone();
-        let completion = self.eval_cached_call_completion(site, &callee, args, receiver)?;
+        let completion = if let Some((target, access)) = native {
+            self.eval_direct_native_property_call(target, access, &callee, args, &receiver)
+                .map(Completion::Normal)?
+        } else {
+            self.eval_cached_call_completion(site, &callee, args, receiver)?
+        };
         let Completion::Normal(value) = completion else {
             return Ok(Some(completion));
         };
