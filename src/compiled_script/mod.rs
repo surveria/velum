@@ -5,7 +5,7 @@ pub use usage::CompiledScriptUsage;
 use crate::{
     binding_metadata::BindingLayout,
     bytecode::BytecodeProgram,
-    compiled_module::{ModuleExport, ModuleImport, ModuleImportName},
+    compiled_module::{ModuleExport, ModuleImport, ModuleImportName, ModuleRequest},
     compiler,
     error::{Error, Result},
     lexer,
@@ -54,9 +54,32 @@ pub struct EvalCompileContext {
 type CompiledModuleParts = (
     CompiledScript,
     Box<[String]>,
+    Box<[ModuleRequest]>,
     Box<[ModuleImport]>,
     Box<[ModuleExport]>,
 );
+
+fn compile_module_requests(module: &ModuleSyntax) -> (Box<[String]>, Box<[ModuleRequest]>) {
+    let module_requests = module
+        .requests
+        .iter()
+        .map(|request| {
+            ModuleRequest::new(
+                request.specifier.clone(),
+                request.phase,
+                request.attributes.clone(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .into_boxed_slice();
+    let mut requests = Vec::new();
+    for request in &module.requests {
+        if !requests.iter().any(|known| known == &request.specifier) {
+            requests.push(request.specifier.clone());
+        }
+    }
+    (requests.into_boxed_slice(), module_requests)
+}
 
 impl CompileMode {
     const SCRIPT: Self = Self::Script;
@@ -151,13 +174,21 @@ impl CompiledScript {
             &CompileMode::Module,
         )?;
         let module = module.ok_or_else(|| Error::runtime("module parser did not return syntax"))?;
+        let (requests, module_requests) = compile_module_requests(&module);
         let imported_exports = module
             .imports
             .iter()
             .map(|entry| {
                 (
                     entry.local_name.clone(),
-                    (entry.request.clone(), entry.import_name.clone()),
+                    (
+                        ModuleRequest::new(
+                            entry.request.specifier.clone(),
+                            entry.request.phase,
+                            entry.request.attributes.clone(),
+                        ),
+                        entry.import_name.clone(),
+                    ),
                 )
             })
             .collect::<BTreeMap<_, _>>();
@@ -166,7 +197,11 @@ impl CompiledScript {
             .into_iter()
             .map(|entry| {
                 ModuleImport::new(
-                    entry.request,
+                    ModuleRequest::new(
+                        entry.request.specifier,
+                        entry.request.phase,
+                        entry.request.attributes,
+                    ),
                     match entry.import_name {
                         parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
                         parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
@@ -188,13 +223,20 @@ impl CompiledScript {
                         ModuleExport::Indirect {
                             export_name,
                             import_name: import_name.clone(),
-                            request: request.clone(),
+                            request: request.specifier().to_owned(),
                         }
                     }
                     Some((request, parser::ModuleImportName::Namespace)) => {
-                        ModuleExport::Namespace {
-                            export_name,
-                            request: request.clone(),
+                        if request.phase() == crate::syntax::ImportPhase::Defer {
+                            ModuleExport::DeferredNamespace {
+                                export_name,
+                                request: request.specifier().to_owned(),
+                            }
+                        } else {
+                            ModuleExport::Namespace {
+                                export_name,
+                                request: request.specifier().to_owned(),
+                            }
                         }
                     }
                     None => ModuleExport::Local {
@@ -222,7 +264,7 @@ impl CompiledScript {
             })
             .collect::<Vec<_>>()
             .into_boxed_slice();
-        Ok((script, module.requests.into_boxed_slice(), imports, exports))
+        Ok((script, requests, module_requests, imports, exports))
     }
 
     fn compile_with_name_and_mode(

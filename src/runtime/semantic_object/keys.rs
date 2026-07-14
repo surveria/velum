@@ -185,6 +185,9 @@ impl Context {
                 )),
             };
         };
+        if let Value::Object(id) = object_ref.value {
+            self.evaluate_deferred_module_namespace(*id)?;
+        }
         match object_ref.value {
             Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_own_property_keys(*id),
             Value::Object(id) => self.ordinary_own_property_keys(*id),

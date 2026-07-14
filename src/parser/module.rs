@@ -4,25 +4,34 @@ use crate::{
     ast::{DeclKind, Expr, Statement, Stmt},
     error::{Error, Result},
     lexer::TokenKind,
+    syntax::ImportPhase,
 };
 
 use super::{Parser, property_name::keyword_property_name};
 
 const AS_KEYWORD: &str = "as";
+const DEFER_KEYWORD: &str = "defer";
 const FROM_KEYWORD: &str = "from";
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct ModuleSyntax {
-    pub(crate) requests: Vec<String>,
+    pub(crate) requests: Vec<ModuleRequestEntry>,
     pub(crate) imports: Vec<ModuleImportEntry>,
     pub(crate) exports: Vec<ModuleExportEntry>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModuleImportEntry {
-    pub(crate) request: String,
+    pub(crate) request: ModuleRequestEntry,
     pub(crate) import_name: ModuleImportName,
     pub(crate) local_name: String,
+}
+
+#[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ModuleRequestEntry {
+    pub(crate) specifier: String,
+    pub(crate) phase: ImportPhase,
+    pub(crate) attributes: Box<[(String, String)]>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -77,12 +86,24 @@ impl Parser {
         statements: &mut Vec<Statement>,
     ) -> Result<()> {
         if matches!(self.peek_kind(0), Some(TokenKind::String(_))) {
-            let request = self.module_specifier()?;
-            Self::remember_module_request(module, &request);
+            let specifier = self.module_specifier()?;
+            let request =
+                self.module_request_after_specifier(specifier, ImportPhase::Evaluation)?;
+            Self::remember_module_request(module, request);
             self.consume_statement_terminator("expected terminator after import declaration")?;
             return Ok(());
         }
 
+        let phase = if self
+            .peek()
+            .is_some_and(|token| token.is_unescaped_identifier_named(DEFER_KEYWORD))
+            && matches!(self.peek_kind(1), Some(TokenKind::Star))
+        {
+            self.advance();
+            ImportPhase::Defer
+        } else {
+            ImportPhase::Evaluation
+        };
         let mut pending = Vec::new();
         if !self.check(&TokenKind::Star) && !self.check(&TokenKind::LBrace) {
             let binding = self.consume_binding_identifier("expected default import binding")?;
@@ -94,8 +115,9 @@ impl Parser {
             self.module_import_tail(&mut pending)?;
         }
         self.consume_contextual_module_word(FROM_KEYWORD)?;
-        let request = self.module_specifier()?;
-        Self::remember_module_request(module, &request);
+        let specifier = self.module_specifier()?;
+        let request = self.module_request_after_specifier(specifier, phase)?;
+        Self::remember_module_request(module, request.clone());
         for (import_name, binding) in pending {
             let local_name = binding.name().as_str().to_owned();
             module.imports.push(ModuleImportEntry {
@@ -154,7 +176,9 @@ impl Parser {
                 let export_name = self.module_identifier_name(true)?;
                 self.consume_contextual_module_word(FROM_KEYWORD)?;
                 let request = self.module_specifier()?;
-                Self::remember_module_request(module, &request);
+                let module_request =
+                    self.module_request_after_specifier(request.clone(), ImportPhase::Evaluation)?;
+                Self::remember_module_request(module, module_request);
                 module.exports.push(ModuleExportEntry::Namespace {
                     export_name,
                     request,
@@ -162,7 +186,9 @@ impl Parser {
             } else {
                 self.consume_contextual_module_word(FROM_KEYWORD)?;
                 let request = self.module_specifier()?;
-                Self::remember_module_request(module, &request);
+                let module_request =
+                    self.module_request_after_specifier(request.clone(), ImportPhase::Evaluation)?;
+                Self::remember_module_request(module, module_request);
                 module.exports.push(ModuleExportEntry::Star { request });
             }
             return self
@@ -307,7 +333,9 @@ impl Parser {
         self.consume(&TokenKind::RBrace, "expected '}' after named exports")?;
         if self.match_contextual_module_word(FROM_KEYWORD) {
             let request = self.module_specifier()?;
-            Self::remember_module_request(module, &request);
+            let module_request =
+                self.module_request_after_specifier(request.clone(), ImportPhase::Evaluation)?;
+            Self::remember_module_request(module, module_request);
             for (import_name, export_name, _) in names {
                 module.exports.push(ModuleExportEntry::Indirect {
                     export_name,
@@ -394,6 +422,57 @@ impl Parser {
             .map_err(|_| Error::parse_at("module specifier contains a lone surrogate", span))
     }
 
+    fn module_request_after_specifier(
+        &mut self,
+        specifier: String,
+        phase: ImportPhase,
+    ) -> Result<ModuleRequestEntry> {
+        let attributes = if self.match_kind(&TokenKind::With) {
+            self.module_import_attributes()?
+        } else {
+            Box::new([])
+        };
+        Ok(ModuleRequestEntry {
+            specifier,
+            phase,
+            attributes,
+        })
+    }
+
+    fn module_import_attributes(&mut self) -> Result<Box<[(String, String)]>> {
+        self.consume(&TokenKind::LBrace, "expected '{' after import attributes")?;
+        let mut attributes = Vec::new();
+        let mut names = BTreeSet::new();
+        while !self.check(&TokenKind::RBrace) {
+            let name = self.module_identifier_name(true)?;
+            if !names.insert(name.clone()) {
+                return Err(self.parse_error("duplicate import attribute"));
+            }
+            self.consume(
+                &TokenKind::Colon,
+                "expected ':' after import attribute name",
+            )?;
+            let token = self.advance_token("expected import attribute value")?;
+            let span = token.span;
+            let TokenKind::String(value) = token.kind else {
+                return Err(Error::parse_at(
+                    "import attribute value must be a string literal",
+                    span,
+                ));
+            };
+            let value = String::from_utf16(&value.cooked).map_err(|_| {
+                Error::parse_at("import attribute value contains a lone surrogate", span)
+            })?;
+            attributes.push((name, value));
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.consume(&TokenKind::RBrace, "expected '}' after import attributes")?;
+        attributes.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(attributes.into_boxed_slice())
+    }
+
     fn module_identifier_name(&mut self, allow_string: bool) -> Result<String> {
         let token = self.advance_token("expected module export name")?;
         let span = token.span;
@@ -424,9 +503,9 @@ impl Parser {
         self.advance().is_some()
     }
 
-    fn remember_module_request(module: &mut ModuleSyntax, request: &str) {
-        if !module.requests.iter().any(|known| known == request) {
-            module.requests.push(request.to_owned());
+    fn remember_module_request(module: &mut ModuleSyntax, request: ModuleRequestEntry) {
+        if !module.requests.iter().any(|known| known == &request) {
+            module.requests.push(request);
         }
     }
 

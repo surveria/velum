@@ -6,14 +6,14 @@ use crate::{
     syntax::ImportPhase,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct DynamicModuleRequest {
+#[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ModuleRequest {
     specifier: String,
     phase: ImportPhase,
     attributes: Box<[(String, String)]>,
 }
 
-impl DynamicModuleRequest {
+impl ModuleRequest {
     #[must_use]
     pub fn new(
         specifier: impl Into<String>,
@@ -42,6 +42,9 @@ impl DynamicModuleRequest {
         &self.attributes
     }
 }
+
+/// Backwards-compatible name for a request passed to dynamic import loaders.
+pub type DynamicModuleRequest = ModuleRequest;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModuleSource {
@@ -77,6 +80,16 @@ pub trait ModuleLoader {
     /// Returns an embedder or policy error when resolution or loading fails.
     fn load(&mut self, referrer: &str, request: &str) -> Result<ModuleSource>;
 
+    /// Resolves a static import request with its phase and attributes.
+    /// Loaders that only support ordinary source-text modules may rely on the
+    /// default request-by-specifier behavior.
+    ///
+    /// # Errors
+    /// Returns an embedder or policy error when resolution or loading fails.
+    fn load_static(&mut self, referrer: &str, request: &ModuleRequest) -> Result<ModuleSource> {
+        self.load(referrer, request.specifier())
+    }
+
     /// Resolves a dynamic import request. Loaders that do not need phase or
     /// attribute metadata may rely on the default static-load behavior.
     ///
@@ -99,14 +112,14 @@ pub enum ModuleImportName {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModuleImport {
-    request: String,
+    request: ModuleRequest,
     import_name: ModuleImportName,
     local_name: String,
 }
 
 impl ModuleImport {
     pub(crate) const fn new(
-        request: String,
+        request: ModuleRequest,
         import_name: ModuleImportName,
         local_name: String,
     ) -> Self {
@@ -119,7 +132,22 @@ impl ModuleImport {
 
     #[must_use]
     pub const fn request(&self) -> &str {
-        self.request.as_str()
+        self.request.specifier()
+    }
+
+    #[must_use]
+    pub const fn module_request(&self) -> &ModuleRequest {
+        &self.request
+    }
+
+    #[must_use]
+    pub const fn phase(&self) -> ImportPhase {
+        self.request.phase()
+    }
+
+    #[must_use]
+    pub const fn attributes(&self) -> &[(String, String)] {
+        self.request.attributes()
     }
 
     #[must_use]
@@ -148,6 +176,10 @@ pub enum ModuleExport {
         export_name: String,
         request: String,
     },
+    DeferredNamespace {
+        export_name: String,
+        request: String,
+    },
     Star {
         request: String,
     },
@@ -157,6 +189,7 @@ pub enum ModuleExport {
 pub struct CompiledModule {
     script: CompiledScript,
     requests: Box<[String]>,
+    module_requests: Box<[ModuleRequest]>,
     imports: Box<[ModuleImport]>,
     exports: Box<[ModuleExport]>,
 }
@@ -167,11 +200,12 @@ impl CompiledModule {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        let (script, requests, imports, exports) =
+        let (script, requests, module_requests, imports, exports) =
             CompiledScript::compile_module_named(source_name, source, limits)?;
         Ok(Self {
             script,
             requests,
+            module_requests,
             imports,
             exports,
         })
@@ -180,6 +214,11 @@ impl CompiledModule {
     #[must_use]
     pub const fn requests(&self) -> &[String] {
         &self.requests
+    }
+
+    #[must_use]
+    pub const fn module_requests(&self) -> &[ModuleRequest] {
+        &self.module_requests
     }
 
     #[must_use]
@@ -209,9 +248,5 @@ impl CompiledModule {
 
     pub(crate) const fn script(&self) -> &CompiledScript {
         &self.script
-    }
-
-    pub(crate) const fn has_top_level_await(&self) -> bool {
-        self.script.has_top_level_await()
     }
 }

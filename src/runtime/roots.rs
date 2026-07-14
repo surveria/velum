@@ -190,15 +190,7 @@ impl Context {
         for scope in &self.locals {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
-        for module in &self.modules {
-            if let Some(scope) = module.scope() {
-                visit_scope(scope, VmRootKind::ModuleBinding, visitor)?;
-            }
-            visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
-            if let Some(import_meta) = module.import_meta() {
-                visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
-            }
-        }
+        self.visit_module_roots(visitor)?;
         if let Some(import_meta) = &self.active_import_meta {
             visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
         }
@@ -281,6 +273,23 @@ impl Context {
         }
         self.retained_values.visit(visitor)?;
         self.transient_roots.visit(visitor)?;
+        Ok(())
+    }
+
+    fn visit_module_roots<V: DirectRootVisitor>(&self, visitor: &mut V) -> Result<()> {
+        for module in &self.modules {
+            if let Some(scope) = module.scope() {
+                visit_scope(scope, VmRootKind::ModuleBinding, visitor)?;
+            }
+            visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
+            visitor.visit_value(VmRootKind::ModuleBinding, module.deferred_namespace())?;
+            if let Some(import_meta) = module.import_meta() {
+                visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
+            }
+            if let Some(error) = module.evaluation_error_value() {
+                visitor.visit_value(VmRootKind::ModuleBinding, error)?;
+            }
+        }
         Ok(())
     }
 }

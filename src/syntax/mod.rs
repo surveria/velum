@@ -90,7 +90,7 @@ pub enum FunctionKind {
 }
 
 /// Module phase requested by an import call.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ImportPhase {
     Evaluation,
     Source,

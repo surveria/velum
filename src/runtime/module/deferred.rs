@@ -7,30 +7,60 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{EvaluationState, ModuleRecord, PendingModule};
+use super::{EvaluationState, ModuleDependency, ModuleRecord, PendingModule};
+
+impl ModuleRecord {
+    pub(in crate::runtime) const fn scope(
+        &self,
+    ) -> Option<&crate::runtime::binding::scope::BindingScope> {
+        self.scope.as_ref()
+    }
+
+    pub(in crate::runtime) const fn namespace(&self) -> &Value {
+        &self.namespace
+    }
+
+    pub(in crate::runtime) const fn deferred_namespace(&self) -> &Value {
+        &self.deferred_namespace
+    }
+
+    pub(in crate::runtime) const fn import_meta(&self) -> Option<&Value> {
+        self.import_meta.as_ref()
+    }
+
+    pub(in crate::runtime) fn evaluation_error_value(&self) -> Option<&Value> {
+        self.evaluation_error
+            .as_ref()
+            .and_then(Error::javascript_value)
+    }
+}
 
 impl Context {
     pub(super) fn evaluate_dynamic_module_graph(
         &mut self,
         root: usize,
-        mut graph: Vec<PendingModule>,
+        graph: Vec<PendingModule>,
         phase: ImportPhase,
     ) -> Result<Value> {
+        let base = self.modules.len();
+        let root = base
+            .checked_add(root)
+            .ok_or_else(|| Error::limit("persisted dynamic module index overflowed"))?;
+        self.persist_module_graph(graph)?;
         match phase {
             ImportPhase::Evaluation => {
-                self.with_module_evaluation(|context| context.evaluate_module(root, &mut graph))?;
+                self.with_module_evaluation(|context| context.evaluate_persisted_module(root))?;
             }
             ImportPhase::Defer => {
                 let mut asynchronous = Vec::new();
-                Self::gather_async_transitive_dependencies(
+                self.gather_persisted_async_transitive_dependencies(
                     root,
-                    &graph,
                     &mut BTreeSet::new(),
                     &mut asynchronous,
                 )?;
                 for module in asynchronous {
                     self.with_module_evaluation(|context| {
-                        context.evaluate_module(module, &mut graph)
+                        context.evaluate_persisted_module(module)
                     })?;
                 }
             }
@@ -40,37 +70,16 @@ impl Context {
                 ));
             }
         }
-        let namespace = graph
+        let module = self
+            .modules
             .get(root)
-            .and_then(|module| module.namespace.clone())
-            .ok_or_else(|| Error::runtime("dynamic module namespace is missing"))?;
-        self.persist_module_graph(graph)?;
+            .ok_or_else(|| Error::runtime("dynamic module namespace owner is missing"))?;
+        let namespace = if phase == ImportPhase::Defer {
+            module.deferred_namespace.clone()
+        } else {
+            module.namespace.clone()
+        };
         Ok(namespace)
-    }
-
-    fn gather_async_transitive_dependencies(
-        module_index: usize,
-        graph: &[PendingModule],
-        seen: &mut BTreeSet<usize>,
-        result: &mut Vec<usize>,
-    ) -> Result<()> {
-        if !seen.insert(module_index) {
-            return Ok(());
-        }
-        let module = graph
-            .get(module_index)
-            .ok_or_else(|| Error::runtime("deferred module graph index is missing"))?;
-        if !matches!(module.state, EvaluationState::Pending) {
-            return Ok(());
-        }
-        if module.module.has_top_level_await() {
-            result.push(module_index);
-            return Ok(());
-        }
-        for dependency in module.dependencies.values().copied() {
-            Self::gather_async_transitive_dependencies(dependency, graph, seen, result)?;
-        }
-        Ok(())
     }
 
     pub(in crate::runtime) fn evaluate_deferred_module_namespace_property(
@@ -83,28 +92,44 @@ impl Context {
         {
             return Ok(());
         }
-        let has_own = self.objects.has_own(namespace, property)?;
-        if property.name() == "then" && !has_own {
+        if property.name() == "then" {
             return Ok(());
         }
-        let Some(module_index) = self
-            .modules
-            .iter()
-            .position(|module| matches!(module.namespace, Value::Object(id) if id == namespace))
-        else {
+        self.evaluate_deferred_module_namespace(namespace)
+    }
+
+    pub(in crate::runtime) fn evaluate_deferred_module_namespace(
+        &mut self,
+        namespace: ObjectId,
+    ) -> Result<()> {
+        let Some(module_index) = self.modules.iter().position(
+            |module| matches!(module.deferred_namespace, Value::Object(id) if id == namespace),
+        ) else {
             return Ok(());
         };
-        if !matches!(
-            self.modules.get(module_index).map(|module| module.state),
-            Some(EvaluationState::Pending)
-        ) {
-            return Ok(());
+        match self.modules.get(module_index).map(|module| module.state) {
+            Some(EvaluationState::Pending) => {
+                if !self
+                    .persisted_module_ready_for_sync_execution(module_index, &mut BTreeSet::new())?
+                {
+                    return Err(Error::type_error(
+                        "deferred module is not ready for synchronous evaluation",
+                    ));
+                }
+            }
+            Some(EvaluationState::Evaluating) => {
+                return Err(Error::type_error(
+                    "deferred module cannot be evaluated synchronously while evaluating",
+                ));
+            }
+            Some(EvaluationState::Errored) => {}
+            Some(EvaluationState::Evaluated) | None => return Ok(()),
         }
         self.with_module_evaluation(|context| context.evaluate_persisted_module(module_index))?;
         Ok(())
     }
 
-    fn evaluate_persisted_module(&mut self, module_index: usize) -> Result<Value> {
+    pub(super) fn evaluate_persisted_module(&mut self, module_index: usize) -> Result<Value> {
         let state = self
             .modules
             .get(module_index)
@@ -115,22 +140,27 @@ impl Context {
                 return Ok(Value::Undefined);
             }
             EvaluationState::Pending => {}
+            EvaluationState::Errored => {
+                return Err(self
+                    .modules
+                    .get(module_index)
+                    .and_then(|module| module.evaluation_error.clone())
+                    .ok_or_else(|| {
+                        Error::runtime("persisted module evaluation error is missing")
+                    })?);
+            }
+        }
+        if let Some(error) = self.cached_module_evaluation_error(module_index)? {
+            self.cache_module_evaluation_error(module_index, &error)?;
+            return Err(error);
         }
         self.modules
             .get_mut(module_index)
             .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
             .state = EvaluationState::Evaluating;
-        let dependencies = self
-            .modules
-            .get(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .dependencies
-            .to_vec();
-        for dependency in dependencies {
-            if let Err(error) = self.evaluate_persisted_module(dependency) {
-                self.restore_pending_module_state(module_index);
-                return Err(error);
-            }
+        if let Err(error) = self.evaluate_persisted_module_dependencies(module_index) {
+            self.cache_module_evaluation_error(module_index, &error)?;
+            return Err(error);
         }
         let import_meta = if let Some(import_meta) = self
             .modules
@@ -182,7 +212,7 @@ impl Context {
         let value = match outcome.and_then(|outcome| self.module_outcome_value(outcome)) {
             Ok(value) => value,
             Err(error) => {
-                self.restore_pending_module_state(module_index);
+                self.cache_module_evaluation_error(module_index, &error)?;
                 return Err(error);
             }
         };
@@ -191,6 +221,123 @@ impl Context {
             .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
             .state = EvaluationState::Evaluated;
         Ok(value)
+    }
+
+    fn evaluate_persisted_module_dependencies(&mut self, module_index: usize) -> Result<()> {
+        let dependencies = self
+            .modules
+            .get(module_index)
+            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
+            .dependencies
+            .to_vec();
+        for dependency in dependencies {
+            let result = match dependency.phase {
+                ImportPhase::Evaluation => self.evaluate_persisted_module(dependency.index),
+                ImportPhase::Defer => {
+                    let mut asynchronous = Vec::new();
+                    self.gather_persisted_async_transitive_dependencies(
+                        dependency.index,
+                        &mut BTreeSet::new(),
+                        &mut asynchronous,
+                    )?;
+                    let mut result = Ok(Value::Undefined);
+                    for asynchronous_dependency in asynchronous {
+                        result = self.evaluate_persisted_module(asynchronous_dependency);
+                        if result.is_err() {
+                            break;
+                        }
+                    }
+                    result
+                }
+                ImportPhase::Source => Err(Error::runtime(
+                    "source-phase static module evaluation is unavailable",
+                )),
+            };
+            result?;
+        }
+        Ok(())
+    }
+
+    fn persisted_module_ready_for_sync_execution(
+        &self,
+        module_index: usize,
+        seen: &mut BTreeSet<usize>,
+    ) -> Result<bool> {
+        if !seen.insert(module_index) {
+            return Ok(true);
+        }
+        let module = self
+            .modules
+            .get(module_index)
+            .ok_or_else(|| Error::runtime("persisted deferred module is missing"))?;
+        match module.state {
+            EvaluationState::Evaluated | EvaluationState::Errored => return Ok(true),
+            EvaluationState::Evaluating => return Ok(false),
+            EvaluationState::Pending => {}
+        }
+        if module.script.has_top_level_await() {
+            return Ok(false);
+        }
+        for dependency in &module.dependencies {
+            if !self.persisted_module_ready_for_sync_execution(dependency.index, seen)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn cache_module_evaluation_error(&mut self, module_index: usize, error: &Error) -> Result<()> {
+        let module = self
+            .modules
+            .get_mut(module_index)
+            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?;
+        module.state = EvaluationState::Errored;
+        module.evaluation_error = Some(error.clone());
+        Ok(())
+    }
+
+    fn cached_module_evaluation_error(&self, module_index: usize) -> Result<Option<Error>> {
+        let name = self
+            .modules
+            .get(module_index)
+            .map(|module| module.name.as_str())
+            .ok_or_else(|| Error::runtime("persisted module index is missing"))?;
+        Ok(self
+            .modules
+            .iter()
+            .enumerate()
+            .find(|(index, module)| {
+                *index != module_index
+                    && module.name == name
+                    && module.state == EvaluationState::Errored
+            })
+            .and_then(|(_, module)| module.evaluation_error.clone()))
+    }
+
+    fn gather_persisted_async_transitive_dependencies(
+        &self,
+        module_index: usize,
+        seen: &mut BTreeSet<usize>,
+        result: &mut Vec<usize>,
+    ) -> Result<()> {
+        if !seen.insert(module_index) {
+            return Ok(());
+        }
+        let module = self
+            .modules
+            .get(module_index)
+            .ok_or_else(|| Error::runtime("persisted deferred module is missing"))?;
+        if !matches!(module.state, EvaluationState::Pending) {
+            return Ok(());
+        }
+        if module.script.has_top_level_await() {
+            result.push(module_index);
+            return Ok(());
+        }
+        for dependency in &module.dependencies {
+            self.gather_persisted_async_transitive_dependencies(dependency.index, seen, result)?;
+        }
+        Ok(())
     }
 
     fn restore_pending_module_state(&mut self, module_index: usize) {
@@ -214,11 +361,21 @@ impl Context {
                 Self::deactivate_module_records(&mut records)?;
                 return Err(Error::runtime("persisted module namespace is missing"));
             };
+            let Some(deferred_namespace) = pending.deferred_namespace.take() else {
+                Self::deactivate_module_records(&mut records)?;
+                return Err(Error::runtime(
+                    "persisted deferred module namespace is missing",
+                ));
+            };
             let dependencies = pending
                 .dependencies
-                .values()
-                .map(|index| {
+                .iter()
+                .map(|(request, index)| {
                     base.checked_add(*index)
+                        .map(|index| ModuleDependency {
+                            phase: request.phase(),
+                            index,
+                        })
                         .ok_or_else(|| Error::limit("persisted module index overflowed"))
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -233,8 +390,10 @@ impl Context {
                 dependencies,
                 scope: Some(scope),
                 namespace,
+                deferred_namespace,
                 import_meta: pending.import_meta,
-                state: pending.state,
+                state: EvaluationState::Pending,
+                evaluation_error: None,
             });
         }
         if let Err(error) = reservation.commit() {

@@ -307,7 +307,10 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(false);
         };
-        if self.objects.is_proxy(*id) || self.is_global_object_id(*id) {
+        if self.objects.is_proxy(*id)
+            || self.objects.is_module_namespace(*id)?
+            || self.is_global_object_id(*id)
+        {
             return Ok(false);
         }
         let value = self.runtime_value(value)?;
@@ -398,6 +401,7 @@ impl Context {
             return Ok(false);
         };
         if self.objects.is_proxy(*id)
+            || self.objects.is_module_namespace(*id)?
             || self.is_global_object_id(*id)
             || self.objects.array_len_if_array(*id)?.is_some()
         {
