@@ -482,6 +482,21 @@ impl BytecodeCompiler<'_> {
                 object: BytecodeBlock::compile_expression(object, self.layout)?,
                 property: crate::bytecode::BytecodePrivateName::new(name.clone()),
             }),
+            Expr::SuperMember { property, access } => Ok(BytecodeAssignmentTarget::SuperProperty {
+                property: crate::bytecode::BytecodeSuperProperty::Static(Self::compile_property(
+                    property, *access,
+                )),
+                strict,
+            }),
+            Expr::SuperComputedMember { property, access } => {
+                Ok(BytecodeAssignmentTarget::SuperProperty {
+                    property: crate::bytecode::BytecodeSuperProperty::Computed {
+                        expression: BytecodeBlock::compile_expression(property, self.layout)?,
+                        operand: Self::compile_dynamic_property(*access),
+                    },
+                    strict,
+                })
+            }
             Expr::Parenthesized(expr) => self.compile_assignment_target_with_strict(expr, strict),
             _ => Err(Error::runtime("invalid bytecode assignment target")),
         }

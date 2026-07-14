@@ -25,7 +25,7 @@ impl ArrayLength {
 }
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-pub(in crate::runtime::object) struct ArrayIndex(pub(in crate::runtime::object) u32);
+pub(in crate::runtime) struct ArrayIndex(pub(in crate::runtime::object) u32);
 
 impl ArrayIndex {
     pub(in crate::runtime::object) fn from_u32(value: u32) -> Result<Self> {
@@ -40,7 +40,7 @@ impl ArrayIndex {
         Self::from_u32(value)
     }
 
-    pub(in crate::runtime::object) fn parse(property: &str) -> Option<Self> {
+    pub(in crate::runtime) fn parse(property: &str) -> Option<Self> {
         let value = property.parse::<u32>().ok()?;
         if value == u32::MAX || value.to_string() != property {
             return None;

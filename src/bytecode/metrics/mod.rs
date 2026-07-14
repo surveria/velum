@@ -291,6 +291,7 @@ impl BytecodeInstruction {
                 property, value, ..
             } => property.metrics().combine(value.metrics()),
             Self::UpdateSuperProperty { property, .. } => property.metrics(),
+            Self::DeleteSuperProperty(Some(property)) => property.metrics(),
             Self::Switch {
                 discriminant,
                 cases,
@@ -347,7 +348,7 @@ impl BytecodeInstruction {
             | Self::Yield { .. }
             | Self::TypeOfValue
             | Self::ToPropertyKey
-            | Self::DeleteSuperProperty
+            | Self::DeleteSuperProperty(None)
             | Self::DeleteValue
             | Self::PrivateMember { .. }
             | Self::PrivateAssign { .. }
@@ -360,6 +361,7 @@ impl BytecodeInstruction {
             | Self::CallValueWithReceiverSpread
             | Self::ArrayLiteral { .. }
             | Self::ObjectLiteral { .. }
+            | Self::PrepareSuperConstructor
             | Self::CallSuper { .. }
             | Self::CallSuperSpread
             | Self::Jump(_)

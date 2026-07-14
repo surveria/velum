@@ -156,6 +156,7 @@ impl Lexer {
                 '&' => self.ampersand_token(offset),
                 '|' => self.pipe_token(offset),
                 '^' => self.simple_or_equal(offset, TokenKind::Caret, TokenKind::CaretEqual),
+                '@' => self.simple(TokenKind::At),
                 _ => return Err(Error::lex(format!("unexpected character '{ch}'"), offset)),
             }
             if let Some(token) = self.pending.take() {

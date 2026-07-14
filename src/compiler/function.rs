@@ -355,7 +355,15 @@ struct CaptureBindingCollector {
     bindings: Vec<StaticBinding>,
     uses_arguments: bool,
     contains_direct_eval: bool,
-    inside_nested_function: bool,
+    requires_dynamic_lexical_capture: bool,
+    nesting: FunctionNesting,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum FunctionNesting {
+    #[default]
+    Root,
+    Nested,
 }
 
 /// Free bindings referenced by a function body plus whether the body reads
@@ -364,6 +372,7 @@ struct CollectedFunctionBindings {
     bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
     contains_direct_eval: bool,
+    requires_dynamic_lexical_capture: bool,
 }
 
 const ARGUMENTS_BINDING_NAME: &str = "arguments";
@@ -503,11 +512,13 @@ impl CaptureBindingCollector {
     }
 
     fn collect_class(&mut self, class: &crate::ast::ClassLiteral) {
+        self.collect_exprs(&class.decorators);
         if let Some(heritage) = &class.heritage {
             self.collect_expr(heritage);
         }
         self.collect_function_body(&class.constructor.params, &class.constructor.body);
         for member in &class.members {
+            self.collect_exprs(&member.decorators);
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &member.key
@@ -517,6 +528,7 @@ impl CaptureBindingCollector {
             self.collect_function_body(&member.params, &member.body);
         }
         for field in &class.fields {
+            self.collect_exprs(&field.decorators);
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &field.key
@@ -525,6 +537,16 @@ impl CaptureBindingCollector {
             }
             if let Some(initializer) = &field.initializer {
                 self.collect_nested_expr(initializer);
+            }
+            if let Some(auto_accessor) = &field.auto_accessor {
+                self.collect_function_body(
+                    &auto_accessor.getter.params,
+                    &auto_accessor.getter.body,
+                );
+                self.collect_function_body(
+                    &auto_accessor.setter.params,
+                    &auto_accessor.setter.body,
+                );
             }
         }
         for block in &class.static_blocks {
@@ -733,25 +755,25 @@ impl CaptureBindingCollector {
     }
 
     fn collect_function_body(&mut self, params: &[FunctionParam], body: &[Statement]) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_param_defaults(params);
         self.collect_statements(body);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_nested_expr(&mut self, expr: &Expression) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_expr(expr);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_nested_statements(&mut self, statements: &[Statement]) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_statements(statements);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_binding(&mut self, binding: &StaticBinding) {

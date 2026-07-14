@@ -32,8 +32,8 @@ pub use call_site::BytecodeCallSite;
 pub use completion::BytecodeCompletion;
 pub use fast_path::BytecodeDirectThrow;
 pub use function::{
-    BytecodeEvalMode, BytecodeFunction, BytecodeFunctionInit, BytecodeFunctionParam,
-    BytecodeFunctionParamTarget,
+    BytecodeEvalMode, BytecodeFunction, BytecodeFunctionCaptureSemantics, BytecodeFunctionInit,
+    BytecodeFunctionParam, BytecodeFunctionParamTarget,
 };
 pub use function_mode::BytecodeNewTargetMode;
 pub use hoist::BytecodeHoistPlan;
@@ -49,7 +49,8 @@ pub use super_property::BytecodeSuperProperty;
 pub use template::BytecodeTemplateElement;
 pub use types::{
     BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCatch, BytecodeClass,
-    BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind, BytecodeClassStaticElement,
+    BytecodeClassAutoAccessor, BytecodeClassDefinitionElement, BytecodeClassField,
+    BytecodeClassMember, BytecodeClassMemberKind, BytecodeClassStaticElement,
     BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
     BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
     BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodePreparedNativeCall,

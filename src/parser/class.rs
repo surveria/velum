@@ -31,6 +31,15 @@ struct ParsedClassFunction {
     arguments_binding: Option<crate::syntax::StaticBinding>,
 }
 
+struct ClassFieldSpec {
+    key: ClassKeySeed,
+    key_name: Option<StaticName>,
+    is_static: bool,
+    is_auto_accessor: bool,
+    decorators: Vec<Expression>,
+    source_order: usize,
+}
+
 const CLASS_STATIC_KEYWORD: &str = "static";
 const CLASS_GETTER_KEYWORD: &str = "get";
 const CLASS_SETTER_KEYWORD: &str = "set";
@@ -43,8 +52,19 @@ const DERIVED_CONSTRUCTOR_REST_NAME: &str = "%superargs%";
 impl Parser {
     /// Parses a class declaration after its consumed `class` keyword.
     pub(super) fn class_declaration(&mut self) -> Result<Stmt> {
+        self.class_declaration_with_decorators(Vec::new())
+    }
+
+    pub(super) fn decorated_class_declaration(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::At, "expected '@' before class decorator")?;
+        let decorators = self.decorator_list_after_first_at()?;
+        self.consume(&TokenKind::Class, "expected 'class' after decorators")?;
+        self.class_declaration_with_decorators(decorators)
+    }
+
+    fn class_declaration_with_decorators(&mut self, decorators: Vec<Expression>) -> Result<Stmt> {
         let name = self.consume_class_binding_identifier("expected class declaration name")?;
-        let class = self.class_literal_tail(Some(name.name().clone()))?;
+        let class = self.class_literal_tail(Some(name.name().clone()), decorators)?;
         Ok(Stmt::ClassDecl {
             name,
             class: Box::new(class),
@@ -53,6 +73,19 @@ impl Parser {
 
     /// Parses a class expression after its consumed `class` keyword.
     pub(super) fn class_expression(&mut self) -> Result<Expression> {
+        self.class_expression_with_decorators(Vec::new())
+    }
+
+    pub(super) fn decorated_class_expression_after_at(&mut self) -> Result<Expression> {
+        let decorators = self.decorator_list_after_first_at()?;
+        self.consume(&TokenKind::Class, "expected 'class' after decorators")?;
+        self.class_expression_with_decorators(decorators)
+    }
+
+    fn class_expression_with_decorators(
+        &mut self,
+        decorators: Vec<Expression>,
+    ) -> Result<Expression> {
         let start = self.previous_span();
         let name = if self.next_is_identifier() {
             Some(
@@ -63,8 +96,23 @@ impl Parser {
         } else {
             None
         };
-        let class = self.class_literal_tail(name)?;
+        let class = self.class_literal_tail(name, decorators)?;
         Ok(self.expression_node(start, Expr::Class(Box::new(class))))
+    }
+
+    fn decorator_list_after_first_at(&mut self) -> Result<Vec<Expression>> {
+        let mut decorators = vec![self.call()?];
+        while self.match_kind(&TokenKind::At) {
+            decorators.push(self.call()?);
+        }
+        Ok(decorators)
+    }
+
+    fn class_element_decorators(&mut self) -> Result<Vec<Expression>> {
+        if !self.match_kind(&TokenKind::At) {
+            return Ok(Vec::new());
+        }
+        self.decorator_list_after_first_at()
     }
 
     fn consume_class_binding_identifier(
@@ -78,7 +126,11 @@ impl Parser {
         result
     }
 
-    fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
+    fn class_literal_tail(
+        &mut self,
+        name: Option<StaticName>,
+        decorators: Vec<Expression>,
+    ) -> Result<ClassLiteral> {
         let previous_strict = self.is_strict_mode();
         self.set_strict_mode(true);
         let inner_name_binding = name
@@ -86,13 +138,13 @@ impl Parser {
             .map(|name| self.static_binding(name))
             .transpose()?;
         let heritage = if self.match_kind(&TokenKind::Extends) {
-            Some(self.call()?)
+            Some(self.left_hand_side_expression()?)
         } else {
             None
         };
         self.push_class_private_scope();
         let result = self
-            .class_body_literal(name, inner_name_binding, heritage)
+            .class_body_literal(name, inner_name_binding, heritage, decorators)
             .and_then(|class| self.pop_class_private_scope().map(|()| class));
         self.set_strict_mode(previous_strict);
         result
@@ -103,6 +155,7 @@ impl Parser {
         name: Option<StaticName>,
         inner_name_binding: Option<crate::syntax::StaticBinding>,
         heritage: Option<Expression>,
+        decorators: Vec<Expression>,
     ) -> Result<ClassLiteral> {
         self.consume(&TokenKind::LBrace, "expected '{' before class body")?;
         let derived = heritage.is_some();
@@ -132,6 +185,7 @@ impl Parser {
             None => self.default_class_constructor()?,
         };
         Ok(ClassLiteral {
+            decorators,
             name,
             inner_name_binding,
             heritage,
@@ -178,7 +232,11 @@ impl Parser {
         derived: bool,
     ) -> Result<()> {
         let member_offset = self.offset();
+        let decorators = self.class_element_decorators()?;
         if self.class_static_block_start() {
+            if !decorators.is_empty() {
+                return Err(self.parse_error("class static blocks cannot be decorated"));
+            }
             return self.class_static_block(member_offset, static_blocks);
         }
         let is_static = self.match_class_static_prefix();
@@ -198,7 +256,17 @@ impl Parser {
             if accessor.is_some() {
                 return Err(self.parse_error("expected '(' after class accessor name"));
             }
-            return self.class_field(key, key_name, is_static, member_offset, fields);
+            return self.class_field(
+                ClassFieldSpec {
+                    key,
+                    key_name,
+                    is_static,
+                    is_auto_accessor,
+                    decorators,
+                    source_order: member_offset,
+                },
+                fields,
+            );
         }
         if is_auto_accessor {
             return Err(self.parse_error("auto-accessor class elements cannot be methods"));
@@ -208,6 +276,9 @@ impl Parser {
             && let Some(name) = &key_name
         {
             if !is_static && name.as_str() == CLASS_CONSTRUCTOR_NAME {
+                if !decorators.is_empty() {
+                    return Err(self.parse_error("class constructors cannot be decorated"));
+                }
                 return self.class_constructor_member(
                     accessor,
                     function_kind,
@@ -240,6 +311,7 @@ impl Parser {
         }
         let function = self.class_member_function(kind, function_kind, member_offset, false)?;
         members.push(ClassMember {
+            source_order: member_offset,
             key: Self::class_element_name(key),
             kind,
             function_kind,
@@ -249,6 +321,7 @@ impl Parser {
             name: key_name,
             params: function.params,
             body: function.body,
+            decorators,
         });
         Ok(())
     }
@@ -319,26 +392,31 @@ impl Parser {
     /// private scope.
     fn class_field(
         &mut self,
-        key: ClassKeySeed,
-        key_name: Option<StaticName>,
-        is_static: bool,
-        member_offset: usize,
+        spec: ClassFieldSpec,
         fields: &mut Vec<crate::ast::ClassField>,
     ) -> Result<()> {
+        let ClassFieldSpec {
+            key,
+            key_name,
+            is_static,
+            is_auto_accessor,
+            decorators,
+            source_order,
+        } = spec;
         if let ClassKeySeed::Private(name) = &key {
             let name = name.clone();
-            self.declare_private_name(&name, PrivateElementKind::Field, is_static, member_offset)?;
+            self.declare_private_name(&name, PrivateElementKind::Field, is_static, source_order)?;
         } else if let Some(name) = &key_name {
             if name.as_str() == CLASS_CONSTRUCTOR_NAME {
                 return Err(Error::parse(
                     "class field cannot be named 'constructor'",
-                    member_offset,
+                    source_order,
                 ));
             }
             if is_static && name.as_str() == CLASS_PROTOTYPE_NAME {
                 return Err(Error::parse(
                     "class static member cannot be named 'prototype'",
-                    member_offset,
+                    source_order,
                 ));
             }
         }
@@ -352,12 +430,20 @@ impl Parser {
             None
         };
         self.consume_statement_terminator("expected statement terminator after class field")?;
+        let key = Self::class_element_name(key);
+        let auto_accessor = if is_auto_accessor && matches!(key, ClassElementName::Property(_)) {
+            Some(self.build_public_auto_accessor(is_static, source_order)?)
+        } else {
+            None
+        };
         fields.push(crate::ast::ClassField {
-            source_order: member_offset,
-            key: Self::class_element_name(key),
+            source_order,
+            key,
             is_static,
+            auto_accessor,
             name: key_name,
             initializer,
+            decorators,
         });
         Ok(())
     }

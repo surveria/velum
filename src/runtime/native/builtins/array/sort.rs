@@ -200,6 +200,9 @@ impl Context {
         &self,
         callback: FunctionId,
     ) -> Result<Option<NumericSortOrder>> {
+        if self.is_class_constructor(callback)? {
+            return Ok(None);
+        }
         let function = self.function(callback)?;
         let bytecode = &function.bytecode;
         if bytecode.hoist_plan().lexical_declaration_count() != 0

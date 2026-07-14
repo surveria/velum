@@ -10,10 +10,11 @@ use crate::{
     runtime::abstract_operations::{SetFailureBehavior, to_boolean},
     runtime::control::Completion,
     runtime::function::FunctionSuperBinding,
-    syntax::{BinaryOp, UpdateOp},
+    syntax::{BinaryOp, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
 
+use super::ops::BytecodeAssignmentReference;
 use super::state::BytecodeState;
 
 const SUPER_OUTSIDE_CLASS_ERROR: &str = "'super' is not available in this context";
@@ -117,19 +118,101 @@ impl Context {
         value: Value,
         strict: bool,
     ) -> Result<()> {
+        self.set_super_property_parts(
+            &reference.base,
+            &reference.receiver,
+            property,
+            value,
+            strict,
+        )
+    }
+
+    pub(in crate::runtime::bytecode) fn set_super_property_parts(
+        &mut self,
+        base: &Value,
+        receiver: &Value,
+        property: &crate::runtime::property::DynamicPropertyKey,
+        value: Value,
+        strict: bool,
+    ) -> Result<()> {
         let failure = if strict {
             SetFailureBehavior::Throw
         } else {
             SetFailureBehavior::ReturnFalse
         };
-        self.set(
-            &reference.base,
-            property.lookup(),
-            value,
-            &reference.receiver,
-            failure,
-        )?;
+        self.set(base, property.lookup(), value, receiver, failure)?;
         Ok(())
+    }
+
+    pub(in crate::runtime::bytecode) fn super_assignment_receiver(&mut self) -> Result<Value> {
+        self.current_this()
+    }
+
+    pub(in crate::runtime::bytecode) fn eval_super_assignment_reference(
+        &mut self,
+        property: &BytecodeSuperProperty,
+        strict: bool,
+    ) -> Result<BytecodeAssignmentReference> {
+        let receiver = self.super_assignment_receiver()?;
+        match property {
+            BytecodeSuperProperty::Static(property) => {
+                self.finish_static_super_assignment_reference(receiver, property, strict)
+            }
+            BytecodeSuperProperty::Computed {
+                expression,
+                operand,
+            } => {
+                let property_value = self.eval_bytecode_expression(expression)?;
+                self.finish_computed_super_assignment_reference(
+                    receiver,
+                    &property_value,
+                    operand.access(),
+                    strict,
+                )
+            }
+        }
+    }
+
+    pub(in crate::runtime::bytecode) fn finish_static_super_assignment_reference(
+        &mut self,
+        receiver: Value,
+        property: &BytecodeProperty,
+        strict: bool,
+    ) -> Result<BytecodeAssignmentReference> {
+        let property = crate::runtime::property::DynamicPropertyKey::new(
+            property.name().as_str().to_owned(),
+            self.known_property_key(property.name().as_str()),
+        );
+        self.finish_super_assignment_reference(receiver, property, strict)
+    }
+
+    pub(in crate::runtime::bytecode) fn finish_computed_super_assignment_reference(
+        &mut self,
+        receiver: Value,
+        property_value: &Value,
+        _access: StaticPropertyAccessId,
+        strict: bool,
+    ) -> Result<BytecodeAssignmentReference> {
+        let property = self.dynamic_property_key(property_value)?;
+        self.finish_super_assignment_reference(receiver, property, strict)
+    }
+
+    fn finish_super_assignment_reference(
+        &mut self,
+        receiver: Value,
+        property: crate::runtime::property::DynamicPropertyKey,
+        strict: bool,
+    ) -> Result<BytecodeAssignmentReference> {
+        let frame = self.super_frame()?;
+        let base = self
+            .semantic_get_prototype(&frame.home_object)?
+            .ok_or_else(|| Error::type_error(SUPER_OUTSIDE_CLASS_ERROR))?;
+        Ok(BytecodeAssignmentReference::SuperProperty {
+            base,
+            receiver,
+            property,
+            strict,
+        })
     }
 
     pub(super) fn eval_bytecode_super_property_assignment(
@@ -187,7 +270,7 @@ impl Context {
         self.runtime_value(updated)
     }
 
-    fn get_super_property(
+    pub(in crate::runtime::bytecode) fn get_super_property(
         &mut self,
         base: &Value,
         receiver: &Value,
@@ -206,7 +289,8 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let args = state.stack.pop_many(arg_count)?;
-        self.eval_super_call(state, &args, next)
+        let constructor = state.stack.pop()?;
+        self.eval_super_call(state, &constructor, &args, next)
     }
 
     pub(super) fn eval_bytecode_call_super_spread(
@@ -216,15 +300,13 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
-        self.eval_super_call(state, &args, next)
+        let constructor = state.stack.pop()?;
+        self.eval_super_call(state, &constructor, &args, next)
     }
 
-    /// Constructs the parent with the active `new.target`, then initializes
-    /// this derived constructor's fields on the returned object.
-    fn eval_super_call(
+    pub(super) fn eval_bytecode_prepare_super_constructor(
         &mut self,
         state: &mut BytecodeState,
-        args: &[Value],
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let frame = self.super_frame()?;
@@ -237,9 +319,24 @@ impl Context {
         let constructor = self
             .semantic_get_prototype(&Value::Function(own_constructor))?
             .ok_or_else(|| Error::type_error(SUPER_NOT_CONSTRUCTOR_ERROR))?;
+        state.stack.push(constructor);
+        state.pc = next;
+        Ok(None)
+    }
+
+    /// Constructs the parent with the active `new.target`, then initializes
+    /// this derived constructor's fields on the returned object.
+    fn eval_super_call(
+        &mut self,
+        state: &mut BytecodeState,
+        constructor: &Value,
+        args: &[Value],
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let frame = self.super_frame()?;
         let new_target = self.current_new_target()?;
         let this_value = self
-            .semantic_construct(&constructor, args, new_target)
+            .semantic_construct(constructor, args, new_target)
             .map_err(|error| error.with_context(SUPER_NOT_CONSTRUCTOR_ERROR))?;
         if frame.this_value.borrow().is_some() {
             return Err(Error::exception(

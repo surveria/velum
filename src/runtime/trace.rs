@@ -367,30 +367,7 @@ impl Function {
         }
         self.properties
             .visit_strong_edges(VmCallableEdgeKind::JavaScriptFunctionProperty, visitor)?;
-        if let Some(binding) = &self.super_binding {
-            if let Some(constructor) = &binding.constructor {
-                visitor.visit(
-                    VmCallableEdgeKind::JavaScriptFunctionInternal,
-                    StrongEdgeReference::Value(constructor),
-                )?;
-            }
-            visitor.visit(
-                VmCallableEdgeKind::JavaScriptFunctionInternal,
-                StrongEdgeReference::Value(&binding.home_object),
-            )?;
-            if let Some(this_value) = binding.this_value.borrow().as_ref() {
-                visitor.visit(
-                    VmCallableEdgeKind::JavaScriptFunctionInternal,
-                    StrongEdgeReference::Value(this_value),
-                )?;
-            }
-            if let Some(constructor) = binding.own_constructor {
-                visitor.visit(
-                    VmCallableEdgeKind::JavaScriptFunctionInternal,
-                    StrongEdgeReference::Function(constructor),
-                )?;
-            }
-        }
+        self.visit_super_binding_edges(visitor)?;
         if let Some(parent) = &self.static_parent {
             visitor.visit(
                 VmCallableEdgeKind::JavaScriptFunctionInternal,
@@ -403,6 +380,12 @@ impl Function {
                     visitor.visit(
                         VmCallableEdgeKind::JavaScriptFunctionInternal,
                         StrongEdgeReference::PropertyKey(key),
+                    )?;
+                }
+                for initializer in field.decorator_initializers() {
+                    visitor.visit(
+                        VmCallableEdgeKind::JavaScriptFunctionInternal,
+                        StrongEdgeReference::Value(initializer),
                     )?;
                 }
             }
@@ -436,6 +419,37 @@ impl Function {
                 VmCallableEdgeKind::JavaScriptFunctionInternal,
                 StrongEdgeReference::Value(value),
             )?;
+        }
+        Ok(())
+    }
+
+    fn visit_super_binding_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if let Some(binding) = &self.super_binding {
+            if let Some(constructor) = &binding.constructor {
+                visitor.visit(
+                    VmCallableEdgeKind::JavaScriptFunctionInternal,
+                    StrongEdgeReference::Value(constructor),
+                )?;
+            }
+            visitor.visit(
+                VmCallableEdgeKind::JavaScriptFunctionInternal,
+                StrongEdgeReference::Value(&binding.home_object),
+            )?;
+            if let Some(this_value) = binding.this_value.borrow().as_ref() {
+                visitor.visit(
+                    VmCallableEdgeKind::JavaScriptFunctionInternal,
+                    StrongEdgeReference::Value(this_value),
+                )?;
+            }
+            if let Some(constructor) = binding.own_constructor {
+                visitor.visit(
+                    VmCallableEdgeKind::JavaScriptFunctionInternal,
+                    StrongEdgeReference::Function(constructor),
+                )?;
+            }
         }
         Ok(())
     }

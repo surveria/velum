@@ -1,10 +1,13 @@
+use std::rc::Rc;
+
 use crate::{
+    SourceSpan,
     ast::{
         Expr, Expression, FunctionKind, FunctionParam, ImportPhase, Statement, Stmt, UnaryOp,
         UpdateOp,
     },
     error::{Error, Result},
-    lexer::{NumberToken, TokenKind},
+    lexer::{NumberToken, StringToken, TokenKind},
     value::Value,
 };
 
@@ -147,6 +150,13 @@ impl Parser {
     pub(super) fn call(&mut self) -> Result<Expression> {
         let expr = self.primary()?;
         self.call_suffix(expr)
+    }
+
+    pub(super) fn left_hand_side_expression(&mut self) -> Result<Expression> {
+        if self.match_kind(&TokenKind::New) {
+            return self.new_expr();
+        }
+        self.call()
     }
 
     fn call_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
@@ -327,11 +337,7 @@ impl Parser {
         ))
     }
 
-    fn string_literal(
-        &mut self,
-        value: crate::lexer::StringToken,
-        span: crate::SourceSpan,
-    ) -> Result<Expression> {
+    fn string_literal(&mut self, value: StringToken, span: SourceSpan) -> Result<Expression> {
         if self.is_strict_mode() && value.legacy_escape {
             return Err(Error::parse_at(
                 "legacy escape sequence is not allowed in strict mode",
@@ -512,30 +518,7 @@ impl Parser {
             }
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Import => self.dynamic_import(token_span)?,
-            TokenKind::Identifier(name) => {
-                if (self.class_arguments_are_restricted() || self.reject_all_arguments)
-                    && name.as_ref() == "arguments"
-                {
-                    return Err(Error::parse_at(
-                        "arguments is not allowed in a class field or static block",
-                        token_span,
-                    ));
-                }
-                if self.yield_identifier_is_reserved()
-                    && name.as_ref() == super::YIELD_IDENTIFIER_NAME
-                {
-                    return Err(Error::parse_at(
-                        "yield is not a valid identifier reference",
-                        token_span,
-                    ));
-                }
-                self.validate_strict_identifier_reference(name.as_ref())?;
-                self.note_arguments_reference(name.as_ref());
-                Expression::new(
-                    Expr::Identifier(self.static_binding_name_shared(name)?),
-                    token_span,
-                )
-            }
+            TokenKind::Identifier(name) => self.primary_identifier(name, token_span)?,
             TokenKind::Await if !self.await_identifier_is_reserved() => Expression::new(
                 Expr::Identifier(self.contextual_await_binding(token_span.start())?),
                 token_span,
@@ -550,6 +533,9 @@ impl Parser {
                 parser.function_expression(kind, token_span)
             })?,
             TokenKind::Class => self.with_in_operator_allowed(true, Self::class_expression)?,
+            TokenKind::At => {
+                self.with_in_operator_allowed(true, Self::decorated_class_expression_after_at)?
+            }
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
@@ -583,6 +569,29 @@ impl Parser {
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         })
+    }
+
+    fn primary_identifier(&mut self, name: Rc<str>, span: SourceSpan) -> Result<Expression> {
+        if (self.class_arguments_are_restricted() || self.reject_all_arguments)
+            && name.as_ref() == "arguments"
+        {
+            return Err(Error::parse_at(
+                "arguments is not allowed in a class field or static block",
+                span,
+            ));
+        }
+        if self.yield_identifier_is_reserved() && name.as_ref() == super::YIELD_IDENTIFIER_NAME {
+            return Err(Error::parse_at(
+                "yield is not a valid identifier reference",
+                span,
+            ));
+        }
+        self.validate_strict_identifier_reference(name.as_ref())?;
+        self.note_arguments_reference(name.as_ref());
+        Ok(Expression::new(
+            Expr::Identifier(self.static_binding_name_shared(name)?),
+            span,
+        ))
     }
 
     fn number_literal(&self, value: NumberToken, span: crate::SourceSpan) -> Result<Expression> {

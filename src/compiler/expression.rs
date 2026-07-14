@@ -11,6 +11,7 @@ use super::{
 
 impl BytecodeCompiler<'_> {
     fn compile_super_call(&mut self, args: &[Expression]) -> Result<()> {
+        self.emit(BytecodeInstruction::PrepareSuperConstructor);
         if has_spread_arg(args) {
             let spread_flags = self.compile_spread_parts(args)?;
             self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });

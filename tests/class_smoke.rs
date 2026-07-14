@@ -394,3 +394,22 @@ fn rejects_nonordinary_class_constructors() -> TestResult {
         "class constructor must be an ordinary method",
     )
 }
+
+#[test]
+fn orders_static_numeric_method_names_before_other_constructor_keys() -> TestResult {
+    ensure_value(
+        &eval(
+            r#"
+            class Example {
+                static a() {}
+                static [2]() {}
+                static c() {}
+                static [1]() {}
+            }
+            Object.getOwnPropertyNames(Example).join(",") ===
+                "1,2,length,name,prototype,a,c"
+            "#,
+        )?,
+        &Value::Bool(true),
+    )
+}

@@ -1,9 +1,9 @@
 use crate::{
     error::{Error, Result},
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
-        is_compatible_property_update,
+        ArrayIndex, DataPropertyDescriptor, DataPropertyUpdate, OwnPropertyDescriptor,
+        PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
+        PropertyWritable, is_compatible_property_update,
     },
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
     runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
@@ -379,9 +379,31 @@ impl FunctionProperties {
         &self,
         atoms: &AtomTable,
     ) -> Result<(Vec<String>, Vec<SymbolId>)> {
-        let mut names = Vec::new();
+        let mut indexed_names = Vec::new();
+        let mut ordered_names = Vec::new();
         let length_replaced = self.intrinsic_was_replaced(FunctionPropertyKind::Length);
         let name_replaced = self.intrinsic_was_replaced(FunctionPropertyKind::Name);
+        for key in &self.property_order {
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            let name = atoms.name(atom)?;
+            if (length_replaced && name == FUNCTION_LENGTH_PROPERTY)
+                || (name_replaced && name == FUNCTION_NAME_PROPERTY)
+            {
+                continue;
+            }
+            if let Some(index) = ArrayIndex::parse(name) {
+                indexed_names.push((index, name.to_owned()));
+            } else {
+                ordered_names.push(name.to_owned());
+            }
+        }
+        indexed_names.sort_by_key(|(index, _)| *index);
+        let mut names = indexed_names
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect::<Vec<_>>();
         if self
             .intrinsic_descriptor(FunctionPropertyKind::Length)
             .is_some()
@@ -402,17 +424,7 @@ impl FunctionProperties {
         {
             names.push(FUNCTION_PROTOTYPE_PROPERTY.to_owned());
         }
-        for key in &self.property_order {
-            if let Some(atom) = key.atom() {
-                let name = atoms.name(atom)?;
-                if (length_replaced && name == FUNCTION_LENGTH_PROPERTY)
-                    || (name_replaced && name == FUNCTION_NAME_PROPERTY)
-                {
-                    continue;
-                }
-                names.push(name.to_owned());
-            }
-        }
+        names.extend(ordered_names);
         let symbols = self
             .property_order
             .iter()

@@ -14,7 +14,8 @@ mod search;
 mod sort;
 mod storage;
 
-pub(super) use index::{ArrayIndex, ArrayLength};
+pub(in crate::runtime) use index::ArrayIndex;
+pub(super) use index::ArrayLength;
 pub(super) use storage::ArrayStorage;
 
 use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty, ShapeTable};

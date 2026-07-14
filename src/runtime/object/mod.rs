@@ -23,7 +23,8 @@ mod temporal;
 mod trace;
 mod typed_array;
 
-use array::{ArrayIndex, ArrayLength, ArrayStorage};
+pub(in crate::runtime) use array::ArrayIndex;
+use array::{ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
 pub use base::ObjectHeap;
 pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};

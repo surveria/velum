@@ -67,6 +67,9 @@ impl Context {
                 self.leave_private_environment(state)?;
                 result
             }
+            BytecodeInstruction::PrepareSuperConstructor => {
+                self.eval_bytecode_prepare_super_constructor(state, next)
+            }
             BytecodeInstruction::CallSuper { arg_count } => {
                 self.eval_bytecode_call_super(state, *arg_count, next)
             }

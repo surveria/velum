@@ -136,6 +136,7 @@ pub enum TokenKind {
     PipeEqual,
     Caret,
     CaretEqual,
+    At,
     AndAnd,
     AndAndEqual,
     OrOr,

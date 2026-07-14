@@ -132,10 +132,16 @@ impl Context {
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
-            BytecodeInstruction::DeleteSuperProperty => Err(Error::exception(
-                crate::value::ErrorName::ReferenceError,
-                DELETE_SUPER_PROPERTY_ERROR,
-            )),
+            BytecodeInstruction::DeleteSuperProperty(property) => {
+                self.current_this()?;
+                if let Some(property) = property {
+                    self.eval_bytecode_expression(property)?;
+                }
+                Err(Error::exception(
+                    crate::value::ErrorName::ReferenceError,
+                    DELETE_SUPER_PROPERTY_ERROR,
+                ))
+            }
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
@@ -152,6 +158,7 @@ impl Context {
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateClass { .. }
+            | BytecodeInstruction::PrepareSuperConstructor
             | BytecodeInstruction::CallSuper { .. }
             | BytecodeInstruction::CallSuperSpread
             | BytecodeInstruction::SuperMember { .. }

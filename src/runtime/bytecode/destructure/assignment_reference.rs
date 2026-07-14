@@ -142,6 +142,9 @@ impl Context {
             BytecodeAssignmentTarget::PrivateProperty { object, property } => {
                 self.eval_resumable_private_reference(object, property)
             }
+            BytecodeAssignmentTarget::SuperProperty { property, strict } => {
+                self.eval_resumable_super_reference(property, *strict)
+            }
         }
     }
 
@@ -168,5 +171,36 @@ impl Context {
         Ok(PatternStep::Value(
             BytecodeAssignmentReference::PrivateProperty { object, name },
         ))
+    }
+
+    fn eval_resumable_super_reference(
+        &mut self,
+        property: &crate::bytecode::BytecodeSuperProperty,
+        strict: bool,
+    ) -> Result<PatternStep<BytecodeAssignmentReference>> {
+        let receiver = self.super_assignment_receiver()?;
+        match property {
+            crate::bytecode::BytecodeSuperProperty::Static(property) => self
+                .finish_static_super_assignment_reference(receiver, property, strict)
+                .map(PatternStep::Value),
+            crate::bytecode::BytecodeSuperProperty::Computed {
+                expression,
+                operand,
+            } => {
+                let property_value = match self.eval_pattern_block(expression)? {
+                    PatternStep::Value(value) => value,
+                    PatternStep::Abrupt(completion) => {
+                        return Ok(PatternStep::Abrupt(completion));
+                    }
+                };
+                self.finish_computed_super_assignment_reference(
+                    receiver,
+                    &property_value,
+                    operand.access(),
+                    strict,
+                )
+                .map(PatternStep::Value)
+            }
+        }
     }
 }

@@ -6,8 +6,8 @@ mod pattern;
 mod statement;
 
 pub use class::{
-    ClassConstructor, ClassElementName, ClassField, ClassLiteral, ClassMember, ClassMemberKind,
-    ClassStaticBlock,
+    ClassAutoAccessor, ClassAutoAccessorFunction, ClassConstructor, ClassElementName, ClassField,
+    ClassLiteral, ClassMember, ClassMemberKind, ClassStaticBlock,
 };
 pub use expression::{
     Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, TemplateElement,
