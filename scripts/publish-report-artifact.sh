@@ -113,6 +113,27 @@ valid_artifact_relative_path() {
   [[ "${relative_path}" == "${directory}/${file_name}" ]]
 }
 
+valid_artifact_run_attempt() {
+  local expected_mode="$1"
+  local artifact_attempt="$2"
+  local workflow_attempt="$3"
+
+  [[ "${artifact_attempt}" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "${workflow_attempt}" =~ ^[1-9][0-9]*$ ]] || return 1
+  if [[ "${expected_mode}" == correctness ]]; then
+    [[ "${artifact_attempt}" == "${workflow_attempt}" ]]
+    return
+  fi
+  [[ "${expected_mode}" == performance ]] || return 1
+  if ((${#artifact_attempt} < ${#workflow_attempt})); then
+    return 0
+  fi
+  if ((${#artifact_attempt} > ${#workflow_attempt})); then
+    return 1
+  fi
+  [[ "${artifact_attempt}" == "${workflow_attempt}" || "${artifact_attempt}" < "${workflow_attempt}" ]]
+}
+
 validate_workflow_run_fields() {
   local expected_mode="$1"
   local expected_repository="$2"
@@ -227,10 +248,11 @@ download_matching_artifact() {
       continue
     fi
     if [[ "${RSQJS_ARTIFACT_RUN_ID:-}" != "${RUN_ID}" \
-      || "${RSQJS_ARTIFACT_RUN_ATTEMPT:-}" != "${RUN_ATTEMPT}" \
       || "${RSQJS_ARTIFACT_REPOSITORY:-}" != "${RUN_REPOSITORY}" \
       || "${RSQJS_ARTIFACT_WORKFLOW:-}" != "${RUN_NAME}" \
-      || "${RSQJS_ARTIFACT_EVENT_NAME:-}" != "${RUN_EVENT}" ]]; then
+      || "${RSQJS_ARTIFACT_EVENT_NAME:-}" != "${RUN_EVENT}" ]] \
+      || ! valid_artifact_run_attempt "${expected_mode}" \
+        "${RSQJS_ARTIFACT_RUN_ATTEMPT:-}" "${RUN_ATTEMPT}"; then
       printf 'skipping artifact %s: workflow metadata envelope mismatch\n' "${artifact_id}" >&2
       continue
     fi
