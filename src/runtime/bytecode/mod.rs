@@ -133,6 +133,7 @@ impl Context {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
             BytecodeInstruction::DeleteSuperProperty(property) => {
+                self.current_this()?;
                 if let Some(property) = property {
                     self.eval_bytecode_expression(property)?;
                 }

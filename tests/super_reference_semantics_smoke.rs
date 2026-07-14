@@ -194,6 +194,26 @@ fn deleting_computed_super_properties_evaluates_the_key_before_throwing() -> Tes
 }
 
 #[test]
+fn deleting_super_properties_checks_this_before_the_computed_key() -> TestResult {
+    expect_true(
+        r"
+        var baseCalls = 0;
+        class Base { constructor() { baseCalls = baseCalls + 1; } }
+        class Derived extends Base {
+            constructor() {
+                delete super[(super(), 0)];
+            }
+        }
+        try {
+            new Derived();
+        } catch (error) {
+            error instanceof ReferenceError && baseCalls === 0
+        }
+        ",
+    )
+}
+
+#[test]
 fn destructuring_and_for_of_assign_through_super_references() -> TestResult {
     expect_true(
         r#"
