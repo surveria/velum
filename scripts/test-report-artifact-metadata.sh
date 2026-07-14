@@ -61,6 +61,20 @@ fi
 valid_artifact_relative_path "test-runs/report.md" test-runs report.md ||
   fail_test "rejected canonical relative path"
 
+valid_artifact_run_attempt performance 2 2 ||
+  fail_test "rejected current performance workflow attempt"
+valid_artifact_run_attempt performance 1 2 ||
+  fail_test "rejected successful performance output reused by a publisher rerun"
+if valid_artifact_run_attempt performance 3 2; then
+  fail_test "accepted a performance artifact from a future workflow attempt"
+fi
+if valid_artifact_run_attempt correctness 1 2; then
+  fail_test "accepted correctness metadata from a different workflow attempt"
+fi
+if valid_artifact_run_attempt performance invalid 2; then
+  fail_test "accepted a non-numeric artifact workflow attempt"
+fi
+
 valid_baseline="${tmp_dir}/test262-pass-baseline.txt"
 {
   printf '%s\n' '# rsqjs-test262-pass-baseline-v1'
