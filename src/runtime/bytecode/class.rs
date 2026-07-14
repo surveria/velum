@@ -260,7 +260,15 @@ impl Context {
         self.pop_temporary_this()?;
         let value = value?.into_result()?;
         match field {
-            ResolvedClassField::Public { key, name, .. } => {
+            ResolvedClassField::Public {
+                key,
+                name,
+                infer_name,
+                ..
+            } => {
+                if *infer_name {
+                    self.set_function_name(&value, name, None)?;
+                }
                 let update = DataPropertyUpdate::new(
                     Some(value),
                     Some(PropertyWritable::Yes),
@@ -314,6 +322,7 @@ impl Context {
                     ResolvedClassField::Public {
                         key,
                         name,
+                        infer_name: field.infer_name_from_computed_key,
                         initializer: field.initializer.clone(),
                     }
                 }

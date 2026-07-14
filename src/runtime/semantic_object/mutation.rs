@@ -451,6 +451,20 @@ impl Context {
             let length = self.array_length_from_value(&value)?;
             return self.objects.set_array_length(*id, length);
         }
+        if existing_descriptor.is_some()
+            && let Value::Object(id) = receiver
+            && self.objects.is_proxy(*id)
+        {
+            let update =
+                PropertyUpdate::Data(DataPropertyUpdate::new(Some(value), None, None, None));
+            let descriptor_value = self.create_property_update_object(&update)?;
+            return self.semantic_define_own_property_update_with_descriptor(
+                receiver,
+                property,
+                update,
+                &descriptor_value,
+            );
+        }
         if existing_descriptor.is_none()
             && let Value::Object(id) = receiver
             && !self.objects.is_proxy(*id)

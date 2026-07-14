@@ -10,7 +10,7 @@ use crate::{
     value::{FunctionId, HostFunctionId, NativeFunctionId, Value},
 };
 
-use super::properties::FunctionPropertyKind;
+use super::{FUNCTION_PROTOTYPE_CALLER_PROPERTY, properties::FunctionPropertyKind};
 use crate::runtime::native::NativeFunctionKind;
 
 impl Context {
@@ -171,7 +171,11 @@ impl Context {
         if Self::is_restricted_property(property)
             && !self.function_uses_restricted_prototype(id, property)?
         {
-            return Ok(Value::Undefined);
+            return Ok(if property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY {
+                Value::Null
+            } else {
+                Value::Undefined
+            });
         }
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent

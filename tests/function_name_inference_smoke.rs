@@ -125,6 +125,23 @@ fn names_class_methods_and_accessors_from_resolved_keys() -> TestResult {
 }
 
 #[test]
+fn infers_names_for_computed_class_field_initializers() -> TestResult {
+    expect_string(
+        r#"
+        let arrow = "arrow";
+        class Example {
+            [arrow] = () => {};
+            [5] = async () => {};
+            static ["factory"] = function () {};
+        }
+        let instance = new Example();
+        instance.arrow.name + "|" + instance[5].name + "|" + Example.factory.name
+        "#,
+        "arrow|5|factory",
+    )
+}
+
+#[test]
 fn named_async_functions_keep_their_private_self_binding() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

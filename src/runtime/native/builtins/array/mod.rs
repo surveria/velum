@@ -224,6 +224,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -255,6 +256,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -286,6 +288,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?

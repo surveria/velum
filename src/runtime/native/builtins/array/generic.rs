@@ -25,6 +25,22 @@ const SPECIES_DISPLAY: &str = "[Symbol.species]";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
+    pub(super) const fn array_search_bound_is_primitive(value: Option<&Value>) -> bool {
+        match value {
+            None => true,
+            Some(value) => matches!(
+                value,
+                Value::Undefined
+                    | Value::Null
+                    | Value::Bool(_)
+                    | Value::Number(_)
+                    | Value::BigInt(_)
+                    | Value::String(_)
+                    | Value::Symbol(_)
+            ),
+        }
+    }
+
     pub(super) fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
         match value {
             None | Some(Value::Undefined) => Ok(super::ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),

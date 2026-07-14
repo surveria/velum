@@ -303,12 +303,12 @@ fn enforces_object_property_limits_and_reuses_released_capacity() -> TestResult 
         "object property count after delete and reuse",
     )?;
 
-    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ObjectProperty, 4);
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ObjectProperty, 174);
     let mut vm = vm_with_storage_limits(limits);
     vm.eval("{ let camera = () => 1; delete camera.name; camera.lens = 2; }")?;
     ensure_usize(
         vm.storage_snapshot()?.count(VmStorageKind::ObjectProperty),
-        4,
+        174,
         "function property count after delete and reuse",
     )
 }

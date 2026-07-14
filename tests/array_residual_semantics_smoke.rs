@@ -184,6 +184,69 @@ fn mutating_array_fast_paths_respect_index_descriptors() -> TestResult {
     )
 }
 
+#[test]
+fn generic_array_mutations_define_existing_proxy_properties_with_value_only() -> TestResult {
+    eval_is_42(
+        r#"
+        let array = [1, 2];
+        let descriptors = [];
+        let proxy = new Proxy(array, {
+            defineProperty(target, key, descriptor) {
+                descriptors.push(Object.keys(descriptor).join(","));
+                return Reflect.defineProperty(target, key, descriptor);
+            }
+        });
+        let popped = Array.prototype.pop.call(proxy);
+        let shifted = Array.prototype.shift.call(proxy);
+        popped === 2 && shifted === 1 && array.length === 0 &&
+            descriptors.every(function (keys) { return keys === "value"; }) ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn array_unscopables_lists_at_and_blocks_it_in_with_environments() -> TestResult {
+    eval_is_42(
+        r#"
+        let unscopables = Array.prototype[Symbol.unscopables];
+        let at = 42;
+        let observed;
+        with (Array.prototype) {
+            observed = at;
+        }
+        unscopables.at === true &&
+            Reflect.ownKeys(unscopables)[0] === "at" &&
+            observed === 42 ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn array_searches_leave_fast_paths_before_observable_bound_coercion() -> TestResult {
+    eval_is_42(
+        r#"
+        function search(method, values, start) {
+            let log = [];
+            Object.setPrototypeOf(values, new Proxy(Array.prototype, {
+                has: function (target, key) {
+                    log.push(String(key));
+                    return Reflect.has(target, key);
+                }
+            }));
+            Array.prototype[method].call(values, 100, {
+                valueOf: function () {
+                    values.length = 0;
+                    return start;
+                }
+            });
+            return log.join(",");
+        }
+        search("indexOf", [1, 2, 3], 0) === "0,1,2" &&
+            search("lastIndexOf", [1, 2, 3], 2) === "2,1,0" ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

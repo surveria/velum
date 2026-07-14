@@ -221,6 +221,7 @@ pub struct BytecodeClassField {
     pub key: BytecodeClassMemberKey,
     pub is_static: bool,
     pub name: Option<StaticName>,
+    pub infer_name_from_computed_key: bool,
     pub initializer: Option<BytecodeBlock>,
 }
 

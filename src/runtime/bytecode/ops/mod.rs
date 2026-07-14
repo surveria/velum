@@ -309,6 +309,12 @@ impl Context {
         if !self.semantic_is_callable(right)? {
             return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));
         }
+        if let Value::NativeFunction(id) = right
+            && let NativeFunctionKind::BoundFunction(bound) = self.native_function(*id)?.kind()
+        {
+            let target = self.bound_function_target(bound)?;
+            return self.eval_bytecode_instanceof(left, &target);
+        }
         if !matches!(
             left,
             Value::Object(_)

@@ -99,6 +99,18 @@ const FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY: &str = "arguments";
 const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
 pub(in crate::runtime) const NATIVE_FUNCTION_SOURCE_TEXT: &str = "function () { [native code] }";
 
+pub(in crate::runtime) fn native_function_source_text(kind: NativeFunctionKind) -> String {
+    let name = if matches!(kind, NativeFunctionKind::BoundFunction(_)) {
+        ""
+    } else {
+        kind.name()
+    };
+    if name.is_empty() {
+        return NATIVE_FUNCTION_SOURCE_TEXT.to_owned();
+    }
+    format!("function {name}() {{ [native code] }}")
+}
+
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
