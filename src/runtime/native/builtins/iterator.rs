@@ -503,24 +503,6 @@ impl Context {
         Ok(callback)
     }
 
-    fn iterator_inherits_prototype(&mut self, iterator: &Value, target: ObjectId) -> Result<bool> {
-        let target = Value::Object(target);
-        let mut current = iterator.clone();
-        loop {
-            let Some(prototype) = self.semantic_get_prototype(&current)? else {
-                return Ok(false);
-            };
-            if crate::runtime::abstract_operations::same_value(&prototype, &target) {
-                return Ok(true);
-            }
-            if matches!(prototype, Value::Null) {
-                return Ok(false);
-            }
-            self.step()?;
-            current = prototype;
-        }
-    }
-
     fn close_after_iterator_validation_error(&mut self, iterator: &Value, error: Error) -> Error {
         let mut source = crate::runtime::abstract_operations::IteratorSource::Protocol {
             iterator: iterator.clone(),

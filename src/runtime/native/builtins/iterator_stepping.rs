@@ -8,7 +8,7 @@ use crate::{
         native::IteratorFunctionKind,
         object::{ObjectPropertyInit, PropertyEnumerable},
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::NativeFunctionKind;
@@ -29,6 +29,28 @@ enum HelperPlan {
 }
 
 impl Context {
+    pub(super) fn iterator_inherits_prototype(
+        &mut self,
+        iterator: &Value,
+        target: ObjectId,
+    ) -> Result<bool> {
+        let target = Value::Object(target);
+        let mut current = iterator.clone();
+        loop {
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
+                return Ok(false);
+            };
+            if crate::runtime::abstract_operations::same_value(&prototype, &target) {
+                return Ok(true);
+            }
+            if matches!(prototype, Value::Null) {
+                return Ok(false);
+            }
+            self.step()?;
+            current = prototype;
+        }
+    }
+
     pub(in crate::runtime::native) fn create_iterator_result_object(
         &mut self,
         value: Value,
