@@ -293,9 +293,6 @@ impl Context {
             }
         }
         if !self.optional_optimizations_enabled() {
-            if matches!(operand, BindingOperand::Global { .. }) {
-                return self.get_global_binding_by_name(binding);
-            }
             return self.get_binding_by_name(binding);
         }
         if let Some(cell) = self.cached_static_binding(binding)? {
@@ -308,13 +305,6 @@ impl Context {
         let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
             return Ok(None);
         };
-        if matches!(operand, BindingOperand::Global { .. }) {
-            if let Some((location, cell)) = self.compiled_global_static_binding(binding, atom)? {
-                self.remember_static_binding(binding, location)?;
-                return Ok(Some(cell));
-            }
-            return Ok(self.global_binding_by_atom(atom));
-        }
         if let Some((location, cell)) = self.compiled_global_static_binding(binding, atom)? {
             self.remember_static_binding(binding, location)?;
             return Ok(Some(cell));
@@ -342,23 +332,6 @@ impl Context {
             return Ok(None);
         };
         self.binding_at_location(location)
-    }
-
-    fn get_global_binding_by_name(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
-        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
-            return Ok(None);
-        };
-        Ok(self.global_binding_by_atom(atom))
-    }
-
-    fn global_binding_by_atom(&self, atom: AtomId) -> Option<BindingCell> {
-        if self.realm.object_global_names.contains(&atom) {
-            return None;
-        }
-        self.realm
-            .globals
-            .get(atom)
-            .or_else(|| self.realm.builtin_globals.get(atom))
     }
 
     fn current_function_eval_variable_binding(&self, atom: AtomId) -> Result<Option<BindingCell>> {

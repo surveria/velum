@@ -2,10 +2,11 @@ use std::rc::Rc;
 
 use crate::{
     binding_metadata::{BindingLayout, BindingOperand},
+    bytecode::BytecodeBinding,
     error::Result,
     runtime::activation::DynamicEnvironment,
     runtime::{CompiledBindingFrame, Context, control::Completion},
-    value::FunctionId,
+    value::{FunctionId, Value},
 };
 
 use super::{
@@ -14,6 +15,24 @@ use super::{
 };
 
 impl Context {
+    pub(super) fn fast_pre_setup_load_global_binding(
+        &mut self,
+        binding: &BytecodeBinding,
+    ) -> Result<Value> {
+        if let Some(atom) = self.lookup_static_name_atom(binding.name().name())?
+            && !self.realm.object_global_names.contains(&atom)
+            && let Some(cell) = self
+                .realm
+                .globals
+                .get(atom)
+                .or_else(|| self.realm.builtin_globals.get(atom))
+        {
+            return self.runtime_value(cell.value(binding.name())?);
+        }
+        self.unresolved_global_property_value(binding.name().name())?
+            .ok_or_else(|| crate::runtime::control::reference_error_undefined(binding.name()))
+    }
+
     pub(super) fn capture_function_environment(
         &self,
         init: &BytecodeFunctionInit<'_>,

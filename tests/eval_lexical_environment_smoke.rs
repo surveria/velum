@@ -115,6 +115,25 @@ fn eval_created_vars_shadow_globals_only_inside_the_owning_function() -> TestRes
 }
 
 #[test]
+fn catch_var_redeclarations_use_the_current_catch_binding() -> TestResult {
+    expect_true(
+        r#"
+        var value = "global";
+        var before;
+        var after;
+        try {
+            throw "caught";
+        } catch (value) {
+            before = value;
+            var value = "updated";
+            after = value;
+        }
+        before === "caught" && after === "updated" && value === "global"
+        "#,
+    )
+}
+
+#[test]
 fn declarations_preserve_the_previous_completion_value() -> TestResult {
     expect_true(
         r#"
