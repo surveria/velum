@@ -118,7 +118,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let value = self.bigint_receiver_value(this_value)?;
-        self.eval_bigint_to_locale_string(args, &value)
+        self.eval_numeric_to_locale_string(args, &Value::BigInt(value))
     }
 
     pub(in crate::runtime::native) fn eval_bigint_prototype_value_of(

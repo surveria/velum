@@ -149,13 +149,6 @@ impl Context {
                 AsyncIteratorPending::SyncIteratorResult { done: false },
                 Some(Completion::Normal(value)),
             ) => Ok(AsyncIteratorStep::Value(value)),
-            (
-                AsyncIteratorPending::SyncIteratorResult { done: false },
-                Some(Completion::Throw(value)),
-            ) => {
-                set_protocol_done(&mut continuation.source);
-                Ok(AsyncIteratorStep::Abrupt(Completion::Throw(value)))
-            }
             (_, Some(Completion::Throw(value))) => {
                 set_protocol_done(&mut continuation.source);
                 Ok(AsyncIteratorStep::Abrupt(Completion::Throw(value)))

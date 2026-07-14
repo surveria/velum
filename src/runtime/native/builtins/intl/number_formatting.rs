@@ -4,7 +4,7 @@ use crate::{
         Context, abstract_operations::NumericValue, call::RuntimeCallArgs,
         object::NumberFormatValue,
     },
-    value::{ErrorName, JsBigInt, ObjectId, Value},
+    value::{ErrorName, ObjectId, Value},
 };
 
 use super::number_range::{format_range_text, range_separator};
@@ -131,20 +131,16 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let number = self.number_receiver_value(this_value)?;
-        let formatter = self.parse_number_format(args)?;
-        let input = self.number_format_input(&Value::Number(number))?;
-        let output = format_number(&formatter, input)?;
-        self.heap_string_value(&output.text)
+        self.eval_numeric_to_locale_string(args, &Value::Number(number))
     }
 
-    pub(in crate::runtime::native) fn eval_bigint_to_locale_string(
+    pub(in crate::runtime::native) fn eval_numeric_to_locale_string(
         &mut self,
         args: RuntimeCallArgs<'_>,
-        value: &JsBigInt,
+        value: &Value,
     ) -> Result<Value> {
         let formatter = self.parse_number_format(args)?;
-        let input = parse_number_input(&value.to_string())?;
-        let output = format_number(&formatter, input)?;
+        let output = format_number(&formatter, self.number_format_input(value)?)?;
         self.heap_string_value(&output.text)
     }
 
