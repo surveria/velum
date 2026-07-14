@@ -380,10 +380,11 @@ impl BytecodeCompiler<'_> {
     ) -> Result<()> {
         let binding = BytecodeBinding::compile_write(name, self.layout, strict)?;
         let requires_resolved_reference = binding.with_environment_count() > 0
-            || !matches!(
+            || matches!(
                 binding.operand(),
-                crate::binding_metadata::BindingOperand::Local { .. }
-            );
+                crate::binding_metadata::BindingOperand::Unresolved
+            )
+            || super::binding_effects::expression_contains_direct_eval(expr);
         if requires_resolved_reference {
             self.emit(BytecodeInstruction::ResolveBinding(binding.clone()));
         }
