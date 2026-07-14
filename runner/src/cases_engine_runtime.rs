@@ -57,7 +57,7 @@ fn engine_error_and_global_cases() -> Vec<EngineCase> {
             id: "global_numeric_constants",
             path: PATH_GLOBAL_NUMERIC_CONSTANTS,
             expectation: Expectation::OutputAndValue {
-                output: &["number true true true", "false false false true"],
+                output: &["number true true true", "false false true true"],
                 value: "42",
             },
         },

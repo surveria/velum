@@ -140,6 +140,27 @@ fn derived_native_construction_uses_the_new_target_prototype() -> TestResult {
     )
 }
 
+#[test]
+fn deleting_super_properties_throws_before_reference_preparation() -> TestResult {
+    expect_true(
+        r#"
+        var keyEvaluations = 0;
+        var object = {
+            method() {
+                try {
+                    delete super[(keyEvaluations += 1, "value")];
+                } catch (error) {
+                    return error instanceof ReferenceError && keyEvaluations === 0;
+                }
+                return false;
+            }
+        };
+        Object.setPrototypeOf(object, null);
+        object.method()
+        "#,
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

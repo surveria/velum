@@ -25,11 +25,10 @@ impl Context {
     }
 
     pub(crate) fn delete_unresolved_global_property(&mut self, name: &str) -> Result<bool> {
-        let Some(global_object) = self.realm.global_object else {
-            return Ok(true);
-        };
+        let global_object = self.global_object_id()?;
         let object = Value::Object(global_object);
-        let lookup = self.property_lookup(name);
+        let key = self.intern_property_key(name)?;
+        let lookup = PropertyLookup::from_key(name, key);
         self.delete_property_value_with_lookup(&object, lookup)
     }
 
@@ -355,28 +354,37 @@ impl Context {
         let Some(value) = self.global_binding_property_value(lookup.name())? else {
             return Ok(None);
         };
+        let declared_global = self.atom(lookup.name()).is_some_and(|atom| {
+            self.realm
+                .globals
+                .get(atom)
+                .is_some_and(|binding| binding.kind() == DeclKind::Var)
+        });
         let writable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
             PropertyWritable::No
         } else {
             PropertyWritable::Yes
         };
-        let configurable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME) {
+        let configurable = if declared_global
+            || matches!(lookup.name(), NAN_NAME | INFINITY_NAME | UNDEFINED_NAME)
+        {
             PropertyConfigurable::No
         } else {
             PropertyConfigurable::Yes
         };
-        let descriptor = DataPropertyDescriptor::new(
-            value.clone(),
-            writable,
-            PropertyEnumerable::No,
-            configurable,
-        );
+        let enumerable = if declared_global {
+            PropertyEnumerable::Yes
+        } else {
+            PropertyEnumerable::No
+        };
+        let descriptor =
+            DataPropertyDescriptor::new(value.clone(), writable, enumerable, configurable);
         self.define_global_object_data_property(
             id,
             lookup.name(),
             value,
             writable,
-            PropertyEnumerable::No,
+            enumerable,
             configurable,
         )?;
         Ok(Some(OwnPropertyDescriptor::Data(descriptor)))

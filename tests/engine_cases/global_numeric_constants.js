@@ -22,7 +22,7 @@ typeof nanBefore === "number" &&
   -Infinity < -1e300 &&
   deleteNaN === false &&
   deleteInfinity === false &&
-  deleteObject === false &&
+  deleteObject === true &&
   deleteMissing === true &&
   shadow === 42
     ? 42

@@ -466,12 +466,19 @@ impl Context {
         self.get_binding_bytecode(binding)
     }
 
-    pub(crate) fn binding_exists_or_materialize_bytecode(
-        &mut self,
+    pub(crate) fn bytecode_binding_is_declarative(
+        &self,
         binding: &BytecodeBinding,
     ) -> Result<bool> {
-        self.get_or_materialize_binding_bytecode(binding)
-            .map(|binding| binding.is_some())
+        if binding.operand() != BindingOperand::Unresolved {
+            return Ok(true);
+        }
+        let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
+            return Ok(false);
+        };
+        Ok(self
+            .resolve_binding_location(atom)
+            .is_some_and(|location| !matches!(location, BindingLocation::BuiltinGlobal { .. })))
     }
 
     pub(crate) fn resolve_runtime_static_declaration(
