@@ -142,6 +142,37 @@ load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 ||
 [[ "${RUN_HEAD_SHA}" == "${head_sha}" ]] || fail_test "shifted the parsed head SHA"
 [[ "${RUN_ATTEMPT}" == 7 ]] || fail_test "shifted the parsed run attempt"
 
+retry_state="${tmp_dir}/artifact-retry-state"
+printf '0\n' > "${retry_state}"
+download_matching_artifact() {
+  local target_dir="$5"
+  local attempt
+  attempt="$(sed -n '1p' "${retry_state}")"
+  attempt=$((attempt + 1))
+  printf '%s\n' "${attempt}" > "${retry_state}"
+  if ((attempt < 3)); then
+    return 1
+  fi
+  printf '%s/artifact-ready\n' "${target_dir}"
+}
+
+retry_result="$(RSQJS_ARTIFACT_WAIT_ATTEMPTS=3 RSQJS_ARTIFACT_WAIT_SECONDS=0 \
+  download_matching_artifact_with_retry owner/repo delayed-artifact "${tree_sha}" \
+  correctness "${tmp_dir}/retry-target")"
+[[ "${retry_result}" == "${tmp_dir}/retry-target/artifact-ready" ]] ||
+  fail_test "artifact retry did not return the delayed artifact"
+[[ "$(sed -n '1p' "${retry_state}")" == 3 ]] ||
+  fail_test "artifact retry used an unexpected number of attempts"
+
+download_matching_artifact() {
+  return 1
+}
+if retry_result="$(RSQJS_ARTIFACT_WAIT_ATTEMPTS=2 RSQJS_ARTIFACT_WAIT_SECONDS=0 \
+  download_matching_artifact_with_retry owner/repo missing-artifact "${tree_sha}" \
+  correctness "${tmp_dir}/missing-target" 2>/dev/null)"; then
+  fail_test "artifact retry accepted an artifact that never appeared"
+fi
+
 headline="$(report_commit_headline \
   'AS-06a2a: attach VM-owned bytecode continuations' 439 20260710T212554Z)"
 [[ "${headline}" == \
