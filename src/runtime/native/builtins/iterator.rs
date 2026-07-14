@@ -665,13 +665,11 @@ impl Context {
     ) -> Result<Value> {
         let input = first_arg(&args);
         let iterator = self.iterator_flattenable_source(&input)?;
+        let next = self.iterator_direct_next(&iterator)?;
         let prototype = self.iterator_prototype_object_id()?;
-        if let Value::Object(id) = &iterator
-            && self.objects.prototype_chain_has_object(*id, prototype)?
-        {
+        if self.iterator_inherits_prototype(&iterator, prototype)? {
             return Ok(iterator);
         }
-        let next = self.iterator_direct_next(&iterator)?;
         let wrap_prototype = self.wrapped_iterator_prototype_id()?;
         let id = self.create_wrapped_iterator(iterator, next)?;
         let next_fn = self.create_native_function(
@@ -692,8 +690,13 @@ impl Context {
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("wrapped iterator object creation failed"));
         };
-        self.define_non_enumerable_object_property(*object_id, ITERATOR_NEXT_NAME, next_fn)?;
+        self.define_non_enumerable_object_property(
+            *object_id,
+            ITERATOR_NEXT_NAME,
+            next_fn.clone(),
+        )?;
         self.define_non_enumerable_object_property(*object_id, ITERATOR_RETURN_NAME, return_fn)?;
+        self.define_collection_iterator_state(*object_id, next_fn)?;
         Ok(object)
     }
 

@@ -54,27 +54,6 @@ pub(super) fn regexp_find_utf16(
     })
 }
 
-pub(super) fn regexp_test_utf16(
-    compiled: &regress::Regex,
-    flags: RegExpFlags,
-    input: &[u16],
-    start: usize,
-) -> Option<Range<usize>> {
-    if start > input.len() {
-        return None;
-    }
-    let matched = if flags.unicode() || flags.unicode_sets() {
-        compiled.find_from_utf16(input, start).next()
-    } else {
-        compiled.find_from_ucs2(input, start).next()
-    };
-    let matched = matched?;
-    if flags.sticky() && matched.start() != start {
-        return None;
-    }
-    Some(matched.range())
-}
-
 fn regexp_syntax_error(error: &crate::regexp_syntax::RegExpSyntaxError) -> Error {
     Error::exception(ErrorName::SyntaxError, error.to_string())
 }

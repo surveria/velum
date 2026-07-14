@@ -149,6 +149,16 @@ impl Context {
         };
         match object_ref.value {
             Value::Object(id)
+                if !self.objects.is_proxy(*id)
+                    && self
+                        .objects
+                        .typed_array(*id)?
+                        .is_some_and(|view| view.length() > 0) =>
+            {
+                self.objects.prevent_extensions(*id)?;
+                return Ok(Some(false));
+            }
+            Value::Object(id)
                 if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
             {
                 match level {
@@ -218,6 +228,15 @@ impl Context {
             return Ok(None);
         };
         match object_ref.value {
+            Value::Object(id)
+                if !self.objects.is_proxy(*id)
+                    && self
+                        .objects
+                        .typed_array(*id)?
+                        .is_some_and(|view| view.length() > 0) =>
+            {
+                return Ok(Some(false));
+            }
             Value::Object(id)
                 if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
             {

@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime, Value, VmStorageKind};
+use rs_quickjs::{Engine, Error, Runtime, RuntimeLimits, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -154,6 +154,39 @@ fn preserves_reduce_iteration_contracts_across_resize() -> TestResult {
         ",
     )?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn separates_byte_buffer_and_object_property_limits() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_object_properties: 128,
+        max_byte_buffer_len: 512,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let value = context.eval("new Uint8Array(256).byteLength")?;
+    ensure_value(&value, &Value::Number(256.0))?;
+
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_byte_buffer_len: 4,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let Err(error) = context.eval("new ArrayBuffer(5)") else {
+        return Err("expected the byte buffer limit to reject ArrayBuffer allocation".into());
+    };
+    if matches!(error, Error::ResourceLimit { .. })
+        && error
+            .to_string()
+            .contains("typed array byte length exceeded 4")
+    {
+        let value = context.eval(
+            "try { new Uint8Array(new ArrayBuffer(0), 0, 1000000); 0; } \
+             catch (error) { error instanceof RangeError ? 42 : 0; }",
+        )?;
+        return ensure_value(&value, &Value::Number(42.0));
+    }
+    Err(format!("expected byte buffer resource limit, got {error:?}").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

@@ -22,6 +22,27 @@ fn static_optional_member_short_circuits_nullish_values() -> TestResult {
 }
 
 #[test]
+fn optional_member_calls_preserve_receivers_and_skip_nullish_arguments() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let calls = 0;
+        function argument() { calls += 1; return 1; }
+        const object = {
+          value: 41,
+          add(value) { return this.value + value; }
+        };
+        const direct = object?.add(1);
+        const spread = object?.add(...[1]);
+        const skipped = null?.add(argument());
+        [direct, spread, skipped, calls].join("|")
+        "#,
+    )?;
+    ensure_value(&value, &Value::from("42|42||0"))
+}
+
+#[test]
 fn question_before_decimal_remains_a_conditional_operator() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

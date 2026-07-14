@@ -1,5 +1,6 @@
 use crate::{
     error::Result,
+    regexp_syntax::RegExpFlags,
     runtime::{Context, object::OwnPropertyDescriptor},
     value::Value,
 };
@@ -42,23 +43,27 @@ impl Context {
         }
 
         let flags = regexp.parsed_flags();
-        let mut text = String::new();
-        for (enabled, marker) in [
-            (flags.has_indices(), 'd'),
-            (flags.global(), 'g'),
-            (flags.ignore_case(), 'i'),
-            (flags.multiline(), 'm'),
-            (flags.dot_all(), 's'),
-            (flags.unicode(), 'u'),
-            (flags.unicode_sets(), 'v'),
-            (flags.sticky(), 'y'),
-        ] {
-            if enabled {
-                text.push(marker);
-            }
-        }
-        Ok(Some(text))
+        Ok(Some(regexp_flags_text(flags)))
     }
+}
+
+pub(super) fn regexp_flags_text(flags: RegExpFlags) -> String {
+    let mut text = String::new();
+    for (enabled, marker) in [
+        (flags.has_indices(), 'd'),
+        (flags.global(), 'g'),
+        (flags.ignore_case(), 'i'),
+        (flags.multiline(), 'm'),
+        (flags.dot_all(), 's'),
+        (flags.unicode(), 'u'),
+        (flags.unicode_sets(), 'v'),
+        (flags.sticky(), 'y'),
+    ] {
+        if enabled {
+            text.push(marker);
+        }
+    }
+    text
 }
 
 const fn intrinsic_flag_getters() -> [(&'static str, NativeFunctionKind); 8] {

@@ -26,8 +26,9 @@ mod split;
 
 use engine::{
     compile_regexp_pattern_utf16, escaped_regexp_source_utf16, parse_regexp_flags,
-    regexp_find_utf16, regexp_index_usize_to_number, regexp_test_utf16,
+    regexp_find_utf16, regexp_index_usize_to_number,
 };
+use flags::regexp_flags_text;
 
 use super::{
     NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME,
@@ -98,6 +99,14 @@ impl Context {
         let pattern_value = args.first().cloned().unwrap_or(Value::Undefined);
         let flags_value = args.get(1);
         let pattern_is_regexp = self.is_regexp(&pattern_value)?;
+        let regexp_data = if pattern_is_regexp {
+            match &pattern_value {
+                Value::Object(id) => self.objects.regexp_value(*id)?.cloned(),
+                _ => None,
+            }
+        } else {
+            None
+        };
         if mode == RegExpCallMode::Call
             && pattern_is_regexp
             && flags_value.is_none_or(value_is_undefined)
@@ -109,7 +118,9 @@ impl Context {
                 return Ok(pattern_value);
             }
         }
-        let pattern = if pattern_is_regexp {
+        let pattern = if let Some(regexp) = &regexp_data {
+            regexp.pattern_utf16().to_vec()
+        } else if pattern_is_regexp {
             let source = self.get_named(&pattern_value, REGEXP_SOURCE_PROPERTY)?;
             self.to_utf16_string(&source)?
         } else {
@@ -120,8 +131,12 @@ impl Context {
         };
         let flags = match (pattern_is_regexp, flags_value) {
             (true, None | Some(Value::Undefined)) => {
-                let flags = self.get_named(&pattern_value, REGEXP_FLAGS_PROPERTY)?;
-                self.to_string(&flags)?
+                if let Some(regexp) = &regexp_data {
+                    regexp_flags_text(regexp.parsed_flags())
+                } else {
+                    let flags = self.get_named(&pattern_value, REGEXP_FLAGS_PROPERTY)?;
+                    self.to_string(&flags)?
+                }
             }
             (false, None | Some(Value::Undefined)) => String::new(),
             (_, Some(value)) => self.to_string(value)?,
@@ -150,9 +165,13 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        if self.semantic_object_ref(this_value)?.is_none() {
+            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
-        self.regexp_test_code_units(this_value, &input)
-            .map(Value::Bool)
+        let input_value = self.heap_utf16_string_value(&input)?;
+        self.regexp_exec_abstract(this_value, &input_value, &input)
+            .map(|result| Value::Bool(result.is_some()))
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_to_string(
@@ -584,29 +603,6 @@ impl Context {
             .regexp_value(*id)?
             .cloned()
             .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))
-    }
-
-    fn regexp_test_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<bool> {
-        let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = regexp.parsed_flags();
-        self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
-        let last_index = self.regexp_last_index_utf16(this_value, input)?;
-        let start = if flags.global() || flags.sticky() {
-            last_index
-        } else {
-            0
-        };
-        let matched = regexp_test_utf16(regexp.compiled(), flags, input, start);
-        let Some(range) = matched else {
-            if flags.global() || flags.sticky() {
-                self.set_regexp_last_index(this_value, 0)?;
-            }
-            return Ok(false);
-        };
-        if flags.global() || flags.sticky() {
-            self.set_regexp_last_index(this_value, range.end)?;
-        }
-        Ok(true)
     }
 
     fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
