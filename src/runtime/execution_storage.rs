@@ -258,6 +258,66 @@ impl Context {
         self.release_frame_storage(frame.storage_footprint()?)
     }
 
+    pub(in crate::runtime) fn current_function_variable_scope_index(
+        &self,
+    ) -> Result<Option<usize>> {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return Ok(None);
+            }
+            let Some(function_id) = frame.function_id() else {
+                continue;
+            };
+            let phase = frame
+                .function_environment_phase()
+                .ok_or_else(|| Error::runtime("function environment phase is unavailable"))?;
+            if phase == FunctionEnvironmentPhase::ParameterInitialization {
+                return Ok(None);
+            }
+            if phase == FunctionEnvironmentPhase::Setup {
+                return Err(Error::runtime(
+                    "function variable environment is not initialized",
+                ));
+            }
+            let base = frame
+                .local_base()
+                .ok_or_else(|| Error::runtime("function local base is unavailable"))?;
+            let function = self.function(function_id)?;
+            let base_scope_offset = usize::from(function.self_binding.is_some())
+                .checked_add(usize::from(function.arguments_binding.is_some()))
+                .ok_or_else(|| Error::limit("function variable scope index overflowed"))?;
+            let mut index = base
+                .checked_add(base_scope_offset)
+                .ok_or_else(|| Error::limit("function variable scope index overflowed"))?;
+            if phase.has_separate_body_scope() {
+                index = index
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("function variable scope index overflowed"))?;
+            }
+            if self.locals.get(index).is_none() {
+                return Err(Error::runtime(
+                    "function variable environment scope disappeared",
+                ));
+            }
+            return Ok(Some(index));
+        }
+        Ok(None)
+    }
+
+    pub(in crate::runtime) fn current_function_contains_sloppy_direct_eval(&self) -> Result<bool> {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return Ok(false);
+            }
+            let Some(function_id) = frame.function_id() else {
+                continue;
+            };
+            let bytecode = &self.function(function_id)?.bytecode;
+            return Ok(!bytecode.strict() && bytecode.contains_direct_eval());
+        }
+        Ok(false)
+    }
+
     pub(in crate::runtime) fn current_activation_this(&self) -> Option<&Value> {
         for frame in self.activation_frames.iter().rev() {
             if frame.is_eval_boundary() {

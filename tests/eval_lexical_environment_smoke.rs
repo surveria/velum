@@ -58,6 +58,63 @@ fn strict_eval_keeps_vars_local_and_preserves_captured_lexicals() -> TestResult 
 }
 
 #[test]
+fn sloppy_eval_functions_capture_eval_lexical_and_variable_bindings() -> TestResult {
+    expect_true(
+        r#"
+        function createReader() {
+            var value = 2;
+            return eval(`
+                let offset = 40;
+                var value = 4;
+                function read() { return offset + value; }
+                read
+            `);
+        }
+        var read = createReader();
+        read() === 44
+        "#,
+    )
+}
+
+#[test]
+fn sloppy_eval_var_declarations_target_the_function_variable_environment() -> TestResult {
+    expect_true(
+        r#"
+        function createValue() {
+            {
+                let blockOnly = 1;
+                eval("var createdByEval = 41");
+                if (blockOnly !== 1) return -1;
+            }
+            return createdByEval;
+        }
+        createValue() === 41 && typeof createdByEval === "undefined"
+        "#,
+    )
+}
+
+#[test]
+fn eval_created_vars_shadow_globals_only_inside_the_owning_function() -> TestResult {
+    expect_true(
+        r#"
+        var value = 42;
+        function readGlobal() { return value; }
+        function updateLocal() {
+            var readLocal = eval(`
+                var value = 5;
+                function read() { return value; }
+                read
+            `);
+            if (readLocal() !== 5 || value !== 5 || readGlobal() !== 42) return false;
+            value = 8;
+            return readLocal() === 8 && value === 8 && readGlobal() === 42;
+        }
+        updateLocal() && value === 42
+        "#,
+    )
+}
+
+#[test]
 fn declarations_preserve_the_previous_completion_value() -> TestResult {
     expect_true(
         r#"
@@ -107,6 +164,19 @@ fn global_eval_declarations_create_configurable_bindings() -> TestResult {
         varDescriptor.writable && varDescriptor.enumerable && varDescriptor.configurable &&
         functionDescriptor.writable && functionDescriptor.enumerable &&
         functionDescriptor.configurable
+        "#,
+    )
+}
+
+#[test]
+fn global_eval_bindings_follow_configurable_property_deletion() -> TestResult {
+    expect_true(
+        r#"
+        eval("var evalCreated = 1");
+        var deleted = eval("delete evalCreated");
+        var missing = typeof evalCreated === "undefined";
+        evalCreated = 2;
+        deleted && missing && evalCreated === 2 && globalThis.evalCreated === 2
         "#,
     )
 }

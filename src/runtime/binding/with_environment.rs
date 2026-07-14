@@ -5,8 +5,11 @@ use crate::{
     runtime::{
         Context,
         abstract_operations::to_boolean,
-        activation::{ActivationFrame, DynamicEnvironment, FunctionEnvironmentPhase},
+        activation::{
+            ActivationFrame, DynamicEnvironment, EvalBindingEnvironment, FunctionEnvironmentPhase,
+        },
     },
+    storage::atom::AtomId,
     value::Value,
 };
 
@@ -14,32 +17,53 @@ const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct WithBindingReference {
-    object: Value,
+    target: DynamicBindingTarget,
     provides_implicit_this: bool,
+}
+
+#[derive(Debug, Clone)]
+enum DynamicBindingTarget {
+    Object(Value),
+    EvalBinding {
+        environment: EvalBindingEnvironment,
+        atom: AtomId,
+    },
 }
 
 impl WithBindingReference {
     const fn with_object(object: Value) -> Self {
         Self {
-            object,
+            target: DynamicBindingTarget::Object(object),
             provides_implicit_this: true,
         }
     }
 
     const fn eval_var(object: Value) -> Self {
         Self {
-            object,
+            target: DynamicBindingTarget::Object(object),
             provides_implicit_this: false,
         }
     }
 
-    pub(in crate::runtime) const fn object(&self) -> &Value {
-        &self.object
+    const fn eval_binding(environment: EvalBindingEnvironment, atom: AtomId) -> Self {
+        Self {
+            target: DynamicBindingTarget::EvalBinding { environment, atom },
+            provides_implicit_this: false,
+        }
+    }
+
+    pub(in crate::runtime) const fn object(&self) -> Option<&Value> {
+        match &self.target {
+            DynamicBindingTarget::Object(object) => Some(object),
+            DynamicBindingTarget::EvalBinding { .. } => None,
+        }
     }
 
     pub(in crate::runtime) fn call_this_value(&self) -> Value {
         if self.provides_implicit_this {
-            return self.object.clone();
+            if let DynamicBindingTarget::Object(object) = &self.target {
+                return object.clone();
+            }
         }
         Value::Undefined
     }
@@ -49,16 +73,24 @@ impl WithBindingReference {
         context: &mut Context,
         binding: &BytecodeBinding,
     ) -> Result<Value> {
-        let lookup = context.property_lookup(binding.name().as_str());
-        if !context.has_property_value_with_lookup(&self.object, lookup)? {
-            if binding.strict_write() || context.current_code_is_strict()? {
-                return Err(crate::runtime::control::reference_error_undefined(
-                    binding.name(),
-                ));
+        match &self.target {
+            DynamicBindingTarget::Object(object) => {
+                let lookup = context.property_lookup(binding.name().as_str());
+                if !context.has_property_value_with_lookup(object, lookup)? {
+                    if binding.strict_write() || context.current_code_is_strict()? {
+                        return Err(crate::runtime::control::reference_error_undefined(
+                            binding.name(),
+                        ));
+                    }
+                    return Ok(Value::Undefined);
+                }
+                context.get(object, lookup)
             }
-            return Ok(Value::Undefined);
+            DynamicBindingTarget::EvalBinding { environment, atom } => environment
+                .binding(*atom)?
+                .ok_or_else(|| crate::runtime::control::reference_error_undefined(binding.name()))?
+                .value(binding.name()),
         }
-        context.get(&self.object, lookup)
     }
 
     pub(in crate::runtime) fn set(
@@ -67,20 +99,31 @@ impl WithBindingReference {
         binding: &BytecodeBinding,
         value: Value,
     ) -> Result<()> {
-        let lookup = context.property_lookup(binding.name().as_str());
-        if !context.has_property_value_with_lookup(&self.object, lookup)? && binding.strict_write()
-        {
-            return Err(crate::runtime::control::reference_error_undefined(
-                binding.name(),
-            ));
+        match &self.target {
+            DynamicBindingTarget::Object(object) => {
+                let lookup = context.property_lookup(binding.name().as_str());
+                if !context.has_property_value_with_lookup(object, lookup)?
+                    && binding.strict_write()
+                {
+                    return Err(crate::runtime::control::reference_error_undefined(
+                        binding.name(),
+                    ));
+                }
+                let failure = if binding.strict_write() {
+                    crate::runtime::abstract_operations::SetFailureBehavior::Throw
+                } else {
+                    crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse
+                };
+                context.set(object, lookup, value, object, failure)?;
+                Ok(())
+            }
+            DynamicBindingTarget::EvalBinding { environment, atom } => {
+                let cell = environment.binding(*atom)?.ok_or_else(|| {
+                    crate::runtime::control::reference_error_undefined(binding.name())
+                })?;
+                context.assign_bytecode_cell(binding, &cell, value)
+            }
         }
-        let failure = if binding.strict_write() {
-            crate::runtime::abstract_operations::SetFailureBehavior::Throw
-        } else {
-            crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse
-        };
-        context.set(&self.object, lookup, value, &self.object, failure)?;
-        Ok(())
     }
 
     pub(in crate::runtime) fn delete(
@@ -88,8 +131,13 @@ impl WithBindingReference {
         context: &mut Context,
         binding: &BytecodeBinding,
     ) -> Result<bool> {
-        let lookup = context.property_lookup(binding.name().as_str());
-        context.delete_property_value_with_lookup(&self.object, lookup)
+        match &self.target {
+            DynamicBindingTarget::Object(object) => {
+                let lookup = context.property_lookup(binding.name().as_str());
+                context.delete_property_value_with_lookup(object, lookup)
+            }
+            DynamicBindingTarget::EvalBinding { environment, atom } => environment.delete(*atom),
+        }
     }
 }
 
@@ -155,6 +203,105 @@ impl Context {
         Ok(())
     }
 
+    pub(in crate::runtime) fn push_eval_binding_environment(
+        &mut self,
+        environment: EvalBindingEnvironment,
+    ) -> Result<()> {
+        let index = self.current_dynamic_environment_index()?;
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
+        let Some(environments) = self
+            .activation_frames
+            .get_mut(index)
+            .and_then(ActivationFrame::dynamic_environments_mut)
+        else {
+            self.storage_ledger
+                .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
+            return Err(Error::runtime("eval binding activation disappeared"));
+        };
+        let position = environments
+            .iter()
+            .position(|environment| matches!(environment, DynamicEnvironment::With(_)))
+            .unwrap_or(environments.len());
+        environments.insert(position, DynamicEnvironment::EvalBindings(environment));
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn register_eval_binding(
+        &self,
+        environment: &EvalBindingEnvironment,
+        atom: AtomId,
+        cell: crate::runtime::binding::scope::BindingCell,
+        deletable: bool,
+    ) -> Result<()> {
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
+        match environment.insert(atom, cell, deletable) {
+            Ok(true) => Ok(()),
+            Ok(false) => self
+                .storage_ledger
+                .release_count(crate::runtime::VmStorageKind::Binding, 1),
+            Err(error) => {
+                self.storage_ledger
+                    .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
+                Err(error)
+            }
+        }
+    }
+
+    pub(in crate::runtime) fn assign_eval_annex_b_var(
+        &self,
+        atom: AtomId,
+        name: &str,
+        value: Value,
+    ) -> Result<bool> {
+        for environment in self.current_dynamic_environments().iter().rev() {
+            let DynamicEnvironment::EvalBindings(environment) = environment else {
+                continue;
+            };
+            if environment.assign_annex_b(atom, name, value.clone())? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub(in crate::runtime) fn pop_eval_binding_environment(
+        &mut self,
+        expected: &EvalBindingEnvironment,
+    ) -> Result<()> {
+        let index = self.current_dynamic_environment_index()?;
+        let environments = self
+            .activation_frames
+            .get_mut(index)
+            .and_then(ActivationFrame::dynamic_environments_mut)
+            .ok_or_else(|| Error::runtime("eval binding activation disappeared"))?;
+        let position = environments
+            .iter()
+            .position(|environment| {
+                matches!(environment, DynamicEnvironment::EvalBindings(active) if active.same_environment(expected))
+            })
+            .ok_or_else(|| Error::runtime("eval binding environment disappeared"))?;
+        let binding_count = environments
+            .get(position)
+            .ok_or_else(|| Error::runtime("eval binding environment disappeared"))?
+            .storage_binding_count()?;
+        let environment = environments.remove(position);
+        if let Err(error) = self
+            .storage_ledger
+            .release_count(crate::runtime::VmStorageKind::Binding, binding_count)
+        {
+            let environments = self
+                .activation_frames
+                .get_mut(index)
+                .and_then(ActivationFrame::dynamic_environments_mut)
+                .ok_or_else(|| Error::runtime("eval binding activation disappeared"))?;
+            environments.insert(position, environment);
+            return Err(error);
+        }
+        Ok(())
+    }
+
     pub(in crate::runtime) fn pop_with_environment(&mut self) -> Result<Value> {
         let environment = self
             .current_dynamic_environments_mut()?
@@ -195,7 +342,9 @@ impl Context {
         }
         let resolves_eval_var = matches!(
             binding.operand(),
-            BindingOperand::Global { .. } | BindingOperand::Unresolved
+            BindingOperand::Global { .. }
+                | BindingOperand::EvalVariable { .. }
+                | BindingOperand::Unresolved
         );
         let mut remaining_with_environments = count;
         for environment in environments.into_iter().rev() {
@@ -212,7 +361,15 @@ impl Context {
                         return Ok(Some(WithBindingReference::eval_var(object)));
                     }
                 }
-                DynamicEnvironment::With(_) | DynamicEnvironment::EvalVar(_) => {}
+                DynamicEnvironment::EvalBindings(environment) if resolves_eval_var => {
+                    let atom = self.intern_static_name_atom(binding.name().name())?;
+                    if environment.binding(atom)?.is_some() {
+                        return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
+                    }
+                }
+                DynamicEnvironment::With(_)
+                | DynamicEnvironment::EvalVar(_)
+                | DynamicEnvironment::EvalBindings(_) => {}
             }
         }
         Ok(None)
@@ -233,7 +390,7 @@ impl Context {
             .rev()
             .find_map(|environment| match environment {
                 DynamicEnvironment::EvalVar(value) => Some(value.clone()),
-                DynamicEnvironment::With(_) => None,
+                DynamicEnvironment::With(_) | DynamicEnvironment::EvalBindings(_) => None,
             })
     }
 

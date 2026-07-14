@@ -53,8 +53,16 @@ impl Function {
     pub(in crate::runtime) fn storage_footprint(
         &self,
     ) -> Result<JavaScriptFunctionStorageFootprint> {
+        let dynamic_binding_count =
+            self.dynamic_environments
+                .iter()
+                .try_fold(0_usize, |count, environment| {
+                    count
+                        .checked_add(environment.storage_binding_count()?)
+                        .ok_or_else(function_storage_overflow)
+                })?;
         let binding_count =
-            checked_function_storage_sum([self.upvalues.len(), self.dynamic_environments.len()])?;
+            checked_function_storage_sum([self.upvalues.len(), dynamic_binding_count])?;
         let mut metadata_cache_entry_count = checked_function_storage_sum([
             self.param_binding_ids.len(),
             self.param_atoms.len(),

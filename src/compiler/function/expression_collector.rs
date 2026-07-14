@@ -19,6 +19,7 @@ impl CaptureBindingCollector {
         CollectedFunctionBindings {
             bindings: Rc::from(collector.bindings.into_boxed_slice()),
             uses_arguments: collector.uses_arguments,
+            contains_direct_eval: collector.contains_direct_eval,
         }
     }
 
@@ -30,6 +31,12 @@ impl CaptureBindingCollector {
             Expr::New { constructor, args } => (constructor.as_ref(), args.as_slice()),
             _ => return,
         };
+        if !self.inside_nested_function
+            && matches!(expr, Expr::Call { .. })
+            && super::super::binding_effects::direct_eval_callee(callee)
+        {
+            self.contains_direct_eval = true;
+        }
         self.collect_expr(callee);
         self.collect_exprs(args);
     }

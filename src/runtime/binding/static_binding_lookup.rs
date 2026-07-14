@@ -48,7 +48,9 @@ impl Context {
                 };
                 Ok(Some((location, cell)))
             }
-            BindingOperand::Global { .. } | BindingOperand::Unresolved => Ok(None),
+            BindingOperand::Global { .. }
+            | BindingOperand::EvalVariable { .. }
+            | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -131,7 +133,9 @@ impl Context {
             BindingOperand::Local { scope, slot } => {
                 self.compiled_declaration_local_binding(scope, slot)
             }
-            BindingOperand::Upvalue { .. } | BindingOperand::Unresolved => Ok(None),
+            BindingOperand::EvalVariable { .. }
+            | BindingOperand::Upvalue { .. }
+            | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -167,7 +171,7 @@ impl Context {
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
             }
-            BindingOperand::Unresolved => Ok(None),
+            BindingOperand::EvalVariable { .. } | BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -331,8 +335,7 @@ impl Context {
     }
 
     fn compiled_global_location(&self, atom: AtomId, slot: BindingSlot) -> BindingLocation {
-        if !self.has_visible_local_scope() && self.realm.globals.cell_for_slot(atom, slot).is_some()
-        {
+        if self.realm.globals.cell_for_slot(atom, slot).is_some() {
             return BindingLocation::exact_global(atom, slot);
         }
         BindingLocation::global(atom, slot)
@@ -392,7 +395,7 @@ impl Context {
         atom: AtomId,
         slot: BindingSlot,
     ) -> Option<BindingCell> {
-        if self.has_visible_local_scope() || self.realm.object_global_names.contains(&atom) {
+        if self.realm.object_global_names.contains(&atom) {
             return None;
         }
         self.realm.globals.cell_at_slot(slot)

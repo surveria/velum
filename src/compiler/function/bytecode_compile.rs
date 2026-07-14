@@ -74,6 +74,7 @@ impl BytecodeFunction {
             hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
             capture_bindings: collected.bindings,
             uses_arguments,
+            contains_direct_eval: collected.contains_direct_eval,
             strict: mode.strict,
             simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
         }))

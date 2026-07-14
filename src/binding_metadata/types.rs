@@ -9,6 +9,9 @@ pub enum BindingOperand {
     Global {
         slot: GlobalSlot,
     },
+    EvalVariable {
+        slot: GlobalSlot,
+    },
     Local {
         scope: ScopeId,
         slot: LocalSlot,
@@ -96,6 +99,7 @@ impl FunctionScopeId {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ScopeKind {
     Global,
+    EvalVariable,
     Local,
 }
 

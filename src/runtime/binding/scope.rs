@@ -8,7 +8,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         VmStorageKind,
-        control::reference_error_uninitialized,
+        control::{reference_error_undefined, reference_error_uninitialized},
         storage_ledger::{VmStorageLedger, VmStorageReservation},
     },
     storage::atom::AtomId,
@@ -251,12 +251,12 @@ impl BindingScope {
     }
 
     pub(crate) fn contains(&self, atom: AtomId) -> bool {
-        self.binding_position(atom).is_ok()
+        self.get(atom).is_some()
     }
 
     pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
         let slot = self.slot_of(atom)?;
-        self.cell(slot).cloned()
+        self.cell(slot).filter(|cell| !cell.is_deleted()).cloned()
     }
 
     pub(crate) const fn compiled_scope(&self) -> Option<ScopeId> {
@@ -276,10 +276,13 @@ impl BindingScope {
 
     pub(crate) fn slot_of(&self, atom: AtomId) -> Option<BindingSlot> {
         let position = self.binding_position(atom).ok()?;
-        self.index
+        let slot = self
+            .index
             .bindings()
             .get(position)
-            .map(|entry| entry.slot())
+            .map(|entry| entry.slot())?;
+        self.cell(slot).filter(|cell| !cell.is_deleted())?;
+        Some(slot)
     }
 
     pub(crate) fn cell_for_slot(&self, atom: AtomId, slot: BindingSlot) -> Option<BindingCell> {
@@ -287,11 +290,11 @@ impl BindingScope {
         if slot_atom != atom {
             return None;
         }
-        self.cell(slot).cloned()
+        self.cell(slot).filter(|cell| !cell.is_deleted()).cloned()
     }
 
     pub(crate) fn cell_at_slot(&self, slot: BindingSlot) -> Option<BindingCell> {
-        self.cell(slot).cloned()
+        self.cell(slot).filter(|cell| !cell.is_deleted()).cloned()
     }
 
     pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) -> Result<BindingSlot> {
@@ -643,6 +646,7 @@ impl BindingCell {
             match &binding.state {
                 BindingState::Initialized(value) => return Ok(value.clone()),
                 BindingState::Uninitialized => return Err(reference_error_uninitialized(name)),
+                BindingState::Deleted => return Err(reference_error_undefined(name)),
                 BindingState::Alias(target) => target.clone(),
             }
         };
@@ -650,6 +654,7 @@ impl BindingCell {
         match &target_binding.state {
             BindingState::Initialized(value) => Ok(value.clone()),
             BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
+            BindingState::Deleted => Err(reference_error_undefined(name)),
             BindingState::Alias(_) => Err(Error::runtime(
                 "import binding alias target is not terminal",
             )),
@@ -679,6 +684,9 @@ impl BindingCell {
 
     pub fn assign(&self, name: &str, value: Value) -> Result<()> {
         let mut binding = self.borrow_mut()?;
+        if matches!(binding.state, BindingState::Deleted) {
+            return Err(reference_error_undefined(name));
+        }
         if !binding.mutable {
             return Err(Error::runtime(format!("assignment to constant '{name}'")));
         }
@@ -697,6 +705,9 @@ impl BindingCell {
         strict: bool,
     ) -> Result<()> {
         let mut binding = self.borrow_mut()?;
+        if matches!(binding.state, BindingState::Deleted) {
+            return Err(reference_error_undefined(name));
+        }
         if !binding.mutable {
             if binding.immutable_assignment == ImmutableAssignment::ThrowIfStrict && !strict {
                 return Ok(());
@@ -741,6 +752,29 @@ impl BindingCell {
         Ok(())
     }
 
+    pub(in crate::runtime) fn mark_deleted(&self) -> Result<()> {
+        let mut binding = self.borrow_mut()?;
+        if binding.is_terminal_alias_target {
+            return Err(Error::runtime("terminal import binding cannot be deleted"));
+        }
+        binding.state = BindingState::Deleted;
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn restore_deleted(&self, value: Value) -> Result<()> {
+        let mut binding = self.borrow_mut()?;
+        if !matches!(binding.state, BindingState::Deleted) {
+            return Err(Error::runtime("eval binding is not deleted"));
+        }
+        binding.state = BindingState::Initialized(value);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn is_deleted(&self) -> bool {
+        self.borrow()
+            .is_ok_and(|binding| matches!(binding.state, BindingState::Deleted))
+    }
+
     pub(crate) fn same_cell(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
@@ -770,6 +804,7 @@ struct BindingCellInner {
 enum BindingState {
     Uninitialized,
     Initialized(Value),
+    Deleted,
     Alias(BindingCell),
 }
 

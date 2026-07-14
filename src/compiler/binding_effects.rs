@@ -136,7 +136,7 @@ fn assignment_contains_direct_eval(assignment: &Expr) -> bool {
     }
 }
 
-fn direct_eval_callee(expression: &Expression) -> bool {
+pub(super) fn direct_eval_callee(expression: &Expression) -> bool {
     match expression.kind() {
         Expr::Identifier(binding) => binding.as_str() == DIRECT_EVAL_BINDING,
         Expr::Parenthesized(expression) => direct_eval_callee(expression),

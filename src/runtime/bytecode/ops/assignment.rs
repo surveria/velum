@@ -164,7 +164,7 @@ impl BytecodeAssignmentReference {
     pub(in crate::runtime::bytecode) fn root_values(&self) -> Vec<&Value> {
         match self {
             Self::Binding { .. } => Vec::new(),
-            Self::WithBinding { reference, .. } => vec![reference.object()],
+            Self::WithBinding { reference, .. } => reference.object().into_iter().collect(),
             Self::StaticProperty { object, .. }
             | Self::ArrayIndexProperty { object, .. }
             | Self::PrivateProperty { object, .. } => {
