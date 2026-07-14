@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{Expr, Expression, FunctionParam, Statement};
 
-use super::{CaptureBindingCollector, CollectedFunctionBindings};
+use super::{CaptureBindingCollector, CollectedFunctionBindings, FunctionNesting};
 
 impl CaptureBindingCollector {
     pub(super) fn collect_function_with_additional<'a>(
@@ -36,7 +36,7 @@ impl CaptureBindingCollector {
             && super::super::binding_effects::direct_eval_callee(callee)
         {
             self.requires_dynamic_lexical_capture = true;
-            if !self.inside_nested_function {
+            if matches!(self.nesting, FunctionNesting::Root) {
                 self.contains_direct_eval = true;
             }
         }

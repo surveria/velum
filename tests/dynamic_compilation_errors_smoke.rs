@@ -83,8 +83,12 @@ fn uncaught_eval_syntax_errors_keep_the_dynamic_source_span() -> TestResult {
         )
         .into());
     }
-    if span.start() != 0 || span.end() != 1 {
-        return Err(format!("expected dynamic span 0..1, got {span:?}").into());
+    let expected_offset = DYNAMIC_SOURCE.len();
+    if span.start() != expected_offset || span.end() != expected_offset {
+        return Err(format!(
+            "expected dynamic EOF span {expected_offset}..{expected_offset}, got {span:?}"
+        )
+        .into());
     }
     Ok(())
 }

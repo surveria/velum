@@ -195,7 +195,7 @@ impl Context {
                 };
                 self.finish_computed_super_assignment_reference(
                     receiver,
-                    property_value,
+                    &property_value,
                     operand.access(),
                     strict,
                 )

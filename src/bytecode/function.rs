@@ -12,9 +12,7 @@ pub struct BytecodeFunction {
     body: BytecodeBlock,
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
-    uses_arguments: bool,
-    contains_direct_eval: bool,
-    requires_dynamic_lexical_capture: bool,
+    capture_semantics: BytecodeFunctionCaptureSemantics,
     eval_mode: BytecodeEvalMode,
     source: Option<Rc<str>>,
     pub(crate) simple_parameters: bool,
@@ -27,12 +25,31 @@ pub struct BytecodeFunctionInit {
     pub body: BytecodeBlock,
     pub hoist_plan: BytecodeHoistPlan,
     pub capture_bindings: Rc<[StaticBinding]>,
-    pub uses_arguments: bool,
-    pub contains_direct_eval: bool,
-    pub requires_dynamic_lexical_capture: bool,
+    pub capture_semantics: BytecodeFunctionCaptureSemantics,
     pub eval_mode: BytecodeEvalMode,
     pub source: Option<Rc<str>>,
     pub simple_parameters: bool,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct BytecodeFunctionCaptureSemantics {
+    uses_arguments: bool,
+    contains_direct_eval: bool,
+    requires_dynamic_lexical_capture: bool,
+}
+
+impl BytecodeFunctionCaptureSemantics {
+    pub const fn new(
+        uses_arguments: bool,
+        contains_direct_eval: bool,
+        requires_dynamic_lexical_capture: bool,
+    ) -> Self {
+        Self {
+            uses_arguments,
+            contains_direct_eval,
+            requires_dynamic_lexical_capture,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -61,9 +78,7 @@ impl BytecodeFunction {
             body: init.body,
             hoist_plan: init.hoist_plan,
             capture_bindings: init.capture_bindings,
-            uses_arguments: init.uses_arguments,
-            contains_direct_eval: init.contains_direct_eval,
-            requires_dynamic_lexical_capture: init.requires_dynamic_lexical_capture,
+            capture_semantics: init.capture_semantics,
             eval_mode: init.eval_mode,
             source: init.source,
             simple_parameters: init.simple_parameters,
@@ -79,15 +94,15 @@ impl BytecodeFunction {
     }
 
     pub const fn uses_arguments(&self) -> bool {
-        self.uses_arguments
+        self.capture_semantics.uses_arguments
     }
 
     pub const fn contains_direct_eval(&self) -> bool {
-        self.contains_direct_eval
+        self.capture_semantics.contains_direct_eval
     }
 
     pub const fn requires_dynamic_lexical_capture(&self) -> bool {
-        self.requires_dynamic_lexical_capture
+        self.capture_semantics.requires_dynamic_lexical_capture
     }
 
     pub const fn strict(&self) -> bool {

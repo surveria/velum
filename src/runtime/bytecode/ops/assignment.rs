@@ -175,13 +175,7 @@ impl BytecodeAssignmentReference {
                 receiver,
                 property,
                 strict,
-            } => context.set_super_property_parts(
-                base,
-                receiver,
-                &mut property.clone(),
-                value,
-                *strict,
-            ),
+            } => context.set_super_property_parts(base, receiver, property, value, *strict),
         }
     }
 

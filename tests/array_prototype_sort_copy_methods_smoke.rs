@@ -370,7 +370,7 @@ fn exposes_method_metadata() -> TestResult {
 #[test]
 fn does_not_optimize_class_constructors_as_numeric_comparators() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         class NumericComparator {
             constructor(left, right) { return left - right; }
         }
@@ -381,7 +381,7 @@ fn does_not_optimize_class_constructors_as_numeric_comparators() -> TestResult {
             rejected = error instanceof TypeError;
         }
         rejected ? 42 : 0
-        "#,
+        ",
     )
 }
 

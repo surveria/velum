@@ -12,8 +12,8 @@ use crate::{
     runtime::control::Completion,
     runtime::function::{BytecodeFunctionInit, FunctionSuperBinding, ResolvedClassField},
     runtime::object::{
-        AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
+        DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+        PropertyKey, PropertyUpdate, PropertyWritable,
     },
     value::{FunctionId, ObjectId, Value},
 };
@@ -21,6 +21,12 @@ use crate::{
 use super::state::BytecodeState;
 
 mod auto_accessor;
+mod support;
+
+use support::{
+    class_element_input_count, class_member_decorator_kind, class_member_property_update,
+    take_class_computed_key, take_class_input_values,
+};
 
 impl Context {
     pub(super) fn eval_bytecode_create_class(
@@ -29,26 +35,11 @@ impl Context {
         class: &BytecodeClass,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let element_input_count = class.members.iter().try_fold(0_usize, |count, member| {
-            class_element_input_count(count, member.decorator_count, &member.key)
-        })?;
-        let element_input_count = class
-            .fields
-            .iter()
-            .try_fold(element_input_count, |count, field| {
-                class_element_input_count(count, field.decorator_count, &field.key)
-            })?;
-        let element_inputs = state.stack.pop_many(element_input_count)?;
-        let heritage = if class.heritage {
-            Some(state.stack.pop()?)
-        } else {
-            None
-        };
-        let heritage = heritage
-            .map(|value| self.resolve_class_heritage(value))
-            .transpose()?;
-        let class_decorators = state.stack.pop_many(class.decorator_count)?;
-
+        let ClassCreationInputs {
+            element_inputs,
+            heritage,
+            decorators: class_decorators,
+        } = self.take_class_creation_inputs(state, class)?;
         let constructor = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: class.constructor_id,
             name: class.name.as_ref(),
@@ -66,41 +57,11 @@ impl Context {
             *constructor_id,
             class.default_derived_constructor,
         )?;
-        if let Some(binding) = &class.inner_name_binding {
-            self.eval_bytecode_declaration(
-                binding,
-                crate::syntax::DeclKind::Const,
-                Some(constructor.clone()),
-            )?;
-            self.retain_function_class_name_environment(*constructor_id, binding)?;
-        }
+        self.prepare_class_constructor(class, &constructor, *constructor_id)?;
         let Some(prototype_id) = self.function_constructor_prototype(*constructor_id)? else {
             return Err(Error::runtime("class prototype object is not available"));
         };
-        if heritage
-            .as_ref()
-            .is_some_and(|heritage| matches!(heritage.constructor, Value::Undefined))
-        {
-            self.objects
-                .set_prototype_value(prototype_id, &Value::Null)?;
-        }
-        if let Some(heritage) = &heritage
-            && !matches!(heritage.constructor, Value::Undefined)
-        {
-            self.set_function_static_parent(*constructor_id, heritage.constructor.clone())?;
-        }
-        self.set_function_super_binding(
-            *constructor_id,
-            Rc::new(FunctionSuperBinding {
-                constructor: heritage
-                    .as_ref()
-                    .map(|heritage| heritage.constructor.clone()),
-                home_object: Value::Object(prototype_id),
-                own_constructor: Some(*constructor_id),
-                this_value: std::cell::RefCell::new(None),
-                allow_direct_eval_super_call: std::cell::Cell::new(heritage.is_some()),
-            }),
-        )?;
+        self.prepare_class_heritage(*constructor_id, prototype_id, heritage.as_ref())?;
         let static_super_binding = Rc::new(FunctionSuperBinding {
             constructor: None,
             home_object: constructor.clone(),
@@ -132,6 +93,81 @@ impl Context {
         state.stack.push(constructor);
         state.pc = next;
         Ok(None)
+    }
+
+    fn take_class_creation_inputs(
+        &mut self,
+        state: &mut BytecodeState,
+        class: &BytecodeClass,
+    ) -> Result<ClassCreationInputs> {
+        let element_input_count = class.members.iter().try_fold(0_usize, |count, member| {
+            class_element_input_count(count, member.decorator_count, &member.key)
+        })?;
+        let element_input_count = class
+            .fields
+            .iter()
+            .try_fold(element_input_count, |count, field| {
+                class_element_input_count(count, field.decorator_count, &field.key)
+            })?;
+        let element_inputs = state.stack.pop_many(element_input_count)?;
+        let heritage = if class.heritage {
+            Some(state.stack.pop()?)
+        } else {
+            None
+        };
+        let heritage = heritage
+            .map(|value| self.resolve_class_heritage(value))
+            .transpose()?;
+        let decorators = state.stack.pop_many(class.decorator_count)?;
+        Ok(ClassCreationInputs {
+            element_inputs,
+            heritage,
+            decorators,
+        })
+    }
+
+    fn prepare_class_constructor(
+        &mut self,
+        class: &BytecodeClass,
+        constructor: &Value,
+        constructor_id: FunctionId,
+    ) -> Result<()> {
+        if let Some(binding) = &class.inner_name_binding {
+            self.eval_bytecode_declaration(
+                binding,
+                crate::syntax::DeclKind::Const,
+                Some(constructor.clone()),
+            )?;
+            self.retain_function_class_name_environment(constructor_id, binding)?;
+        }
+        Ok(())
+    }
+
+    fn prepare_class_heritage(
+        &mut self,
+        constructor_id: FunctionId,
+        prototype_id: ObjectId,
+        heritage: Option<&ClassHeritage>,
+    ) -> Result<()> {
+        if heritage.is_some_and(|heritage| matches!(heritage.constructor, Value::Undefined)) {
+            self.objects
+                .set_prototype_value(prototype_id, &Value::Null)?;
+        }
+        if let Some(heritage) = heritage
+            && !matches!(heritage.constructor, Value::Undefined)
+        {
+            self.set_function_static_parent(constructor_id, heritage.constructor.clone())?;
+        }
+        self.set_function_super_binding(
+            constructor_id,
+            Rc::new(FunctionSuperBinding {
+                constructor: heritage.map(|heritage| heritage.constructor.clone()),
+                home_object: Value::Object(prototype_id),
+                own_constructor: Some(constructor_id),
+                this_value: std::cell::RefCell::new(None),
+                allow_direct_eval_super_call: std::cell::Cell::new(heritage.is_some()),
+            }),
+        )
     }
 
     fn install_class_elements(
@@ -374,60 +410,21 @@ impl Context {
         prototype_id: ObjectId,
         private_names: &[crate::syntax::StaticName],
     ) -> Result<(FunctionId, Option<PrivateSlot>)> {
-        let function = self.create_bytecode_function(&BytecodeFunctionInit {
-            static_function_id: member.id,
-            name: None,
-            bytecode: &member.bytecode,
-            constructable: false,
-            kind: member.function_kind,
-            class_constructor: false,
-            prototype_parent: None,
-            new_target_mode: BytecodeNewTargetMode::Own,
-        })?;
-        let Value::Function(function_id) = function.clone() else {
-            return Err(Error::runtime("class member creation failed"));
-        };
-
+        let (function, function_id) = self.create_class_member_function(member)?;
         let prefix = match member.kind {
             BytecodeClassMemberKind::Method => None,
             BytecodeClassMemberKind::Getter => Some(crate::syntax::AccessorKind::Getter),
             BytecodeClassMemberKind::Setter => Some(crate::syntax::AccessorKind::Setter),
         };
         if let BytecodeClassMemberKey::Private { index } = member.key {
-            let index_usize = usize::try_from(index)
-                .map_err(|_| Error::limit("private name index exceeded supported range"))?;
-            let name = private_names
-                .get(index_usize)
-                .ok_or_else(|| Error::runtime("private class member name disappeared"))?;
-            self.set_function_name(&function, name.as_str(), prefix)?;
-            let function = self.apply_callable_decorators(
+            return self.install_private_class_member(
+                member,
                 function,
-                decorators,
-                DecoratorContext::Element {
-                    kind: class_member_decorator_kind(member.kind),
-                    name: name.as_str(),
-                    is_static: member.is_static,
-                    is_private: true,
-                },
-            )?;
-            let value = match member.kind {
-                BytecodeClassMemberKind::Method => PrivateSlotValue::Method(function),
-                BytecodeClassMemberKind::Getter => PrivateSlotValue::Accessor {
-                    getter: Some(function),
-                    setter: None,
-                },
-                BytecodeClassMemberKind::Setter => PrivateSlotValue::Accessor {
-                    getter: None,
-                    setter: Some(function),
-                },
-            };
-            return Ok((
                 function_id,
-                Some(PrivateSlot {
-                    id: self.resolve_own_private_name(index)?,
-                    value,
-                }),
-            ));
+                decorators,
+                index,
+                private_names,
+            );
         }
 
         let (key, name, function_name) =
@@ -444,30 +441,7 @@ impl Context {
             },
         )?;
 
-        let update = match member.kind {
-            BytecodeClassMemberKind::Method => PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(function),
-                Some(PropertyWritable::Yes),
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::Yes),
-            )),
-            BytecodeClassMemberKind::Getter => {
-                PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
-                    Some(function),
-                    None,
-                    Some(PropertyEnumerable::No),
-                    Some(PropertyConfigurable::Yes),
-                ))
-            }
-            BytecodeClassMemberKind::Setter => {
-                PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
-                    None,
-                    Some(function),
-                    Some(PropertyEnumerable::No),
-                    Some(PropertyConfigurable::Yes),
-                ))
-            }
-        };
+        let update = class_member_property_update(member.kind, function);
         if member.is_static {
             self.define_function_property_key(constructor_id, &name, key, update)?;
             return Ok((function_id, None));
@@ -480,6 +454,76 @@ impl Context {
             self.limits.max_object_properties,
         )?;
         Ok((function_id, None))
+    }
+
+    fn create_class_member_function(
+        &mut self,
+        member: &BytecodeClassMember,
+    ) -> Result<(Value, FunctionId)> {
+        let function = self.create_bytecode_function(&BytecodeFunctionInit {
+            static_function_id: member.id,
+            name: None,
+            bytecode: &member.bytecode,
+            constructable: false,
+            kind: member.function_kind,
+            class_constructor: false,
+            prototype_parent: None,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        })?;
+        let Value::Function(function_id) = function.clone() else {
+            return Err(Error::runtime("class member creation failed"));
+        };
+        Ok((function, function_id))
+    }
+
+    fn install_private_class_member(
+        &mut self,
+        member: &BytecodeClassMember,
+        function: Value,
+        function_id: FunctionId,
+        decorators: Vec<Value>,
+        index: u32,
+        private_names: &[crate::syntax::StaticName],
+    ) -> Result<(FunctionId, Option<PrivateSlot>)> {
+        let prefix = match member.kind {
+            BytecodeClassMemberKind::Method => None,
+            BytecodeClassMemberKind::Getter => Some(crate::syntax::AccessorKind::Getter),
+            BytecodeClassMemberKind::Setter => Some(crate::syntax::AccessorKind::Setter),
+        };
+        let index_usize = usize::try_from(index)
+            .map_err(|_| Error::limit("private name index exceeded supported range"))?;
+        let name = private_names
+            .get(index_usize)
+            .ok_or_else(|| Error::runtime("private class member name disappeared"))?;
+        self.set_function_name(&function, name.as_str(), prefix)?;
+        let function = self.apply_callable_decorators(
+            function,
+            decorators,
+            DecoratorContext::Element {
+                kind: class_member_decorator_kind(member.kind),
+                name: name.as_str(),
+                is_static: member.is_static,
+                is_private: true,
+            },
+        )?;
+        let value = match member.kind {
+            BytecodeClassMemberKind::Method => PrivateSlotValue::Method(function),
+            BytecodeClassMemberKind::Getter => PrivateSlotValue::Accessor {
+                getter: Some(function),
+                setter: None,
+            },
+            BytecodeClassMemberKind::Setter => PrivateSlotValue::Accessor {
+                getter: None,
+                setter: Some(function),
+            },
+        };
+        Ok((
+            function_id,
+            Some(PrivateSlot {
+                id: self.resolve_own_private_name(index)?,
+                value,
+            }),
+        ))
     }
 
     fn class_member_property_key(
@@ -685,53 +729,6 @@ impl<'a> DecoratorContext<'a> {
     }
 }
 
-fn class_element_input_count(
-    count: usize,
-    decorator_count: usize,
-    key: &BytecodeClassMemberKey,
-) -> Result<usize> {
-    count
-        .checked_add(decorator_count)
-        .and_then(|count| {
-            count.checked_add(usize::from(matches!(key, BytecodeClassMemberKey::Computed)))
-        })
-        .ok_or_else(|| Error::limit("class evaluation input count overflowed"))
-}
-
-fn take_class_input_values(
-    inputs: &mut std::vec::IntoIter<Value>,
-    count: usize,
-    description: &str,
-) -> Result<Vec<Value>> {
-    let values = inputs.by_ref().take(count).collect::<Vec<_>>();
-    if values.len() != count {
-        return Err(Error::runtime(format!("{description} value disappeared")));
-    }
-    Ok(values)
-}
-
-fn take_class_computed_key(
-    inputs: &mut std::vec::IntoIter<Value>,
-    key: &BytecodeClassMemberKey,
-    missing_message: &str,
-) -> Result<Option<Value>> {
-    match key {
-        BytecodeClassMemberKey::Computed => inputs
-            .next()
-            .map(Some)
-            .ok_or_else(|| Error::runtime(missing_message)),
-        BytecodeClassMemberKey::Static(_) | BytecodeClassMemberKey::Private { .. } => Ok(None),
-    }
-}
-
-const fn class_member_decorator_kind(kind: BytecodeClassMemberKind) -> &'static str {
-    match kind {
-        BytecodeClassMemberKind::Method => "method",
-        BytecodeClassMemberKind::Getter => "getter",
-        BytecodeClassMemberKind::Setter => "setter",
-    }
-}
-
 const DECORATOR_KIND_PROPERTY: &str = "kind";
 const DECORATOR_NAME_PROPERTY: &str = "name";
 const DECORATOR_STATIC_PROPERTY: &str = "static";
@@ -743,6 +740,12 @@ pub(super) struct ClassInstallationTargets {
     constructor: Value,
     constructor_id: FunctionId,
     prototype_id: ObjectId,
+}
+
+struct ClassCreationInputs {
+    element_inputs: Vec<Value>,
+    heritage: Option<ClassHeritage>,
+    decorators: Vec<Value>,
 }
 
 /// Resolved `extends` heritage: the parent constructor value plus its

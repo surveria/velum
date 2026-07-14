@@ -126,7 +126,7 @@ fn super_constructor_is_resolved_after_argument_evaluation() -> TestResult {
 #[test]
 fn super_constructor_reference_is_prepared_before_arguments() -> TestResult {
     expect_true(
-        r#"
+        r"
         class Base { constructor(value) { this.value = value; } }
         class Derived extends Base {
             constructor() {
@@ -134,7 +134,7 @@ fn super_constructor_reference_is_prepared_before_arguments() -> TestResult {
             }
         }
         new Derived().value === 42
-        "#,
+        ",
     )
 }
 
@@ -218,11 +218,11 @@ fn destructuring_and_for_of_assign_through_super_references() -> TestResult {
 #[test]
 fn class_heritage_accepts_new_expressions() -> TestResult {
     expect_true(
-        r#"
+        r"
         class Base {}
         class Derived extends new Proxy(Base, {}) {}
         new Derived() instanceof Base
-        "#,
+        ",
     )
 }
 

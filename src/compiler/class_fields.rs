@@ -11,7 +11,7 @@ impl BytecodeCompiler<'_> {
     /// Lowers logical class fields in source order. Auto-accessor getter and
     /// setter functions share the field's one resolved public key.
     pub(super) fn compile_class_fields(
-        &mut self,
+        &self,
         class: &crate::ast::ClassLiteral,
         private_names: &[StaticName],
     ) -> Result<Vec<BytecodeClassField>> {

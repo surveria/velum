@@ -87,10 +87,10 @@ fn field_decorator_initializers_transform_instance_and_static_values() -> TestRe
 #[test]
 fn rejects_non_callable_decorator_replacements() -> TestResult {
     let Err(error) = eval(
-        r#"
+        r"
         function invalid() { return 42; }
         @invalid class Example {}
-        "#,
+        ",
     ) else {
         return Err("expected invalid decorator replacement to fail".into());
     };

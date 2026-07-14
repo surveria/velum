@@ -356,7 +356,14 @@ struct CaptureBindingCollector {
     uses_arguments: bool,
     contains_direct_eval: bool,
     requires_dynamic_lexical_capture: bool,
-    inside_nested_function: bool,
+    nesting: FunctionNesting,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum FunctionNesting {
+    #[default]
+    Root,
+    Nested,
 }
 
 /// Free bindings referenced by a function body plus whether the body reads
@@ -748,25 +755,25 @@ impl CaptureBindingCollector {
     }
 
     fn collect_function_body(&mut self, params: &[FunctionParam], body: &[Statement]) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_param_defaults(params);
         self.collect_statements(body);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_nested_expr(&mut self, expr: &Expression) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_expr(expr);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_nested_statements(&mut self, statements: &[Statement]) {
-        let was_inside_nested_function = self.inside_nested_function;
-        self.inside_nested_function = true;
+        let previous_nesting = self.nesting;
+        self.nesting = FunctionNesting::Nested;
         self.collect_statements(statements);
-        self.inside_nested_function = was_inside_nested_function;
+        self.nesting = previous_nesting;
     }
 
     fn collect_binding(&mut self, binding: &StaticBinding) {

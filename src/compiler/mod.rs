@@ -536,7 +536,7 @@ impl<'a> BytecodeCompiler<'a> {
     /// Lowers class methods and accessors, pushing computed keys onto the
     /// stack in member order.
     fn compile_class_members(
-        &mut self,
+        &self,
         class: &crate::ast::ClassLiteral,
         private_names: &[StaticName],
     ) -> Result<Vec<BytecodeClassMember>> {

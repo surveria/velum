@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
+use crate::runtime::private::{PrivateEnvironment, PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -399,94 +399,117 @@ impl Context {
             allow_direct_eval_super_call: std::cell::Cell::new(false),
         });
         for field in fields.iter() {
-            self.push_class_evaluation(
-                instance.clone(),
-                super_binding.clone(),
+            self.initialize_class_field(
+                instance,
+                field,
                 private_environment.clone(),
-                true,
+                super_binding.clone(),
             )?;
-            let super_binding = self.current_super_frame();
-            let previous_super_call_permission = super_binding
-                .as_ref()
-                .map(|binding| binding.allow_direct_eval_super_call.replace(false));
-            let initializer = match field {
-                ResolvedClassField::Public { initializer, .. }
-                | ResolvedClassField::Private { initializer, .. }
-                | ResolvedClassField::AutoAccessor { initializer, .. } => initializer,
-            };
-            let value = initializer
-                .as_ref()
-                .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
-                    self.eval_bytecode_block(initializer)
-                });
-            if let (Some(binding), Some(previous)) =
-                (&super_binding, previous_super_call_permission)
-            {
-                binding.allow_direct_eval_super_call.set(previous);
-            }
-            self.pop_temporary_this()?;
-            let value = value?.into_result()?;
-            let mut value = value;
-            for initializer in field.decorator_initializers() {
-                value = self
-                    .semantic_call(initializer, &[value], instance.clone())?
-                    .into_result()?;
-            }
-            match field {
-                ResolvedClassField::Public {
-                    key,
-                    name,
-                    infer_name,
-                    ..
-                } => {
-                    if *infer_name {
-                        self.set_function_name(&value, name, None)?;
-                    }
-                    let update = crate::runtime::object::PropertyUpdate::Data(
-                        crate::runtime::object::DataPropertyUpdate::new(
-                            Some(value.clone()),
-                            Some(crate::runtime::object::PropertyWritable::Yes),
-                            Some(crate::runtime::object::PropertyEnumerable::Yes),
-                            Some(crate::runtime::object::PropertyConfigurable::Yes),
-                        ),
-                    );
-                    let descriptor = crate::runtime::object::DataPropertyDescriptor::new(
-                        value,
-                        crate::runtime::object::PropertyWritable::Yes,
-                        crate::runtime::object::PropertyEnumerable::Yes,
-                        crate::runtime::object::PropertyConfigurable::Yes,
-                    );
-                    let descriptor_value = self.create_property_descriptor_object(
-                        &crate::runtime::object::OwnPropertyDescriptor::Data(descriptor),
-                    )?;
-                    let mut property =
-                        crate::runtime::property::DynamicPropertyKey::new(name.clone(), Some(*key));
-                    if !self.semantic_define_own_property_update_with_descriptor(
-                        instance,
-                        &mut property,
-                        update,
-                        &descriptor_value,
-                    )? {
-                        return Err(Error::type_error("class field definition was rejected"));
-                    }
-                }
-                ResolvedClassField::Private { name, .. } => {
-                    self.add_private_slot_to_value(
-                        instance,
-                        name.clone(),
-                        PrivateSlotValue::Field(value),
-                    )?;
-                }
-                ResolvedClassField::AutoAccessor { backing_name, .. } => {
-                    self.add_private_slot_to_value(
-                        instance,
-                        backing_name.clone(),
-                        PrivateSlotValue::Field(value),
-                    )?;
-                }
-            }
         }
         Ok(())
+    }
+
+    fn initialize_class_field(
+        &mut self,
+        instance: &Value,
+        field: &ResolvedClassField,
+        private_environment: Option<Rc<PrivateEnvironment>>,
+        super_binding: Rc<FunctionSuperBinding>,
+    ) -> Result<()> {
+        self.push_class_evaluation(instance.clone(), super_binding, private_environment, true)?;
+        let active_super = self.current_super_frame();
+        let previous_super_call_permission = active_super
+            .as_ref()
+            .map(|binding| binding.allow_direct_eval_super_call.replace(false));
+        let initializer = match field {
+            ResolvedClassField::Public { initializer, .. }
+            | ResolvedClassField::Private { initializer, .. }
+            | ResolvedClassField::AutoAccessor { initializer, .. } => initializer,
+        };
+        let value = initializer
+            .as_ref()
+            .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
+                self.eval_bytecode_block(initializer)
+            });
+        if let (Some(binding), Some(previous)) = (&active_super, previous_super_call_permission) {
+            binding.allow_direct_eval_super_call.set(previous);
+        }
+        self.pop_temporary_this()?;
+        let mut value = value?.into_result()?;
+        for initializer in field.decorator_initializers() {
+            value = self
+                .semantic_call(initializer, &[value], instance.clone())?
+                .into_result()?;
+        }
+        self.define_initialized_class_field(instance, field, value)
+    }
+
+    fn define_initialized_class_field(
+        &mut self,
+        instance: &Value,
+        field: &ResolvedClassField,
+        value: Value,
+    ) -> Result<()> {
+        match field {
+            ResolvedClassField::Public {
+                key,
+                name,
+                infer_name,
+                ..
+            } => self.define_public_class_field(instance, *key, name, *infer_name, value),
+            ResolvedClassField::Private { name, .. } => self.add_private_slot_to_value(
+                instance,
+                name.clone(),
+                PrivateSlotValue::Field(value),
+            ),
+            ResolvedClassField::AutoAccessor { backing_name, .. } => self
+                .add_private_slot_to_value(
+                    instance,
+                    backing_name.clone(),
+                    PrivateSlotValue::Field(value),
+                ),
+        }
+    }
+
+    fn define_public_class_field(
+        &mut self,
+        instance: &Value,
+        key: crate::runtime::object::PropertyKey,
+        name: &str,
+        infer_name: bool,
+        value: Value,
+    ) -> Result<()> {
+        if infer_name {
+            self.set_function_name(&value, name, None)?;
+        }
+        let update = crate::runtime::object::PropertyUpdate::Data(
+            crate::runtime::object::DataPropertyUpdate::new(
+                Some(value.clone()),
+                Some(crate::runtime::object::PropertyWritable::Yes),
+                Some(crate::runtime::object::PropertyEnumerable::Yes),
+                Some(crate::runtime::object::PropertyConfigurable::Yes),
+            ),
+        );
+        let descriptor = crate::runtime::object::DataPropertyDescriptor::new(
+            value,
+            crate::runtime::object::PropertyWritable::Yes,
+            crate::runtime::object::PropertyEnumerable::Yes,
+            crate::runtime::object::PropertyConfigurable::Yes,
+        );
+        let descriptor_value = self.create_property_descriptor_object(
+            &crate::runtime::object::OwnPropertyDescriptor::Data(descriptor),
+        )?;
+        let mut property =
+            crate::runtime::property::DynamicPropertyKey::new(name.to_owned(), Some(key));
+        if self.semantic_define_own_property_update_with_descriptor(
+            instance,
+            &mut property,
+            update,
+            &descriptor_value,
+        )? {
+            return Ok(());
+        }
+        Err(Error::type_error("class field definition was rejected"))
     }
 }
 

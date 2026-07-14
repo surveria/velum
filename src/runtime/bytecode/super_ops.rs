@@ -121,7 +121,7 @@ impl Context {
         self.set_super_property_parts(
             &reference.base,
             &reference.receiver,
-            &mut property.clone(),
+            property,
             value,
             strict,
         )
@@ -131,7 +131,7 @@ impl Context {
         &mut self,
         base: &Value,
         receiver: &Value,
-        property: &mut crate::runtime::property::DynamicPropertyKey,
+        property: &crate::runtime::property::DynamicPropertyKey,
         value: Value,
         strict: bool,
     ) -> Result<()> {
@@ -165,7 +165,7 @@ impl Context {
                 let property_value = self.eval_bytecode_expression(expression)?;
                 self.finish_computed_super_assignment_reference(
                     receiver,
-                    property_value,
+                    &property_value,
                     operand.access(),
                     strict,
                 )
@@ -189,11 +189,11 @@ impl Context {
     pub(in crate::runtime::bytecode) fn finish_computed_super_assignment_reference(
         &mut self,
         receiver: Value,
-        property_value: Value,
+        property_value: &Value,
         _access: StaticPropertyAccessId,
         strict: bool,
     ) -> Result<BytecodeAssignmentReference> {
-        let property = self.dynamic_property_key(&property_value)?;
+        let property = self.dynamic_property_key(property_value)?;
         self.finish_super_assignment_reference(receiver, property, strict)
     }
 
@@ -290,7 +290,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let args = state.stack.pop_many(arg_count)?;
         let constructor = state.stack.pop()?;
-        self.eval_super_call(state, constructor, &args, next)
+        self.eval_super_call(state, &constructor, &args, next)
     }
 
     pub(super) fn eval_bytecode_call_super_spread(
@@ -301,7 +301,7 @@ impl Context {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
         let constructor = state.stack.pop()?;
-        self.eval_super_call(state, constructor, &args, next)
+        self.eval_super_call(state, &constructor, &args, next)
     }
 
     pub(super) fn eval_bytecode_prepare_super_constructor(
@@ -329,14 +329,14 @@ impl Context {
     fn eval_super_call(
         &mut self,
         state: &mut BytecodeState,
-        constructor: Value,
+        constructor: &Value,
         args: &[Value],
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let frame = self.super_frame()?;
         let new_target = self.current_new_target()?;
         let this_value = self
-            .semantic_construct(&constructor, args, new_target)
+            .semantic_construct(constructor, args, new_target)
             .map_err(|error| error.with_context(SUPER_NOT_CONSTRUCTOR_ERROR))?;
         if frame.this_value.borrow().is_some() {
             return Err(Error::exception(

@@ -32,8 +32,8 @@ pub use call_site::BytecodeCallSite;
 pub use completion::BytecodeCompletion;
 pub use fast_path::BytecodeDirectThrow;
 pub use function::{
-    BytecodeEvalMode, BytecodeFunction, BytecodeFunctionInit, BytecodeFunctionParam,
-    BytecodeFunctionParamTarget,
+    BytecodeEvalMode, BytecodeFunction, BytecodeFunctionCaptureSemantics, BytecodeFunctionInit,
+    BytecodeFunctionParam, BytecodeFunctionParamTarget,
 };
 pub use function_mode::BytecodeNewTargetMode;
 pub use hoist::BytecodeHoistPlan;

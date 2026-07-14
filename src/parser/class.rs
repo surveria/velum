@@ -31,6 +31,15 @@ struct ParsedClassFunction {
     arguments_binding: Option<crate::syntax::StaticBinding>,
 }
 
+struct ClassFieldSpec {
+    key: ClassKeySeed,
+    key_name: Option<StaticName>,
+    is_static: bool,
+    is_auto_accessor: bool,
+    decorators: Vec<Expression>,
+    source_order: usize,
+}
+
 const CLASS_STATIC_KEYWORD: &str = "static";
 const CLASS_GETTER_KEYWORD: &str = "get";
 const CLASS_SETTER_KEYWORD: &str = "set";
@@ -248,12 +257,14 @@ impl Parser {
                 return Err(self.parse_error("expected '(' after class accessor name"));
             }
             return self.class_field(
-                key,
-                key_name,
-                is_static,
-                is_auto_accessor,
-                decorators,
-                member_offset,
+                ClassFieldSpec {
+                    key,
+                    key_name,
+                    is_static,
+                    is_auto_accessor,
+                    decorators,
+                    source_order: member_offset,
+                },
                 fields,
             );
         }
@@ -381,28 +392,31 @@ impl Parser {
     /// private scope.
     fn class_field(
         &mut self,
-        key: ClassKeySeed,
-        key_name: Option<StaticName>,
-        is_static: bool,
-        is_auto_accessor: bool,
-        decorators: Vec<Expression>,
-        member_offset: usize,
+        spec: ClassFieldSpec,
         fields: &mut Vec<crate::ast::ClassField>,
     ) -> Result<()> {
+        let ClassFieldSpec {
+            key,
+            key_name,
+            is_static,
+            is_auto_accessor,
+            decorators,
+            source_order,
+        } = spec;
         if let ClassKeySeed::Private(name) = &key {
             let name = name.clone();
-            self.declare_private_name(&name, PrivateElementKind::Field, is_static, member_offset)?;
+            self.declare_private_name(&name, PrivateElementKind::Field, is_static, source_order)?;
         } else if let Some(name) = &key_name {
             if name.as_str() == CLASS_CONSTRUCTOR_NAME {
                 return Err(Error::parse(
                     "class field cannot be named 'constructor'",
-                    member_offset,
+                    source_order,
                 ));
             }
             if is_static && name.as_str() == CLASS_PROTOTYPE_NAME {
                 return Err(Error::parse(
                     "class static member cannot be named 'prototype'",
-                    member_offset,
+                    source_order,
                 ));
             }
         }
@@ -418,12 +432,12 @@ impl Parser {
         self.consume_statement_terminator("expected statement terminator after class field")?;
         let key = Self::class_element_name(key);
         let auto_accessor = if is_auto_accessor && matches!(key, ClassElementName::Property(_)) {
-            Some(self.build_public_auto_accessor(is_static, member_offset)?)
+            Some(self.build_public_auto_accessor(is_static, source_order)?)
         } else {
             None
         };
         fields.push(crate::ast::ClassField {
-            source_order: member_offset,
+            source_order,
             key,
             is_static,
             auto_accessor,
