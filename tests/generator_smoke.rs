@@ -134,7 +134,7 @@ fn generator_object_method_is_iterable() -> TestResult {
 #[test]
 fn generator_prototype_inherits_the_iterator_method() -> TestResult {
     let value = eval(
-        r#"
+        r"
         function* values() {}
         let generatorPrototype = Object.getPrototypeOf(values.prototype);
         let iteratorPrototype = Object.getPrototypeOf(generatorPrototype);
@@ -142,7 +142,7 @@ fn generator_prototype_inherits_the_iterator_method() -> TestResult {
             Object.getOwnPropertySymbols(generatorPrototype)[0] === Symbol.toStringTag &&
             !Object.prototype.hasOwnProperty.call(generatorPrototype, Symbol.iterator) &&
             generatorPrototype[Symbol.iterator] === iteratorPrototype[Symbol.iterator] ? 42 : 0
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Number(42.0))
 }

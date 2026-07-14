@@ -163,7 +163,7 @@ fn reflect_accepts_callable_array_like_argument_lists() -> TestResult {
     let mut context = runtime.context();
 
     let value = context.eval(
-        r#"
+        r"
         function argumentsList(first, second) {}
         argumentsList[0] = 20;
         argumentsList[1] = 22;
@@ -178,7 +178,7 @@ fn reflect_accepts_callable_array_like_argument_lists() -> TestResult {
         let applied = Reflect.apply(add, null, argumentsList);
         let constructed = Reflect.construct(Box, argumentsList);
         applied === 42 && constructed.value === 42 ? 42 : 0
-        "#,
+        ",
     )?;
 
     ensure_value(&value, &Value::Number(42.0))

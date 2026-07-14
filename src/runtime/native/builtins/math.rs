@@ -73,7 +73,9 @@ fn accurate_atanh(value: f64) -> f64 {
     let magnitude = value.abs();
     let result = if magnitude < 0.5 {
         let square = magnitude * magnitude;
-        0.5 * (2.0 * magnitude + 2.0 * square / (1.0 - magnitude)).ln_1p()
+        0.5 * 2.0_f64
+            .mul_add(magnitude, 2.0 * square / (1.0 - magnitude))
+            .ln_1p()
     } else {
         0.5 * (2.0 * magnitude / (1.0 - magnitude)).ln_1p()
     };

@@ -68,7 +68,7 @@ fn array_from_closes_iterators_when_mapping_throws() -> TestResult {
 #[test]
 fn array_from_does_not_close_iterators_when_stepping_throws() -> TestResult {
     ensure_eval(
-        r#"
+        r"
         let marker = {};
         let closed = 0;
         let iterable = {};
@@ -85,7 +85,7 @@ fn array_from_does_not_close_iterators_when_stepping_throws() -> TestResult {
             caught = error === marker;
         }
         caught && closed === 0 ? 42 : 0
-        "#,
+        ",
         &Value::Number(42.0),
     )
 }
