@@ -78,7 +78,9 @@ fn regexp_unicode_and_source_invariants_share_one_engine_path() -> TestResult {
         const wordComplement = /[^\W]/iu.test("\u017F") && /[^\W]/iu.test("\u212A");
         const splitBackref = /foo(.+)bar\1/u.exec("foo\uD834bar\uD834\uDC00") === null;
         const source = RegExp("[/]").source === "[/]" && RegExp("/").source === "\\/";
-        legacyCase && unicodeCase && wordComplement && splitBackref && source ? 42 : 0
+        const groupName = /(?<\u{1d4d3}>x)/.exec("x").groups.𝓓 === "x" &&
+            /(?<\ud835\udcd3>x)/.exec("x").groups.𝓓 === "x";
+        legacyCase && unicodeCase && wordComplement && splitBackref && source && groupName ? 42 : 0
         "#,
     )?;
     ensure_value(&value, &Value::Number(42.0))

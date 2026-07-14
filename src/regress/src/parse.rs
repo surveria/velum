@@ -1790,10 +1790,23 @@ where
 
     #[allow(clippy::branches_sharing_code)]
     fn try_escape_unicode_sequence(&mut self) -> Option<u32> {
+        let code_point_escape = self.flags.unicode || self.flags.unicode_sets;
+        self.try_escape_unicode_sequence_with_code_points(code_point_escape)
+    }
+
+    fn try_group_name_unicode_sequence(&mut self) -> Option<u32> {
+        self.try_escape_unicode_sequence_with_code_points(true)
+    }
+
+    #[allow(clippy::branches_sharing_code)]
+    fn try_escape_unicode_sequence_with_code_points(
+        &mut self,
+        code_point_escape: bool,
+    ) -> Option<u32> {
         let orig_input = self.input.clone();
 
         // Support \u{X..X} (Unicode CodePoint)
-        if (self.flags.unicode || self.flags.unicode_sets) && self.try_consume('{') {
+        if code_point_escape && self.try_consume('{') {
             let mut value = 0_u32;
             let mut has_digit = false;
             loop {
@@ -1835,9 +1848,7 @@ where
             }
             match u16::from_str_radix(&s, 16) {
                 Ok(u) => {
-                    if (self.flags.unicode || self.flags.unicode_sets)
-                        && (0xD800..=0xDBFF).contains(&u)
-                    {
+                    if code_point_escape && (0xD800..=0xDBFF).contains(&u) {
                         // Found a high surrogate. Try to parse a low surrogate next
                         // to see if we can rebuild the original `char`
                         let after_high = self.input.clone();
@@ -1888,7 +1899,10 @@ where
 
         if let Some(mut c) = self.next_group_name_character() {
             if c == '\\' && self.try_consume('u') {
-                if let Some(escaped) = self.try_escape_unicode_sequence().and_then(char::from_u32) {
+                if let Some(escaped) = self
+                    .try_group_name_unicode_sequence()
+                    .and_then(char::from_u32)
+                {
                     c = escaped;
                 } else {
                     self.input = orig_input;
@@ -1910,8 +1924,9 @@ where
         loop {
             if let Some(mut c) = self.next_group_name_character() {
                 if c == '\\' && self.try_consume('u') {
-                    if let Some(escaped) =
-                        self.try_escape_unicode_sequence().and_then(char::from_u32)
+                    if let Some(escaped) = self
+                        .try_group_name_unicode_sequence()
+                        .and_then(char::from_u32)
                     {
                         c = escaped;
                     } else {
