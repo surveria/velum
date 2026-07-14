@@ -579,7 +579,9 @@ impl Context {
     ) -> Result<Value> {
         let lookup = self.static_property_lookup(property)?;
         let Some(deletion) = self.semantic_property_delete(object, lookup)? else {
-            return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
+            return self
+                .delete_property_value_with_lookup(object, lookup)
+                .map(Value::Bool);
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && !self.is_global_object_id(id)
@@ -601,7 +603,9 @@ impl Context {
     ) -> Result<Value> {
         let lookup = property.lookup();
         let Some(deletion) = self.semantic_property_delete(object, lookup)? else {
-            return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
+            return self
+                .delete_property_value_with_lookup(object, lookup)
+                .map(Value::Bool);
         };
         if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && !self.is_global_object_id(id)

@@ -145,7 +145,7 @@ impl Context {
         Ok(prototype)
     }
 
-    fn boolean_constructor_prototype(&mut self) -> Result<ObjectId> {
+    pub(in crate::runtime) fn boolean_constructor_prototype(&mut self) -> Result<ObjectId> {
         let Value::NativeFunction(id) = self.boolean_constructor_value()? else {
             return Err(Error::runtime("Boolean constructor value is not native"));
         };

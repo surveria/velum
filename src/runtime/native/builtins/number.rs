@@ -183,7 +183,7 @@ impl Context {
         Ok(prototype)
     }
 
-    fn number_constructor_prototype(&mut self) -> Result<ObjectId> {
+    pub(in crate::runtime) fn number_constructor_prototype(&mut self) -> Result<ObjectId> {
         let Value::NativeFunction(id) = self.number_constructor_value()? else {
             return Err(crate::error::Error::runtime(
                 "Number constructor value is not native",

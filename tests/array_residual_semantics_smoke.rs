@@ -143,6 +143,47 @@ fn push_and_unshift_use_ecmascript_length_boundaries() -> TestResult {
     )
 }
 
+#[test]
+fn mutating_array_fast_paths_respect_index_descriptors() -> TestResult {
+    eval_is_42(
+        r#"
+        let typeErrors = 0;
+        let calls = [
+            function () {
+                let array = [1, 2, 3];
+                Object.defineProperty(array, "2", { configurable: false });
+                array.pop();
+            },
+            function () {
+                let array = [1, 2, 3];
+                Object.defineProperty(array, "0", { writable: false });
+                array.reverse();
+            },
+            function () {
+                let array = [1, 2, 3];
+                Object.defineProperty(array, "0", { writable: false });
+                array.shift();
+            },
+            function () {
+                let array = [1, 2, 3];
+                Object.defineProperty(array, "0", { writable: false });
+                array.unshift(0);
+            }
+        ];
+        for (let call of calls) {
+            try {
+                call();
+            } catch (error) {
+                if (error instanceof TypeError) {
+                    typeErrors++;
+                }
+            }
+        }
+        typeErrors === calls.length ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

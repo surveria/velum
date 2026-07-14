@@ -41,6 +41,39 @@ impl ObjectHeap {
         Ok(false)
     }
 
+    pub(crate) fn array_index_range_has_mutation_barrier_in_chain(
+        &self,
+        id: ObjectId,
+        start: usize,
+        end: usize,
+    ) -> Result<bool> {
+        for position in start..end {
+            let index = ArrayIndex::from_usize(position)?;
+            let mut current = Some(id);
+            let mut budget = PrototypeTraversalBudget::from_object_count(self.object_count());
+            while let Some(current_id) = current {
+                budget.enter_next()?;
+                let object = self.object(current_id)?;
+                if object
+                    .array_storage
+                    .dense_property(index)
+                    .is_some_and(|property| !property.has_default_array_attributes())
+                {
+                    return Ok(true);
+                }
+                if let Some(key) = object.array_storage.sparse_key(index)
+                    && object
+                        .named_property(&self.shapes, key)?
+                        .is_some_and(|property| !property.has_default_array_attributes())
+                {
+                    return Ok(true);
+                }
+                current = object.prototype;
+            }
+        }
+        Ok(false)
+    }
+
     pub(crate) fn dynamic_array_index_if_array(
         &self,
         id: ObjectId,

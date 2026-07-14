@@ -228,7 +228,7 @@ impl Context {
         )
     }
 
-    fn symbol_constructor_prototype(&mut self) -> Result<ObjectId> {
+    pub(in crate::runtime) fn symbol_constructor_prototype(&mut self) -> Result<ObjectId> {
         let Value::NativeFunction(id) = self.symbol_constructor_value()? else {
             return Err(Error::runtime("Symbol constructor value is not native"));
         };
