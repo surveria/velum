@@ -19,29 +19,36 @@ impl BytecodeCompiler<'_> {
                 continue;
             }
             let accessor = match property.kind {
-                ObjectPropertyKind::Init | ObjectPropertyKind::Spread => None,
+                ObjectPropertyKind::Init
+                | ObjectPropertyKind::Shorthand
+                | ObjectPropertyKind::Spread => None,
                 ObjectPropertyKind::Get => Some(AccessorKind::Getter),
                 ObjectPropertyKind::Set => Some(AccessorKind::Setter),
             };
             match &property.key {
                 ObjectPropertyKey::Static(key) => {
-                    let operand = accessor.map_or_else(
-                        || {
-                            if matches!(property.value.kind(), Expr::MethodFunction { .. }) {
-                                BytecodeObjectProperty::StaticMethod(key.clone())
-                            } else {
-                                BytecodeObjectProperty::Static(key.clone())
-                            }
-                        },
-                        |kind| BytecodeObjectProperty::StaticAccessor {
-                            key: key.clone(),
-                            kind,
-                        },
-                    );
+                    let operand = if property.kind == ObjectPropertyKind::Shorthand {
+                        BytecodeObjectProperty::StaticData(key.clone())
+                    } else {
+                        accessor.map_or_else(
+                            || {
+                                if matches!(property.value.kind(), Expr::MethodFunction { .. }) {
+                                    BytecodeObjectProperty::StaticMethod(key.clone())
+                                } else {
+                                    BytecodeObjectProperty::Static(key.clone())
+                                }
+                            },
+                            |kind| BytecodeObjectProperty::StaticAccessor {
+                                key: key.clone(),
+                                kind,
+                            },
+                        )
+                    };
                     operands.push(operand);
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;
+                    self.emit(BytecodeInstruction::ToPropertyKey);
                     let property = match accessor {
                         Some(kind) => BytecodeObjectProperty::ComputedAccessor { kind },
                         None if matches!(property.value.kind(), Expr::MethodFunction { .. }) => {
@@ -55,8 +62,10 @@ impl BytecodeCompiler<'_> {
                     operands.push(property);
                 }
             }
-            if property.kind == ObjectPropertyKind::Init
-                && let ObjectPropertyKey::Static(key) = &property.key
+            if matches!(
+                property.kind,
+                ObjectPropertyKind::Init | ObjectPropertyKind::Shorthand
+            ) && let ObjectPropertyKey::Static(key) = &property.key
             {
                 self.compile_expr_with_inferred_name(&property.value, key)?;
             } else {

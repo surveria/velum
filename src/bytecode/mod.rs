@@ -51,6 +51,6 @@ pub use types::{
     BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind, BytecodeClassStaticElement,
     BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
     BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodePreparedNativeCall,
+    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };

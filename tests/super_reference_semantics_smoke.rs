@@ -41,6 +41,23 @@ fn super_writes_updates_and_compound_assignments_target_the_receiver() -> TestRe
 }
 
 #[test]
+fn super_assignment_evaluates_the_rhs_before_rejecting_a_null_base() -> TestResult {
+    expect_true(
+        r#"
+        var count = 0;
+        class Camera {
+            static assign() { super.value = count += 1; }
+            static computed() { super["value"] = count += 1; }
+        }
+        Object.setPrototypeOf(Camera, null);
+        try { Camera.assign(); } catch (error) {}
+        try { Camera.computed(); } catch (error) {}
+        count === 2
+        "#,
+    )
+}
+
+#[test]
 fn direct_eval_inherits_the_active_super_context() -> TestResult {
     expect_true(
         r#"

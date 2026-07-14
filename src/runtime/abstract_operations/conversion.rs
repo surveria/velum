@@ -242,6 +242,19 @@ impl Context {
         Ok(DynamicPropertyKey::new(name, key))
     }
 
+    /// ECMAScript `ToPropertyKey`, retaining the resulting primitive value.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_property_key_value(&mut self, value: &Value) -> Result<Value> {
+        let primitive = self.to_primitive(value, PreferredType::String)?;
+        if matches!(primitive, Value::Symbol(_)) {
+            return Ok(primitive);
+        }
+        let name = to_string_primitive(&primitive)?;
+        self.check_string_len(&name)?;
+        self.heap_string_value(&name)
+    }
+
     fn get_to_primitive_method(&mut self, value: &Value) -> Result<Option<Value>> {
         let constructor = self.symbol_constructor_value()?;
         let symbol = self.get_named(&constructor, SYMBOL_TO_PRIMITIVE_PROPERTY)?;

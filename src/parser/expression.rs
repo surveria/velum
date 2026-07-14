@@ -184,7 +184,7 @@ impl Parser {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
             } else {
-                self.arguments()?
+                self.with_in_operator_allowed(true, Self::arguments)?
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             if matches!(expr.kind(), Expr::Identifier(binding) if binding.as_str() == EVAL_IDENTIFIER_NAME)
@@ -238,7 +238,7 @@ impl Parser {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
             } else {
-                self.arguments()?
+                self.with_in_operator_allowed(true, Self::arguments)?
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             args
@@ -370,7 +370,7 @@ impl Parser {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
             } else {
-                self.arguments()?
+                self.with_in_operator_allowed(true, Self::arguments)?
             };
             self.consume(&TokenKind::RParen, "expected ')' after super arguments")?;
             return Ok(self.expression_node(start, Expr::SuperCall { args }));
@@ -393,7 +393,7 @@ impl Parser {
                     start,
                 ));
             }
-            let property = self.expression()?;
+            let property = self.with_in_operator_allowed(true, Self::expression)?;
             self.consume(
                 &TokenKind::RBracket,
                 "expected ']' after super property expression",
@@ -459,12 +459,12 @@ impl Parser {
         if self.check(&TokenKind::RParen) || self.check(&TokenKind::DotDotDot) {
             return Err(self.parse_error("import call requires one specifier expression"));
         }
-        let specifier = self.assignment_expression()?;
+        let specifier = self.with_in_operator_allowed(true, Self::assignment_expression)?;
         let options = if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
             if self.check(&TokenKind::DotDotDot) {
                 return Err(self.parse_error("import call does not accept spread arguments"));
             }
-            let options = self.assignment_expression()?;
+            let options = self.with_in_operator_allowed(true, Self::assignment_expression)?;
             if self.match_kind(&TokenKind::Comma) && !self.check(&TokenKind::RParen) {
                 return Err(self.parse_error("import call accepts at most two arguments"));
             }
@@ -541,15 +541,15 @@ impl Parser {
                 token_span,
             ),
             TokenKind::Let => self.contextual_let(token_span)?,
-            TokenKind::Function => {
-                let kind = if self.match_kind(&TokenKind::Star) {
+            TokenKind::Function => self.with_in_operator_allowed(true, |parser| {
+                let kind = if parser.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
                 } else {
                     FunctionKind::Ordinary
                 };
-                self.function_expression(kind)?
-            }
-            TokenKind::Class => self.class_expression()?,
+                parser.function_expression(kind)
+            })?,
+            TokenKind::Class => self.with_in_operator_allowed(true, Self::class_expression)?,
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
@@ -558,7 +558,7 @@ impl Parser {
                     } else {
                         FunctionKind::Async
                     };
-                    self.function_expression(kind)?
+                    self.with_in_operator_allowed(true, |parser| parser.function_expression(kind))?
                 } else {
                     Expression::new(
                         Expr::Identifier(self.contextual_async_binding(token_span.start())?),
@@ -566,10 +566,10 @@ impl Parser {
                     )
                 }
             }
-            TokenKind::LBrace => self.object_literal()?,
-            TokenKind::LBracket => self.array_literal()?,
+            TokenKind::LBrace => self.with_in_operator_allowed(true, Self::object_literal)?,
+            TokenKind::LBracket => self.with_in_operator_allowed(true, Self::array_literal)?,
             TokenKind::LParen => {
-                let expr = self.expression()?;
+                let expr = self.with_in_operator_allowed(true, Self::expression)?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
                 self.expression_node(token_span, Expr::Parenthesized(Box::new(expr)))
             }

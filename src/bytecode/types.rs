@@ -45,6 +45,7 @@ impl BytecodeProgram {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BytecodeObjectProperty {
     Static(StaticName),
+    StaticData(StaticName),
     StaticMethod(StaticName),
     StaticAccessor { key: StaticName, kind: AccessorKind },
     Computed,
@@ -58,6 +59,7 @@ impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
             Self::Static(_)
+            | Self::StaticData(_)
             | Self::StaticMethod(_)
             | Self::StaticAccessor { .. }
             | Self::Spread => 1,
@@ -67,6 +69,17 @@ impl BytecodeObjectProperty {
             | Self::ComputedAccessor { .. } => 2,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodePreparedNativeCall {
+    Direct {
+        target: NativeCallTarget,
+        access: StaticPropertyAccessId,
+    },
+    Cached {
+        access: StaticPropertyAccessId,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -443,6 +456,7 @@ pub enum BytecodeInstruction {
     },
     TypeOfBinding(BytecodeBinding),
     TypeOfValue,
+    ToPropertyKey,
     DeleteBinding(BytecodeBinding),
     DeleteStaticProperty {
         property: BytecodeProperty,
@@ -596,6 +610,7 @@ pub enum BytecodeInstruction {
     },
     CallValueWithReceiver {
         site: BytecodeCallSite,
+        native: Option<BytecodePreparedNativeCall>,
         arg_count: usize,
     },
     TailCallValue {

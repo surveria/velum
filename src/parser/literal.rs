@@ -11,6 +11,7 @@ use super::{Parser, property_name::keyword_property_name};
 const SPREAD_PROPERTY_KEY: &str = "...";
 const GETTER_KEYWORD_NAME: &str = "get";
 const SETTER_KEYWORD_NAME: &str = "set";
+const PROTOTYPE_PROPERTY_NAME: &str = "__proto__";
 
 pub(super) enum ObjectPropertyName {
     Static {
@@ -24,12 +25,29 @@ impl Parser {
     pub(super) fn object_literal(&mut self) -> Result<Expression> {
         let start = self.previous_span();
         let mut properties = Vec::new();
+        let mut prototype_setter_seen = false;
         if self.match_kind(&TokenKind::RBrace) {
             return Ok(self.expression_node(start, Expr::Object(properties)));
         }
 
         loop {
-            properties.push(self.object_literal_property()?);
+            let property = self.object_literal_property()?;
+            if property.kind == ObjectPropertyKind::Init
+                && matches!(
+                    &property.key,
+                    ObjectPropertyKey::Static(name) if name.as_str() == PROTOTYPE_PROPERTY_NAME
+                )
+                && !matches!(property.value.kind(), Expr::MethodFunction { .. })
+            {
+                if prototype_setter_seen {
+                    return Err(Error::parse_at(
+                        "duplicate __proto__ fields are not allowed in object literals",
+                        property.value.span(),
+                    ));
+                }
+                prototype_setter_seen = true;
+            }
+            properties.push(property);
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -97,7 +115,7 @@ impl Parser {
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
                 key: ObjectPropertyKey::Static(key),
-                kind: ObjectPropertyKind::Init,
+                kind: ObjectPropertyKind::Shorthand,
                 value: self.expression_node(start, Expr::Identifier(binding)),
             });
         }
@@ -133,19 +151,22 @@ impl Parser {
         let inherited_strict = self.is_strict_mode();
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
-                let parameters =
-                    parser.with_await_context(false, false, Self::function_parameters)?;
-                parser.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
-                Self::validate_object_accessor_parameters(kind, &parameters, start)?;
-                parser.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
-                let body = parser.with_new_target_scope(|parser| {
+                parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, false, |parser| {
+                        let parameters =
+                            parser.with_await_context(false, false, Self::function_parameters)?;
+                        parser.consume(
+                            &TokenKind::RParen,
+                            "expected ')' after accessor parameters",
+                        )?;
+                        Self::validate_object_accessor_parameters(kind, &parameters, start)?;
+                        parser.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
                         parser.with_await_context(false, false, |parser| {
-                            parser.function_body(inherited_strict)
+                            let body = parser.function_body(inherited_strict)?;
+                            Ok((parameters, body))
                         })
                     })
-                })?;
-                Ok((parameters, body))
+                })
             })?;
         self.validate_function_parameters(
             &parameters.bound_names,
@@ -210,6 +231,7 @@ impl Parser {
                 ))
             }
             ObjectPropertyKind::Init
+            | ObjectPropertyKind::Shorthand
             | ObjectPropertyKind::Get
             | ObjectPropertyKind::Set
             | ObjectPropertyKind::Spread => Ok(()),
@@ -243,27 +265,30 @@ impl Parser {
         let inherited_strict = self.is_strict_mode();
         let ((parameters, body), uses_arguments) =
             self.with_function_arguments_context(|parser| {
-                let parameters = parser.with_await_context(false, kind.is_async(), |parser| {
-                    parser.with_yield_expression(false, |parser| {
-                        parser.with_yield_identifier_reserved(
-                            kind.is_generator(),
-                            Self::function_parameters,
-                        )
-                    })
-                })?;
-                parser.reject_duplicate_parameters(&parameters.bound_names)?;
-                parser.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
-                parser.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-                let body = parser.with_new_target_scope(|parser| {
+                parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, false, |parser| {
+                        let parameters =
+                            parser.with_await_context(false, kind.is_async(), |parser| {
+                                parser.with_yield_expression(false, |parser| {
+                                    parser.with_yield_identifier_reserved(
+                                        kind.is_generator(),
+                                        Self::function_parameters,
+                                    )
+                                })
+                            })?;
+                        parser.reject_duplicate_parameters(&parameters.bound_names)?;
+                        parser
+                            .consume(&TokenKind::RParen, "expected ')' after method parameters")?;
+                        parser.consume(&TokenKind::LBrace, "expected '{' before method body")?;
                         parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
-                            parser.with_yield_expression(kind.is_generator(), |parser| {
-                                parser.function_body(inherited_strict)
-                            })
+                            let body = parser
+                                .with_yield_expression(kind.is_generator(), |parser| {
+                                    parser.function_body(inherited_strict)
+                                })?;
+                            Ok((parameters, body))
                         })
                     })
-                })?;
-                Ok((parameters, body))
+                })
             })?;
         self.validate_function_parameters(
             &parameters.bound_names,
@@ -344,7 +369,7 @@ impl Parser {
 
     pub(super) fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
         if self.match_kind(&TokenKind::LBracket) {
-            let expr = self.assignment_expression()?;
+            let expr = self.with_in_operator_allowed(true, Self::assignment_expression)?;
             self.consume(
                 &TokenKind::RBracket,
                 "expected ']' after computed object property name",

@@ -17,6 +17,7 @@ mod iterator_consumers;
 mod iterator_static;
 mod iterator_stepping;
 mod json;
+mod json_internalize;
 mod json_meta;
 mod json_parse;
 mod json_quote;

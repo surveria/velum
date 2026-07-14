@@ -11,7 +11,7 @@ use super::super::Parser;
 
 impl Parser {
     pub(in crate::parser) fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
-        let name_await_reserved = kind.is_async() || self.await_identifier_is_reserved();
+        let name_await_reserved = self.await_identifier_is_reserved();
         let name = self.with_await_identifier_reserved(name_await_reserved, |parser| {
             parser.consume_binding_identifier("expected function declaration name")
         })?;
@@ -51,6 +51,9 @@ impl Parser {
                     })
                 })
             })?;
+        if body.contains_use_strict {
+            self.validate_function_binding_in_strict_code(&name)?;
+        }
         self.validate_function_parameters(
             &parameters.bound_names,
             parameters.is_simple,

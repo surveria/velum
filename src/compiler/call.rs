@@ -1,6 +1,7 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    ast::{Expr, Expression, StaticCallSiteId},
+    ast::{Expr, Expression, StaticCallSiteId, StaticName, StaticPropertyAccessId},
+    bytecode::BytecodePreparedNativeCall,
     error::Result,
     value::Value,
 };
@@ -102,71 +103,25 @@ impl BytecodeCompiler<'_> {
                 object,
                 property,
                 access,
-            } => {
-                self.compile_expr(object)?;
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallStaticMember {
-                    property: Self::compile_property(property, *access),
-                    native: NativeCallTarget::from_property_name(property.as_str()),
-                    arg_count: args.len(),
-                });
-                Ok(())
-            }
+            } => self.compile_static_member_call(object, property, *access, site, args),
             Expr::OptionalMember {
                 object,
                 property,
                 access,
-            } => {
-                self.compile_expr(object)?;
-                let nullish_jump = self.emit_jump_if_nullish_keep();
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallStaticMember {
-                    property: Self::compile_property(property, *access),
-                    native: NativeCallTarget::from_property_name(property.as_str()),
-                    arg_count: args.len(),
-                });
-                self.finish_optional_call(nullish_jump)
-            }
+            } => self.compile_optional_static_member_call(object, property, *access, site, args),
             Expr::ComputedMember {
                 object,
                 property,
                 access,
-            } => {
-                self.compile_expr(object)?;
-                self.compile_expr(property)?;
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallComputedMember {
-                    property: Self::compile_dynamic_property(*access),
-                    native: computed_property_native_target(property),
-                    arg_count: args.len(),
-                });
-                Ok(())
-            }
+            } => self.compile_computed_member_call(object, property, *access, site, args),
             Expr::PrivateMember { object, name } => {
-                self.compile_expr(object)?;
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallPrivateMember {
-                    property: crate::bytecode::BytecodePrivateName::new(name.clone()),
-                    arg_count: args.len(),
-                });
-                Ok(())
+                self.compile_private_member_call(object, name, site, args)
             }
             Expr::SuperMember { property, access } => {
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallSuperMember {
-                    property: Self::compile_property(property, *access),
-                    arg_count: args.len(),
-                });
-                Ok(())
+                self.compile_super_member_call(property, *access, site, args)
             }
             Expr::SuperComputedMember { property, access } => {
-                self.compile_expr(property)?;
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::CallComputedSuperMember {
-                    property: Self::compile_dynamic_property(*access),
-                    arg_count: args.len(),
-                });
-                Ok(())
+                self.compile_computed_super_member_call(property, *access, site, args)
             }
             Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, strict, args),
             _ => {
@@ -179,6 +134,172 @@ impl BytecodeCompiler<'_> {
                 Ok(())
             }
         }
+    }
+
+    fn compile_static_member_call(
+        &mut self,
+        object: &Expression,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        if args.is_empty() {
+            self.emit(BytecodeInstruction::CallStaticMember {
+                property: Self::compile_property(property, access),
+                native: NativeCallTarget::from_property_name(property.as_str()),
+                arg_count: 0,
+            });
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::Duplicate);
+        self.emit(BytecodeInstruction::StaticMember {
+            property: Self::compile_property(property, access),
+        });
+        let native = NativeCallTarget::from_property_name(property.as_str())
+            .map(|target| BytecodePreparedNativeCall::Direct { target, access });
+        self.compile_prepared_receiver_call(site, args, native)
+    }
+
+    fn compile_optional_static_member_call(
+        &mut self,
+        object: &Expression,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        let nullish_jump = self.emit_jump_if_nullish_keep();
+        if args.is_empty() {
+            self.emit(BytecodeInstruction::CallStaticMember {
+                property: Self::compile_property(property, access),
+                native: NativeCallTarget::from_property_name(property.as_str()),
+                arg_count: 0,
+            });
+            return self.finish_optional_call(nullish_jump);
+        }
+        self.emit(BytecodeInstruction::Duplicate);
+        self.emit(BytecodeInstruction::StaticMember {
+            property: Self::compile_property(property, access),
+        });
+        let native = NativeCallTarget::from_property_name(property.as_str())
+            .map(|target| BytecodePreparedNativeCall::Direct { target, access });
+        self.compile_prepared_receiver_call(site, args, native)?;
+        self.finish_optional_call(nullish_jump)
+    }
+
+    fn compile_computed_member_call(
+        &mut self,
+        object: &Expression,
+        property: &Expression,
+        access: StaticPropertyAccessId,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        if args.is_empty() {
+            self.compile_expr(property)?;
+            self.emit(BytecodeInstruction::CallComputedMember {
+                property: Self::compile_dynamic_property(access),
+                native: computed_property_native_target(property),
+                arg_count: 0,
+            });
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::Duplicate);
+        self.compile_expr(property)?;
+        self.emit(BytecodeInstruction::ComputedMember {
+            property: Self::compile_dynamic_property(access),
+        });
+        let native = Some(
+            computed_property_native_target(property)
+                .map_or(BytecodePreparedNativeCall::Cached { access }, |target| {
+                    BytecodePreparedNativeCall::Direct { target, access }
+                }),
+        );
+        self.compile_prepared_receiver_call(site, args, native)
+    }
+
+    fn compile_private_member_call(
+        &mut self,
+        object: &Expression,
+        name: &StaticName,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        let property = crate::bytecode::BytecodePrivateName::new(name.clone());
+        self.compile_expr(object)?;
+        if args.is_empty() {
+            self.emit(BytecodeInstruction::CallPrivateMember {
+                property,
+                arg_count: 0,
+            });
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::Duplicate);
+        self.emit(BytecodeInstruction::PrivateMember { property });
+        self.compile_prepared_receiver_call(site, args, None)
+    }
+
+    fn compile_super_member_call(
+        &mut self,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        if args.is_empty() {
+            self.emit(BytecodeInstruction::CallSuperMember {
+                property: Self::compile_property(property, access),
+                arg_count: 0,
+            });
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::LoadThis);
+        self.emit(BytecodeInstruction::SuperMember {
+            property: Self::compile_property(property, access),
+        });
+        self.compile_prepared_receiver_call(site, args, None)
+    }
+
+    fn compile_computed_super_member_call(
+        &mut self,
+        property: &Expression,
+        access: StaticPropertyAccessId,
+        site: StaticCallSiteId,
+        args: &[Expression],
+    ) -> Result<()> {
+        if args.is_empty() {
+            self.compile_expr(property)?;
+            self.emit(BytecodeInstruction::CallComputedSuperMember {
+                property: Self::compile_dynamic_property(access),
+                arg_count: 0,
+            });
+            return Ok(());
+        }
+        self.emit(BytecodeInstruction::LoadThis);
+        self.emit(BytecodeInstruction::ComputedSuperMember {
+            expression: crate::bytecode::BytecodeBlock::compile_expression(property, self.layout)?,
+            property: Self::compile_dynamic_property(access),
+        });
+        self.compile_prepared_receiver_call(site, args, None)
+    }
+
+    fn compile_prepared_receiver_call(
+        &mut self,
+        site: StaticCallSiteId,
+        args: &[Expression],
+        native: Option<BytecodePreparedNativeCall>,
+    ) -> Result<()> {
+        self.compile_args(args)?;
+        self.emit(BytecodeInstruction::CallValueWithReceiver {
+            site: BytecodeCallSite::new(site),
+            native,
+            arg_count: args.len(),
+        });
+        Ok(())
     }
 
     fn compile_wrapped_call(
@@ -218,6 +339,7 @@ impl BytecodeCompiler<'_> {
             self.emit(if target.has_receiver {
                 BytecodeInstruction::CallValueWithReceiver {
                     site: BytecodeCallSite::new(site),
+                    native: None,
                     arg_count: args.len(),
                 }
             } else {
@@ -407,11 +529,13 @@ impl BytecodeCompiler<'_> {
             } => {
                 self.compile_expr(object)?;
                 let nullish_jump = self.emit_jump_if_nullish_keep();
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallStaticMemberSpread {
+                self.emit(BytecodeInstruction::Duplicate);
+                self.emit(BytecodeInstruction::StaticMember {
                     property: Self::compile_property(property, *access),
                 });
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallValueWithReceiverSpread);
                 self.finish_optional_call(nullish_jump)
             }
             Expr::ComputedMember {

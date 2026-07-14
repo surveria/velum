@@ -93,9 +93,6 @@ impl Context {
         let base = self
             .semantic_get_prototype(&frame.home_object)?
             .ok_or_else(|| Error::type_error(SUPER_OUTSIDE_CLASS_ERROR))?;
-        if matches!(base, Value::Null) {
-            return Err(Error::type_error(SUPER_BASE_NULL_ERROR));
-        }
         Ok(PreparedSuperReference {
             base,
             receiver,

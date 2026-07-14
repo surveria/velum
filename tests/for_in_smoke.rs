@@ -252,10 +252,29 @@ fn skips_properties_deleted_before_their_turn() -> TestResult {
 
 #[test]
 fn rejects_unparenthesized_in_in_classic_for_initializer() -> TestResult {
-    ensure_error_contains(
+    for source in [
         "var values = [1]; for (1 in values; true;) { break; }",
-        "unparenthesized 'in'",
-    )
+        "for ('' in {} ? 0 : 0; false;) {}",
+        "for (true ? 0 : 0 in {}; false;) {}",
+    ] {
+        ensure_error_contains(source, "unparenthesized 'in'")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn allows_in_in_parentheses_and_conditional_consequents() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let object = { key: 1 };
+        for (("key" in object); false;) {}
+        for (true ? "key" in object : false; false;) {}
+        42
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

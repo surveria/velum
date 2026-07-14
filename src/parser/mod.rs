@@ -18,6 +18,7 @@ mod eval_context;
 mod expression;
 mod function;
 mod function_expression;
+mod in_context;
 mod literal;
 mod lookahead;
 mod member;
@@ -34,6 +35,7 @@ mod yield_context;
 
 use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
 use class_private::ClassPrivateScope;
+use in_context::InOperatorContext;
 use static_tables::{StaticBindingTable, StaticFunctionTable, StaticNameTable, StaticStringTable};
 use super_context::SuperContext;
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
@@ -113,6 +115,7 @@ struct Parser {
     super_context: SuperContext,
     static_call_site_count: usize,
     arguments_reference: ArgumentsReference,
+    in_operator_context: InOperatorContext,
     strict_mode: bool,
     function_declaration_context: FunctionDeclarationContext,
     await_expression_context: AwaitExpressionContext,
@@ -173,6 +176,7 @@ impl Parser {
             super_context: SuperContext::Forbidden,
             static_call_site_count: 0,
             arguments_reference: ArgumentsReference::Unreferenced,
+            in_operator_context: InOperatorContext::Allowed,
             strict_mode,
             function_declaration_context: FunctionDeclarationContext::Var,
             await_expression_context: AwaitExpressionContext::Allowed,

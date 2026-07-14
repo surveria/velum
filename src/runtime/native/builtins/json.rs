@@ -1,12 +1,8 @@
 use crate::{
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, ObjectPrimitiveValue, ObjectPropertyInit,
-        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
-        PropertyWritable,
-    },
-    runtime::{Context, property::DynamicPropertyKey, roots::VmRootKind},
+    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    runtime::{Context, roots::VmRootKind},
     value::{ObjectId, Value, format_ecmascript_number},
 };
 
@@ -117,18 +113,20 @@ impl Context {
     ) -> Result<Value> {
         let text = self.json_parse_text(args.first())?;
         self.check_utf16_string_len(&text)?;
-        let value = parse_json_text(&text, self.limits.max_expression_depth)?;
-        let value = self.value_from_json(value)?;
+        let parsed = parse_json_text(&text, self.limits.max_expression_depth)?;
         let Some(reviver) = args.get(1) else {
-            return Ok(value);
+            return self.value_from_json(parsed);
         };
         if !self.semantic_is_callable(reviver)? {
-            return Ok(value);
+            return self.value_from_json(parsed);
         }
+        let (value, record) = self.value_and_record_from_json(parsed)?;
         let _value_scope =
             self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&value))?;
+        let record_roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        record.add_original_object_roots(&record_roots)?;
         let holder = self.create_json_wrapper(value)?;
-        self.internalize_json_property(&holder, JSON_EMPTY_KEY, reviver)
+        self.internalize_json_property(&holder, JSON_EMPTY_KEY, reviver, Some(&record))
     }
 
     pub(in crate::runtime::native) fn eval_json_stringify(
@@ -168,10 +166,10 @@ impl Context {
 
     fn value_from_json(&mut self, value: ParsedJson) -> Result<Value> {
         match value {
-            ParsedJson::Null => Ok(Value::Null),
-            ParsedJson::Bool(value) => Ok(Value::Bool(value)),
-            ParsedJson::Number(value) => Ok(Value::Number(value)),
-            ParsedJson::String(value) => self.heap_utf16_string_value(&value),
+            ParsedJson::Null { .. } => Ok(Value::Null),
+            ParsedJson::Bool { value, .. } => Ok(Value::Bool(value)),
+            ParsedJson::Number { value, .. } => Ok(Value::Number(value)),
+            ParsedJson::String { value, .. } => self.heap_utf16_string_value(&value),
             ParsedJson::Array(values) => self.array_from_json(values),
             ParsedJson::Object(object) => self.object_from_json(object),
         }
@@ -232,74 +230,6 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
-    }
-
-    fn internalize_json_property(
-        &mut self,
-        holder: &Value,
-        key: &str,
-        reviver: &Value,
-    ) -> Result<Value> {
-        let value = self.get_named(holder, key)?;
-        if matches!(value, Value::Object(_)) {
-            self.internalize_json_children(&value, reviver)?;
-        }
-        let key_value = self.heap_string_value(key)?;
-        let args = [key_value, value];
-        self.call_json_callback(reviver, holder.clone(), &args)
-    }
-
-    fn internalize_json_children(&mut self, holder: &Value, reviver: &Value) -> Result<()> {
-        if self.semantic_is_array(holder)? {
-            let length = self.array_like_length(holder)?;
-            for index in 0..length {
-                self.internalize_json_child(holder, &index.to_string(), reviver)?;
-            }
-            return Ok(());
-        }
-        for key in self.semantic_own_enumerable_string_keys(holder)? {
-            self.internalize_json_child(holder, &key, reviver)?;
-        }
-        Ok(())
-    }
-
-    fn internalize_json_child(&mut self, holder: &Value, key: &str, reviver: &Value) -> Result<()> {
-        let value = self.internalize_json_property(holder, key, reviver)?;
-        if matches!(value, Value::Undefined) {
-            return self.delete_json_property(holder, key);
-        }
-        self.set_json_property(holder, key, value)
-    }
-
-    fn delete_json_property(&mut self, holder: &Value, key: &str) -> Result<()> {
-        let lookup = self.property_lookup(key);
-        self.delete_property_value_with_lookup(holder, lookup)?;
-        Ok(())
-    }
-
-    fn set_json_property(&mut self, holder: &Value, key: &str, value: Value) -> Result<()> {
-        let descriptor = DataPropertyDescriptor::new(
-            value.clone(),
-            PropertyWritable::Yes,
-            PropertyEnumerable::Yes,
-            PropertyConfigurable::Yes,
-        );
-        let descriptor_value =
-            self.create_property_descriptor_object(&OwnPropertyDescriptor::Data(descriptor))?;
-        let update = PropertyUpdate::Data(DataPropertyUpdate::new(
-            Some(value),
-            Some(PropertyWritable::Yes),
-            Some(PropertyEnumerable::Yes),
-            Some(PropertyConfigurable::Yes),
-        ));
-        let mut property = DynamicPropertyKey::new(key.to_owned(), None);
-        self.semantic_define_own_property_update_with_descriptor(
-            holder,
-            &mut property,
-            update,
-            &descriptor_value,
-        )?;
-        Ok(())
     }
 
     fn json_replacer(&mut self, value: Option<&Value>) -> Result<JsonReplacer> {
@@ -752,7 +682,7 @@ impl Context {
         self.to_string(value)
     }
 
-    fn call_json_callback(
+    pub(super) fn call_json_callback(
         &mut self,
         function: &Value,
         this_value: Value,

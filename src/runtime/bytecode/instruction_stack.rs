@@ -112,8 +112,20 @@ impl Context {
             BytecodeInstruction::TypeOfBinding(_) | BytecodeInstruction::TypeOfValue => {
                 self.eval_bytecode_typeof_instruction(state, instruction, next)
             }
+            BytecodeInstruction::ToPropertyKey => self.eval_bytecode_to_property_key(state, next),
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_to_property_key(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let value = state.stack.pop()?;
+        state.stack.push(self.to_property_key_value(&value)?);
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_stack_shape_instruction(

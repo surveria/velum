@@ -168,6 +168,10 @@ fn rejects_strict_function_parameter_early_errors() -> TestResult {
         "\"use strict\"; async function invalid(arguments) {}",
         "\"use strict\"; (async function eval() {})",
         "\"use strict\"; async (eval) => eval",
+        "function eval() { \"use strict\"; }",
+        "function arguments() { \"use strict\"; }",
+        "(function eval() { \"use strict\"; })",
+        "(function arguments() { \"use strict\"; })",
     ];
 
     for source in sources {
@@ -194,6 +198,12 @@ fn async_function_uses_default_parameter_before_body() -> TestResult {
     )?;
     let value = context.eval("resolved")?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn async_declaration_name_uses_the_outer_await_context() -> TestResult {
+    let value = eval("async function await() { return 42; } await instanceof Function")?;
+    ensure_value(&value, &Value::Bool(true))
 }
 
 #[test]

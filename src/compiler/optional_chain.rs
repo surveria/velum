@@ -68,6 +68,7 @@ impl BytecodeCompiler<'_> {
         self.emit(if has_receiver {
             BytecodeInstruction::CallValueWithReceiver {
                 site: BytecodeCallSite::new(site),
+                native: None,
                 arg_count: args.len(),
             }
         } else {
@@ -179,6 +180,7 @@ impl BytecodeCompiler<'_> {
         self.emit(if has_receiver {
             BytecodeInstruction::CallValueWithReceiver {
                 site: BytecodeCallSite::new(site),
+                native: None,
                 arg_count: args.len(),
             }
         } else {

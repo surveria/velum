@@ -70,7 +70,7 @@ impl Parser {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
             } else {
-                self.arguments()?
+                self.with_in_operator_allowed(true, Self::arguments)?
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             let site = self.static_call_site()?;
@@ -85,7 +85,7 @@ impl Parser {
             ));
         }
         if self.match_kind(&TokenKind::LBracket) {
-            let property = self.expression()?;
+            let property = self.with_in_operator_allowed(true, Self::expression)?;
             self.consume(
                 &TokenKind::RBracket,
                 "expected ']' after property expression",
@@ -115,7 +115,7 @@ impl Parser {
     /// Parses one `[expression]` member suffix after its consumed bracket,
     /// folding literal keys into static member accesses.
     pub(super) fn member_bracket_suffix(&mut self, expr: Expression) -> Result<Expression> {
-        let property = self.expression()?;
+        let property = self.with_in_operator_allowed(true, Self::expression)?;
         self.consume(
             &TokenKind::RBracket,
             "expected ']' after property expression",

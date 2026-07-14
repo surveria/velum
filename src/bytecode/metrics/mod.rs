@@ -203,6 +203,14 @@ impl BytecodeInstruction {
             Self::CallStaticMember { native, .. } | Self::CallComputedMember { native, .. } => {
                 BytecodeMetrics::property_operands(1).combine(BytecodeMetrics::native_call(*native))
             }
+            Self::CallValueWithReceiver { native, .. } => {
+                BytecodeMetrics::native_call(native.and_then(|prepared| match prepared {
+                    crate::bytecode::BytecodePreparedNativeCall::Direct { target, .. } => {
+                        Some(target)
+                    }
+                    crate::bytecode::BytecodePreparedNativeCall::Cached { .. } => None,
+                }))
+            }
             Self::NumberUnary(_)
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
@@ -338,6 +346,7 @@ impl BytecodeInstruction {
             | Self::GeneratorStart
             | Self::Yield { .. }
             | Self::TypeOfValue
+            | Self::ToPropertyKey
             | Self::DeleteSuperProperty
             | Self::DeleteValue
             | Self::PrivateMember { .. }
@@ -348,7 +357,6 @@ impl BytecodeInstruction {
             | Self::CallPrivateMemberSpread { .. }
             | Self::PrivateIn { .. }
             | Self::CallValue { .. }
-            | Self::CallValueWithReceiver { .. }
             | Self::CallValueWithReceiverSpread
             | Self::ArrayLiteral { .. }
             | Self::ObjectLiteral { .. }
