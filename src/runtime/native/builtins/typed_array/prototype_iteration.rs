@@ -99,19 +99,19 @@ impl Context {
                 this_value,
             )?;
             match kind {
-                TypedArrayFunctionKind::Every if !to_boolean(&selected) => {
+                TypedArrayFunctionKind::Every if !to_boolean(self, &selected)? => {
                     return Ok(Value::Bool(false));
                 }
-                TypedArrayFunctionKind::Some if to_boolean(&selected) => {
+                TypedArrayFunctionKind::Some if to_boolean(self, &selected)? => {
                     return Ok(Value::Bool(true));
                 }
                 TypedArrayFunctionKind::Find | TypedArrayFunctionKind::FindLast
-                    if to_boolean(&selected) =>
+                    if to_boolean(self, &selected)? =>
                 {
                     return Ok(value);
                 }
                 TypedArrayFunctionKind::FindIndex | TypedArrayFunctionKind::FindLastIndex
-                    if to_boolean(&selected) =>
+                    if to_boolean(self, &selected)? =>
                 {
                     return Self::typed_array_usize_value(index);
                 }
@@ -304,7 +304,7 @@ impl Context {
                     index,
                     this_value,
                 )?;
-                if to_boolean(&keep) {
+                if to_boolean(self, &keep)? {
                     selected.push(value);
                 }
             }

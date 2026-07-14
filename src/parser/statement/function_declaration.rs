@@ -1,7 +1,10 @@
+use std::collections::BTreeSet;
+
 use crate::{
-    ast::{FunctionKind, Stmt},
+    ast::{FunctionKind, FunctionParam, Statement, Stmt},
     error::Result,
     lexer::TokenKind,
+    syntax::StaticNameId,
 };
 
 use super::super::Parser;
@@ -62,8 +65,13 @@ impl Parser {
         } else {
             None
         };
+        let mut statements = body.statements;
+        Self::suppress_parameter_conflicting_annex_b_bindings(
+            &mut statements,
+            &parameters.params,
+            strict,
+        )?;
         let params = parameters.into_params();
-        let statements = body.statements;
         let block_scoped =
             self.function_declaration_context == super::super::FunctionDeclarationContext::Lexical;
         let annex_b_var_binding =
@@ -83,5 +91,101 @@ impl Parser {
             kind,
             strict,
         })
+    }
+
+    pub(in crate::parser) fn suppress_parameter_conflicting_annex_b_bindings(
+        statements: &mut [Statement],
+        params: &[FunctionParam],
+        strict: bool,
+    ) -> Result<()> {
+        if strict {
+            return Ok(());
+        }
+        let mut excluded_names = BTreeSet::new();
+        for param in params {
+            param.target.for_each_binding(&mut |binding| {
+                excluded_names.insert(binding.name().id());
+                Ok::<(), crate::Error>(())
+            })?;
+        }
+        Self::suppress_annex_b_bindings(statements, &excluded_names);
+        Ok(())
+    }
+
+    fn suppress_annex_b_bindings(
+        statements: &mut [Statement],
+        excluded_names: &BTreeSet<StaticNameId>,
+    ) {
+        for statement in statements {
+            Self::suppress_annex_b_binding(statement, excluded_names);
+        }
+    }
+
+    fn suppress_annex_b_binding(
+        statement: &mut Statement,
+        excluded_names: &BTreeSet<StaticNameId>,
+    ) {
+        match statement.kind_mut() {
+            Stmt::FunctionDecl {
+                name,
+                annex_b_var_binding,
+                ..
+            } => {
+                if excluded_names.contains(&name.name().id()) {
+                    *annex_b_var_binding = None;
+                }
+            }
+            Stmt::Block(statements) | Stmt::DeclList(statements) => {
+                Self::suppress_annex_b_bindings(statements, excluded_names);
+            }
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                Self::suppress_annex_b_binding(consequent, excluded_names);
+                if let Some(alternate) = alternate {
+                    Self::suppress_annex_b_binding(alternate, excluded_names);
+                }
+            }
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::With { body, .. }
+            | Stmt::Label { body, .. }
+            | Stmt::For { body, .. }
+            | Stmt::ForIn { body, .. }
+            | Stmt::ForOf { body, .. } => {
+                Self::suppress_annex_b_binding(body, excluded_names);
+            }
+            Stmt::Switch { cases, .. } => {
+                for case in cases {
+                    Self::suppress_annex_b_bindings(&mut case.statements, excluded_names);
+                }
+            }
+            Stmt::Try {
+                body,
+                catch,
+                finally_body,
+            } => {
+                Self::suppress_annex_b_bindings(body, excluded_names);
+                if let Some(catch) = catch {
+                    Self::suppress_annex_b_bindings(&mut catch.body, excluded_names);
+                }
+                if let Some(finally_body) = finally_body {
+                    Self::suppress_annex_b_bindings(finally_body, excluded_names);
+                }
+            }
+            Stmt::Empty
+            | Stmt::Debugger
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::VarDecl { .. }
+            | Stmt::ImportBinding { .. }
+            | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
+            | Stmt::Expr(_) => {}
+        }
     }
 }

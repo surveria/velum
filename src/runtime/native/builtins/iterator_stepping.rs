@@ -256,7 +256,7 @@ impl Context {
                 let counter = self.bump_helper_counter(state_id)?;
                 match self.helper_callback_call(&predicate, &value, counter) {
                     Ok(selected) => {
-                        if crate::runtime::abstract_operations::to_boolean(&selected) {
+                        if crate::runtime::abstract_operations::to_boolean(self, &selected)? {
                             Ok(Some(value))
                         } else {
                             Ok(None)

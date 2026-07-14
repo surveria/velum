@@ -102,7 +102,9 @@ impl Context {
             return Err(range_error("numberingSystem has an invalid value"));
         }
         let hour12_value = self.date_time_option_value(options, "hour12")?;
-        let hour12 = (!matches!(hour12_value, Value::Undefined)).then(|| to_boolean(&hour12_value));
+        let hour12 = (!matches!(hour12_value, Value::Undefined))
+            .then(|| to_boolean(self, &hour12_value))
+            .transpose()?;
         let hour_cycle =
             self.date_time_option_string(options, "hourCycle", &["h11", "h12", "h23", "h24"])?;
         let time_zone_value = self.date_time_option_string(options, "timeZone", &[])?;

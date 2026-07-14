@@ -509,7 +509,7 @@ impl Context {
             op,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
         ) {
-            if !logical_assignment_should_store(op, &current)? {
+            if !logical_assignment_should_store(self, op, &current)? {
                 return self.runtime_value(current);
             }
             let value = self.eval_bytecode_expression(value)?;
@@ -664,10 +664,10 @@ const fn bytecode_property_set_uses_sloppy_primitive_path(object: &Value, strict
     !strict && !matches!(object, Value::Object(_) | Value::Undefined | Value::Null)
 }
 
-fn logical_assignment_should_store(op: BinaryOp, value: &Value) -> Result<bool> {
+fn logical_assignment_should_store(context: &Context, op: BinaryOp, value: &Value) -> Result<bool> {
     match op {
-        BinaryOp::LogicalAnd => Ok(to_boolean(value)),
-        BinaryOp::LogicalOr => Ok(!to_boolean(value)),
+        BinaryOp::LogicalAnd => to_boolean(context, value),
+        BinaryOp::LogicalOr => Ok(!to_boolean(context, value)?),
         BinaryOp::NullishCoalescing => Ok(matches!(value, Value::Undefined | Value::Null)),
         BinaryOp::Add
         | BinaryOp::Sub

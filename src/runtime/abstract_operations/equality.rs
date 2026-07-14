@@ -23,6 +23,8 @@ pub(in crate::runtime) fn abstract_equality(
 ) -> Result<bool> {
     match (left, right) {
         (Value::Undefined, Value::Null) | (Value::Null, Value::Undefined) => Ok(true),
+        (left, Value::Undefined | Value::Null) if context.is_html_dda(left)? => Ok(true),
+        (Value::Undefined | Value::Null, right) if context.is_html_dda(right)? => Ok(true),
         (Value::Bool(left), _) => {
             abstract_equality(context, &Value::Number(bool_to_number(*left)), right)
         }

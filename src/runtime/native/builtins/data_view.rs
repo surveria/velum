@@ -165,7 +165,11 @@ impl Context {
         let values = args.as_slice();
         let byte_offset =
             Self::length_to_usize(self.to_index(values.first())?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;
-        let little_endian = values.get(1).is_some_and(to_boolean);
+        let little_endian = values
+            .get(1)
+            .map(|value| to_boolean(self, value))
+            .transpose()?
+            .unwrap_or(false);
         view.read(element_kind, byte_offset, little_endian)
     }
 
@@ -185,7 +189,11 @@ impl Context {
             TypedArrayContentType::Number => Value::Number(self.to_number(value)?),
             TypedArrayContentType::BigInt => Value::BigInt(self.to_bigint(value)?),
         };
-        let little_endian = values.get(2).is_some_and(to_boolean);
+        let little_endian = values
+            .get(2)
+            .map(|value| to_boolean(self, value))
+            .transpose()?
+            .unwrap_or(false);
         view.write(element_kind, byte_offset, &element, little_endian)?;
         Ok(Value::Undefined)
     }

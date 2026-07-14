@@ -176,7 +176,7 @@ impl Context {
         let property = self.finish_super_property(reference.property.clone())?;
         let current =
             self.get_super_property(&reference.base, &reference.receiver, property.lookup())?;
-        if let Some(store) = logical_super_assignment_store(op, &current) {
+        if let Some(store) = logical_super_assignment_store(self, op, &current)? {
             if !store {
                 return self.runtime_value(current);
             }
@@ -393,11 +393,15 @@ struct PreparedSuperReference {
     property: PreparedSuperProperty,
 }
 
-fn logical_super_assignment_store(op: BinaryOp, value: &Value) -> Option<bool> {
-    match op {
-        BinaryOp::LogicalAnd => Some(to_boolean(value)),
-        BinaryOp::LogicalOr => Some(!to_boolean(value)),
+fn logical_super_assignment_store(
+    context: &Context,
+    op: BinaryOp,
+    value: &Value,
+) -> Result<Option<bool>> {
+    Ok(match op {
+        BinaryOp::LogicalAnd => Some(to_boolean(context, value)?),
+        BinaryOp::LogicalOr => Some(!to_boolean(context, value)?),
         BinaryOp::NullishCoalescing => Some(matches!(value, Value::Undefined | Value::Null)),
         _ => None,
-    }
+    })
 }

@@ -46,8 +46,14 @@ impl Context {
         functional: bool,
     ) -> Result<(Value, bool, bool)> {
         if functional {
-            let global = to_boolean(&self.get_named(receiver, REGEXP_GLOBAL_PROPERTY)?);
-            let unicode = global && to_boolean(&self.get_named(receiver, REGEXP_UNICODE_PROPERTY)?);
+            let global_value = self.get_named(receiver, REGEXP_GLOBAL_PROPERTY)?;
+            let global = to_boolean(self, &global_value)?;
+            let unicode = if global {
+                let unicode_value = self.get_named(receiver, REGEXP_UNICODE_PROPERTY)?;
+                to_boolean(self, &unicode_value)?
+            } else {
+                false
+            };
             return Ok((replacement, global, unicode));
         }
         let replacement = self.to_utf16_string(&replacement)?;

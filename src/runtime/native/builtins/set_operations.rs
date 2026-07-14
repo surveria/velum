@@ -274,7 +274,7 @@ impl Context {
     fn set_record_has(&mut self, record: &SetRecord, value: &Value) -> Result<bool> {
         let args = [value.clone()];
         let result = self.call_value(&record.has, &args, record.object.clone())?;
-        Ok(to_boolean(&result))
+        to_boolean(self, &result)
     }
 
     /// Drive the iterator returned by the set-like `keys` method to completion.

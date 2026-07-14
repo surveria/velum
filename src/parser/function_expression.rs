@@ -71,8 +71,13 @@ impl Parser {
         } else {
             None
         };
+        let mut statements = body.statements;
+        Self::suppress_parameter_conflicting_annex_b_bindings(
+            &mut statements,
+            &parameters.params,
+            strict,
+        )?;
         let params = parameters.into_params();
-        let statements = body.statements;
         Ok(self.expression_node(
             start,
             Expr::Function {

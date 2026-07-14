@@ -39,6 +39,9 @@ impl Context {
     }
 
     pub(in crate::runtime) fn semantic_type_name(&self, value: &Value) -> Result<&'static str> {
+        if self.is_html_dda(value)? {
+            return Ok("undefined");
+        }
         if self.semantic_is_callable(value)? {
             return Ok("function");
         }

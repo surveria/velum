@@ -521,7 +521,8 @@ impl Context {
         if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
-        Ok(Some(to_boolean(&self.get_named(descriptor, property)?)))
+        let value = self.get_named(descriptor, property)?;
+        Ok(Some(to_boolean(self, &value)?))
     }
 
     const fn property_writable(value: bool) -> PropertyWritable {

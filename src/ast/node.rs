@@ -16,6 +16,10 @@ impl<K> AstNode<K> {
         &self.kind
     }
 
+    pub(crate) const fn kind_mut(&mut self) -> &mut K {
+        &mut self.kind
+    }
+
     pub const fn span(&self) -> SourceSpan {
         self.span
     }

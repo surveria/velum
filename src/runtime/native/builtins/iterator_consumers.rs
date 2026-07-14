@@ -144,17 +144,17 @@ impl Context {
             match consumer {
                 IteratorConsumer::ForEach | IteratorConsumer::ToArray => {}
                 IteratorConsumer::Some => {
-                    if to_boolean(&result) {
+                    if to_boolean(self, &result)? {
                         return self.consumer_close(&mut source, Value::Bool(true));
                     }
                 }
                 IteratorConsumer::Every => {
-                    if !to_boolean(&result) {
+                    if !to_boolean(self, &result)? {
                         return self.consumer_close(&mut source, Value::Bool(false));
                     }
                 }
                 IteratorConsumer::Find => {
-                    if to_boolean(&result) {
+                    if to_boolean(self, &result)? {
                         return self.consumer_close(&mut source, value);
                     }
                 }

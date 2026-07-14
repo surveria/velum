@@ -274,7 +274,9 @@ impl Context {
             return Ok(None);
         }
         let value = self.get_named(options, name)?;
-        Ok((!matches!(value, Value::Undefined)).then(|| to_boolean(&value)))
+        (!matches!(value, Value::Undefined))
+            .then(|| to_boolean(self, &value))
+            .transpose()
     }
 
     fn collator_prototype_id(&self, constructor: NativeFunctionId) -> Result<ObjectId> {

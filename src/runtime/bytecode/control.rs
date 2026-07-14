@@ -159,17 +159,20 @@ impl Context {
             }
             BytecodeInstruction::JumpIfFalse(target) => {
                 let value = state.stack.pop()?;
-                state.pc = if to_boolean(&value) { next } else { *target };
+                let condition = to_boolean(self, &value)?;
+                state.pc = if condition { next } else { *target };
                 Ok(None)
             }
             BytecodeInstruction::JumpIfFalseKeep(target) => {
                 let value = state.stack.peek()?;
-                state.pc = if to_boolean(value) { next } else { *target };
+                let condition = to_boolean(self, value)?;
+                state.pc = if condition { next } else { *target };
                 Ok(None)
             }
             BytecodeInstruction::JumpIfTrueKeep(target) => {
                 let value = state.stack.peek()?;
-                state.pc = if to_boolean(value) { *target } else { next };
+                let condition = to_boolean(self, value)?;
+                state.pc = if condition { *target } else { next };
                 Ok(None)
             }
             BytecodeInstruction::Complete(completion) => {
@@ -719,7 +722,7 @@ impl Context {
     ) -> Result<BytecodeCondition> {
         if let Some(completion) = self.eval_bytecode_linear_direct_condition(condition, plan)? {
             return Ok(match completion {
-                Completion::Normal(value) => BytecodeCondition::Value(to_boolean(&value)),
+                Completion::Normal(value) => BytecodeCondition::Value(to_boolean(self, &value)?),
                 completion @ (Completion::TailCall(_)
                 | Completion::Throw(_)
                 | Completion::Return(_)
@@ -730,7 +733,7 @@ impl Context {
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
-            Completion::Normal(value) => Ok(BytecodeCondition::Value(to_boolean(&value))),
+            Completion::Normal(value) => Ok(BytecodeCondition::Value(to_boolean(self, &value)?)),
             completion @ (Completion::TailCall(_)
             | Completion::Throw(_)
             | Completion::Return(_)
