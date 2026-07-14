@@ -176,7 +176,7 @@ impl Context {
         .map_err(dynamic_compilation_error)?;
         let result = self.with_realm(realm, |context| {
             let boundary = context.push_eval_activation_boundary()?;
-            let result = context.eval_compiled_eval_completion(&script, script.strict());
+            let result = context.eval_compiled_eval_completion(&script, script.strict(), false);
             let boundary_result = context.pop_eval_activation_boundary(boundary);
             boundary_result?;
             result.and_then(Completion::into_result)

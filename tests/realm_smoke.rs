@@ -169,6 +169,35 @@ fn foreign_callable_allocates_typed_errors_in_its_origin_realm() -> TestResult {
 }
 
 #[test]
+fn derived_constructor_postconditions_use_the_callers_realm() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let result = context.eval(
+        r#"
+        var other = __createRealm();
+        var BadReturn = other.eval(
+            "(class extends Object { constructor() { return null; } })"
+        );
+        var MissingThis = other.eval(
+            "(class extends Object { constructor() {} })"
+        );
+        var BodyThrow = other.eval(
+            "(class extends Object { constructor() { throw new TypeError('body'); } })"
+        );
+        function capture(constructor) {
+            try { new constructor(); } catch (error) { return error; }
+        }
+        capture(BadReturn).constructor === TypeError &&
+            capture(MissingThis).constructor === ReferenceError &&
+            capture(BodyThrow).constructor === other.TypeError;
+        "#,
+    )?;
+    assert_eq!(result, Value::Bool(true));
+    Ok(())
+}
+
+#[test]
 fn array_species_ignores_a_foreign_realms_intrinsic_array_constructor() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

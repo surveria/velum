@@ -243,7 +243,10 @@ impl ObjectHeap {
             return Ok(true);
         };
         let object = self.object(id)?;
-        let mut current = object.prototype;
+        if object.has_semantic_prototype() {
+            return Ok(true);
+        }
+        let mut current = object.ordinary_prototype_id();
         let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
         while let Some(current_id) = current {
             budget.enter_next()?;
@@ -251,7 +254,10 @@ impl ObjectHeap {
             if object.has_own_array_index_in_range(start, end)? {
                 return Ok(true);
             }
-            current = object.prototype;
+            if object.has_semantic_prototype() {
+                return Ok(true);
+            }
+            current = object.ordinary_prototype_id();
         }
         Ok(false)
     }

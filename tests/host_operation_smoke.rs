@@ -5,6 +5,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const DETACH_NAME: &str = "hostDetachArrayBuffer";
 const COLLECT_GARBAGE_NAME: &str = "hostCollectGarbage";
 const CREATE_IS_HTML_DDA_NAME: &str = "hostCreateIsHTMLDDA";
+const EVAL_SCRIPT_NAME: &str = "hostEvalScript";
 
 #[test]
 fn collects_garbage_during_active_evaluation_without_losing_live_values() -> TestResult {
@@ -71,6 +72,66 @@ fn creates_callable_is_html_dda_host_exotics() -> TestResult {
         return Ok(());
     }
     Err(format!("expected IsHTMLDDA semantic invariants, got {value:?}").into())
+}
+
+#[test]
+fn eval_script_operation_uses_global_script_environment() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(EVAL_SCRIPT_NAME, HostOperation::EvalScript)?;
+    let value = context.eval(
+        "function run() { \
+             let localOnly = 1; \
+             hostEvalScript('var scriptVar = 2; let scriptLexical = 3;'); \
+             return typeof localOnly + ':' + scriptVar + ':' + scriptLexical; \
+         } \
+         var result = run(); \
+         var varIsPermanent = delete scriptVar === false; \
+         var lexicalIsNotProperty = \
+             !Object.prototype.hasOwnProperty.call(globalThis, 'scriptLexical'); \
+         result === 'number:2:3' && varIsPermanent && lexicalIsNotProperty ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected global Script evaluation invariants, got {value:?}").into())
+}
+
+#[test]
+fn eval_script_preflights_global_declarations_atomically() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(EVAL_SCRIPT_NAME, HostOperation::EvalScript)?;
+    let value = context.eval(
+        "hostEvalScript('var declared; function declaredFunction() {}'); \
+         var lexicalCollision = false; \
+         try { hostEvalScript('var leaked; let declared;'); } \
+         catch (error) { lexicalCollision = error instanceof SyntaxError; } \
+         Object.defineProperty(globalThis, 'configurableGlobal', { \
+             value: 7, configurable: true \
+         }); \
+         hostEvalScript('let configurableGlobal = 8;'); \
+         var configurableLexical = configurableGlobal === 8 && \
+             globalThis.configurableGlobal === 7; \
+         Object.defineProperty(globalThis, 'existingVar', { \
+             value: 9, writable: false, enumerable: false, configurable: true \
+         }); \
+         hostEvalScript('var existingVar;'); \
+         var descriptor = Object.getOwnPropertyDescriptor(globalThis, 'existingVar'); \
+         var descriptorPreserved = descriptor.value === 9 && !descriptor.writable && \
+             !descriptor.enumerable && descriptor.configurable; \
+         Object.preventExtensions(globalThis); \
+         hostEvalScript('var existingVar;'); \
+         var rejectedNewVar = false; \
+         try { hostEvalScript('var brandNew;'); } \
+         catch (error) { rejectedNewVar = error instanceof TypeError; } \
+         lexicalCollision && typeof leaked === 'undefined' && configurableLexical && \
+             descriptorPreserved && rejectedNewVar ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected atomic global declaration instantiation, got {value:?}").into())
 }
 
 #[test]

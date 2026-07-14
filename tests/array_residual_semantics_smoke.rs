@@ -205,6 +205,27 @@ fn generic_array_mutations_define_existing_proxy_properties_with_value_only() ->
 }
 
 #[test]
+fn array_index_assignment_routes_through_a_proxy_prototype_set_trap() -> TestResult {
+    eval_is_42(
+        r#"
+        var receiver;
+        var observed;
+        var prototype = new Proxy({}, {
+            set: function (target, property, value, actualReceiver) {
+                observed = [target, property, value, actualReceiver];
+                return true;
+            }
+        });
+        receiver = new Array(1);
+        Object.setPrototypeOf(receiver, prototype);
+        receiver[0] = 1;
+        observed[0] !== receiver && observed[1] === "0" &&
+            observed[2] === 1 && observed[3] === receiver ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn array_unscopables_lists_at_and_blocks_it_in_with_environments() -> TestResult {
     eval_is_42(
         r#"

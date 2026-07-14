@@ -40,16 +40,6 @@ impl TailCall {
     pub(in crate::runtime) const fn callee(&self) -> &Value {
         &self.callee
     }
-
-    pub(in crate::runtime) fn with_derived_constructor_return(
-        mut self,
-        this_value: Option<Value>,
-    ) -> Result<Self> {
-        self.return_mode = self
-            .return_mode
-            .merge(TailCallReturnMode::DerivedConstructor { this_value })?;
-        Ok(self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

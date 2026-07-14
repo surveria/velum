@@ -17,13 +17,14 @@ pub(in crate::runtime) enum DynamicEnvironment {
     With(Value),
     EvalVar(Value),
     EvalBindings(EvalBindingEnvironment),
+    CapturedLexical(EvalBindingEnvironment),
 }
 
 impl DynamicEnvironment {
     pub(in crate::runtime) fn storage_binding_count(&self) -> EngineResult<usize> {
         match self {
             Self::With(_) | Self::EvalVar(_) => Ok(1),
-            Self::EvalBindings(environment) => environment
+            Self::EvalBindings(environment) | Self::CapturedLexical(environment) => environment
                 .len()?
                 .checked_add(1)
                 .ok_or_else(|| Error::limit("eval environment binding count overflowed")),
@@ -36,7 +37,9 @@ impl DynamicEnvironment {
     ) -> EngineResult<()> {
         match self {
             Self::With(value) | Self::EvalVar(value) => visit(value),
-            Self::EvalBindings(environment) => environment.for_each_value(visit),
+            Self::EvalBindings(environment) | Self::CapturedLexical(environment) => {
+                environment.for_each_value(visit)
+            }
         }
     }
 }
@@ -53,6 +56,10 @@ struct EvalBindingEntry {
 }
 
 impl EvalBindingEnvironment {
+    pub(in crate::runtime) fn contains(&self, atom: AtomId) -> EngineResult<bool> {
+        self.binding(atom).map(|binding| binding.is_some())
+    }
+
     pub(in crate::runtime) fn insert(
         &self,
         atom: AtomId,
@@ -151,7 +158,7 @@ impl EvalBindingEnvironment {
         Rc::ptr_eq(&self.0, &other.0)
     }
 
-    fn len(&self) -> EngineResult<usize> {
+    pub(in crate::runtime) fn len(&self) -> EngineResult<usize> {
         self.0
             .try_borrow()
             .map(|entries| entries.len())
@@ -192,6 +199,7 @@ pub(in crate::runtime) enum ActivationFrame {
         environment_phase: FunctionEnvironmentPhase,
         upvalues: FunctionUpvalues,
         dynamic_environments: Vec<DynamicEnvironment>,
+        captured_dynamic_environment_count: usize,
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
@@ -237,6 +245,16 @@ impl FunctionEnvironmentPhase {
 pub(in crate::runtime) struct ActivationFrameStorageFootprint {
     binding_count: usize,
     execution_frame_count: usize,
+}
+
+pub(in crate::runtime) struct FunctionCallActivation {
+    pub(in crate::runtime) function: FunctionId,
+    pub(in crate::runtime) environment: FunctionActivationEnvironment,
+    pub(in crate::runtime) captured_dynamic_environment_count: usize,
+    pub(in crate::runtime) this_value: Value,
+    pub(in crate::runtime) new_target: Value,
+    pub(in crate::runtime) super_binding: Option<Rc<FunctionSuperBinding>>,
+    pub(in crate::runtime) private_environment: Option<Rc<PrivateEnvironment>>,
 }
 
 impl ActivationFrameStorageFootprint {
@@ -291,15 +309,16 @@ impl ActivationFrame {
         })
     }
 
-    pub(in crate::runtime) fn call(
-        function: FunctionId,
-        local_base: usize,
-        environment: FunctionActivationEnvironment,
-        this_value: Value,
-        new_target: Value,
-        super_binding: Option<Rc<FunctionSuperBinding>>,
-        private_environment: Option<Rc<PrivateEnvironment>>,
-    ) -> Self {
+    pub(in crate::runtime) fn call(local_base: usize, activation: FunctionCallActivation) -> Self {
+        let FunctionCallActivation {
+            function,
+            environment,
+            captured_dynamic_environment_count,
+            this_value,
+            new_target,
+            super_binding,
+            private_environment,
+        } = activation;
         let (upvalues, dynamic_environments) = environment;
         Self::Call {
             function,
@@ -307,6 +326,7 @@ impl ActivationFrame {
             environment_phase: FunctionEnvironmentPhase::Setup,
             upvalues,
             dynamic_environments,
+            captured_dynamic_environment_count,
             this_value,
             new_target,
             super_binding,
@@ -503,6 +523,16 @@ impl ActivationFrame {
     pub(in crate::runtime) const fn function_id(&self) -> Option<FunctionId> {
         match self {
             Self::Call { function, .. } => Some(*function),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn captured_dynamic_environment_count(&self) -> Option<usize> {
+        match self {
+            Self::Call {
+                captured_dynamic_environment_count,
+                ..
+            } => Some(*captured_dynamic_environment_count),
             Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }

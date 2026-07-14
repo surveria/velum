@@ -237,7 +237,10 @@ impl ObjectHeap {
                 }
                 return Ok(CacheablePropertyLookup::hit(guard, key, hit));
             }
-            current = object.prototype;
+            if object.has_semantic_prototype() {
+                return Ok(CacheablePropertyLookup::uncacheable(guard));
+            }
+            current = object.ordinary_prototype_id();
             depth = depth.next()?;
         }
 
@@ -402,7 +405,7 @@ impl ObjectHeap {
         if removed.is_enumerable() {
             object.enumerable_property_count = object.enumerable_property_count.saturating_sub(1);
         }
-        self.bump_if_structure_changed(hit.owner, before)?;
+        self.bump_if_structure_changed(hit.owner, &before)?;
         Ok(CacheablePropertyDelete::Deleted)
     }
 

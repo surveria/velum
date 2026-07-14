@@ -4,7 +4,7 @@ use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::control::{Completion, Suspension},
+    runtime::control::{Completion, Suspension, TailCallReturnMode},
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
@@ -228,8 +228,11 @@ impl Context {
         let lexical_this =
             self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         let script_or_module_name = self.active_script_or_module_name();
-        let new_target =
-            FunctionNewTarget::from_mode(init.new_target_mode, self.current_new_target()?);
+        let new_target = FunctionNewTarget::from_mode(
+            init.new_target_mode,
+            self.current_new_target()?,
+            self.direct_eval_allows_new_target()?,
+        );
         let class_field_initializer_context = self.current_class_field_initializer_context()?;
         let mut function_record = super::Function {
             realm: self.active_realm_index(),
@@ -241,7 +244,7 @@ impl Context {
             param_frames,
             bytecode: init.bytecode.clone(),
             fast_path: fast_path.map(Rc::new),
-            source: None,
+            source: init.bytecode.source().cloned(),
             upvalues: upvalues.cells,
             dynamic_environments,
             static_name_atom_cache,
@@ -399,7 +402,7 @@ impl Context {
     fn function_direct_call_new_target(&self, id: FunctionId) -> Result<Value> {
         match &self.function(id)?.new_target {
             FunctionNewTarget::Own => Ok(Value::Undefined),
-            FunctionNewTarget::Lexical(value) => Ok(value.clone()),
+            FunctionNewTarget::Lexical { value, .. } => Ok(value.clone()),
         }
     }
 
@@ -430,10 +433,10 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
         new_target: Value,
-    ) -> Result<Completion> {
+    ) -> Result<(Completion, TailCallReturnMode)> {
         let raw_args = args.as_slice();
         if let Some(completion) = self.try_eval_pre_setup_function_fast_path(id, raw_args)? {
-            return Ok(completion);
+            return Ok((completion, TailCallReturnMode::Ordinary));
         }
         let FunctionCallSetup {
             param_atoms,
@@ -462,17 +465,20 @@ impl Context {
         };
         let args = packed_args.as_deref().unwrap_or(raw_args);
         let mut dynamic_environments = dynamic_environments.to_vec();
+        let captured_dynamic_environment_count = dynamic_environments.len();
         if bytecode.requires_parameter_initialization() && !bytecode.strict() {
             dynamic_environments.push(self.create_parameter_eval_var_environment()?);
         }
-        let local_base = self.push_call_activation(
-            id,
-            (upvalues, dynamic_environments),
-            this_value,
-            new_target,
-            super_binding,
-            private_environment,
-        )?;
+        let local_base =
+            self.push_call_activation(crate::runtime::activation::FunctionCallActivation {
+                function: id,
+                environment: (upvalues, dynamic_environments),
+                captured_dynamic_environment_count,
+                this_value,
+                new_target,
+                super_binding,
+                private_environment,
+            })?;
         self.initialize_base_fields_at_activation(id, field_receiver.as_ref(), local_base)?;
         self.push_optional_function_self_scope(id, self_binding, local_base)?;
         let scope_result = self.function_call_scope(
@@ -484,22 +490,14 @@ impl Context {
         );
         let scope = match scope_result {
             Ok(scope) => scope,
-            Err(error) => {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
+            Err(error) => return self.abort_function_scope_setup(local_base, error),
         };
         let arguments_scope = match arguments_binding
             .map(|binding| self.arguments_binding_scope(id, binding, raw_args, &scope))
             .transpose()
         {
             Ok(arguments_scope) => arguments_scope,
-            Err(error) => {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
+            Err(error) => return self.abort_function_scope_setup(local_base, error),
         };
         if let Err(error) = self.push_function_binding_storage(local_base, arguments_scope, scope) {
             self.pop_call_activation(local_base)?;
@@ -513,11 +511,8 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        if let (Ok(completion), Some(binding)) = (&result, &derived_super_binding) {
-            result = self.normalize_derived_constructor_completion(completion.clone(), binding);
-        }
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
-            return result;
+            return result.map(|completion| (completion, TailCallReturnMode::Ordinary));
         }
         if let Ok(completion) = result {
             result = self.dispose_active_binding_scope(completion);
@@ -530,7 +525,14 @@ impl Context {
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
-        result
+        let return_mode = self.function_return_mode(id, derived_super_binding.as_ref())?;
+        result.map(|completion| (completion, return_mode))
+    }
+
+    fn abort_function_scope_setup<T>(&mut self, local_base: usize, error: Error) -> Result<T> {
+        self.leave_function_local_frame(local_base)?;
+        self.pop_call_activation(local_base)?;
+        Err(error)
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
@@ -596,22 +598,17 @@ impl Context {
         id: FunctionId,
         source: Rc<str>,
     ) -> Result<()> {
-        let previous_bytes = self.function(id)?.source.as_deref().map_or(0, str::len);
-        let additional_count = usize::from(self.function(id)?.source.is_none());
-        let projected_count = self
-            .source_record_count()?
-            .checked_add(additional_count)
-            .ok_or_else(|| Error::limit("source record count overflowed"))?;
-        let projected_payload_bytes = self
-            .source_record_bytes()?
-            .checked_sub(previous_bytes)
-            .and_then(|bytes| bytes.checked_add(source.len()))
-            .ok_or_else(|| Error::limit("source record payload bytes overflowed"))?;
-        self.ensure_storage_totals(
+        let previous_source = self.function(id)?.source.as_deref();
+        let previous_count = usize::from(previous_source.is_some());
+        let previous_bytes = previous_source.map_or(0, str::len);
+        let reservation = self.storage_ledger.reserve_replacement(
             crate::runtime::VmStorageKind::SourceRecord,
-            projected_count,
-            projected_payload_bytes,
+            previous_count,
+            previous_bytes,
+            1,
+            source.len(),
         )?;
+        reservation.commit()?;
         self.function_mut(id)?.source = Some(source);
         Ok(())
     }

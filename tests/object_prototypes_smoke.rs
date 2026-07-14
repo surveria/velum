@@ -3,6 +3,31 @@ use rs_quickjs::{Runtime, Value};
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn prototype_cycle_checks_stop_at_proxy_exotics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        var trapCount = 0;
+        var root = {};
+        var intermediary = new Proxy(Object.create(root), {
+            getPrototypeOf() {
+                trapCount += 1;
+                throw new Error("unexpected getPrototypeOf trap");
+            }
+        });
+        var leaf = Object.create(intermediary);
+        var updated = Reflect.setPrototypeOf(root, leaf);
+        updated && Object.getPrototypeOf(root) === leaf && trapCount === 0
+        "#,
+    )?;
+    if value == Value::Bool(true) {
+        return Ok(());
+    }
+    Err(format!("expected Proxy-bounded prototype update, got {value:?}").into())
+}
+
+#[test]
 fn supports_literal_prototype_lookup_and_enumeration() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

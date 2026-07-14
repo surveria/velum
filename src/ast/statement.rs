@@ -108,6 +108,7 @@ pub enum ForInTarget {
     Binding {
         name: StaticBinding,
         kind: DeclKind,
+        initializer: Option<Expression>,
     },
     PatternBinding {
         pattern: Box<BindingPattern>,

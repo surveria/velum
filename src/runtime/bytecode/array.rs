@@ -77,7 +77,9 @@ impl Context {
         if self.optional_optimizations_enabled()
             && (!strict || self.bytecode_target_is_typed_array(object)?)
             && let Value::Object(id) = object
-            && !self.objects.prototype_chain_has_typed_array(*id)?
+            && !self
+                .objects
+                .prototype_chain_requires_semantic_index_write(*id)?
             && self.set_array_or_typed_array_index(*id, index.index()?, value.clone())?
         {
             return Ok(());
@@ -104,7 +106,10 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(false);
         };
-        if self.objects.prototype_chain_has_typed_array(*id)? {
+        if self
+            .objects
+            .prototype_chain_requires_semantic_index_write(*id)?
+        {
             return Ok(false);
         }
         if strict && self.objects.typed_array(*id)?.is_none() {

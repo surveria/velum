@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{OptimizationMode, Runtime, Value, Vm, VmConfig};
 
 mod support;
 
@@ -71,6 +71,52 @@ fn function_constructor_does_not_capture_caller_locals() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::from("undefined"))
+}
+
+#[test]
+fn function_constructor_observes_live_global_bindings() -> TestResult {
+    for mode in [OptimizationMode::Disabled, OptimizationMode::Enabled] {
+        let config = VmConfig::default().with_optimization_mode(mode);
+        let mut vm = Vm::with_config(config);
+        let value = vm.eval(
+            r#"
+        var readPlanet = Function.call(globalThis, "return planet;");
+        var readColor = Function.call(globalThis, "return color;");
+        var before = readPlanet();
+        var planet = "mars";
+        var after = readPlanet();
+        var missingIsReferenceError = false;
+        try { readColor(); } catch (error) {
+            missingIsReferenceError = error instanceof ReferenceError;
+        }
+        globalThis.color = "red";
+        String(before) + ":" + String(after) + ":" +
+            String(missingIsReferenceError) + ":" + String(readColor())
+        "#,
+        )?;
+        ensure_value(&value, &Value::from("undefined:mars:true:red"))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn dynamic_function_fast_paths_reuse_only_compatible_active_caches() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        var readArray = Function("return Array;");
+        function callFromAnotherLayout() {
+            var total = 0;
+            for (var index = 0; index < 2000; index++) {
+                total = total + (readArray() === Array ? 1 : 0);
+            }
+            return total;
+        }
+        callFromAnotherLayout()
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(2000.0))
 }
 
 #[test]

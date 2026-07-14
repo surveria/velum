@@ -14,8 +14,11 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<Value> {
         let mut object = Object::ordinary_with_property_capacity(properties.len());
-        object.prototype =
-            Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?);
+        object.prototype = Some(Value::Object(self.object_prototype_id(
+            constructor_key,
+            max_objects,
+            max_properties,
+        )?));
         for property in properties {
             object.define(
                 property.key,
@@ -36,8 +39,11 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<ObjectId> {
         let mut object = Object::ordinary();
-        object.prototype =
-            Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?);
+        object.prototype = Some(Value::Object(self.object_prototype_id(
+            constructor_key,
+            max_objects,
+            max_properties,
+        )?));
         self.push_object(object, max_objects)
     }
 }

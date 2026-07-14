@@ -1,11 +1,14 @@
 use crate::{
     error::{Error, Result},
-    value::{FunctionId, Value},
+    value::Value,
 };
 
 use super::{
-    Context, FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
-    activation::{ActivationFrame, ActivationFrameStorageFootprint, FunctionEnvironmentPhase},
+    Context, FunctionUpvalues, VmStorageKind,
+    activation::{
+        ActivationFrame, ActivationFrameStorageFootprint, FunctionCallActivation,
+        FunctionEnvironmentPhase,
+    },
     binding::scope::BindingScope,
     function::FunctionSuperBinding,
     private::PrivateEnvironment,
@@ -66,23 +69,10 @@ impl Context {
 
     pub(super) fn push_call_activation(
         &mut self,
-        function: FunctionId,
-        environment: FunctionActivationEnvironment,
-        this_value: Value,
-        new_target: Value,
-        super_binding: Option<std::rc::Rc<FunctionSuperBinding>>,
-        private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
+        activation: FunctionCallActivation,
     ) -> Result<usize> {
         let base = self.locals.len();
-        let frame = ActivationFrame::call(
-            function,
-            base,
-            environment,
-            this_value,
-            new_target,
-            super_binding,
-            private_environment,
-        );
+        let frame = ActivationFrame::call(base, activation);
         self.activate_frame_storage(frame.storage_footprint()?)?;
         self.activation_frames.push(frame);
         Ok(base)
@@ -350,10 +340,12 @@ impl Context {
             let Some(function_id) = frame.function_id() else {
                 continue;
             };
-            return Ok(matches!(
-                self.function(function_id)?.new_target,
-                super::FunctionNewTarget::Own
-            ));
+            return Ok(match self.function(function_id)?.new_target {
+                super::FunctionNewTarget::Own => true,
+                super::FunctionNewTarget::Lexical {
+                    allows_direct_eval, ..
+                } => allows_direct_eval,
+            });
         }
         Ok(false)
     }

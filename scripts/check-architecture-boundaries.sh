@@ -1163,7 +1163,7 @@ check_callable_edge_boundary() {
     'if let Some(binding) = &self.super_binding {' \
     'if let Some(parent) = &self.static_parent {' \
     'if let Some(fields) = &self.class_fields {' \
-    'if let FunctionNewTarget::Lexical(value) = &self.new_target {'; do
+    'if let FunctionNewTarget::Lexical { value, .. } = &self.new_target {'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/trace.rs"; then
       fail "callable edge boundary changed; JavaScript function source '${source}' is missing"
     fi
@@ -1242,7 +1242,7 @@ check_object_edge_boundary() {
     'for object in &self.objects {' \
     'for entry in &self.named_properties {' \
     'self.array_storage.visit_strong_edges(visitor)?;' \
-    'if let Some(prototype) = self.prototype {' \
+    'if let Some(prototype) = &self.prototype {' \
     'if let Some(string) = &self.string_value {' \
     'if let Some(ObjectPrimitiveValue::Symbol(symbol)) = &self.primitive_value {' \
     'if let Some(proxy) = &self.proxy_value {' \

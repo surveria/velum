@@ -43,7 +43,7 @@ impl Context {
                 None | Some(Value::Undefined) => String::new(),
                 Some(value) => self.to_string(value)?,
             };
-            self.charge_regexp_utf16_work(&pattern, &[])?;
+            self.charge_regexp_compile_work(&pattern)?;
             self.check_utf16_string_len(&pattern)?;
             self.check_string_len(&flags)?;
             let parsed_flags = parse_regexp_flags(&flags)?;

@@ -2,11 +2,13 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::numeric::number_to_uint32,
-    runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
+    runtime::{
+        object::{PropertyKey, PropertyLookup},
+        property::DynamicPropertyKey,
+    },
     value::{ErrorName, ObjectId, Value},
 };
 
-const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_LENGTH_RANGE_ERROR: &str = "Invalid array length";
 
 impl Context {
@@ -53,44 +55,14 @@ impl Context {
         property_name: &str,
         value: Value,
     ) -> Result<()> {
-        let lookup = PropertyLookup::from_key(property_name, key);
-        match self.objects.accessor_write_target(object, lookup)? {
-            AccessorWriteDisposition::Setter(setter) => {
-                self.call_accessor_function(&setter, Value::Object(object), &[value])?;
-                return Ok(());
-            }
-            AccessorWriteDisposition::NoSetter => return Ok(()),
-            AccessorWriteDisposition::None => {}
-        }
-        if let Some(index) = self
-            .objects
-            .typed_array_property_index(object, property_name)?
-        {
-            let crate::runtime::object::TypedArrayPropertyIndex::Valid(index) = index else {
-                return Ok(());
-            };
-            let Some(view) = self.objects.typed_array(object)? else {
-                return Err(Error::runtime("typed array view is not available"));
-            };
-            let element = self.convert_typed_array_element_value(view.element_kind(), &value)?;
-            self.objects
-                .set_typed_array_value(object, index, &element)?;
-            return Ok(());
-        }
-        if property_name == ARRAY_LENGTH_PROPERTY
-            && self.objects.array_len_if_array(object)?.is_some()
-        {
-            let length = self.array_length_from_value(&value)?;
-            return self.objects.set_array_length(object, length).map(|_| ());
-        }
-        crate::runtime::property::set_property(
-            &mut self.objects,
-            &Value::Object(object),
-            key,
-            property_name,
-            value,
-            self.limits.max_object_properties,
-        )
+        let receiver = Value::Object(object);
+        let mut property = DynamicPropertyKey::new(property_name.to_owned(), Some(key));
+        let Some(_updated) =
+            self.semantic_reflect_property_write(&receiver, &mut property, value, &receiver)?
+        else {
+            return Err(Error::runtime("ordinary object write target disappeared"));
+        };
+        Ok(())
     }
 
     pub(in crate::runtime) fn array_length_from_value(&mut self, value: &Value) -> Result<usize> {

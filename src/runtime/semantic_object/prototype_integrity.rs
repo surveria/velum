@@ -53,7 +53,18 @@ impl Context {
             Value::Object(id) if self.objects.is_proxy(*id) => {
                 self.proxy_set_prototype_of(*id, prototype)?
             }
-            Value::Object(id) => self.objects.try_set_prototype_value(*id, &prototype)?,
+            Value::Object(id) => {
+                if !matches!(prototype, Value::Null)
+                    && self.semantic_object_ref(&prototype)?.is_none()
+                {
+                    return Ok(Some(false));
+                }
+                if self.semantic_prototype_chain_contains(&prototype, target)? {
+                    false
+                } else {
+                    self.objects.try_set_prototype_value(*id, &prototype)?
+                }
+            }
             Value::Function(id) => {
                 self.set_function_static_parent(*id, prototype)?;
                 true
@@ -297,8 +308,22 @@ impl Context {
             if crate::runtime::abstract_operations::same_value(&current, target) {
                 return Ok(true);
             }
-            let Some(next) = self.semantic_get_prototype(&current)? else {
+            let Some(object_ref) = self.semantic_object_ref(&current)? else {
                 return Ok(false);
+            };
+            let next = match object_ref.value {
+                Value::Object(id) if self.objects.is_proxy(*id) => return Ok(false),
+                Value::Object(id) => self.objects.prototype_value(*id)?,
+                Value::Function(id) => self.function_inheritance_prototype_value(*id)?,
+                Value::NativeFunction(id) => self.native_function_object_prototype_value(*id)?,
+                Value::HostFunction(id) => self.host_function_inheritance_prototype_value(*id)?,
+                Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::BigInt(_)
+                | Value::String(_)
+                | Value::Symbol(_) => return Ok(false),
             };
             if matches!(next, Value::Null) {
                 return Ok(false);

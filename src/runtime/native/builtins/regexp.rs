@@ -275,7 +275,7 @@ impl Context {
     }
 
     fn create_regexp_object_from_utf16(&mut self, pattern: &[u16], flags: &str) -> Result<Value> {
-        self.charge_regexp_utf16_work(pattern, &[])?;
+        self.charge_regexp_compile_work(pattern)?;
         let parsed_flags = parse_regexp_flags(flags)?;
         let compiled = compile_regexp_pattern_utf16(pattern, parsed_flags)?;
         self.check_utf16_string_len(pattern)?;
@@ -679,7 +679,7 @@ impl Context {
         // Read the internal matcher only after that observable conversion has completed.
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
-        self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
+        self.charge_regexp_match_work(input)?;
         let start = if flags.global() || flags.sticky() {
             last_index
         } else {
@@ -700,12 +700,19 @@ impl Context {
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
 
-    fn charge_regexp_utf16_work(&mut self, pattern: &[u16], input: &[u16]) -> Result<()> {
+    fn charge_regexp_compile_work(&mut self, pattern: &[u16]) -> Result<()> {
         let steps = pattern
             .len()
-            .checked_add(input.len())
-            .and_then(|steps| steps.checked_add(1))
-            .ok_or_else(|| Error::limit("RegExp work estimate overflowed"))?;
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("RegExp compile work estimate overflowed"))?;
+        self.charge_runtime_steps(steps)
+    }
+
+    fn charge_regexp_match_work(&mut self, input: &[u16]) -> Result<()> {
+        let steps = input
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("RegExp match work estimate overflowed"))?;
         self.charge_runtime_steps(steps)
     }
 

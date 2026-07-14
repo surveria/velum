@@ -115,6 +115,47 @@ fn eval_created_vars_shadow_globals_only_inside_the_owning_function() -> TestRes
 }
 
 #[test]
+fn direct_eval_orders_active_vars_inside_captured_with_environments() -> TestResult {
+    expect_true(
+        r#"
+        var a = 9;
+        function directWith(object, source) {
+            var evaluate;
+            with (object) {
+                evaluate = function () {
+                    var a = 1;
+                    return eval(source);
+                };
+            }
+            return evaluate();
+        }
+        directWith({ eval: eval, a: -1000 }, "a + 1") === 2
+        "#,
+    )
+}
+
+#[test]
+fn deleted_eval_vars_fall_back_to_outer_bindings_for_captured_functions() -> TestResult {
+    expect_true(
+        r#"
+        var value = 42;
+        function createAccessor() {
+            return eval(`
+                var value = 5;
+                function access(action) {
+                    if (action === "delete") return eval("delete value");
+                    return value;
+                }
+                access
+            `);
+        }
+        var access = createAccessor();
+        access("read") === 5 && access("delete") === true && access("read") === 42
+        "#,
+    )
+}
+
+#[test]
 fn catch_var_redeclarations_use_the_current_catch_binding() -> TestResult {
     expect_true(
         r#"

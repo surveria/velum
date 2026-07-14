@@ -30,6 +30,7 @@ pub struct TemplateElement {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ObjectPropertyKind {
     Init,
+    PrototypeSetter,
     Shorthand,
     Get,
     Set,

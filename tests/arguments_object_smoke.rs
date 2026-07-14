@@ -134,6 +134,20 @@ fn parameters_and_vars_named_arguments_shadow_the_object() -> TestResult {
 }
 
 #[test]
+fn unreachable_var_arguments_keeps_the_implicit_arguments_object() -> TestResult {
+    ensure_string(
+        r#"
+        function probe() {
+            return typeof arguments;
+            var arguments = "unreachable";
+        }
+        probe(1, 2, 3)
+        "#,
+        "object",
+    )
+}
+
+#[test]
 fn arrow_functions_do_not_bind_their_own_arguments() -> TestResult {
     ensure_string(
         r"

@@ -90,6 +90,12 @@ const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DirectEvalScopeBoundary {
+    binding_layout_depth: usize,
+    local_scope_start: usize,
+}
+
 #[derive(Debug)]
 pub struct Context {
     identity: VmIdentity,
@@ -107,6 +113,7 @@ pub struct Context {
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
+    direct_eval_scope_boundaries: Vec<DirectEvalScopeBoundary>,
     active_realm: RealmIndex,
     realm: RealmState,
     inactive_realms: Vec<Option<RealmState>>,
@@ -182,14 +189,24 @@ type FunctionActivationEnvironment = (FunctionUpvalues, Vec<activation::DynamicE
 #[derive(Debug, Clone)]
 enum FunctionNewTarget {
     Own,
-    Lexical(Value),
+    Lexical {
+        value: Value,
+        allows_direct_eval: bool,
+    },
 }
 
 impl FunctionNewTarget {
-    fn from_mode(mode: BytecodeNewTargetMode, lexical_value: Value) -> Self {
+    fn from_mode(
+        mode: BytecodeNewTargetMode,
+        lexical_value: Value,
+        allows_direct_eval: bool,
+    ) -> Self {
         match mode {
             BytecodeNewTargetMode::Own => Self::Own,
-            BytecodeNewTargetMode::Lexical => Self::Lexical(lexical_value),
+            BytecodeNewTargetMode::Lexical => Self::Lexical {
+                value: lexical_value,
+                allows_direct_eval,
+            },
         }
     }
 }
@@ -401,6 +418,7 @@ impl Context {
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
+            direct_eval_scope_boundaries: Vec::new(),
             active_realm: RealmIndex::ROOT,
             realm: RealmState::new(storage_ledger.clone()),
             inactive_realms: vec![None],
@@ -730,33 +748,22 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         new_target: Value,
     ) -> Result<Value> {
-        let realm = self.function(id)?.realm;
-        self.with_realm(realm, |context| {
-            context.eval_function_constructor_value_in_active_realm(id, args, new_target)
-        })
-    }
-
-    fn eval_function_constructor_value_in_active_realm(
-        &mut self,
-        id: crate::value::FunctionId,
-        args: RuntimeCallArgs<'_>,
-        new_target: Value,
-    ) -> Result<Value> {
         if let Some(super_constructor) = self.default_derived_constructor_super(id)? {
-            let instance =
-                self.semantic_construct(&super_constructor, args.as_slice(), new_target)?;
-            self.initialize_class_fields(id, &instance)?;
-            return Ok(instance);
+            let realm = self.function(id)?.realm;
+            return self.with_realm(realm, |context| {
+                let instance =
+                    context.semantic_construct(&super_constructor, args.as_slice(), new_target)?;
+                context.initialize_class_fields(id, &instance)?;
+                Ok(instance)
+            });
         }
-        let prototype = self
-            .constructor_instance_prototype_with_default(&new_target, NativeFunctionKind::Object)?;
-        let constructor_key = self.object_constructor_property_key()?;
-        let object = self.objects.create_with_prototype(
-            Some(prototype),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
+        let prototype = self.constructor_instance_semantic_prototype_with_default(
+            &new_target,
+            NativeFunctionKind::Object,
         )?;
+        let object = self
+            .objects
+            .create_with_semantic_prototype(Some(prototype), self.limits.max_objects)?;
         match self.eval_function_completion_with_this_and_new_target(
             id,
             args,
@@ -778,17 +785,5 @@ impl Context {
                 completion.into_function_result().map(|_| object)
             }
         }
-    }
-
-    fn constructor_instance_prototype(
-        &mut self,
-        new_target: &Value,
-    ) -> Result<Option<crate::value::ObjectId>> {
-        let prototype = self.get_named(new_target, CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
-        let Value::Object(id) = prototype else {
-            return Ok(None);
-        };
-        self.objects.validate_id(id)?;
-        Ok(Some(id))
     }
 }

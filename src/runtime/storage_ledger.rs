@@ -104,6 +104,48 @@ impl VmStorageLedger {
         })
     }
 
+    pub(in crate::runtime) fn reserve_replacement(
+        &self,
+        kind: VmStorageKind,
+        released_count: usize,
+        released_payload_bytes: usize,
+        additional_count: usize,
+        additional_payload_bytes: usize,
+    ) -> Result<VmStorageReservation> {
+        let count = self.count_cell(kind)?;
+        let payload_bytes = self.payload_cell(kind)?;
+        let previous_count = count.get();
+        let previous_payload_bytes = payload_bytes.get();
+        let projected_count = previous_count
+            .checked_sub(released_count)
+            .and_then(|count| count.checked_add(additional_count))
+            .ok_or_else(|| Error::limit("storage category replacement count overflowed"))?;
+        let projected_payload_bytes = previous_payload_bytes
+            .checked_sub(released_payload_bytes)
+            .and_then(|bytes| bytes.checked_add(additional_payload_bytes))
+            .ok_or_else(|| Error::limit("storage category replacement payload overflowed"))?;
+        let max_count = self.state.limits.max_count(kind);
+        if projected_count > max_count {
+            return Err(Error::limit(format!(
+                "{kind:?} record count exceeded {max_count}"
+            )));
+        }
+        let max_payload_bytes = self.state.limits.max_payload_bytes(kind);
+        if projected_payload_bytes > max_payload_bytes {
+            return Err(Error::limit(format!(
+                "{kind:?} payload bytes exceeded {max_payload_bytes}"
+            )));
+        }
+        Ok(VmStorageReservation {
+            ledger: self.clone(),
+            kind,
+            previous_count,
+            projected_count,
+            previous_payload_bytes,
+            projected_payload_bytes,
+        })
+    }
+
     pub(in crate::runtime) fn release_count(
         &self,
         kind: VmStorageKind,

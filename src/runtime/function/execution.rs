@@ -121,7 +121,7 @@ impl Context {
             let _return_root =
                 self.transient_root_scope(VmRootKind::TransientCall, return_mode.root_value())?;
             let realm = self.function(id)?.realm;
-            let completion = self.with_realm(realm, |context| {
+            let (completion, function_return_mode) = self.with_realm(realm, |context| {
                 context.eval_function_completion_with_this_inner::<CAN_SUSPEND>(
                     id,
                     RuntimeCallArgs::values(&args),
@@ -129,6 +129,7 @@ impl Context {
                     new_target.clone(),
                 )
             })?;
+            return_mode = return_mode.merge(function_return_mode)?;
             let Completion::TailCall(request) = completion else {
                 return self.normalize_tail_call_return(completion, return_mode);
             };

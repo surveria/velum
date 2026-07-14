@@ -24,7 +24,7 @@ impl Parser {
     ) -> Result<()> {
         let mut lexical_names = Vec::new();
         match target {
-            ForInTarget::Binding { name, kind } if *kind != DeclKind::Var => {
+            ForInTarget::Binding { name, kind, .. } if *kind != DeclKind::Var => {
                 lexical_names.push(name.name().as_str().to_owned());
             }
             ForInTarget::PatternBinding { pattern, kind } if *kind != DeclKind::Var => {
@@ -358,6 +358,7 @@ impl Parser {
                     crate::ast::ForInTarget::Binding {
                         name,
                         kind: DeclKind::Var,
+                        ..
                     } => names.push(name.name().as_str().to_owned()),
                     crate::ast::ForInTarget::PatternBinding {
                         pattern,

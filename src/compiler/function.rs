@@ -59,6 +59,7 @@ impl BytecodeCompiler<'_> {
                 spec.body,
                 FunctionCompileMode::new(spec.kind, spec.strict),
                 self.layout,
+                self.source_text(self.current_span),
             )?,
             constructable: spec.constructable,
             kind: spec.kind,
@@ -116,6 +117,7 @@ impl BytecodeCompiler<'_> {
                     body,
                     FunctionCompileMode::new(*kind, *strict),
                     self.layout,
+                    self.source_text(statement.span()),
                 )?,
                 constructable: kind.is_constructable(),
                 kind: *kind,
@@ -487,7 +489,11 @@ impl CaptureBindingCollector {
 
     fn collect_for_in_target(&mut self, target: &ForInTarget) {
         match target {
-            ForInTarget::Binding { .. } => {}
+            ForInTarget::Binding { initializer, .. } => {
+                if let Some(initializer) = initializer {
+                    self.collect_expr(initializer);
+                }
+            }
             ForInTarget::PatternBinding { pattern, .. } => self.collect_pattern(pattern),
             ForInTarget::PatternAssignment { pattern, .. } => {
                 self.collect_assignment_pattern(pattern);

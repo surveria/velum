@@ -208,6 +208,7 @@ impl Context {
         environment: EvalBindingEnvironment,
     ) -> Result<()> {
         let index = self.current_dynamic_environment_index()?;
+        let captured_count = self.current_captured_dynamic_environment_count();
         self.storage_ledger
             .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
         let Some(environments) = self
@@ -219,9 +220,14 @@ impl Context {
                 .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
             return Err(Error::runtime("eval binding activation disappeared"));
         };
+        let active_start = captured_count.min(environments.len());
         let position = environments
             .iter()
-            .position(|environment| matches!(environment, DynamicEnvironment::With(_)))
+            .enumerate()
+            .skip(active_start)
+            .find_map(|(position, environment)| {
+                matches!(environment, DynamicEnvironment::With(_)).then_some(position)
+            })
             .unwrap_or(environments.len());
         environments.insert(position, DynamicEnvironment::EvalBindings(environment));
         Ok(())
@@ -328,14 +334,63 @@ impl Context {
         &mut self,
         binding: &BytecodeBinding,
     ) -> Result<Option<WithBindingReference>> {
+        let environments = self.current_dynamic_environments().to_vec();
+        if self.direct_eval_binding_layout_is_active() {
+            let frame_start = self.current_local_frame_start();
+            let eval_scope_start = self
+                .direct_eval_local_scope_start()
+                .unwrap_or(self.locals.len())
+                .max(frame_start)
+                .min(self.locals.len());
+            let atom = self.intern_static_name_atom(binding.name().name())?;
+            if self
+                .locals
+                .iter()
+                .skip(eval_scope_start)
+                .rev()
+                .any(|scope| scope.contains(atom))
+            {
+                return Ok(None);
+            }
+            let captured_count = self
+                .current_captured_dynamic_environment_count()
+                .min(environments.len());
+            let (captured, active) = environments.split_at(captured_count);
+            if let Some(reference) = self.resolve_dynamic_binding_chain(
+                binding,
+                active,
+                count_with_environments(active),
+            )? {
+                return Ok(Some(reference));
+            }
+            if self
+                .locals
+                .iter()
+                .take(eval_scope_start)
+                .skip(frame_start)
+                .rev()
+                .any(|scope| scope.contains(atom))
+            {
+                return Ok(None);
+            }
+            return self.resolve_dynamic_binding_chain(
+                binding,
+                captured,
+                count_with_environments(captured),
+            );
+        }
         let count = usize::try_from(binding.with_environment_count())
             .map_err(|_| Error::limit("with environment count exceeded addressable range"))?;
-        let environments = self.current_dynamic_environments().to_vec();
-        let available_with_environments = environments
-            .iter()
-            .filter(|environment| matches!(environment, DynamicEnvironment::With(_)))
-            .count();
-        if count > available_with_environments {
+        self.resolve_dynamic_binding_chain(binding, &environments, count)
+    }
+
+    fn resolve_dynamic_binding_chain(
+        &mut self,
+        binding: &BytecodeBinding,
+        environments: &[DynamicEnvironment],
+        count: usize,
+    ) -> Result<Option<WithBindingReference>> {
+        if count > count_with_environments(environments) {
             return Err(Error::runtime(
                 "captured with environment chain is incomplete",
             ));
@@ -347,7 +402,7 @@ impl Context {
                 | BindingOperand::Unresolved
         );
         let mut remaining_with_environments = count;
-        for environment in environments.into_iter().rev() {
+        for environment in environments.iter().rev().cloned() {
             match environment {
                 DynamicEnvironment::With(object) if remaining_with_environments > 0 => {
                     remaining_with_environments = remaining_with_environments.saturating_sub(1);
@@ -367,12 +422,31 @@ impl Context {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
                     }
                 }
+                DynamicEnvironment::CapturedLexical(environment) if resolves_eval_var => {
+                    let atom = self.intern_static_name_atom(binding.name().name())?;
+                    if environment.binding(atom)?.is_some() {
+                        return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
+                    }
+                }
                 DynamicEnvironment::With(_)
                 | DynamicEnvironment::EvalVar(_)
-                | DynamicEnvironment::EvalBindings(_) => {}
+                | DynamicEnvironment::EvalBindings(_)
+                | DynamicEnvironment::CapturedLexical(_) => {}
             }
         }
         Ok(None)
+    }
+
+    fn current_captured_dynamic_environment_count(&self) -> usize {
+        for frame in self.activation_frames.iter().rev() {
+            if frame.is_eval_boundary() {
+                return 0;
+            }
+            if let Some(count) = frame.captured_dynamic_environment_count() {
+                return count;
+            }
+        }
+        0
     }
 
     pub(in crate::runtime) fn current_parameter_eval_var_environment(&self) -> Option<Value> {
@@ -390,7 +464,9 @@ impl Context {
             .rev()
             .find_map(|environment| match environment {
                 DynamicEnvironment::EvalVar(value) => Some(value.clone()),
-                DynamicEnvironment::With(_) | DynamicEnvironment::EvalBindings(_) => None,
+                DynamicEnvironment::With(_)
+                | DynamicEnvironment::EvalBindings(_)
+                | DynamicEnvironment::CapturedLexical(_) => None,
             })
     }
 
@@ -411,4 +487,11 @@ impl Context {
         let blocked = self.get(&unscopables, blocked_lookup)?;
         Ok(!to_boolean(self, &blocked)?)
     }
+}
+
+fn count_with_environments(environments: &[DynamicEnvironment]) -> usize {
+    environments
+        .iter()
+        .filter(|environment| matches!(environment, DynamicEnvironment::With(_)))
+        .count()
 }

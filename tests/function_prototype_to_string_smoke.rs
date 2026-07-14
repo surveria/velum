@@ -13,13 +13,58 @@ fn formats_source_unavailable_callables_as_native_functions() -> TestResult {
         let ordinary = function named() {};
         let bound = ordinary.bind(null);
         let proxy = new Proxy(ordinary, {});
-        let anonymousCallables = [ordinary, bound, proxy, hostNoop];
-        let anonymousSources = anonymousCallables.every(function (callable) {
+        let sourceUnavailableCallables = [bound, proxy, hostNoop];
+        let nativeSources = sourceUnavailableCallables.every(function (callable) {
             return source.call(callable) === "function () { [native code] }";
         });
-        anonymousSources &&
+        source.call(ordinary) === "function named() {}" && nativeSources &&
             source.call(Array) === "function Array() { [native code] }" &&
             source.call(Math.abs) === "function abs() { [native code] }" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn retains_ordinary_function_and_computed_method_source() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        function check(expected, actual = new.target) {
+            return actual === expected;
+        }
+        let restored = eval("(" + check.toString() + ")");
+        let keyMethod = { a(){} }.a;
+        let computed = { [keyMethod](){ return 42; } }["a(){}"];
+        let commented = {
+            [ /* a */ "f" /* b */ ] /* c */ ( /* d */ ) /* e */ { /* f */ }
+        }.f;
+        check.toString().includes("actual = new.target") &&
+            new restored(restored) instanceof restored &&
+            restored(undefined) &&
+            keyMethod.toString() === "a(){}" &&
+            computed() === 42 &&
+            commented.toString() ===
+                '[ /* a */ "f" /* b */ ] /* c */ ( /* d */ ) /* e */ { /* f */ }' ? 42 : 0;
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn retains_complete_generator_and_async_function_expression_source() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let generator = function /* g */ * /* n */ named() {};
+        let asynchronous = async /* a */ function /* n */ named() {};
+        let asyncGenerator = async /* a */ function /* g */ * named() {};
+        generator.toString() === "function /* g */ * /* n */ named() {}" &&
+            asynchronous.toString() === "async /* a */ function /* n */ named() {}" &&
+            asyncGenerator.toString() ===
+                "async /* a */ function /* g */ * named() {}" ? 42 : 0
         "#,
     )?;
     ensure_value(&value, &Value::Number(42.0))

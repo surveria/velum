@@ -4,6 +4,7 @@ const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
 const COLLECT_GARBAGE_HOST_NAME: &str = "__rsqjsTest262CollectGarbage";
 const CREATE_REALM_HOST_NAME: &str = "__rsqjsTest262CreateRealm";
 const CREATE_IS_HTML_DDA_HOST_NAME: &str = "__rsqjsTest262CreateIsHTMLDDA";
+const EVAL_SCRIPT_HOST_NAME: &str = "__rsqjsTest262EvalScript";
 
 const HOST_SOURCE: &str = r"
 var $262 = {
@@ -31,9 +32,7 @@ var $262 = {
         };
         return { global: realmGlobal };
     },
-    evalScript: function evalScript(source) {
-        return (0, eval)(source);
-    }
+    evalScript: __rsqjsTest262EvalScript
 };
 ";
 
@@ -223,6 +222,7 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
         HostOperation::DetachArrayBuffer,
     )?;
     context.register_host_operation(CREATE_REALM_HOST_NAME, HostOperation::CreateRealm)?;
+    context.register_host_operation(EVAL_SCRIPT_HOST_NAME, HostOperation::EvalScript)?;
     context
         .register_host_operation(CREATE_IS_HTML_DDA_HOST_NAME, HostOperation::CreateIsHtmlDda)?;
     context.eval(HOST_SOURCE).map(|_| ())

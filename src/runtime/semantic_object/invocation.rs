@@ -250,17 +250,13 @@ impl Context {
         new_target: &Value,
     ) -> Result<Value> {
         if kind == NativeFunctionKind::Object && !same_value(constructor, new_target) {
-            let prototype = self.constructor_instance_prototype_with_default(
+            let prototype = self.constructor_instance_semantic_prototype_with_default(
                 new_target,
                 NativeFunctionKind::Object,
             )?;
-            let constructor_key = self.object_constructor_property_key()?;
-            return self.objects.create_with_prototype(
-                Some(prototype),
-                constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            );
+            return self
+                .objects
+                .create_with_semantic_prototype(Some(prototype), self.limits.max_objects);
         }
 
         if kind == NativeFunctionKind::RegExp && !same_value(constructor, new_target) {

@@ -208,6 +208,7 @@ impl LayoutBuilder {
             ForInTarget::Binding {
                 name,
                 kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
             } => {
                 names.insert(name.name().as_str().to_owned());
             }

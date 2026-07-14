@@ -21,7 +21,7 @@ impl ObjectHeap {
             {
                 return Ok(property.accessor().is_some());
             }
-            current = object.prototype;
+            current = object.ordinary_prototype_id();
         }
         Ok(false)
     }
@@ -68,7 +68,7 @@ impl ObjectHeap {
                 {
                     return Ok(true);
                 }
-                current = object.prototype;
+                current = object.ordinary_prototype_id();
             }
         }
         Ok(false)
@@ -133,6 +133,9 @@ impl ObjectHeap {
             return Ok(true);
         }
         if self.array_length_if_array(id)?.is_none() {
+            return Ok(false);
+        }
+        if self.prototype_chain_requires_semantic_index_write(id)? {
             return Ok(false);
         }
         let index = ArrayIndex::from_usize(index)?;

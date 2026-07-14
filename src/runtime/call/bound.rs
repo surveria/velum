@@ -268,7 +268,9 @@ impl Context {
         this_value: Value,
         args: Vec<Value>,
     ) -> Result<Value> {
-        let prototype = self.function_constructor_prototype_value()?;
+        let prototype = self
+            .semantic_get_prototype(&target)?
+            .ok_or_else(|| Error::runtime("bound function target has no semantic prototype"))?;
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;

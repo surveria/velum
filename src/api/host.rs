@@ -32,6 +32,8 @@ pub enum HostOperation {
     DetachArrayBuffer,
     /// Creates a VM-local realm and returns its global object.
     CreateRealm,
+    /// Evaluates the first argument as an ECMAScript Script in the active realm.
+    EvalScript,
     /// Creates the callable Annex B host exotic carrying `[[IsHTMLDDA]]`.
     CreateIsHtmlDda,
 }
@@ -665,6 +667,9 @@ impl Context {
                 let realm = self.create_realm()?;
                 let eval = self.create_internal_realm_eval_function("eval".to_owned(), &realm)?;
                 self.install_realm_global_eval(&realm, eval)
+            }
+            HostOperation::EvalScript => {
+                self.eval_script_source_value(args.first().unwrap_or(&Value::Undefined))
             }
             HostOperation::CreateIsHtmlDda => self.create_internal_host_function_value(
                 HostFunction::is_html_dda("IsHTMLDDA".to_owned()),

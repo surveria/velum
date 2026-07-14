@@ -87,18 +87,6 @@ pub(in crate::runtime) enum ObjectPrimitiveValue {
     Symbol(JsSymbol),
 }
 
-/// How an assignment should proceed after resolving accessor properties on
-/// the receiver and its prototype chain.
-#[derive(Debug, Clone)]
-pub enum AccessorWriteDisposition {
-    /// No accessor property found; ordinary data-write semantics apply.
-    None,
-    /// An accessor with a setter intercepts the write.
-    Setter(Value),
-    /// A getter-only accessor swallows the write (sloppy-mode no-op).
-    NoSetter,
-}
-
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 enum ObjectExtensibility {
     #[default]
@@ -137,7 +125,7 @@ struct Object {
     function_prototype_brand: FunctionPrototypeBrand,
     module_namespace: bool,
     shadow_realm: Option<crate::runtime::realm::RealmIndex>,
-    prototype: Option<ObjectId>,
+    prototype: Option<Value>,
     extensibility: ObjectExtensibility,
     storage_ledger: Option<crate::runtime::storage_ledger::VmStorageLedger>,
 }
@@ -148,12 +136,12 @@ enum FunctionPrototypeBrand {
     Present,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct ObjectStructureSnapshot {
     shape: ShapeId,
     property_count: usize,
     enumerable_property_count: usize,
-    prototype: Option<ObjectId>,
+    prototype: Option<Value>,
     extensibility: ObjectExtensibility,
     array_length_writable: PropertyWritable,
 }
@@ -327,31 +315,57 @@ impl Object {
         }
     }
 
-    const fn literal_prototype(value: &Value) -> Option<LiteralPrototype> {
+    fn literal_prototype(value: &Value) -> Option<LiteralPrototype> {
         match value {
-            Value::Object(prototype) => Some(LiteralPrototype::Object(*prototype)),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Some(LiteralPrototype::Object(value.clone())),
             Value::Null => Some(LiteralPrototype::Null),
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_) => None,
+            | Value::Symbol(_) => None,
         }
     }
 
-    const fn structure_snapshot(&self) -> ObjectStructureSnapshot {
+    fn structure_snapshot(&self) -> ObjectStructureSnapshot {
         ObjectStructureSnapshot {
             shape: self.shape,
             property_count: self.property_count(),
             enumerable_property_count: self.enumerable_property_count,
-            prototype: self.prototype,
+            prototype: self.prototype.clone(),
             extensibility: self.extensibility,
             array_length_writable: self.array_length_writable,
         }
+    }
+
+    const fn ordinary_prototype_id(&self) -> Option<ObjectId> {
+        match &self.prototype {
+            Some(Value::Object(id)) => Some(*id),
+            Some(
+                Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+                | Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::BigInt(_)
+                | Value::String(_)
+                | Value::Symbol(_),
+            )
+            | None => None,
+        }
+    }
+
+    const fn has_semantic_prototype(&self) -> bool {
+        matches!(
+            self.prototype,
+            Some(Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_))
+        )
     }
 
     fn get_own(

@@ -144,12 +144,18 @@ impl Context {
             VmStorageKind::CacheEntry,
             footprint.metadata_cache_entry_count(),
         )?;
+        let source_reservation = self.storage_ledger.reserve(
+            VmStorageKind::SourceRecord,
+            footprint.source_record_count(),
+            footprint.source_record_bytes(),
+        )?;
         function
             .properties
             .activate_storage(self.storage_ledger.clone())?;
         function_reservation.commit()?;
         binding_reservation.commit()?;
         cache_reservation.commit()?;
+        source_reservation.commit()?;
         Ok(())
     }
 

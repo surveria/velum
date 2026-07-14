@@ -372,7 +372,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<Value> {
         let mut object = Object::ordinary();
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.intl_value = Some(value);
         self.push_object(object, max_objects).map(Value::Object)
     }

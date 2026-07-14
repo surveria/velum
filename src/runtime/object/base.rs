@@ -1,21 +1,21 @@
 use crate::{
     error::{Error, Result},
     runtime::{arena::SlotArena, limits::VmStorageLimits, storage_ledger::VmStorageLedger},
-    value::ObjectId,
+    value::{ObjectId, Value},
 };
 
 use super::shape::ShapeTable;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) enum LiteralPrototype {
-    Object(ObjectId),
+    Object(Value),
     Null,
 }
 
 impl LiteralPrototype {
-    pub(super) const fn into_object_id(self) -> Option<ObjectId> {
+    pub(super) fn into_value(self) -> Option<Value> {
         match self {
-            Self::Object(id) => Some(id),
+            Self::Object(value) => Some(value),
             Self::Null => None,
         }
     }

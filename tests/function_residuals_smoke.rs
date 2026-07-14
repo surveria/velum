@@ -68,6 +68,21 @@ fn bound_functions_derive_metadata_and_has_instance() -> TestResult {
 }
 
 #[test]
+fn bound_functions_copy_their_targets_semantic_prototype() -> TestResult {
+    assert_script(
+        r#"
+        class FunctionSubclass extends Function {}
+        var target = new FunctionSubclass("value", "return this.base + value");
+        var bound = target.bind({ base: 40 }, 2);
+        var inherited = bound instanceof FunctionSubclass && bound() === 42;
+        Object.setPrototypeOf(target, null);
+        bound = Function.prototype.bind.call(target, { base: 40 }, 2);
+        inherited && Object.getPrototypeOf(bound) === null && bound() === 42 ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn function_prototype_is_the_callable_function_root() -> TestResult {
     assert_script(
         r#"

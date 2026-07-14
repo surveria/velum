@@ -82,6 +82,27 @@ impl ResolvedClassField {
 }
 
 impl Context {
+    pub(in crate::runtime) fn retain_function_class_name_environment(
+        &mut self,
+        id: FunctionId,
+        binding: &crate::bytecode::BytecodeBinding,
+    ) -> Result<()> {
+        let atom = self.intern_static_name_atom(binding.name().name())?;
+        let cell = self
+            .get_binding_bytecode(binding)?
+            .ok_or_else(|| Error::runtime("class name binding disappeared"))?;
+        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        environment.insert(atom, cell, false)?;
+        let dynamic = crate::runtime::activation::DynamicEnvironment::CapturedLexical(environment);
+        let additional_bindings = dynamic.storage_binding_count()?;
+        let mut environments = self.function(id)?.dynamic_environments.to_vec();
+        environments.push(dynamic);
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Binding, additional_bindings)?;
+        self.function_mut(id)?.dynamic_environments = environments.into();
+        Ok(())
+    }
+
     pub(in crate::runtime) fn set_function_default_derived_constructor(
         &mut self,
         id: FunctionId,
@@ -121,18 +142,20 @@ impl Context {
         Ok(false)
     }
 
-    pub(super) fn normalize_derived_constructor_completion(
+    pub(super) fn function_return_mode(
         &self,
-        completion: Completion,
-        binding: &FunctionSuperBinding,
-    ) -> Result<Completion> {
-        let this_value = binding.this_value.borrow().clone();
-        let Completion::TailCall(request) = completion else {
-            return self.normalize_derived_constructor_result(completion, this_value);
+        id: FunctionId,
+        binding: Option<&Rc<FunctionSuperBinding>>,
+    ) -> Result<TailCallReturnMode> {
+        if self.function(id)?.class_constructor != FunctionClassConstructor::Explicit {
+            return Ok(TailCallReturnMode::Ordinary);
+        }
+        let Some(binding) = binding.filter(|binding| binding.constructor.is_some()) else {
+            return Ok(TailCallReturnMode::Ordinary);
         };
-        Ok(Completion::TailCall(
-            request.with_derived_constructor_return(this_value)?,
-        ))
+        Ok(TailCallReturnMode::DerivedConstructor {
+            this_value: binding.this_value.borrow().clone(),
+        })
     }
 
     pub(super) fn normalize_tail_call_return(

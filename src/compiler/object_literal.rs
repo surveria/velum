@@ -20,6 +20,7 @@ impl BytecodeCompiler<'_> {
             }
             let accessor = match property.kind {
                 ObjectPropertyKind::Init
+                | ObjectPropertyKind::PrototypeSetter
                 | ObjectPropertyKind::Shorthand
                 | ObjectPropertyKind::Spread => None,
                 ObjectPropertyKind::Get => Some(AccessorKind::Getter),

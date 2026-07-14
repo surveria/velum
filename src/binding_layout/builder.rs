@@ -153,6 +153,7 @@ impl LayoutBuilder {
                     ForInTarget::Binding {
                         name,
                         kind: DeclKind::Var,
+                        ..
                     } => self.declare(var_scope, name)?,
                     ForInTarget::PatternBinding {
                         pattern,
@@ -369,6 +370,7 @@ impl LayoutBuilder {
             ForInTarget::Binding {
                 name,
                 kind: DeclKind::Let | DeclKind::Const | DeclKind::Using | DeclKind::AwaitUsing,
+                ..
             } => {
                 let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.declare(loop_scope, name)?;
@@ -379,7 +381,11 @@ impl LayoutBuilder {
             ForInTarget::Binding {
                 name,
                 kind: DeclKind::Var,
+                initializer,
             } => {
+                if let Some(initializer) = initializer {
+                    self.analyze_expr(initializer, scope, function)?;
+                }
                 self.analyze_expr(object, scope, function)?;
                 self.declare(var_scope, name)?;
                 self.resolve_declaration_if_with_sensitive(name, scope, function)?;

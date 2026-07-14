@@ -53,8 +53,53 @@ impl Context {
             init.bytecode.capture_bindings(),
             layout,
         )?;
-        let dynamic_environments = Rc::from(self.current_dynamic_environments());
-        Ok((upvalues, dynamic_environments, fast_path))
+        let mut dynamic_environments = self.current_dynamic_environments().to_vec();
+        if init.bytecode.contains_direct_eval()
+            && let Some(environment) = self.capture_direct_eval_lexical_environment()?
+        {
+            dynamic_environments.insert(0, DynamicEnvironment::CapturedLexical(environment));
+        }
+        Ok((upvalues, dynamic_environments.into(), fast_path))
+    }
+
+    fn capture_direct_eval_lexical_environment(
+        &self,
+    ) -> Result<Option<crate::runtime::activation::EvalBindingEnvironment>> {
+        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        for scope in self
+            .locals
+            .iter()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
+            scope.for_each_active_binding(|atom, cell| {
+                if !self.dynamic_eval_environment_contains(atom)? && !environment.contains(atom)? {
+                    environment.insert(atom, cell.clone(), false)?;
+                }
+                Ok(())
+            })?;
+        }
+        if environment.len()? == 0 {
+            return Ok(None);
+        }
+        Ok(Some(environment))
+    }
+
+    fn dynamic_eval_environment_contains(
+        &self,
+        atom: crate::storage::atom::AtomId,
+    ) -> Result<bool> {
+        self.current_dynamic_environments()
+            .iter()
+            .try_fold(false, |found, environment| {
+                if found {
+                    return Ok(true);
+                }
+                let DynamicEnvironment::EvalBindings(environment) = environment else {
+                    return Ok(false);
+                };
+                environment.contains(atom)
+            })
     }
 
     pub(super) fn try_eval_pre_setup_function_fast_path(
@@ -91,10 +136,13 @@ impl Context {
             return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
         }
         if !self.active_function_has_arguments_binding() {
-            if !dynamic_source && !fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
+            if fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
+                return self
+                    .eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
+            }
+            if !dynamic_source {
                 return Ok(None);
             }
-            return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
         }
         match (atom_cache, binding_cache, binding_layout) {
             (Some(atom_cache), Some(binding_cache), Some(binding_layout)) => self
