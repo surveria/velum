@@ -383,6 +383,22 @@ fn direct_eval_spread_calls_keep_the_caller_environment() -> TestResult {
     )
 }
 
+#[test]
+fn nested_direct_eval_closures_capture_transitive_lexical_bindings() -> TestResult {
+    expect_true(
+        r#"
+        function outer() {
+            let lexical = 42;
+            function createProbe(source) {
+                return () => eval(source);
+            }
+            return createProbe("lexical")();
+        }
+        outer() === 42
+        "#,
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

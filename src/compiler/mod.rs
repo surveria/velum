@@ -9,7 +9,7 @@ use crate::{
     binding_metadata::BindingLayout,
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
-        BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKey,
+        BytecodeClass, BytecodeClassDefinitionElement, BytecodeClassMember, BytecodeClassMemberKey,
         BytecodeClassMemberKind, BytecodeClassStaticElement, BytecodeCompletion,
         BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
         BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
@@ -23,6 +23,8 @@ use crate::{
 
 mod binding_effects;
 mod call;
+mod class_elements;
+mod class_fields;
 mod control;
 mod expression;
 mod function;
@@ -439,12 +441,16 @@ impl<'a> BytecodeCompiler<'a> {
                 kind: DeclKind::Const,
             });
         }
+        for decorator in &class.decorators {
+            self.compile_expr(decorator)?;
+        }
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
         self.emit(BytecodeInstruction::BeginPrivateEnvironment {
             names: private_names.clone(),
         });
+        self.compile_class_element_inputs(class)?;
         let members = self.compile_class_members(class, &private_names)?;
         let fields = self.compile_class_fields(class, &private_names)?;
         let static_blocks = class
@@ -456,6 +462,7 @@ impl<'a> BytecodeCompiler<'a> {
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone().or_else(|| inferred_name.cloned()),
+                decorator_count: class.decorators.len(),
                 inner_name_binding,
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
@@ -471,6 +478,7 @@ impl<'a> BytecodeCompiler<'a> {
                 )?,
                 members: members.into(),
                 fields: fields.into(),
+                definition_order: Self::compile_class_definition_order(class).into(),
                 static_blocks: static_blocks.into(),
                 static_element_order: static_element_order.into(),
                 private_names,
@@ -501,6 +509,30 @@ impl<'a> BytecodeCompiler<'a> {
         ordered.into_iter().map(|(_, element)| element).collect()
     }
 
+    fn compile_class_definition_order(
+        class: &crate::ast::ClassLiteral,
+    ) -> Vec<BytecodeClassDefinitionElement> {
+        let mut ordered = class
+            .members
+            .iter()
+            .enumerate()
+            .map(|(index, member)| {
+                (
+                    member.source_order,
+                    BytecodeClassDefinitionElement::Member(index),
+                )
+            })
+            .chain(class.fields.iter().enumerate().map(|(index, field)| {
+                (
+                    field.source_order,
+                    BytecodeClassDefinitionElement::Field(index),
+                )
+            }))
+            .collect::<Vec<_>>();
+        ordered.sort_by_key(|(source_order, _)| *source_order);
+        ordered.into_iter().map(|(_, element)| element).collect()
+    }
+
     /// Lowers class methods and accessors, pushing computed keys onto the
     /// stack in member order.
     fn compile_class_members(
@@ -510,7 +542,7 @@ impl<'a> BytecodeCompiler<'a> {
     ) -> Result<Vec<BytecodeClassMember>> {
         let mut members = Vec::with_capacity(class.members.len());
         for member in &class.members {
-            let key = self.compile_class_element_key(&member.key, private_names)?;
+            let key = Self::lower_class_element_key(&member.key, private_names)?;
             let kind = match member.kind {
                 crate::ast::ClassMemberKind::Method => BytecodeClassMemberKind::Method,
                 crate::ast::ClassMemberKind::Getter => BytecodeClassMemberKind::Getter,
@@ -518,6 +550,7 @@ impl<'a> BytecodeCompiler<'a> {
             };
             members.push(BytecodeClassMember {
                 key,
+                decorator_count: member.decorators.len(),
                 kind,
                 function_kind: member.function_kind,
                 is_static: member.is_static,
@@ -536,49 +569,7 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(members)
     }
 
-    /// Lowers class fields, pushing computed keys onto the stack in field
-    /// order and compiling initializers into deferred blocks.
-    fn compile_class_fields(
-        &mut self,
-        class: &crate::ast::ClassLiteral,
-        private_names: &[StaticName],
-    ) -> Result<Vec<BytecodeClassField>> {
-        let mut fields = Vec::with_capacity(class.fields.len());
-        for field in &class.fields {
-            let key = self.compile_class_element_key(&field.key, private_names)?;
-            let infer_name_from_computed_key = field.name.is_none()
-                && field
-                    .initializer
-                    .as_ref()
-                    .is_some_and(Self::is_anonymous_function_definition);
-            fields.push(BytecodeClassField {
-                key,
-                is_static: field.is_static,
-                name: field.name.clone(),
-                infer_name_from_computed_key,
-                initializer: field
-                    .initializer
-                    .as_ref()
-                    .map(|initializer| {
-                        field.name.as_ref().map_or_else(
-                            || BytecodeBlock::compile_expression(initializer, self.layout),
-                            |name| {
-                                BytecodeBlock::compile_expression_with_inferred_name(
-                                    initializer,
-                                    name,
-                                    self.layout,
-                                )
-                            },
-                        )
-                    })
-                    .transpose()?,
-            });
-        }
-        Ok(fields)
-    }
-
-    fn compile_class_element_key(
-        &mut self,
+    pub(super) fn lower_class_element_key(
         key: &crate::ast::ClassElementName,
         private_names: &[StaticName],
     ) -> Result<BytecodeClassMemberKey> {
@@ -586,8 +577,7 @@ impl<'a> BytecodeCompiler<'a> {
             crate::ast::ClassElementName::Property(ObjectPropertyKey::Static(name)) => {
                 Ok(BytecodeClassMemberKey::Static(name.clone()))
             }
-            crate::ast::ClassElementName::Property(ObjectPropertyKey::Computed(expr)) => {
-                self.compile_expr(expr)?;
+            crate::ast::ClassElementName::Property(ObjectPropertyKey::Computed(_)) => {
                 Ok(BytecodeClassMemberKey::Computed)
             }
             crate::ast::ClassElementName::Private(name) => {
@@ -620,6 +610,19 @@ impl<'a> BytecodeCompiler<'a> {
                 continue;
             }
             names.push(name.clone());
+        }
+        for name in class
+            .fields
+            .iter()
+            .filter_map(|field| field.auto_accessor.as_ref())
+            .map(|auto_accessor| &auto_accessor.backing_name)
+        {
+            if names
+                .iter()
+                .all(|candidate| candidate.as_str() != name.as_str())
+            {
+                names.push(name.clone());
+            }
         }
         names.into()
     }

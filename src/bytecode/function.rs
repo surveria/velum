@@ -14,6 +14,7 @@ pub struct BytecodeFunction {
     capture_bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
     contains_direct_eval: bool,
+    requires_dynamic_lexical_capture: bool,
     eval_mode: BytecodeEvalMode,
     source: Option<Rc<str>>,
     pub(crate) simple_parameters: bool,
@@ -28,6 +29,7 @@ pub struct BytecodeFunctionInit {
     pub capture_bindings: Rc<[StaticBinding]>,
     pub uses_arguments: bool,
     pub contains_direct_eval: bool,
+    pub requires_dynamic_lexical_capture: bool,
     pub eval_mode: BytecodeEvalMode,
     pub source: Option<Rc<str>>,
     pub simple_parameters: bool,
@@ -61,6 +63,7 @@ impl BytecodeFunction {
             capture_bindings: init.capture_bindings,
             uses_arguments: init.uses_arguments,
             contains_direct_eval: init.contains_direct_eval,
+            requires_dynamic_lexical_capture: init.requires_dynamic_lexical_capture,
             eval_mode: init.eval_mode,
             source: init.source,
             simple_parameters: init.simple_parameters,
@@ -81,6 +84,10 @@ impl BytecodeFunction {
 
     pub const fn contains_direct_eval(&self) -> bool {
         self.contains_direct_eval
+    }
+
+    pub const fn requires_dynamic_lexical_capture(&self) -> bool {
+        self.requires_dynamic_lexical_capture
     }
 
     pub const fn strict(&self) -> bool {

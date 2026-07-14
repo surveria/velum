@@ -97,6 +97,7 @@ impl BytecodeFunction {
             capture_bindings: collected.bindings,
             uses_arguments,
             contains_direct_eval: collected.contains_direct_eval,
+            requires_dynamic_lexical_capture: collected.requires_dynamic_lexical_capture,
             eval_mode: BytecodeEvalMode::new(mode.strict, collected.contains_direct_eval),
             simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
             source,

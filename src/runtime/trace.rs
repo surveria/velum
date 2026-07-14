@@ -405,6 +405,12 @@ impl Function {
                         StrongEdgeReference::PropertyKey(key),
                     )?;
                 }
+                for initializer in field.decorator_initializers() {
+                    visitor.visit(
+                        VmCallableEdgeKind::JavaScriptFunctionInternal,
+                        StrongEdgeReference::Value(initializer),
+                    )?;
+                }
             }
         }
         for slot in &self.private_slots {

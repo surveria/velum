@@ -63,10 +63,17 @@ pub(in crate::runtime) enum ResolvedClassField {
         name: String,
         infer_name: bool,
         initializer: Option<crate::bytecode::BytecodeBlock>,
+        decorator_initializers: Rc<[Value]>,
     },
     Private {
         name: PrivateNameId,
         initializer: Option<crate::bytecode::BytecodeBlock>,
+        decorator_initializers: Rc<[Value]>,
+    },
+    AutoAccessor {
+        backing_name: PrivateNameId,
+        initializer: Option<crate::bytecode::BytecodeBlock>,
+        decorator_initializers: Rc<[Value]>,
     },
 }
 
@@ -76,7 +83,24 @@ impl ResolvedClassField {
     ) -> Option<crate::runtime::object::PropertyKey> {
         match self {
             Self::Public { key, .. } => Some(*key),
-            Self::Private { .. } => None,
+            Self::Private { .. } | Self::AutoAccessor { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) fn decorator_initializers(&self) -> &[Value] {
+        match self {
+            Self::Public {
+                decorator_initializers,
+                ..
+            }
+            | Self::Private {
+                decorator_initializers,
+                ..
+            }
+            | Self::AutoAccessor {
+                decorator_initializers,
+                ..
+            } => decorator_initializers,
         }
     }
 }
@@ -295,9 +319,10 @@ impl Context {
             .function(id)?
             .class_fields
             .as_ref()
-            .map_or(0, |existing| existing.len());
-        let additional_count = fields.len().saturating_sub(previous_count);
-        let removed_count = previous_count.saturating_sub(fields.len());
+            .map_or(Ok(0), |existing| class_field_storage_count(existing))?;
+        let next_count = class_field_storage_count(&fields)?;
+        let additional_count = next_count.saturating_sub(previous_count);
+        let removed_count = previous_count.saturating_sub(next_count);
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::CacheEntry, additional_count)?;
@@ -382,7 +407,8 @@ impl Context {
                 .map(|binding| binding.allow_direct_eval_super_call.replace(false));
             let initializer = match field {
                 ResolvedClassField::Public { initializer, .. }
-                | ResolvedClassField::Private { initializer, .. } => initializer,
+                | ResolvedClassField::Private { initializer, .. }
+                | ResolvedClassField::AutoAccessor { initializer, .. } => initializer,
             };
             let value = initializer
                 .as_ref()
@@ -396,6 +422,12 @@ impl Context {
             }
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
+            let mut value = value;
+            for initializer in field.decorator_initializers() {
+                value = self
+                    .semantic_call(initializer, &[value], instance.clone())?
+                    .into_result()?;
+            }
             match field {
                 ResolvedClassField::Public {
                     key,
@@ -441,8 +473,23 @@ impl Context {
                         PrivateSlotValue::Field(value),
                     )?;
                 }
+                ResolvedClassField::AutoAccessor { backing_name, .. } => {
+                    self.add_private_slot_to_value(
+                        instance,
+                        backing_name.clone(),
+                        PrivateSlotValue::Field(value),
+                    )?;
+                }
             }
         }
         Ok(())
     }
+}
+
+fn class_field_storage_count(fields: &[ResolvedClassField]) -> Result<usize> {
+    fields.iter().try_fold(fields.len(), |count, field| {
+        count
+            .checked_add(field.decorator_initializers().len())
+            .ok_or_else(|| Error::limit("class field storage count overflowed"))
+    })
 }

@@ -106,6 +106,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Class) {
             return self.class_declaration();
         }
+        if self.check(&TokenKind::At) {
+            return self.decorated_class_declaration();
+        }
         if self.let_starts_expression_statement(lexical_declaration_allowed) {
             return self.let_expression_statement();
         }

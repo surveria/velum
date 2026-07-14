@@ -63,6 +63,13 @@ impl Function {
                 })?;
         let binding_count =
             checked_function_storage_sum([self.upvalues.len(), dynamic_binding_count])?;
+        let class_field_count = self.class_fields.as_ref().map_or(Ok(0), |fields| {
+            fields.iter().try_fold(fields.len(), |count, field| {
+                count
+                    .checked_add(field.decorator_initializers().len())
+                    .ok_or_else(function_storage_overflow)
+            })
+        })?;
         let mut metadata_cache_entry_count = checked_function_storage_sum([
             self.param_binding_ids.len(),
             self.param_atoms.len(),
@@ -77,7 +84,7 @@ impl Function {
             } else {
                 0
             },
-            self.class_fields.as_ref().map_or(0, |fields| fields.len()),
+            class_field_count,
             self.class_private_slots
                 .as_ref()
                 .map_or(0, |slots| slots.len()),

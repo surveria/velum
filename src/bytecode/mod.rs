@@ -49,7 +49,8 @@ pub use super_property::BytecodeSuperProperty;
 pub use template::BytecodeTemplateElement;
 pub use types::{
     BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeCatch, BytecodeClass,
-    BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKind, BytecodeClassStaticElement,
+    BytecodeClassAutoAccessor, BytecodeClassDefinitionElement, BytecodeClassField,
+    BytecodeClassMember, BytecodeClassMemberKind, BytecodeClassStaticElement,
     BytecodeDestructureMode, BytecodeDynamicProperty, BytecodeForInTarget,
     BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeObjectProperty, BytecodePattern,
     BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodePreparedNativeCall,

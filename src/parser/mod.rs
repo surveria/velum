@@ -12,6 +12,7 @@ mod assignment_target;
 mod await_context;
 mod binary;
 mod class;
+mod class_auto_accessor;
 mod class_private;
 mod early_errors;
 mod eval_context;

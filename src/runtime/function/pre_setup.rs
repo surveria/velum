@@ -54,7 +54,7 @@ impl Context {
             layout,
         )?;
         let mut dynamic_environments = self.current_dynamic_environments().to_vec();
-        if init.bytecode.contains_direct_eval()
+        if init.bytecode.requires_dynamic_lexical_capture()
             && let Some(environment) = self.capture_direct_eval_lexical_environment()?
         {
             dynamic_environments.insert(0, DynamicEnvironment::CapturedLexical(environment));

@@ -355,6 +355,7 @@ struct CaptureBindingCollector {
     bindings: Vec<StaticBinding>,
     uses_arguments: bool,
     contains_direct_eval: bool,
+    requires_dynamic_lexical_capture: bool,
     inside_nested_function: bool,
 }
 
@@ -364,6 +365,7 @@ struct CollectedFunctionBindings {
     bindings: Rc<[StaticBinding]>,
     uses_arguments: bool,
     contains_direct_eval: bool,
+    requires_dynamic_lexical_capture: bool,
 }
 
 const ARGUMENTS_BINDING_NAME: &str = "arguments";
@@ -503,11 +505,13 @@ impl CaptureBindingCollector {
     }
 
     fn collect_class(&mut self, class: &crate::ast::ClassLiteral) {
+        self.collect_exprs(&class.decorators);
         if let Some(heritage) = &class.heritage {
             self.collect_expr(heritage);
         }
         self.collect_function_body(&class.constructor.params, &class.constructor.body);
         for member in &class.members {
+            self.collect_exprs(&member.decorators);
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &member.key
@@ -517,6 +521,7 @@ impl CaptureBindingCollector {
             self.collect_function_body(&member.params, &member.body);
         }
         for field in &class.fields {
+            self.collect_exprs(&field.decorators);
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &field.key
@@ -525,6 +530,16 @@ impl CaptureBindingCollector {
             }
             if let Some(initializer) = &field.initializer {
                 self.collect_nested_expr(initializer);
+            }
+            if let Some(auto_accessor) = &field.auto_accessor {
+                self.collect_function_body(
+                    &auto_accessor.getter.params,
+                    &auto_accessor.getter.body,
+                );
+                self.collect_function_body(
+                    &auto_accessor.setter.params,
+                    &auto_accessor.setter.body,
+                );
             }
         }
         for block in &class.static_blocks {

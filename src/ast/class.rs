@@ -7,6 +7,7 @@ use super::{Expression, FunctionParam, ObjectPropertyKey, Statement};
 /// A parsed class body shared by class declarations and expressions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassLiteral {
+    pub decorators: Vec<Expression>,
     pub name: Option<StaticName>,
     pub inner_name_binding: Option<StaticBinding>,
     pub heritage: Option<Expression>,
@@ -41,8 +42,27 @@ pub struct ClassField {
     pub source_order: usize,
     pub key: ClassElementName,
     pub is_static: bool,
+    pub auto_accessor: Option<ClassAutoAccessor>,
     pub name: Option<StaticName>,
     pub initializer: Option<Expression>,
+    pub decorators: Vec<Expression>,
+}
+
+/// Hidden storage and synthesized access functions for one public
+/// auto-accessor. The public key remains on `ClassField`, so computed keys are
+/// evaluated once for the logical class element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassAutoAccessor {
+    pub backing_name: StaticName,
+    pub getter: ClassAutoAccessorFunction,
+    pub setter: ClassAutoAccessorFunction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassAutoAccessorFunction {
+    pub id: StaticFunctionId,
+    pub params: Rc<[FunctionParam]>,
+    pub body: Rc<[Statement]>,
 }
 
 /// The explicit `constructor` member, or a parser-synthesized empty default.
@@ -57,6 +77,7 @@ pub struct ClassConstructor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassMember {
+    pub source_order: usize,
     pub key: ClassElementName,
     pub kind: ClassMemberKind,
     pub function_kind: FunctionKind,
@@ -66,6 +87,7 @@ pub struct ClassMember {
     pub name: Option<StaticName>,
     pub params: Rc<[FunctionParam]>,
     pub body: Rc<[Statement]>,
+    pub decorators: Vec<Expression>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

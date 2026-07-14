@@ -448,6 +448,9 @@ impl LayoutBuilder {
         scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
+        for decorator in &class.decorators {
+            self.analyze_expr(decorator, scope, function)?;
+        }
         let class_scope = if let Some(binding) = &class.inner_name_binding {
             let class_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
             self.declare(class_scope, binding)?;
@@ -460,6 +463,9 @@ impl LayoutBuilder {
         }
         self.analyze_class_constructor(class, class_scope, function)?;
         for member in &class.members {
+            for decorator in &member.decorators {
+                self.analyze_expr(decorator, class_scope, function)?;
+            }
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &member.key
@@ -476,11 +482,26 @@ impl LayoutBuilder {
             )?;
         }
         for field in &class.fields {
+            for decorator in &field.decorators {
+                self.analyze_expr(decorator, class_scope, function)?;
+            }
             if let crate::ast::ClassElementName::Property(
                 crate::ast::ObjectPropertyKey::Computed(key),
             ) = &field.key
             {
                 self.analyze_expr(key, class_scope, function)?;
+            }
+            if let Some(auto_accessor) = &field.auto_accessor {
+                for function_data in [&auto_accessor.getter, &auto_accessor.setter] {
+                    self.analyze_function(
+                        function_data.id,
+                        FunctionBindings::new(None, None),
+                        &function_data.params,
+                        &function_data.body,
+                        class_scope,
+                        function,
+                    )?;
+                }
             }
             if field.is_static
                 && let Some(initializer) = &field.initializer

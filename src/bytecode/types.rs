@@ -206,6 +206,8 @@ pub enum BytecodeForInTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClass {
     pub name: Option<StaticName>,
+    /// Decorator values evaluated before heritage and consumed by `CreateClass`.
+    pub decorator_count: usize,
     /// Immutable inner class-name binding initialized after heritage evaluation.
     pub inner_name_binding: Option<BytecodeBinding>,
     /// When true the heritage value sits on the stack below computed keys.
@@ -215,11 +217,18 @@ pub struct BytecodeClass {
     pub constructor: BytecodeFunction,
     pub members: Rc<[BytecodeClassMember]>,
     pub fields: Rc<[BytecodeClassField]>,
+    pub definition_order: Rc<[BytecodeClassDefinitionElement]>,
     pub static_blocks: Rc<[BytecodeBlock]>,
     pub static_element_order: Rc<[BytecodeClassStaticElement]>,
     /// Declared `#name` identifiers in declaration order; class evaluation
     /// allocates one fresh runtime private name per entry.
     pub private_names: Rc<[StaticName]>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeClassDefinitionElement {
+    Member(usize),
+    Field(usize),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -232,15 +241,27 @@ pub enum BytecodeClassStaticElement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClassField {
     pub key: BytecodeClassMemberKey,
+    pub decorator_count: usize,
     pub is_static: bool,
+    pub auto_accessor: Option<BytecodeClassAutoAccessor>,
     pub name: Option<StaticName>,
     pub infer_name_from_computed_key: bool,
     pub initializer: Option<BytecodeBlock>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeClassAutoAccessor {
+    pub backing_name_index: u32,
+    pub getter_id: StaticFunctionId,
+    pub getter: BytecodeFunction,
+    pub setter_id: StaticFunctionId,
+    pub setter: BytecodeFunction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClassMember {
     pub key: BytecodeClassMemberKey,
+    pub decorator_count: usize,
     pub kind: BytecodeClassMemberKind,
     pub function_kind: FunctionKind,
     pub is_static: bool,

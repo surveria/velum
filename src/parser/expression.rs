@@ -550,6 +550,9 @@ impl Parser {
                 parser.function_expression(kind, token_span)
             })?,
             TokenKind::Class => self.with_in_operator_allowed(true, Self::class_expression)?,
+            TokenKind::At => {
+                self.with_in_operator_allowed(true, Self::decorated_class_expression_after_at)?
+            }
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
