@@ -4,7 +4,7 @@ use crate::{
         Context, abstract_operations::NumericValue, call::RuntimeCallArgs,
         object::NumberFormatValue,
     },
-    value::{ErrorName, ObjectId, Value},
+    value::{ErrorName, JsBigInt, ObjectId, Value},
 };
 
 use super::number_range::{format_range_text, range_separator};
@@ -133,6 +133,17 @@ impl Context {
         let number = self.number_receiver_value(this_value)?;
         let formatter = self.parse_number_format(args)?;
         let input = self.number_format_input(&Value::Number(number))?;
+        let output = format_number(&formatter, input)?;
+        self.heap_string_value(&output.text)
+    }
+
+    pub(in crate::runtime::native) fn eval_bigint_to_locale_string(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        value: &JsBigInt,
+    ) -> Result<Value> {
+        let formatter = self.parse_number_format(args)?;
+        let input = parse_number_input(&value.to_string())?;
         let output = format_number(&formatter, input)?;
         self.heap_string_value(&output.text)
     }
@@ -541,10 +552,18 @@ fn push_style_suffix(
                 value: value.to_owned(),
             });
         }
-        "percent" => parts.push(NumberPart {
-            kind: "percentSign",
-            value: "%".to_owned(),
-        }),
+        "percent" => {
+            if locale_starts_with(formatter, "de") || locale_starts_with(formatter, "pt") {
+                parts.push(NumberPart {
+                    kind: "literal",
+                    value: "\u{00a0}".to_owned(),
+                });
+            }
+            parts.push(NumberPart {
+                kind: "percentSign",
+                value: "%".to_owned(),
+            });
+        }
         "unit" if formatter.unit.as_deref() == Some("percent") => parts.push(NumberPart {
             kind: "unit",
             value: "%".to_owned(),

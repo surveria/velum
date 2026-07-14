@@ -67,15 +67,19 @@ impl Context {
             return Ok(None);
         };
         let upvalues = upvalues.as_deref().unwrap_or(&[]);
-        let active_layout = self.current_static_binding_layout();
-        if binding_layout == active_layout {
-            return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
-        }
-        if !self.active_function_has_arguments_binding() {
-            if !dynamic_source && !fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
-                return Ok(None);
+        if !dynamic_source {
+            let active_layout = self.current_static_binding_layout();
+            if binding_layout == active_layout {
+                return self
+                    .eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
             }
-            return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
+            if !self.active_function_has_arguments_binding() {
+                if !fast_path_static_caches_are_compatible(&fast_path.kind, self)? {
+                    return Ok(None);
+                }
+                return self
+                    .eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
+            }
         }
         match (atom_cache, binding_cache, binding_layout) {
             (Some(atom_cache), Some(binding_cache), Some(binding_layout)) => self

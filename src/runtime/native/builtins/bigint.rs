@@ -114,11 +114,11 @@ impl Context {
 
     pub(in crate::runtime::native) fn eval_bigint_prototype_to_locale_string(
         &mut self,
-        _args: RuntimeCallArgs<'_>,
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
         let value = self.bigint_receiver_value(this_value)?;
-        self.heap_string_value(&value.to_string())
+        self.eval_bigint_to_locale_string(args, &value)
     }
 
     pub(in crate::runtime::native) fn eval_bigint_prototype_value_of(
