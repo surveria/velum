@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260714T054603Z.md`
-- Task: PR #623: runtime: close Function, primitive, and Array residuals
-- Performance: 5.48x (4/5 >1.00x) (from `rsqjs-test-report-20260714T054603Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T054603Z.md`)
+- `rsqjs-test-report-20260714T132421Z.md`
+- Task: PR #629: ci: publish large reports through git
+- Performance: 5.52x (4/5 >1.00x) (from `rsqjs-test-report-20260714T132421Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T132421Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 101973 passed / 605 failed (99.41%) (from `rsqjs-test-report-20260714T054603Z.md`)
+- Full Test262: 102139 passed / 439 failed (99.57%) (from `rsqjs-test-report-20260714T132421Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -564,3 +564,4 @@ Latest report:
 | `20260714T030348Z` `fb77830` PR #621: runtime: complete expression and class Test262 residuals | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101821 passed / 757 failed (99.26%) |
 | `20260714T042900Z` `3935e3e` PR #622: runtime: complete binding and legacy expression residuals | 5.39x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101909 passed / 669 failed (99.35%) |
 | `20260714T054603Z` `51e3d2e` PR #623: runtime: close Function, primitive, and Array residuals | 5.48x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101973 passed / 605 failed (99.41%) |
+| `20260714T132421Z` `cc02a47` PR #629: ci: publish large reports through git | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102139 passed / 439 failed (99.57%) |
