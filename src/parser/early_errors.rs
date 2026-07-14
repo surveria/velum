@@ -99,6 +99,16 @@ impl Parser {
         Ok(())
     }
 
+    pub(super) fn reject_invalid_if_statement(&self, statement: &Statement) -> Result<()> {
+        self.reject_invalid_single_statement(statement)?;
+        if matches!(statement.kind(), Stmt::Label { .. }) && Self::is_labelled_function(statement) {
+            return Err(
+                self.parse_error("labelled function declaration is not allowed as an if body")
+            );
+        }
+        Ok(())
+    }
+
     fn is_labelled_function(statement: &Statement) -> bool {
         match statement.kind() {
             Stmt::FunctionDecl { .. } => true,

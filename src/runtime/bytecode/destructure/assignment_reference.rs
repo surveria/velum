@@ -1,5 +1,7 @@
 use crate::{
-    bytecode::{BytecodeAssignmentTarget, BytecodeDestructureMode, BytecodePattern},
+    bytecode::{
+        BytecodeAssignmentTarget, BytecodeBinding, BytecodeDestructureMode, BytecodePattern,
+    },
     error::Result,
     runtime::Context,
 };
@@ -53,21 +55,7 @@ impl Context {
         target: &BytecodeAssignmentTarget,
     ) -> Result<PatternStep<BytecodeAssignmentReference>> {
         match target {
-            BytecodeAssignmentTarget::Binding(name) => {
-                if let Some(reference) = self.resolve_with_binding(name)? {
-                    return Ok(PatternStep::Value(
-                        BytecodeAssignmentReference::WithBinding {
-                            name: name.clone(),
-                            reference,
-                        },
-                    ));
-                }
-                let cell = self.get_or_materialize_binding_bytecode(name)?;
-                Ok(PatternStep::Value(BytecodeAssignmentReference::Binding {
-                    name: name.clone(),
-                    cell,
-                }))
-            }
+            BytecodeAssignmentTarget::Binding(name) => self.eval_binding_reference(name),
             BytecodeAssignmentTarget::WebCompatCall(target) => {
                 self.eval_web_compat_reference(target)
             }
@@ -146,6 +134,14 @@ impl Context {
                 self.eval_resumable_super_reference(property, *strict)
             }
         }
+    }
+
+    fn eval_binding_reference(
+        &mut self,
+        name: &BytecodeBinding,
+    ) -> Result<PatternStep<BytecodeAssignmentReference>> {
+        self.eval_bytecode_binding_assignment_reference(name)
+            .map(PatternStep::Value)
     }
 
     fn eval_web_compat_reference(

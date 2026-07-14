@@ -6,6 +6,7 @@ use crate::{
     error::Result,
     runtime::activation::DynamicEnvironment,
     runtime::{CompiledBindingFrame, Context, control::Completion},
+    syntax::StaticBinding,
     value::{FunctionId, Value},
 };
 
@@ -34,7 +35,7 @@ impl Context {
     }
 
     pub(super) fn capture_function_environment(
-        &self,
+        &mut self,
         init: &BytecodeFunctionInit<'_>,
         param_frames: &[Option<CompiledBindingFrame>],
         layout: Option<&BindingLayout>,
@@ -54,8 +55,12 @@ impl Context {
             layout,
         )?;
         let mut dynamic_environments = self.current_dynamic_environments().to_vec();
-        if init.bytecode.requires_dynamic_lexical_capture()
-            && let Some(environment) = self.capture_direct_eval_lexical_environment()?
+        let requires_unbounded_capture = init.bytecode.requires_dynamic_lexical_capture();
+        let created_during_direct_eval = self.direct_eval_binding_layout_is_active();
+        if (requires_unbounded_capture || created_during_direct_eval)
+            && let Some(environment) = self.capture_direct_eval_lexical_environment(
+                (!requires_unbounded_capture).then(|| init.bytecode.capture_bindings()),
+            )?
         {
             dynamic_environments.insert(0, DynamicEnvironment::CapturedLexical(environment));
         }
@@ -63,8 +68,17 @@ impl Context {
     }
 
     fn capture_direct_eval_lexical_environment(
-        &self,
+        &mut self,
+        referenced_bindings: Option<&[StaticBinding]>,
     ) -> Result<Option<crate::runtime::activation::EvalBindingEnvironment>> {
+        let referenced_atoms = referenced_bindings
+            .map(|bindings| {
+                bindings
+                    .iter()
+                    .map(|binding| self.intern_static_name_atom(binding.name()))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
         let environment = crate::runtime::activation::EvalBindingEnvironment::default();
         for scope in self
             .locals
@@ -73,6 +87,12 @@ impl Context {
             .rev()
         {
             scope.for_each_active_binding(|atom, cell| {
+                if referenced_atoms
+                    .as_ref()
+                    .is_some_and(|atoms| !atoms.contains(&atom))
+                {
+                    return Ok(());
+                }
                 if !self.dynamic_eval_environment_contains(atom)? && !environment.contains(atom)? {
                     environment.insert(atom, cell.clone(), false)?;
                 }

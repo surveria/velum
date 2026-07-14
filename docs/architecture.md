@@ -319,14 +319,19 @@ equivalent sparse tables. Live records keep stable ids; a collection cycle may
 vacate unreachable slots and reuse them only after identity-bearing caches are
 invalidated.
 
-`Vm::collect_garbage` is an explicit stop-the-world safepoint. The marker starts
-from the shared direct-root registry and follows the typed callable, object,
-Promise, collection, iterator, and suspended-frame edge visitors. Map, Set,
-and iterator entries are strong. WeakSet keys are weak, and WeakMap entries are
-resolved as ephemerons to a fixed point: a value is marked only when its key is
-already reachable. Sweep removes dead weak entries before reclaiming arenas,
-then reconciles every ledger-backed owner with the independent storage
-snapshot.
+`Vm::collect_garbage` exposes an explicit stop-the-world safepoint. The
+bytecode dispatcher also invokes the same collector at allocation-pressure
+safepoints after registering the active operand state as transient roots. The
+first pressure threshold reserves the final one-sixteenth of the configured
+object-record limit as allocation headroom. If a cycle cannot reclaim enough
+records, the next threshold advances toward the hard limit instead of running
+a complete mark/sweep on every instruction. The marker starts from the shared
+direct-root registry and follows the typed callable, object, Promise,
+collection, iterator, and suspended-frame edge visitors. Map, Set, and iterator
+entries are strong. WeakSet keys are weak, and WeakMap entries are resolved as
+ephemerons to a fixed point: a value is marked only when its key is already
+reachable. Sweep removes dead weak entries before reclaiming arenas, then
+reconciles every ledger-backed owner with the independent storage snapshot.
 
 Queued jobs, suspended async activations, runtime anchors, registered Symbols,
 scoped transient values, and retained embedder handles are roots. Raw
@@ -335,10 +340,11 @@ collection call; embedders must retain values that need to survive the
 safepoint. Collection is VM-local and does not mutate another VM created by the
 same `Engine`.
 
-Hard storage limits remain checked at each allocation. Explicit collection
-releases logical owner counts and permits arena slots, heap-string bytes, and
-Symbol slots to be reused under those limits. Atoms, shapes, and their
-canonical metadata remain deliberate cache roots until AS-08 centralizes
+Hard storage limits remain checked at each allocation. Explicit or
+pressure-triggered collection releases logical owner counts and permits arena
+slots, heap-string bytes, and Symbol slots to be reused under those limits. A
+reachable graph still fails at the same configured limit. Atoms, shapes, and
+their canonical metadata remain deliberate cache roots until AS-08 centralizes
 optimizer ownership and invalidation. WeakRef and FinalizationRegistry remain
 unsupported until callback ordering and job semantics are specified.
 

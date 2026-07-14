@@ -264,11 +264,11 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
         let consequent = self.with_lexical_function_declarations(Self::statement)?;
-        self.reject_invalid_single_statement(&consequent)?;
+        self.reject_invalid_if_statement(&consequent)?;
         let consequent = Box::new(Self::wrap_single_statement_function(consequent));
         let alternate = if self.match_kind(&TokenKind::Else) {
             let alternate = self.with_lexical_function_declarations(Self::statement)?;
-            self.reject_invalid_single_statement(&alternate)?;
+            self.reject_invalid_if_statement(&alternate)?;
             Some(Box::new(Self::wrap_single_statement_function(alternate)))
         } else {
             None

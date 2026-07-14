@@ -424,7 +424,7 @@ impl Context {
         &mut self,
         declaration: &crate::bytecode::BytecodeFunctionDeclaration,
     ) -> Result<()> {
-        let object_authoritative = self.locals.is_empty()
+        let object_authoritative = !self.has_visible_local_scope()
             && self.global_object_name_is_authoritative(declaration.name().name().name());
         self.hoist_var(declaration.name().name())?;
         let function = self.instantiate_hoisted_function(declaration)?;
@@ -595,7 +595,7 @@ impl Context {
             }
             return Ok(());
         }
-        let global = self.locals.is_empty();
+        let global = !self.has_visible_local_scope();
         let atom = self.intern_static_name_atom(name.name())?;
         if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {

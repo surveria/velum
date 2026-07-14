@@ -142,6 +142,42 @@ impl WithBindingReference {
 }
 
 impl Context {
+    pub(crate) fn constructor_binding_bytecode(
+        &mut self,
+        name: &BytecodeBinding,
+    ) -> Result<Option<Value>> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            return reference.get(self, name).map(Some);
+        }
+        if let Some(binding) = self.get_or_materialize_binding_bytecode(name)? {
+            return Ok(Some(binding.value(name.name())?));
+        }
+        self.unresolved_global_property_value(name.name())
+    }
+
+    pub(in crate::runtime) fn resolve_global_object_binding(
+        &mut self,
+        binding: &BytecodeBinding,
+    ) -> Result<Option<WithBindingReference>> {
+        if !matches!(
+            binding.operand(),
+            BindingOperand::Global { .. }
+                | BindingOperand::EvalVariable { .. }
+                | BindingOperand::Unresolved
+        ) {
+            return Ok(None);
+        }
+        let Some(global_object) = self.realm.global_object else {
+            return Ok(None);
+        };
+        let object = Value::Object(global_object);
+        let lookup = self.property_lookup(binding.name().as_str());
+        if !self.has_property_value_with_lookup(&object, lookup)? {
+            return Ok(None);
+        }
+        Ok(Some(WithBindingReference::eval_var(object)))
+    }
+
     fn current_code_is_strict(&self) -> Result<bool> {
         for frame in self.activation_frames.iter().rev() {
             if frame.is_eval_boundary() {
@@ -401,6 +437,8 @@ impl Context {
                 | BindingOperand::EvalVariable { .. }
                 | BindingOperand::Unresolved
         );
+        let resolves_captured_lexical =
+            resolves_eval_var || matches!(binding.operand(), BindingOperand::Upvalue { .. });
         let mut remaining_with_environments = count;
         for environment in environments.iter().rev().cloned() {
             match environment {
@@ -422,7 +460,7 @@ impl Context {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
                     }
                 }
-                DynamicEnvironment::CapturedLexical(environment) if resolves_eval_var => {
+                DynamicEnvironment::CapturedLexical(environment) if resolves_captured_lexical => {
                     let atom = self.intern_static_name_atom(binding.name().name())?;
                     if environment.binding(atom)?.is_some() {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));

@@ -328,6 +328,53 @@ fn reuses_collected_object_slots_under_a_hard_limit() -> TestResult {
 }
 
 #[test]
+fn automatically_collects_transient_objects_before_the_hard_limit() -> TestResult {
+    let limits = RuntimeLimits {
+        max_objects: 128,
+        ..RuntimeLimits::default()
+    };
+    let config = EngineConfig::with_default_vm_config(VmConfig::with_limits(limits));
+    let engine = Engine::with_config(config);
+    let mut vm = engine.create_vm();
+
+    let value = vm.eval(
+        r"
+        var automaticGcIteration = 0;
+        while (automaticGcIteration < 1000) {
+            ({ payload: automaticGcIteration });
+            automaticGcIteration++;
+        }
+        automaticGcIteration;
+        ",
+    )?;
+    ensure(
+        value.to_string() == "1000",
+        "automatic collection did not preserve execution progress",
+    )?;
+    ensure(
+        vm.storage_snapshot()?.count(VmStorageKind::Object) < 128,
+        "automatic collection did not reclaim transient objects",
+    )?;
+
+    let Err(error) = vm.eval(
+        r"
+        var retainedObjects = [];
+        while (retainedObjects.length < 1000) {
+            retainedObjects.push({ payload: retainedObjects.length });
+        }
+        ",
+    ) else {
+        return Err("expected a reachable object graph to hit the hard limit".into());
+    };
+    ensure(
+        error
+            .to_string()
+            .contains("Object record count exceeded 128"),
+        "automatic collection weakened the hard object limit",
+    )
+}
+
+#[test]
 fn preserves_pending_jobs_and_suspended_async_owners() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

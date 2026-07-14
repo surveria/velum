@@ -100,6 +100,7 @@ struct DirectEvalScopeBoundary {
 pub struct Context {
     identity: VmIdentity,
     limits: RuntimeLimits,
+    automatic_gc: gc::AutomaticGcState,
     storage_ledger: VmStorageLedger,
     atoms: AtomTable,
     strings: StringHeap,
@@ -394,9 +395,15 @@ impl Context {
         let identity = VmIdentity::new();
         let storage_limits = limits.storage.clone();
         let storage_ledger = VmStorageLedger::new(storage_limits.clone());
+        let automatic_gc = gc::AutomaticGcState::new(
+            limits
+                .max_objects
+                .min(storage_limits.max_count(VmStorageKind::Object)),
+        );
         Self {
             identity: identity.clone(),
             limits,
+            automatic_gc,
             storage_ledger: storage_ledger.clone(),
             atoms: AtomTable::new(
                 storage_limits.max_count(VmStorageKind::Atom),

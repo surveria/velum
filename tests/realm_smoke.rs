@@ -223,6 +223,28 @@ fn array_species_ignores_a_foreign_realms_intrinsic_array_constructor() -> TestR
 }
 
 #[test]
+fn foreign_realm_scripts_redeclare_global_functions_after_species_use() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let result = context.eval(
+        r#"
+        var other = __createRealm();
+        function useForeignSpecies() {
+            other.eval("function FakeArray(length) { this.length = length; }");
+            var array = [1, 2, 3];
+            array.constructor = { [Symbol.species]: other.FakeArray };
+            array.map(function (value) { return value; });
+        }
+        for (var index = 0; index < 5; index += 1) useForeignSpecies();
+        true;
+        "#,
+    )?;
+    assert_eq!(result, Value::Bool(true));
+    Ok(())
+}
+
+#[test]
 fn throw_type_error_is_shared_within_and_distinct_between_realms() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

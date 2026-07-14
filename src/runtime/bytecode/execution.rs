@@ -345,6 +345,8 @@ impl Context {
                     state.synchronous_root_values(),
                 )?
             };
+            self.collect_garbage_at_bytecode_safe_point()
+                .map_err(|error| error.with_runtime_span(span))?;
             self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
@@ -388,6 +390,8 @@ impl Context {
                 VmRootKind::TransientOperand,
                 state.synchronous_root_values(),
             )?;
+            self.collect_garbage_at_bytecode_safe_point()
+                .map_err(|error| error.with_runtime_span(span))?;
             self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,

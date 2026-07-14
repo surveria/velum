@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock},
     error::{Error, Result},
-    runtime::{Context, control::Completion},
+    runtime::{Context, control::Completion, roots::VmRootKind},
 };
 
 use super::{BytecodeLinearOp, BytecodeState};
@@ -118,6 +118,12 @@ impl Context {
         while let Some(step) = block.step(state.pc)? {
             let instruction = step.instruction();
             let span = step.span();
+            let _root_scope = self.transient_root_scope(
+                VmRootKind::TransientOperand,
+                state.synchronous_root_values(),
+            )?;
+            self.collect_garbage_at_bytecode_safe_point()
+                .map_err(|error| error.with_runtime_span(span))?;
             if let Some(segment) = plan.segment_at(state.pc.index()) {
                 if let Some(completion) = self.eval_bytecode_linear_segment(segment, state)? {
                     return Ok(completion);

@@ -21,6 +21,58 @@ use crate::{
 use super::Context;
 
 const GC_KIND_COUNT: usize = 11;
+const AUTOMATIC_GC_OBJECT_HEADROOM_DIVISOR: usize = 16;
+
+#[derive(Debug)]
+pub(super) struct AutomaticGcState {
+    object_limit: usize,
+    next_object_count: usize,
+}
+
+impl AutomaticGcState {
+    pub(super) const fn new(object_limit: usize) -> Self {
+        Self {
+            object_limit,
+            next_object_count: automatic_gc_initial_object_count(object_limit),
+        }
+    }
+
+    const fn should_collect(&self, object_count: usize) -> bool {
+        object_count >= self.next_object_count
+    }
+
+    fn record_collection(&mut self, object_count: usize) {
+        let initial = automatic_gc_initial_object_count(self.object_limit);
+        if object_count < initial {
+            self.next_object_count = initial;
+            return;
+        }
+
+        let retry = object_count.saturating_add(automatic_gc_object_headroom(self.object_limit));
+        let final_retry = self.object_limit.saturating_sub(1);
+        let next = retry.min(final_retry);
+        self.next_object_count = if next > object_count {
+            next
+        } else {
+            usize::MAX
+        };
+    }
+}
+
+const fn automatic_gc_initial_object_count(object_limit: usize) -> usize {
+    if object_limit == 0 {
+        return usize::MAX;
+    }
+    object_limit.saturating_sub(automatic_gc_object_headroom(object_limit))
+}
+
+const fn automatic_gc_object_headroom(object_limit: usize) -> usize {
+    let divided = match object_limit.checked_div(AUTOMATIC_GC_OBJECT_HEADROOM_DIVISOR) {
+        Some(value) => value,
+        None => 0,
+    };
+    if divided == 0 { 1 } else { divided }
+}
 
 /// Stable categories included in VM reachability and collection reports.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -568,6 +620,14 @@ impl WeakEdgeVisitor<VmAsyncEdgeKind> for Reachability {
 }
 
 impl Context {
+    pub(in crate::runtime) fn collect_garbage_at_bytecode_safe_point(&mut self) -> Result<()> {
+        let object_count = self.objects.object_count();
+        if !self.automatic_gc.should_collect(object_count) {
+            return Ok(());
+        }
+        self.collect_garbage().map(|_report| ())
+    }
+
     /// Marks every VM-owned record reachable from explicit roots without
     /// mutating the heap.
     ///
@@ -615,6 +675,8 @@ impl Context {
         ];
         let after = self.owner_storage_snapshot()?;
         self.release_collected_storage(&before, &after)?;
+        self.automatic_gc
+            .record_collection(self.objects.object_count());
         let total_reclaimed = reclaimed.iter().try_fold(0_usize, |total, count| {
             total
                 .checked_add(*count)
