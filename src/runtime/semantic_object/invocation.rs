@@ -263,12 +263,12 @@ impl Context {
             );
         }
 
-        let eager_prototype = if matches!(
-            kind,
-            NativeFunctionKind::Intl(
-                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
-            )
-        ) && !same_value(constructor, new_target)
+        if kind == NativeFunctionKind::RegExp && !same_value(constructor, new_target) {
+            return self.construct_regexp_with_new_target(args, new_target);
+        }
+
+        let eager_prototype = if native_constructor_resolves_prototype_before_arguments(kind)
+            && !same_value(constructor, new_target)
         {
             Some(self.constructor_instance_prototype_with_default(new_target, kind)?)
         } else {
@@ -298,4 +298,13 @@ impl Context {
     fn not_constructor_error(value: &Value) -> Error {
         Error::type_error(format!("'{value}' is not a constructor"))
     }
+}
+
+const fn native_constructor_resolves_prototype_before_arguments(kind: NativeFunctionKind) -> bool {
+    matches!(
+        kind,
+        NativeFunctionKind::Intl(
+            IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
+        )
+    )
 }

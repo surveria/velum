@@ -144,7 +144,16 @@ pub(crate) fn fold_code_point(cu: u32, unicode: bool) -> u32 {
     if unicode {
         return fold(cu);
     }
-    uppercase(cu)
+    legacy_canonicalize(cu)
+}
+
+fn legacy_canonicalize(cu: u32) -> u32 {
+    let canonical = uppercase(cu);
+    if (cu >= 0x80 && canonical < 0x80) || cu == 0xDF {
+        cu
+    } else {
+        canonical
+    }
 }
 
 pub fn fold(cu: u32) -> u32 {
@@ -302,7 +311,7 @@ pub fn unfold_char(c: u32) -> Vec<u32> {
 
 pub(crate) fn unfold_uppercase_char(c: u32) -> Vec<u32> {
     let mut res = vec![c];
-    let fcp = uppercase(c);
+    let fcp = legacy_canonicalize(c);
     if fcp != c {
         res.push(fcp);
     }
@@ -311,7 +320,7 @@ pub(crate) fn unfold_uppercase_char(c: u32) -> Vec<u32> {
             continue;
         }
         for cp in tr.transformed_from().codepoints() {
-            let tcp = tr.apply(cp);
+            let tcp = legacy_canonicalize(cp);
             if tcp == fcp {
                 res.push(cp);
             }

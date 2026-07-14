@@ -62,6 +62,13 @@ ECMAScript `lastIndex`. Rust `str`, `String`, and `OwnedValue::String`
 conversions accept only well-formed values; embedders can inspect
 `JsString::as_utf16` when exact ill-formed strings must cross the API boundary.
 
+Dynamic compilation preserves the same invariant. Well-formed source keeps the
+direct UTF-8 frontend path. An ill-formed ECMAScript string is compiled from its
+authoritative UTF-16 units through a diagnostic UTF-8 rendering plus a sparse
+lone-surrogate offset map. String, template, and RegExp tokens recover the exact
+units before static-value interning; diagnostics retain checked UTF-8 byte
+spans, and neither source representation survives `CompiledScript` creation.
+
 The parser AST is not a runtime fallback. It is consumed by binding analysis and
 the compiler, then `CompiledScript` stores a `BytecodeProgram` and
 bytecode-owned function metadata for execution. The `bytecode` module must not

@@ -58,6 +58,26 @@ const SYMBOL_SPLIT_PROPERTY: &str = "split";
 const REGEXP_STRING_ITERATOR_TAG: &str = "RegExp String Iterator";
 const ZERO_INDEX: f64 = 0.0;
 
+enum RegExpPatternInput {
+    Exact(Vec<u16>),
+    Value(Value),
+}
+
+enum RegExpFlagsInput {
+    Exact(String),
+    Value(Value),
+}
+
+struct RegExpConstructorInputs {
+    pattern: RegExpPatternInput,
+    flags: RegExpFlagsInput,
+}
+
+enum RegExpConstructorPreparation {
+    Return(Value),
+    Initialize(RegExpConstructorInputs),
+}
+
 impl Context {
     pub(in crate::runtime::native) fn regexp_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::RegExp) {
@@ -80,8 +100,12 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(crate) fn create_regexp_literal(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        self.create_regexp_object_from_text(pattern, flags)
+    pub(crate) fn create_regexp_literal_utf16(
+        &mut self,
+        pattern: &[u16],
+        flags: &str,
+    ) -> Result<Value> {
+        self.create_regexp_object_from_utf16(pattern, flags)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_constructor(
@@ -96,6 +120,19 @@ impl Context {
         args: &[Value],
         mode: RegExpCallMode,
     ) -> Result<Value> {
+        match self.prepare_regexp_constructor(args, mode)? {
+            RegExpConstructorPreparation::Return(value) => Ok(value),
+            RegExpConstructorPreparation::Initialize(inputs) => {
+                self.initialize_regexp_constructor(inputs)
+            }
+        }
+    }
+
+    fn prepare_regexp_constructor(
+        &mut self,
+        args: &[Value],
+        mode: RegExpCallMode,
+    ) -> Result<RegExpConstructorPreparation> {
         let pattern_value = args.first().cloned().unwrap_or(Value::Undefined);
         let flags_value = args.get(1);
         let pattern_is_regexp = self.is_regexp(&pattern_value)?;
@@ -115,33 +152,69 @@ impl Context {
                 self.get_named(&pattern_value, OBJECT_CONSTRUCTOR_PROPERTY)?;
             let active_constructor = self.regexp_constructor_value()?;
             if same_value(&pattern_constructor, &active_constructor) {
-                return Ok(pattern_value);
+                return Ok(RegExpConstructorPreparation::Return(pattern_value));
             }
         }
         let pattern = if let Some(regexp) = &regexp_data {
-            regexp.pattern_utf16().to_vec()
+            RegExpPatternInput::Exact(regexp.pattern_utf16().to_vec())
         } else if pattern_is_regexp {
             let source = self.get_named(&pattern_value, REGEXP_SOURCE_PROPERTY)?;
-            self.to_utf16_string(&source)?
+            RegExpPatternInput::Value(source)
         } else {
             match &pattern_value {
-                Value::Undefined => Vec::new(),
-                value => self.to_utf16_string(value)?,
+                Value::Undefined => RegExpPatternInput::Exact(Vec::new()),
+                value => RegExpPatternInput::Value(value.clone()),
             }
         };
         let flags = match (pattern_is_regexp, flags_value) {
             (true, None | Some(Value::Undefined)) => {
                 if let Some(regexp) = &regexp_data {
-                    regexp_flags_text(regexp.parsed_flags())
+                    RegExpFlagsInput::Exact(regexp_flags_text(regexp.parsed_flags()))
                 } else {
                     let flags = self.get_named(&pattern_value, REGEXP_FLAGS_PROPERTY)?;
-                    self.to_string(&flags)?
+                    RegExpFlagsInput::Value(flags)
                 }
             }
-            (false, None | Some(Value::Undefined)) => String::new(),
-            (_, Some(value)) => self.to_string(value)?,
+            (false, None | Some(Value::Undefined)) => RegExpFlagsInput::Exact(String::new()),
+            (_, Some(value)) => RegExpFlagsInput::Value(value.clone()),
+        };
+        Ok(RegExpConstructorPreparation::Initialize(
+            RegExpConstructorInputs { pattern, flags },
+        ))
+    }
+
+    fn initialize_regexp_constructor(&mut self, inputs: RegExpConstructorInputs) -> Result<Value> {
+        let pattern = match inputs.pattern {
+            RegExpPatternInput::Exact(pattern) => pattern,
+            RegExpPatternInput::Value(value) => self.to_utf16_string(&value)?,
+        };
+        let flags = match inputs.flags {
+            RegExpFlagsInput::Exact(flags) => flags,
+            RegExpFlagsInput::Value(value) => self.to_string(&value)?,
         };
         self.create_regexp_object_from_utf16(&pattern, &flags)
+    }
+
+    pub(in crate::runtime) fn construct_regexp_with_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        let preparation = self.prepare_regexp_constructor(args, RegExpCallMode::Construct)?;
+        let prototype = self
+            .constructor_instance_prototype_with_default(new_target, NativeFunctionKind::RegExp)?;
+        let RegExpConstructorPreparation::Initialize(inputs) = preparation else {
+            return Err(Error::runtime(
+                "RegExp construction unexpectedly returned its pattern",
+            ));
+        };
+        let value = self.initialize_regexp_constructor(inputs)?;
+        match self.semantic_try_set_prototype(&value, Value::Object(prototype))? {
+            Some(true) => Ok(value),
+            Some(false) | None => Err(Error::runtime(
+                "native construction could not apply the new.target prototype",
+            )),
+        }
     }
 
     pub(in crate::runtime::native) fn construct_regexp_object(
@@ -199,11 +272,6 @@ impl Context {
         text.push_str(&flags);
         self.check_string_len(&text)?;
         self.heap_string_value(&text)
-    }
-
-    fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        let pattern = pattern.encode_utf16().collect::<Vec<_>>();
-        self.create_regexp_object_from_utf16(&pattern, flags)
     }
 
     fn create_regexp_object_from_utf16(&mut self, pattern: &[u16], flags: &str) -> Result<Value> {
@@ -606,10 +674,12 @@ impl Context {
     }
 
     fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
+        let last_index = self.regexp_last_index_utf16(this_value, input)?;
+        // ToLength(lastIndex) may execute user code, including RegExp.prototype.compile.
+        // Read the internal matcher only after that observable conversion has completed.
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
-        let last_index = self.regexp_last_index_utf16(this_value, input)?;
         let start = if flags.global() || flags.sticky() {
             last_index
         } else {

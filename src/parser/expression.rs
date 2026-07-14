@@ -598,13 +598,13 @@ impl Parser {
 
     fn regexp_literal(
         &mut self,
-        pattern: &str,
+        pattern: &[u16],
         flags: &str,
         span: crate::SourceSpan,
     ) -> Result<Expression> {
         Ok(Expression::new(
             Expr::RegExpLiteral {
-                pattern: self.static_string(pattern.encode_utf16().collect())?,
+                pattern: self.static_string(pattern.to_vec())?,
                 flags: self.static_string(flags.encode_utf16().collect())?,
             },
             span,

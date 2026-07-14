@@ -72,6 +72,7 @@ pub(super) fn escaped_regexp_source_utf16(pattern: &[u16]) -> Vec<u16> {
     }
     let mut escaped = Vec::new();
     let mut escaped_by_backslash = false;
+    let mut in_character_class = false;
     for unit in pattern {
         match *unit {
             0x005C => {
@@ -79,7 +80,7 @@ pub(super) fn escaped_regexp_source_utf16(pattern: &[u16]) -> Vec<u16> {
                 escaped_by_backslash = !escaped_by_backslash;
             }
             0x002F => {
-                if escaped_by_backslash {
+                if escaped_by_backslash || in_character_class {
                     escaped.push(*unit);
                 } else {
                     escaped.extend("\\/".encode_utf16());
@@ -87,23 +88,42 @@ pub(super) fn escaped_regexp_source_utf16(pattern: &[u16]) -> Vec<u16> {
                 escaped_by_backslash = false;
             }
             0x000A => {
+                if escaped_by_backslash {
+                    escaped.pop();
+                }
                 escaped.extend("\\n".encode_utf16());
                 escaped_by_backslash = false;
             }
             0x000D => {
+                if escaped_by_backslash {
+                    escaped.pop();
+                }
                 escaped.extend("\\r".encode_utf16());
                 escaped_by_backslash = false;
             }
             0x2028 => {
+                if escaped_by_backslash {
+                    escaped.pop();
+                }
                 escaped.extend("\\u2028".encode_utf16());
                 escaped_by_backslash = false;
             }
             0x2029 => {
+                if escaped_by_backslash {
+                    escaped.pop();
+                }
                 escaped.extend("\\u2029".encode_utf16());
                 escaped_by_backslash = false;
             }
             unit => {
                 escaped.push(unit);
+                if !escaped_by_backslash {
+                    if unit == 0x005B {
+                        in_character_class = true;
+                    } else if unit == 0x005D {
+                        in_character_class = false;
+                    }
+                }
                 escaped_by_backslash = false;
             }
         }

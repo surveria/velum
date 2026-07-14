@@ -41,9 +41,9 @@ const TEST262_MAX_BYTE_BUFFER_LEN: usize = 8_388_608;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
 const TEST262_MAX_OBJECTS: usize = 1_000_000;
 const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
-const TEST262_MAX_SOURCE_LEN: usize = 1_048_576;
+const TEST262_MAX_SOURCE_LEN: usize = 33_554_432;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
-const TEST262_MAX_STRING_LEN: usize = 8_388_608;
+const TEST262_MAX_STRING_LEN: usize = 33_554_432;
 #[cfg(test)]
 const COMPAT_STA_SOURCE: &str = test262_compat_harness::STA_SOURCE;
 #[cfg(test)]

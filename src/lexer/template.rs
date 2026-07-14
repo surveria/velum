@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use crate::{
-    error::{Error, Result},
-    lexer::{TemplatePart, support::push_utf16_char},
+    error::Result,
+    lexer::{SourceText, TemplatePart},
 };
 
 /// Tracks one open `${` substitution while its expression is scanned.
@@ -18,24 +20,22 @@ pub(super) enum TemplatePartPosition {
 }
 
 pub(super) fn template_part_value(
-    source: &str,
+    source: &SourceText,
     cooked: Option<Vec<u16>>,
     raw_start: usize,
     raw_end: usize,
 ) -> Result<TemplatePart> {
-    let raw_source = source
-        .get(raw_start..raw_end)
-        .ok_or_else(|| Error::lex("template literal raw span is invalid", raw_start))?;
+    let raw_source = source.utf16_range(raw_start, raw_end)?;
     let mut raw = Vec::new();
-    let mut chars = raw_source.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\r' {
-            if chars.peek() == Some(&'\n') {
-                chars.next();
+    let mut units = raw_source.into_iter().peekable();
+    while let Some(unit) = units.next() {
+        if unit == u16::from(b'\r') {
+            if units.peek() == Some(&u16::from(b'\n')) {
+                units.next();
             }
-            push_utf16_char(&mut raw, '\n');
+            raw.push(u16::from(b'\n'));
         } else {
-            push_utf16_char(&mut raw, ch);
+            raw.push(unit);
         }
     }
     Ok(TemplatePart {
@@ -43,4 +43,3 @@ pub(super) fn template_part_value(
         raw: Rc::from(raw.into_boxed_slice()),
     })
 }
-use std::rc::Rc;

@@ -1,12 +1,10 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, abstract_operations::to_boolean, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs},
     value::{ErrorName, Value},
 };
 
-use super::{REGEXP_FLAGS_PROPERTY, REGEXP_GLOBAL_PROPERTY, REGEXP_LAST_INDEX_PROPERTY};
-
-const REGEXP_UNICODE_PROPERTY: &str = "unicode";
+use super::{REGEXP_FLAGS_PROPERTY, REGEXP_LAST_INDEX_PROPERTY};
 const DOLLAR: u16 = 0x24;
 
 struct RegExpReplaceMatch {
@@ -45,19 +43,12 @@ impl Context {
         replacement: Value,
         functional: bool,
     ) -> Result<(Value, bool, bool)> {
-        if functional {
-            let global_value = self.get_named(receiver, REGEXP_GLOBAL_PROPERTY)?;
-            let global = to_boolean(self, &global_value)?;
-            let unicode = if global {
-                let unicode_value = self.get_named(receiver, REGEXP_UNICODE_PROPERTY)?;
-                to_boolean(self, &unicode_value)?
-            } else {
-                false
-            };
-            return Ok((replacement, global, unicode));
-        }
-        let replacement = self.to_utf16_string(&replacement)?;
-        let replacement = self.heap_utf16_string_value(&replacement)?;
+        let replacement = if functional {
+            replacement
+        } else {
+            let replacement = self.to_utf16_string(&replacement)?;
+            self.heap_utf16_string_value(&replacement)?
+        };
         let flags = self.get_named(receiver, REGEXP_FLAGS_PROPERTY)?;
         let flags = self.to_string(&flags)?;
         let global = flags.contains('g');

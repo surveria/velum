@@ -26,6 +26,10 @@ impl Lexer {
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
+            if let Some(unit) = self.source.surrogate_at(current_offset) {
+                output.push(unit);
+                continue;
+            }
             match ch {
                 '`' => {
                     let cooked = cooked_valid.then_some(output);

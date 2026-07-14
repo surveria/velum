@@ -1,5 +1,8 @@
+use std::rc::Rc;
+
 use super::{
-    LexicalGoal, NumberToken, StringToken, Token, TokenKind, template::TemplateSubstitutionState,
+    LexicalGoal, NumberToken, SourceText, StringToken, Token, TokenKind,
+    template::TemplateSubstitutionState,
 };
 use crate::{
     error::{Error, Result},
@@ -12,7 +15,7 @@ use crate::{
         digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
         is_line_terminator, numeric_prefix, push_utf16_char, unicode_char,
     },
-    regexp_syntax::validate_regexp_literal,
+    regexp_syntax::validate_regexp_literal_utf16,
     source::{SourceId, SourceSpan},
     value::JsBigInt,
 };
@@ -29,7 +32,7 @@ pub(super) struct LexerCheckpoint {
 }
 
 pub(super) struct Lexer {
-    source: String,
+    source: SourceText,
     source_id: SourceId,
     cursor: usize,
     pending: Option<Token>,
@@ -40,15 +43,15 @@ pub(super) struct Lexer {
 }
 
 impl Lexer {
-    pub(super) fn new(source: &str, source_id: SourceId, allow_html_comments: bool) -> Self {
+    pub(super) const fn new(source: SourceText, source_id: SourceId, html_comments: bool) -> Self {
         Self {
-            source: source.to_owned(),
+            source,
             source_id,
             cursor: 0,
             pending: None,
             line_terminator_before: false,
             line_start: true,
-            allow_html_comments,
+            allow_html_comments: html_comments,
             template_substitutions: Vec::new(),
         }
     }
@@ -73,6 +76,7 @@ impl Lexer {
 
     pub(super) fn is_slash_offset(&self, offset: usize) -> bool {
         self.source
+            .rendered()
             .get(offset..)
             .is_some_and(|suffix| suffix.starts_with('/'))
     }
@@ -88,7 +92,7 @@ impl Lexer {
                 }
                 return Ok(Token {
                     kind: TokenKind::Eof,
-                    span: SourceSpan::point(self.source_id, self.source.len()),
+                    span: SourceSpan::point(self.source_id, self.source.rendered_len()),
                     line_terminator_before: self.line_terminator_before,
                     identifier_escaped: false,
                 });
@@ -181,10 +185,10 @@ impl Lexer {
 
     fn regexp_literal(&mut self, offset: usize) -> Result<()> {
         self.advance();
-        let mut pattern = String::new();
+        let mut pattern = Vec::new();
         let mut in_class = false;
         let mut escaped = false;
-        while let Some((_, ch)) = self.peek() {
+        while let Some((current_offset, ch)) = self.peek() {
             if is_line_terminator(ch) {
                 return Err(Error::lex(
                     "unterminated regular expression literal",
@@ -192,38 +196,49 @@ impl Lexer {
                 ));
             }
             self.advance();
+            let surrogate = self.source.surrogate_at(current_offset);
             if escaped {
-                pattern.push(ch);
+                if let Some(unit) = surrogate {
+                    pattern.push(unit);
+                } else {
+                    push_utf16_char(&mut pattern, ch);
+                }
                 escaped = false;
                 continue;
             }
             match ch {
                 '\\' => {
-                    pattern.push(ch);
+                    push_utf16_char(&mut pattern, ch);
                     escaped = true;
                 }
                 '[' => {
-                    pattern.push(ch);
+                    push_utf16_char(&mut pattern, ch);
                     in_class = true;
                 }
                 ']' => {
-                    pattern.push(ch);
+                    push_utf16_char(&mut pattern, ch);
                     in_class = false;
                 }
                 '/' if !in_class => {
                     let flags = self.regexp_flags();
-                    validate_regexp_literal(&pattern, &flags)
+                    validate_regexp_literal_utf16(&pattern, &flags)
                         .map_err(|error| Error::lex(error.to_string(), offset))?;
                     self.push(
                         TokenKind::RegExp {
-                            pattern: pattern.into(),
+                            pattern: Rc::from(pattern.into_boxed_slice()),
                             flags: flags.into(),
                         },
                         offset,
                     );
                     return Ok(());
                 }
-                _ => pattern.push(ch),
+                _ => {
+                    if let Some(unit) = surrogate {
+                        pattern.push(unit);
+                    } else {
+                        push_utf16_char(&mut pattern, ch);
+                    }
+                }
             }
         }
         Err(Error::lex(
@@ -272,6 +287,7 @@ impl Lexer {
         let leading_zero = text.len() > 1 && text.starts_with('0');
         let integer_has_separator = self
             .source
+            .rendered()
             .get(offset..integer_end)
             .is_some_and(|source| source.contains(NUMERIC_SEPARATOR));
 
@@ -468,6 +484,10 @@ impl Lexer {
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
+            if let Some(unit) = self.source.surrogate_at(current_offset) {
+                output.push(unit);
+                continue;
+            }
             match ch {
                 ch if ch == quote => {
                     self.push(
@@ -506,6 +526,10 @@ impl Lexer {
             return Err(Error::lex("unterminated escape sequence", slash_offset));
         };
         self.advance();
+        if let Some(unit) = self.source.surrogate_at(escape_offset) {
+            output.push(unit);
+            return Ok(false);
+        }
         match escaped {
             'b' => push_utf16_char(output, ASCII_BACKSPACE),
             'f' => push_utf16_char(output, ASCII_FORM_FEED),
@@ -743,6 +767,7 @@ impl Lexer {
 
     fn peek(&self) -> Option<(usize, char)> {
         self.source
+            .rendered()
             .get(self.cursor..)?
             .chars()
             .next()
@@ -756,11 +781,12 @@ impl Lexer {
     fn peek_next_char(&self) -> Option<char> {
         let current = self.peek_char()?;
         let next_cursor = self.cursor.checked_add(current.len_utf8())?;
-        self.source.get(next_cursor..)?.chars().next()
+        self.source.rendered().get(next_cursor..)?.chars().next()
     }
 
     fn remaining_source_starts_with(&self, prefix: &str) -> bool {
         self.source
+            .rendered()
             .get(self.cursor..)
             .is_some_and(|source| source.starts_with(prefix))
     }

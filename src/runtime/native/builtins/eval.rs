@@ -8,6 +8,12 @@ use crate::{
 
 use super::{EVAL_NAME, NativeFunctionKind, dynamic_compilation_error};
 
+#[derive(Clone, Copy)]
+enum EvalSource<'a> {
+    Utf8(&'a str),
+    Utf16(&'a [u16]),
+}
+
 impl Context {
     pub(in crate::runtime::native) fn eval_function_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Eval) {
@@ -44,7 +50,12 @@ impl Context {
             return Ok(Value::Undefined);
         };
 
-        if let Some(source) = argument.string_text() {
+        if let Value::String(source) = argument {
+            let source = if source.is_well_formed() {
+                EvalSource::Utf8(source.as_str())
+            } else {
+                EvalSource::Utf16(source.as_utf16())
+            };
             return self.eval_string_source(source, strict_mode, direct);
         }
         Ok(argument.clone())
@@ -52,7 +63,7 @@ impl Context {
 
     fn eval_string_source(
         &mut self,
-        source: &str,
+        source: EvalSource<'_>,
         strict_mode: bool,
         direct: bool,
     ) -> Result<Value> {
@@ -80,17 +91,27 @@ impl Context {
         } else {
             Rc::from([])
         };
-        let script = crate::compiled_script::CompiledScript::compile_eval(
-            source,
-            self.limits.clone(),
-            crate::compiled_script::EvalCompileContext::new(
-                strict_mode,
-                super_context,
-                class_field_context,
-                allow_new_target,
-                private_names,
+        let compile_context = crate::compiled_script::EvalCompileContext::new(
+            strict_mode,
+            super_context,
+            class_field_context,
+            allow_new_target,
+            private_names,
+        );
+        let script = match source {
+            EvalSource::Utf8(source) => crate::compiled_script::CompiledScript::compile_eval(
+                source,
+                self.limits.clone(),
+                compile_context,
             ),
-        )
+            EvalSource::Utf16(source) => {
+                crate::compiled_script::CompiledScript::compile_eval_utf16(
+                    source,
+                    self.limits.clone(),
+                    compile_context,
+                )
+            }
+        }
         .map_err(dynamic_compilation_error)?;
         self.reject_direct_eval_parameter_conflict(&script, strict_mode, direct)?;
         if direct {

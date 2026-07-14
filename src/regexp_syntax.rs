@@ -82,11 +82,6 @@ impl RegExpFlags {
     }
 }
 
-pub fn compile_regexp(pattern: &str, flags: RegExpFlags) -> Result<Regex, RegExpSyntaxError> {
-    let pattern = pattern.encode_utf16().collect::<Vec<_>>();
-    compile_regexp_utf16(&pattern, flags)
-}
-
 pub fn compile_regexp_utf16(
     pattern: &[u16],
     flags: RegExpFlags,
@@ -104,9 +99,12 @@ pub fn compile_regexp_utf16(
         .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))
 }
 
-pub fn validate_regexp_literal(pattern: &str, flags: &str) -> Result<(), RegExpSyntaxError> {
+pub fn validate_regexp_literal_utf16(
+    pattern: &[u16],
+    flags: &str,
+) -> Result<(), RegExpSyntaxError> {
     let flags = RegExpFlags::parse(flags)?;
-    compile_regexp(pattern, flags).map(drop)
+    compile_regexp_utf16(pattern, flags).map(drop)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]

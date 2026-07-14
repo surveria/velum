@@ -1,10 +1,12 @@
 mod classification;
 mod scanner;
+mod source_text;
 mod stream;
 mod support;
 mod template;
 mod token;
 
+pub use source_text::SourceText;
 pub use stream::TokenStream;
 pub use token::{NumberToken, StringToken, TemplatePart, Token, TokenKind};
 
