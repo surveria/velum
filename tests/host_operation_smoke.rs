@@ -5,6 +5,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const DETACH_NAME: &str = "hostDetachArrayBuffer";
 const COLLECT_GARBAGE_NAME: &str = "hostCollectGarbage";
 const CREATE_IS_HTML_DDA_NAME: &str = "hostCreateIsHTMLDDA";
+const EVAL_SCRIPT_NAME: &str = "hostEvalScript";
 
 #[test]
 fn collects_garbage_during_active_evaluation_without_losing_live_values() -> TestResult {
@@ -71,6 +72,29 @@ fn creates_callable_is_html_dda_host_exotics() -> TestResult {
         return Ok(());
     }
     Err(format!("expected IsHTMLDDA semantic invariants, got {value:?}").into())
+}
+
+#[test]
+fn eval_script_operation_uses_global_script_environment() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(EVAL_SCRIPT_NAME, HostOperation::EvalScript)?;
+    let value = context.eval(
+        "function run() { \
+             let localOnly = 1; \
+             hostEvalScript('var scriptVar = 2; let scriptLexical = 3;'); \
+             return typeof localOnly + ':' + scriptVar + ':' + scriptLexical; \
+         } \
+         var result = run(); \
+         var varIsPermanent = delete scriptVar === false; \
+         var lexicalIsNotProperty = \
+             !Object.prototype.hasOwnProperty.call(globalThis, 'scriptLexical'); \
+         result === 'number:2:3' && varIsPermanent && lexicalIsNotProperty ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected global Script evaluation invariants, got {value:?}").into())
 }
 
 #[test]

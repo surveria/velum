@@ -39,6 +39,15 @@ impl Context {
         self.eval_compiled(&script)
     }
 
+    pub(crate) fn eval_script_source_value(&mut self, source: &Value) -> Result<Value> {
+        let source = self.to_string(source)?;
+        let boundary = self.push_eval_activation_boundary()?;
+        let result = self.eval(&source);
+        let boundary_result = self.pop_eval_activation_boundary(boundary);
+        boundary_result?;
+        result
+    }
+
     /// Evaluates source with a stable embedder-provided diagnostic and module-referrer name.
     ///
     /// # Errors

@@ -229,8 +229,8 @@ impl Context {
         realm: &RealmId,
         source: &Value,
     ) -> Result<Value> {
-        let source = self.to_string(source)?;
-        self.eval_in_realm(realm, &source)
+        let index = self.validate_realm(realm)?;
+        self.with_realm(index, |context| context.eval_script_source_value(source))
     }
 
     pub(in crate::runtime) const fn active_realm_index(&self) -> RealmIndex {
