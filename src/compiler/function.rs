@@ -489,7 +489,11 @@ impl CaptureBindingCollector {
 
     fn collect_for_in_target(&mut self, target: &ForInTarget) {
         match target {
-            ForInTarget::Binding { .. } => {}
+            ForInTarget::Binding { initializer, .. } => {
+                if let Some(initializer) = initializer {
+                    self.collect_expr(initializer);
+                }
+            }
             ForInTarget::PatternBinding { pattern, .. } => self.collect_pattern(pattern),
             ForInTarget::PatternAssignment { pattern, .. } => {
                 self.collect_assignment_pattern(pattern);

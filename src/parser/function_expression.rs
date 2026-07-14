@@ -2,13 +2,17 @@ use crate::{
     ast::{Expr, Expression, FunctionKind},
     error::Result,
     lexer::TokenKind,
+    source::SourceSpan,
 };
 
 use super::Parser;
 
 impl Parser {
-    pub(super) fn function_expression(&mut self, kind: FunctionKind) -> Result<Expression> {
-        let start = self.previous_span();
+    pub(super) fn function_expression(
+        &mut self,
+        kind: FunctionKind,
+        start: SourceSpan,
+    ) -> Result<Expression> {
         let inherited_strict = self.is_strict_mode();
         let name_await_reserved = kind.is_async()
             || (self.await_expression_is_allowed() && self.await_identifier_is_reserved());

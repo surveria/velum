@@ -407,7 +407,7 @@ impl Context {
         })
     }
 
-    fn global_binding_property_descriptor(
+    pub(in crate::runtime) fn global_binding_property_descriptor(
         &mut self,
         name: &str,
     ) -> Result<Option<OwnPropertyDescriptor>> {

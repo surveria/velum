@@ -114,6 +114,22 @@ impl Context {
     }
 
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
+        self.hoist_bytecode_declarations_with_skipped_var(plan, None)
+    }
+
+    pub(crate) fn hoist_bytecode_function_declarations(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+        arguments_binding: Option<&StaticBinding>,
+    ) -> Result<()> {
+        self.hoist_bytecode_declarations_with_skipped_var(plan, arguments_binding)
+    }
+
+    fn hoist_bytecode_declarations_with_skipped_var(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+        skipped_var: Option<&StaticBinding>,
+    ) -> Result<()> {
         let global = !self.has_visible_local_scope();
         if global {
             self.validate_global_declaration_instantiation(plan)?;
@@ -127,6 +143,9 @@ impl Context {
             declarations.push((slot, binding, *kind));
         }
         for binding in plan.var_declarations() {
+            if skipped_var.is_some_and(|skipped| skipped.as_str() == binding.as_str()) {
+                continue;
+            }
             let slot = self
                 .compiled_active_binding_frame(binding)?
                 .map(CompiledBindingFrame::slot)
@@ -147,64 +166,6 @@ impl Context {
             self.hoist_function(declaration)?;
         }
         Ok(())
-    }
-
-    fn validate_global_declaration_instantiation(
-        &mut self,
-        plan: &BytecodeHoistPlan,
-    ) -> Result<()> {
-        for (binding, _) in plan.lexical_declarations() {
-            let name = binding.as_str();
-            if self.global_name_has_lexical_declaration(name)
-                || self
-                    .global_own_property_descriptor(name)?
-                    .is_some_and(|descriptor| !descriptor.configurable().is_yes())
-            {
-                return Err(Error::exception(
-                    ErrorName::SyntaxError,
-                    format!("'{name}' has already been declared"),
-                ));
-            }
-        }
-        for binding in plan.var_declarations() {
-            self.ensure_global_name_is_not_lexical(binding.as_str())?;
-            if !self.can_declare_global_var(binding.as_str())? {
-                return Err(Error::exception(
-                    ErrorName::TypeError,
-                    format!("global variable '{binding}' cannot be declared"),
-                ));
-            }
-        }
-        for declaration in plan.function_declarations() {
-            let name = declaration.name().name().as_str();
-            self.ensure_global_name_is_not_lexical(name)?;
-            if !self.can_declare_global_function(name)? {
-                return Err(Error::exception(
-                    ErrorName::TypeError,
-                    format!("global function '{name}' cannot be declared"),
-                ));
-            }
-        }
-        Ok(())
-    }
-
-    fn global_name_has_lexical_declaration(&self, name: &str) -> bool {
-        self.atom(name).is_some_and(|atom| {
-            self.realm
-                .globals
-                .get(atom)
-                .is_some_and(|binding| binding.kind() != DeclKind::Var)
-        })
-    }
-
-    fn ensure_global_name_is_not_lexical(&self, name: &str) -> Result<()> {
-        if !self.global_name_has_lexical_declaration(name) {
-            return Ok(());
-        }
-        Err(Error::exception(
-            ErrorName::SyntaxError,
-            format!("'{name}' has already been declared"),
-        ))
     }
 
     pub(crate) fn hoist_bytecode_lexical_declarations(
@@ -500,7 +461,10 @@ impl Context {
         self.ensure_global_name_is_not_lexical(name)
     }
 
-    fn can_declare_global_function(&mut self, name: &str) -> Result<bool> {
+    pub(in crate::runtime::binding) fn can_declare_global_function(
+        &mut self,
+        name: &str,
+    ) -> Result<bool> {
         let Some(descriptor) = self.global_own_property_descriptor(name)? else {
             let global_object = self.global_object_id()?;
             return self.objects.is_extensible(global_object);
@@ -512,7 +476,10 @@ impl Context {
         }
     }
 
-    fn can_declare_global_var(&mut self, name: &str) -> Result<bool> {
+    pub(in crate::runtime::binding) fn can_declare_global_var(
+        &mut self,
+        name: &str,
+    ) -> Result<bool> {
         if self.global_own_property_descriptor(name)?.is_some() {
             return Ok(true);
         }
@@ -520,7 +487,7 @@ impl Context {
         self.objects.is_extensible(global_object)
     }
 
-    fn global_own_property_descriptor(
+    pub(in crate::runtime::binding) fn global_own_property_descriptor(
         &mut self,
         name: &str,
     ) -> Result<Option<OwnPropertyDescriptor>> {

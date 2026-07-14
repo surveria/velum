@@ -216,10 +216,31 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::ForIn {
             labels,
             target: self.compile_for_in_target(target)?,
-            object: BytecodeBlock::compile_expression(object, self.layout)?,
+            object: self.compile_for_in_object(target, object)?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
         });
         Ok(())
+    }
+
+    fn compile_for_in_object(
+        &self,
+        target: &ForInTarget,
+        object: &Expression,
+    ) -> Result<BytecodeBlock> {
+        let ForInTarget::Binding {
+            name,
+            initializer: Some(initializer),
+            ..
+        } = target
+        else {
+            return BytecodeBlock::compile_expression(object, self.layout);
+        };
+        let mut compiler = BytecodeCompiler::new(self.layout, initializer.span());
+        compiler.compile_binding_assignment_expr(name, false, true, initializer)?;
+        compiler.emit(BytecodeInstruction::Pop);
+        compiler.compile_expr(object)?;
+        compiler.emit(BytecodeInstruction::StoreLast);
+        compiler.finish()
     }
 
     pub(super) fn compile_for_of(
@@ -394,7 +415,7 @@ impl BytecodeCompiler<'_> {
 
     fn compile_for_in_target(&self, target: &ForInTarget) -> Result<BytecodeForInTarget> {
         match target {
-            ForInTarget::Binding { name, kind } => Ok(BytecodeForInTarget::Binding {
+            ForInTarget::Binding { name, kind, .. } => Ok(BytecodeForInTarget::Binding {
                 name: self.compile_binding(name)?,
                 kind: *kind,
             }),

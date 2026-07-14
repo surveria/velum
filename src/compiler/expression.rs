@@ -371,7 +371,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_binding_assignment_expr(
+    pub(super) fn compile_binding_assignment_expr(
         &mut self,
         name: &StaticBinding,
         strict: bool,

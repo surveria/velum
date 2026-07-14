@@ -181,7 +181,15 @@ impl Parser {
             return Err(self.parse_error("resource declarations are not allowed in for-in heads"));
         }
         let object = self.for_head_rhs(head)?;
-        Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
+        Ok(Some((
+            ForInTarget::Binding {
+                name,
+                kind,
+                initializer: None,
+            },
+            object,
+            head,
+        )))
     }
 
     fn using_of_lookahead(&mut self) -> bool {
@@ -211,11 +219,30 @@ impl Parser {
         }
         let name =
             self.consume_declaration_binding_identifier(kind, "expected for-in binding name")?;
+        let initializer = if kind == DeclKind::Var
+            && !self.is_strict_mode()
+            && self.match_kind(&TokenKind::Equal)
+        {
+            Some(self.with_in_operator_allowed(false, Self::assignment_expression)?)
+        } else {
+            None
+        };
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
         };
+        if initializer.is_some() && head != ForHeadKind::In {
+            return Err(self.parse_error("for-of declarations cannot have initializers"));
+        }
         let object = self.for_head_rhs(head)?;
-        Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
+        Ok(Some((
+            ForInTarget::Binding {
+                name,
+                kind,
+                initializer,
+            },
+            object,
+            head,
+        )))
     }
 
     fn for_head_rhs(&mut self, head: ForHeadKind) -> Result<Expression> {

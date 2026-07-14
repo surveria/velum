@@ -65,7 +65,7 @@ impl ObjectHeap {
             self.remove_argument_parameter_mapping(id, property_name)?;
         }
         self.bump_prototype_lookup_version()?;
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {

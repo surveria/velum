@@ -3,7 +3,7 @@ use crate::error::{Error, Result};
 use super::Context;
 
 pub(super) const STORAGE_KIND_COUNT: usize = 26;
-const LEDGER_ENFORCED_KINDS: [VmStorageKind; 18] = [
+const LEDGER_ENFORCED_KINDS: [VmStorageKind; 19] = [
     VmStorageKind::Binding,
     VmStorageKind::JavaScriptFunction,
     VmStorageKind::NativeFunction,
@@ -22,6 +22,7 @@ const LEDGER_ENFORCED_KINDS: [VmStorageKind; 18] = [
     VmStorageKind::ExecutionFrame,
     VmStorageKind::Association,
     VmStorageKind::Module,
+    VmStorageKind::SourceRecord,
 ];
 
 /// Stable logical owner categories for VM-local retained storage.
@@ -287,7 +288,12 @@ impl Context {
                 .count(kind)
                 .checked_sub(after.count(kind))
                 .ok_or_else(|| Error::runtime("collected storage count underflowed"))?;
-            self.storage_ledger.release_count(kind, released)?;
+            let released_payload_bytes = before
+                .payload_bytes(kind)
+                .checked_sub(after.payload_bytes(kind))
+                .ok_or_else(|| Error::runtime("collected storage payload underflowed"))?;
+            self.storage_ledger
+                .release(kind, released, released_payload_bytes)?;
         }
         self.ensure_durable_storage_ledger_matches(after)?;
         self.ensure_storage_snapshot_within_limits(after)
@@ -358,14 +364,6 @@ impl Context {
             total
                 .checked_add(function.storage_footprint()?.source_record_bytes())
                 .ok_or_else(|| Error::limit("source record bytes overflowed"))
-        })
-    }
-
-    pub(crate) fn source_record_count(&self) -> Result<usize> {
-        self.functions.iter().try_fold(0_usize, |total, function| {
-            total
-                .checked_add(function.storage_footprint()?.source_record_count())
-                .ok_or_else(|| Error::limit("source record count overflowed"))
         })
     }
 

@@ -53,6 +53,24 @@ fn retains_ordinary_function_and_computed_method_source() -> TestResult {
 }
 
 #[test]
+fn retains_complete_generator_and_async_function_expression_source() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let generator = function /* g */ * /* n */ named() {};
+        let asynchronous = async /* a */ function /* n */ named() {};
+        let asyncGenerator = async /* a */ function /* g */ * named() {};
+        generator.toString() === "function /* g */ * /* n */ named() {}" &&
+            asynchronous.toString() === "async /* a */ function /* n */ named() {}" &&
+            asyncGenerator.toString() ===
+                "async /* a */ function /* g */ * named() {}" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn preserves_retained_dynamic_function_source() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

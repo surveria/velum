@@ -353,7 +353,7 @@ impl CompiledScript {
                 parsed.usage.static_function_count,
             )?,
         };
-        binding_layout.set_source_text(Rc::from(diagnostic_source.clone().into_boxed_str()));
+        binding_layout.set_source_text(Rc::from(diagnostic_source.into_boxed_str()));
         let bytecode = compiler::compile_program(&program, &binding_layout)?;
         binding_layout.clear_source_text();
         let bytecode_metrics = bytecode.metrics();

@@ -267,6 +267,7 @@ impl<'a> HoistCollector<'a> {
             ForInTarget::Binding {
                 name,
                 kind: DeclKind::Var,
+                ..
             } => self.var_declarations.push(name.clone()),
             ForInTarget::PatternBinding {
                 pattern,

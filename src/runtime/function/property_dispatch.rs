@@ -20,6 +20,9 @@ impl Context {
     ) -> Result<Value> {
         let function = self.native_function(id)?;
         let kind = function.kind();
+        if matches!(kind, NativeFunctionKind::BoundFunction(_)) {
+            return Ok(function.properties().prototype());
+        }
         let realm = function.realm();
         self.with_realm(realm, |context| {
             context.native_function_object_prototype_in_active_realm(kind)
@@ -126,6 +129,7 @@ impl Context {
         let kind = self.native_function(id)?.kind();
         if !matches!(kind, NativeFunctionKind::TypedArray(_))
             && !self.should_materialize_function_prototype_for(property)
+            && property.name() != crate::runtime::object::PROTOTYPE_PROPERTY
         {
             return Ok(Value::Undefined);
         }
@@ -180,7 +184,9 @@ impl Context {
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent
         } else {
-            if !self.function_should_materialize_prototype_for(id, property)? {
+            if !self.function_should_materialize_prototype_for(id, property)?
+                && property.name() != crate::runtime::object::PROTOTYPE_PROPERTY
+            {
                 return Ok(Value::Undefined);
             }
             self.function_object_prototype_value(id)?

@@ -247,6 +247,16 @@ pub(in crate::runtime) struct ActivationFrameStorageFootprint {
     execution_frame_count: usize,
 }
 
+pub(in crate::runtime) struct FunctionCallActivation {
+    pub(in crate::runtime) function: FunctionId,
+    pub(in crate::runtime) environment: FunctionActivationEnvironment,
+    pub(in crate::runtime) captured_dynamic_environment_count: usize,
+    pub(in crate::runtime) this_value: Value,
+    pub(in crate::runtime) new_target: Value,
+    pub(in crate::runtime) super_binding: Option<Rc<FunctionSuperBinding>>,
+    pub(in crate::runtime) private_environment: Option<Rc<PrivateEnvironment>>,
+}
+
 impl ActivationFrameStorageFootprint {
     pub(in crate::runtime) const fn binding_count(self) -> usize {
         self.binding_count
@@ -299,16 +309,16 @@ impl ActivationFrame {
         })
     }
 
-    pub(in crate::runtime) fn call(
-        function: FunctionId,
-        local_base: usize,
-        environment: FunctionActivationEnvironment,
-        captured_dynamic_environment_count: usize,
-        this_value: Value,
-        new_target: Value,
-        super_binding: Option<Rc<FunctionSuperBinding>>,
-        private_environment: Option<Rc<PrivateEnvironment>>,
-    ) -> Self {
+    pub(in crate::runtime) fn call(local_base: usize, activation: FunctionCallActivation) -> Self {
+        let FunctionCallActivation {
+            function,
+            environment,
+            captured_dynamic_environment_count,
+            this_value,
+            new_target,
+            super_binding,
+            private_environment,
+        } = activation;
         let (upvalues, dynamic_environments) = environment;
         Self::Call {
             function,

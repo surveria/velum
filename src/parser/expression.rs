@@ -547,7 +547,7 @@ impl Parser {
                 } else {
                     FunctionKind::Ordinary
                 };
-                parser.function_expression(kind)
+                parser.function_expression(kind, token_span)
             })?,
             TokenKind::Class => self.with_in_operator_allowed(true, Self::class_expression)?,
             TokenKind::Async => {
@@ -558,7 +558,9 @@ impl Parser {
                     } else {
                         FunctionKind::Async
                     };
-                    self.with_in_operator_allowed(true, |parser| parser.function_expression(kind))?
+                    self.with_in_operator_allowed(true, |parser| {
+                        parser.function_expression(kind, token_span)
+                    })?
                 } else {
                     Expression::new(
                         Expr::Identifier(self.contextual_async_binding(token_span.start())?),

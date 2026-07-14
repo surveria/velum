@@ -100,6 +100,26 @@ fn function_constructor_observes_live_global_bindings() -> TestResult {
 }
 
 #[test]
+fn dynamic_function_fast_paths_reuse_only_compatible_active_caches() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        var readArray = Function("return Array;");
+        function callFromAnotherLayout() {
+            var total = 0;
+            for (var index = 0; index < 2000; index++) {
+                total = total + (readArray() === Array ? 1 : 0);
+            }
+            return total;
+        }
+        callFromAnotherLayout()
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(2000.0))
+}
+
+#[test]
 fn function_constructor_name_is_metadata_not_a_lexical_binding() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

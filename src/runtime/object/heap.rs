@@ -401,7 +401,7 @@ impl ObjectHeap {
             shapes,
             max_properties,
         )?;
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<ObjectPropertyValue> {
@@ -477,7 +477,7 @@ impl ObjectHeap {
         if let Some(cell) = mapped {
             cell.assign(property_name, value)?;
         }
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub fn delete(&mut self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
@@ -487,7 +487,7 @@ impl ObjectHeap {
         if deleted {
             self.remove_argument_parameter_mapping(id, property.name())?;
         }
-        self.bump_if_structure_changed(id, before)?;
+        self.bump_if_structure_changed(id, &before)?;
         Ok(deleted)
     }
 
@@ -572,9 +572,9 @@ impl ObjectHeap {
     pub(super) fn bump_if_structure_changed(
         &mut self,
         id: ObjectId,
-        before: ObjectStructureSnapshot,
+        before: &ObjectStructureSnapshot,
     ) -> Result<()> {
-        if self.object(id)?.structure_snapshot() == before {
+        if self.object(id)?.structure_snapshot() == *before {
             return Ok(());
         }
         self.bump_prototype_lookup_version()

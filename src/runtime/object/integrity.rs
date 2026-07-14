@@ -6,7 +6,7 @@ impl ObjectHeap {
     pub(crate) fn prevent_extensions(&mut self, id: ObjectId) -> Result<()> {
         let before = self.object(id)?.structure_snapshot();
         self.object_mut(id)?.prevent_extensions();
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub(crate) fn seal(&mut self, id: ObjectId) -> Result<()> {

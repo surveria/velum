@@ -31,7 +31,7 @@ impl Parser {
         }
 
         loop {
-            let property = self.object_literal_property()?;
+            let mut property = self.object_literal_property()?;
             if property.kind == ObjectPropertyKind::Init
                 && matches!(
                     &property.key,
@@ -46,6 +46,7 @@ impl Parser {
                     ));
                 }
                 prototype_setter_seen = true;
+                property.kind = ObjectPropertyKind::PrototypeSetter;
             }
             properties.push(property);
             if !self.match_kind(&TokenKind::Comma) {
@@ -231,6 +232,7 @@ impl Parser {
                 ))
             }
             ObjectPropertyKind::Init
+            | ObjectPropertyKind::PrototypeSetter
             | ObjectPropertyKind::Shorthand
             | ObjectPropertyKind::Get
             | ObjectPropertyKind::Set

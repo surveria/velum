@@ -1,4 +1,5 @@
 pub mod declaration;
+mod global_declaration;
 pub mod location;
 pub mod scope;
 mod static_binding_lookup;

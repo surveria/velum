@@ -53,7 +53,7 @@ impl ObjectHeap {
                 )?;
                 object.array_length = Some(new_length);
             }
-            self.bump_if_structure_changed(id, before)?;
+            self.bump_if_structure_changed(id, &before)?;
             return Ok(new_length.value());
         }
 
@@ -84,7 +84,7 @@ impl ObjectHeap {
                 .pop_packed_for_len_if_configurable(length_usize)?
             {
                 self.object_mut(id)?.array_length = Some(index.length());
-                self.bump_if_structure_changed(id, before)?;
+                self.bump_if_structure_changed(id, &before)?;
                 return Ok(property.value());
             }
         }
@@ -299,14 +299,14 @@ impl ObjectHeap {
             return Err(Error::runtime("array index receiver is not an array"));
         }
         object.set_array_index(index, value, max_properties)?;
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub(super) fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
         let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         let deleted = object.delete_array_index(index, shapes)?;
-        self.bump_if_structure_changed(id, before)?;
+        self.bump_if_structure_changed(id, &before)?;
         Ok(deleted)
     }
 

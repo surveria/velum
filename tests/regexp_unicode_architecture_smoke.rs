@@ -68,6 +68,36 @@ fn regexp_observable_steps_reload_current_internal_state() -> TestResult {
 }
 
 #[test]
+fn repeated_regexp_matches_do_not_recharge_compiled_source_work() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        const repeatedRanges = "\\u0000-\\u0001".repeat(512);
+        globalThis.reusedMatcher = new RegExp("[" + repeatedRanges + "]");
+        "#,
+    )?;
+    let before = context.runtime_steps();
+    let value = context.eval(
+        r#"
+        let matches = 0;
+        for (let index = 0; index < 32; index += 1) {
+            if (reusedMatcher.test("\u0000")) matches += 1;
+        }
+        matches
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(32.0))?;
+    let Some(match_steps) = context.runtime_steps().checked_sub(before) else {
+        return Err("runtime step counter moved backwards".into());
+    };
+    if match_steps <= 10_000 {
+        return Ok(());
+    }
+    Err(format!("reused compiled RegExp charged {match_steps} runtime steps").into())
+}
+
+#[test]
 fn regexp_unicode_and_source_invariants_share_one_engine_path() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

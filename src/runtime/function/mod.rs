@@ -469,15 +469,16 @@ impl Context {
         if bytecode.requires_parameter_initialization() && !bytecode.strict() {
             dynamic_environments.push(self.create_parameter_eval_var_environment()?);
         }
-        let local_base = self.push_call_activation(
-            id,
-            (upvalues, dynamic_environments),
-            captured_dynamic_environment_count,
-            this_value,
-            new_target,
-            super_binding,
-            private_environment,
-        )?;
+        let local_base =
+            self.push_call_activation(crate::runtime::activation::FunctionCallActivation {
+                function: id,
+                environment: (upvalues, dynamic_environments),
+                captured_dynamic_environment_count,
+                this_value,
+                new_target,
+                super_binding,
+                private_environment,
+            })?;
         self.initialize_base_fields_at_activation(id, field_receiver.as_ref(), local_base)?;
         self.push_optional_function_self_scope(id, self_binding, local_base)?;
         let scope_result = self.function_call_scope(
@@ -489,22 +490,14 @@ impl Context {
         );
         let scope = match scope_result {
             Ok(scope) => scope,
-            Err(error) => {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
+            Err(error) => return self.abort_function_scope_setup(local_base, error),
         };
         let arguments_scope = match arguments_binding
             .map(|binding| self.arguments_binding_scope(id, binding, raw_args, &scope))
             .transpose()
         {
             Ok(arguments_scope) => arguments_scope,
-            Err(error) => {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
+            Err(error) => return self.abort_function_scope_setup(local_base, error),
         };
         if let Err(error) = self.push_function_binding_storage(local_base, arguments_scope, scope) {
             self.pop_call_activation(local_base)?;
@@ -534,6 +527,12 @@ impl Context {
         activation_result?;
         let return_mode = self.function_return_mode(id, derived_super_binding.as_ref())?;
         result.map(|completion| (completion, return_mode))
+    }
+
+    fn abort_function_scope_setup<T>(&mut self, local_base: usize, error: Error) -> Result<T> {
+        self.leave_function_local_frame(local_base)?;
+        self.pop_call_activation(local_base)?;
+        Err(error)
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
@@ -599,22 +598,17 @@ impl Context {
         id: FunctionId,
         source: Rc<str>,
     ) -> Result<()> {
-        let previous_bytes = self.function(id)?.source.as_deref().map_or(0, str::len);
-        let additional_count = usize::from(self.function(id)?.source.is_none());
-        let projected_count = self
-            .source_record_count()?
-            .checked_add(additional_count)
-            .ok_or_else(|| Error::limit("source record count overflowed"))?;
-        let projected_payload_bytes = self
-            .source_record_bytes()?
-            .checked_sub(previous_bytes)
-            .and_then(|bytes| bytes.checked_add(source.len()))
-            .ok_or_else(|| Error::limit("source record payload bytes overflowed"))?;
-        self.ensure_storage_totals(
+        let previous_source = self.function(id)?.source.as_deref();
+        let previous_count = usize::from(previous_source.is_some());
+        let previous_bytes = previous_source.map_or(0, str::len);
+        let reservation = self.storage_ledger.reserve_replacement(
             crate::runtime::VmStorageKind::SourceRecord,
-            projected_count,
-            projected_payload_bytes,
+            previous_count,
+            previous_bytes,
+            1,
+            source.len(),
         )?;
+        reservation.commit()?;
         self.function_mut(id)?.source = Some(source);
         Ok(())
     }

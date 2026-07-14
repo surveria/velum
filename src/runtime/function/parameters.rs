@@ -380,7 +380,10 @@ impl Context {
             )?;
         }
 
-        self.hoist_bytecode_declarations(bytecode.hoist_plan())?;
+        self.hoist_bytecode_function_declarations(
+            bytecode.hoist_plan(),
+            bytecode.arguments_binding(),
+        )?;
         self.eval_function_body_after_setup::<CAN_SUSPEND>(parameters.function, bytecode)
     }
 

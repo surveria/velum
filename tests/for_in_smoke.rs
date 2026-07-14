@@ -3,6 +3,20 @@ use rs_quickjs::{Error, Runtime, Value};
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn annex_b_var_initializer_runs_before_for_in_and_infers_function_name() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        var inferred;
+        for (var inferred = function() {} in {}) {}
+        inferred.name
+        ",
+    )?;
+    ensure_value(&value, &Value::from("inferred"))
+}
+
+#[test]
 fn supports_for_in_bindings_and_property_order() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

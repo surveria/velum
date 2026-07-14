@@ -9,6 +9,16 @@ use super::{
     BytecodeBlock, BytecodeHoistPlan, CaptureBindingCollector, FunctionCompileMode, compile_params,
 };
 
+struct FunctionCompileInput<'a> {
+    self_binding: Option<StaticBinding>,
+    arguments_binding: Option<StaticBinding>,
+    params: &'a [FunctionParam],
+    statements: &'a [Statement],
+    mode: FunctionCompileMode,
+    layout: &'a BindingLayout,
+    source: Option<std::rc::Rc<str>>,
+}
+
 impl BytecodeFunction {
     pub(in crate::compiler) fn compile(
         self_binding: Option<StaticBinding>,
@@ -20,14 +30,16 @@ impl BytecodeFunction {
         source: Option<std::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
-            self_binding,
-            arguments_binding,
-            params,
-            statements,
-            mode,
-            layout,
+            FunctionCompileInput {
+                self_binding,
+                arguments_binding,
+                params,
+                statements,
+                mode,
+                layout,
+                source,
+            },
             std::iter::empty(),
-            source,
         )
     }
 
@@ -41,30 +53,35 @@ impl BytecodeFunction {
         source: Option<std::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
-            None,
+            FunctionCompileInput {
+                self_binding: None,
+                arguments_binding,
+                params,
+                statements,
+                mode,
+                layout,
+                source,
+            },
+            fields
+                .iter()
+                .filter(|field| !field.is_static)
+                .filter_map(|field| field.initializer.as_ref()),
+        )
+    }
+
+    fn compile_with_additional_captures<'a>(
+        input: FunctionCompileInput<'_>,
+        additional_expressions: impl IntoIterator<Item = &'a crate::ast::Expression>,
+    ) -> Result<Self> {
+        let FunctionCompileInput {
+            self_binding,
             arguments_binding,
             params,
             statements,
             mode,
             layout,
-            fields
-                .iter()
-                .filter(|field| !field.is_static)
-                .filter_map(|field| field.initializer.as_ref()),
             source,
-        )
-    }
-
-    fn compile_with_additional_captures<'a>(
-        self_binding: Option<StaticBinding>,
-        arguments_binding: Option<StaticBinding>,
-        params: &[FunctionParam],
-        statements: &[Statement],
-        mode: FunctionCompileMode,
-        layout: &BindingLayout,
-        additional_expressions: impl IntoIterator<Item = &'a crate::ast::Expression>,
-        source: Option<std::rc::Rc<str>>,
-    ) -> Result<Self> {
+        } = input;
         let collected = CaptureBindingCollector::collect_function_with_additional(
             params,
             statements,

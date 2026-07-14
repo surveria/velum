@@ -154,6 +154,47 @@ fn supports_computed_symbol_object_literal_property_names() -> TestResult {
 }
 
 #[test]
+fn infers_anonymous_function_names_from_static_and_computed_property_keys() -> TestResult {
+    let value = eval(
+        r#"
+        var described = Symbol("camera");
+        var empty = Symbol("");
+        var anonymous = Symbol();
+        var object = {
+            prop: function() {},
+            "": function() {},
+            5: function() {},
+            [described]: function() {},
+            [empty]: function() {},
+            [anonymous]: function() {},
+            [/a/]: function() {},
+        };
+        [
+            object.prop.name,
+            object[""].name,
+            object[5].name,
+            object[described].name,
+            object[empty].name,
+            object[anonymous].name,
+            object[/a/].name,
+        ].join("|")
+        "#,
+    )?;
+    ensure_value(&value, &Value::from("prop||5|[camera]|[]||/a/"))
+}
+
+#[test]
+fn proto_setter_does_not_infer_an_anonymous_function_name() -> TestResult {
+    let value = eval(
+        r#"
+        var object = { __proto__: function() {} };
+        Object.getPrototypeOf(object).name + ":" + object.__proto__.name
+        "#,
+    )?;
+    ensure_value(&value, &Value::from(":"))
+}
+
+#[test]
 fn supports_computed_object_literal_methods() -> TestResult {
     let value = eval(
         r#"

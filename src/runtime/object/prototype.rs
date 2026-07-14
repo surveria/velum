@@ -87,7 +87,7 @@ impl ObjectHeap {
             ));
         }
         object.prototype = prototype;
-        self.bump_if_structure_changed(id, before)
+        self.bump_if_structure_changed(id, &before)
     }
 
     pub(crate) fn try_set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<bool> {
@@ -116,7 +116,7 @@ impl ObjectHeap {
             return Ok(false);
         }
         object.prototype = prototype;
-        self.bump_if_structure_changed(id, before)?;
+        self.bump_if_structure_changed(id, &before)?;
         Ok(true)
     }
 
