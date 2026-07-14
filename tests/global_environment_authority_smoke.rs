@@ -108,6 +108,38 @@ fn deleting_a_lazy_builtin_does_not_extend_the_global_object() -> TestResult {
     ensure_equal(&value, &OwnedValue::Number(42.0))
 }
 
+#[test]
+fn strict_writes_resolve_existing_global_object_properties_before_values() -> TestResult {
+    let source = r#"
+        let objectBackup = Object;
+        globalThis.strictCounter = 0;
+        (function () {
+            "use strict";
+            Object = 12;
+            Object = objectBackup;
+            strictCounter++;
+        })();
+
+        let missingRejected = false;
+        try {
+            (function () {
+                "use strict";
+                strictMissing = (globalThis.strictMissing = 5);
+            })();
+        } catch (error) {
+            missingRejected = error.name === "ReferenceError";
+        }
+
+        let result = Object === objectBackup && strictCounter === 1 && missingRejected;
+        delete globalThis.strictCounter;
+        delete globalThis.strictMissing;
+        result ? 42 : 0
+    "#;
+    let mut vm = Vm::new();
+    let value = vm.eval_owned(source)?;
+    ensure_equal(&value, &OwnedValue::Number(42.0))
+}
+
 fn ensure_equal(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
     if actual == expected {
         return Ok(());

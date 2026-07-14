@@ -266,27 +266,11 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
-        if let Some(reference) = self.resolve_with_binding(name)? {
-            let old_value = reference.get(self, name)?;
-            let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
-            self.checked_value(new_value.clone())?;
-            reference.set(self, name, new_value.clone())?;
-            return Ok(if prefix { new_value } else { old_value });
-        }
-        let binding = self.get_binding_bytecode(name)?;
-        let old_value = if let Some(binding) = &binding {
-            binding.value(name.name())?
-        } else {
-            self.unresolved_global_property_value(name.name().name())?
-                .ok_or_else(|| reference_error_undefined(name.name()))?
-        };
+        let reference = self.eval_bytecode_binding_assignment_reference(name)?;
+        let old_value = reference.get(self)?;
         let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
         self.checked_value(new_value.clone())?;
-        if let Some(binding) = binding {
-            self.assign_bytecode_cell(name, &binding, new_value.clone())?;
-        } else {
-            self.assign_bytecode_or_create_sloppy_global(name, new_value.clone())?;
-        }
+        reference.set(self, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 
@@ -384,25 +368,10 @@ impl Context {
         name: &BytecodeBinding,
         right: &Value,
     ) -> Result<Value> {
-        if let Some(reference) = self.resolve_with_binding(name)? {
-            let old_value = reference.get(self, name)?;
-            let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-            reference.set(self, name, value.clone())?;
-            return Ok(value);
-        }
-        let binding = self.get_or_materialize_binding_bytecode(name)?;
-        let old_value = if let Some(binding) = &binding {
-            binding.value(name.name())?
-        } else {
-            self.unresolved_global_property_value(name.name().name())?
-                .ok_or_else(|| reference_error_undefined(name.name()))?
-        };
+        let reference = self.eval_bytecode_binding_assignment_reference(name)?;
+        let old_value = reference.get(self)?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        if let Some(binding) = binding {
-            self.assign_bytecode_cell(name, &binding, value.clone())?;
-        } else {
-            self.assign_bytecode_or_create_sloppy_global(name, value.clone())?;
-        }
+        reference.set(self, value.clone())?;
         Ok(value)
     }
 
@@ -552,17 +521,7 @@ impl Context {
     ) -> Result<BytecodeAssignmentReference> {
         match target {
             BytecodeAssignmentTarget::Binding(name) => {
-                if let Some(reference) = self.resolve_with_binding(name)? {
-                    return Ok(BytecodeAssignmentReference::WithBinding {
-                        name: name.clone(),
-                        reference,
-                    });
-                }
-                let cell = self.get_or_materialize_binding_bytecode(name)?;
-                Ok(BytecodeAssignmentReference::Binding {
-                    name: name.clone(),
-                    cell,
-                })
+                self.eval_bytecode_binding_assignment_reference(name)
             }
             BytecodeAssignmentTarget::WebCompatCall(target) => {
                 self.eval_bytecode_expression(target)?;
@@ -615,6 +574,31 @@ impl Context {
                 self.eval_super_assignment_reference(property, *strict)
             }
         }
+    }
+
+    pub(in crate::runtime::bytecode) fn eval_bytecode_binding_assignment_reference(
+        &mut self,
+        name: &BytecodeBinding,
+    ) -> Result<BytecodeAssignmentReference> {
+        if let Some(reference) = self.resolve_with_binding(name)? {
+            return Ok(BytecodeAssignmentReference::WithBinding {
+                name: name.clone(),
+                reference,
+            });
+        }
+        let cell = self.get_or_materialize_binding_bytecode(name)?;
+        if cell.is_none()
+            && let Some(reference) = self.resolve_global_object_binding(name)?
+        {
+            return Ok(BytecodeAssignmentReference::WithBinding {
+                name: name.clone(),
+                reference,
+            });
+        }
+        Ok(BytecodeAssignmentReference::Binding {
+            name: name.clone(),
+            cell,
+        })
     }
 
     pub(in crate::runtime::bytecode) fn assign_bytecode_target(
