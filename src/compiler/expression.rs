@@ -379,7 +379,12 @@ impl BytecodeCompiler<'_> {
         expr: &Expression,
     ) -> Result<()> {
         let binding = BytecodeBinding::compile_write(name, self.layout, strict)?;
-        if binding.with_environment_count() > 0 {
+        let requires_resolved_reference = binding.with_environment_count() > 0
+            || !matches!(
+                binding.operand(),
+                crate::binding_metadata::BindingOperand::Local { .. }
+            );
+        if requires_resolved_reference {
             self.emit(BytecodeInstruction::ResolveBinding(binding.clone()));
         }
         if infer_name {
@@ -387,7 +392,7 @@ impl BytecodeCompiler<'_> {
         } else {
             self.compile_expr(expr)?;
         }
-        self.emit(if binding.with_environment_count() > 0 {
+        self.emit(if requires_resolved_reference {
             BytecodeInstruction::StoreResolvedBinding(binding)
         } else {
             BytecodeInstruction::StoreBinding(binding)

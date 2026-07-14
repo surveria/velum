@@ -328,6 +328,16 @@ impl Context {
         &self,
         binding: &BytecodeBinding,
     ) -> Result<Option<BindingCell>> {
+        if matches!(binding.operand(), BindingOperand::Upvalue { .. }) {
+            let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
+                return Ok(None);
+            };
+            if let Some(location @ BindingLocation::Local { .. }) =
+                self.resolve_binding_location(atom)
+            {
+                return self.binding_at_location(location);
+            }
+        }
         if let Some(cell) = self.cached_static_binding(binding.name())? {
             return Ok(Some(cell));
         }

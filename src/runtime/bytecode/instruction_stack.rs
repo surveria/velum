@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::{BytecodeAddress, BytecodeInstruction},
+    bytecode::{BytecodeAddress, BytecodeAssignmentTarget, BytecodeInstruction},
     error::{Error, Result},
     runtime::{
         Context,
@@ -200,23 +200,14 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::ResolveBinding(binding) => {
-                let object = self
-                    .resolve_with_binding(binding)?
-                    .map_or(Value::Undefined, |reference| reference.object().clone());
-                state.stack.push(object);
+                let target = BytecodeAssignmentTarget::Binding(binding.clone());
+                let reference = self.eval_bytecode_assignment_reference(&target)?;
+                state.push_resolved_binding(reference);
             }
-            BytecodeInstruction::StoreResolvedBinding(binding) => {
+            BytecodeInstruction::StoreResolvedBinding(_) => {
                 let value = state.stack.pop()?;
-                let object = state.stack.pop()?;
-                if matches!(object, Value::Undefined) {
-                    self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
-                } else {
-                    crate::runtime::binding::WithBindingReference::new(object).set(
-                        self,
-                        binding,
-                        value.clone(),
-                    )?;
-                }
+                let reference = state.pop_resolved_binding()?;
+                reference.set(self, value.clone())?;
                 state.stack.push(value);
             }
             _ => return Err(Error::runtime("resolved binding instruction mismatch")),

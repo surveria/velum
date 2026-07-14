@@ -58,11 +58,14 @@ fn bigint_string_ordering(left: &Value, right: &Value) -> BigIntStringOrdering {
     )
 }
 
-fn string_value(value: &Value) -> Option<&str> {
-    value.string_text()
+fn string_value(value: &Value) -> Option<&[u16]> {
+    let Value::String(value) = value else {
+        return None;
+    };
+    Some(value.as_utf16())
 }
 
-fn string_relational_compare(op: BinaryOp, left: &str, right: &str) -> bool {
+fn string_relational_compare(op: BinaryOp, left: &[u16], right: &[u16]) -> bool {
     match op {
         BinaryOp::Less => left < right,
         BinaryOp::LessEqual => left <= right,

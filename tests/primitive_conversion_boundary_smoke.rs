@@ -125,6 +125,18 @@ fn preserves_array_search_conversion_order() -> TestResult {
     )
 }
 
+#[test]
+fn compares_strings_by_utf16_code_units() -> TestResult {
+    eval_is_42(
+        r#"
+        "\uD7FF" < "\u{10000}" &&
+            "\uD800" < "\uDC00" &&
+            "\u{10000}" < "\uFFFF" &&
+            "\uDC00" > "\uD800" ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
