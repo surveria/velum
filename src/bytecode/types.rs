@@ -443,6 +443,7 @@ pub enum BytecodeInstruction {
     },
     TypeOfBinding(BytecodeBinding),
     TypeOfValue,
+    ToPropertyKey,
     DeleteBinding(BytecodeBinding),
     DeleteStaticProperty {
         property: BytecodeProperty,

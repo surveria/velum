@@ -99,7 +99,8 @@ impl Context {
             | BytecodeInstruction::Yield { .. }
             | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
-            | BytecodeInstruction::TypeOfValue => {
+            | BytecodeInstruction::TypeOfValue
+            | BytecodeInstruction::ToPropertyKey => {
                 self.eval_bytecode_stack_instruction(state, instruction, next)
             }
             BytecodeInstruction::DeleteBinding(_)

@@ -73,6 +73,23 @@ fn supports_computed_object_literal_property_names() -> TestResult {
 }
 
 #[test]
+fn converts_computed_property_keys_before_evaluating_values() -> TestResult {
+    let value = eval(
+        r#"
+        let name = "first";
+        let key = { toString() { return name; } };
+        let object = {
+            [key]: (name = "second", 40),
+            [key]: 2,
+        };
+        object.first + object.second
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn computed_proto_object_literal_property_is_data_property() -> TestResult {
     let value = eval(
         r#"

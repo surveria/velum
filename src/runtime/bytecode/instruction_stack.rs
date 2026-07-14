@@ -112,6 +112,12 @@ impl Context {
             BytecodeInstruction::TypeOfBinding(_) | BytecodeInstruction::TypeOfValue => {
                 self.eval_bytecode_typeof_instruction(state, instruction, next)
             }
+            BytecodeInstruction::ToPropertyKey => {
+                let value = state.stack.pop()?;
+                state.stack.push(self.to_property_key_value(&value)?);
+                state.pc = next;
+                Ok(None)
+            }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
     }

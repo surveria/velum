@@ -168,6 +168,10 @@ fn rejects_strict_function_parameter_early_errors() -> TestResult {
         "\"use strict\"; async function invalid(arguments) {}",
         "\"use strict\"; (async function eval() {})",
         "\"use strict\"; async (eval) => eval",
+        "function eval() { \"use strict\"; }",
+        "function arguments() { \"use strict\"; }",
+        "(function eval() { \"use strict\"; })",
+        "(function arguments() { \"use strict\"; })",
     ];
 
     for source in sources {

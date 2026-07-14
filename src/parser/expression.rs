@@ -569,7 +569,7 @@ impl Parser {
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
             TokenKind::LParen => {
-                let expr = self.expression()?;
+                let expr = self.with_in_operator_allowed(true, Self::expression)?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
                 self.expression_node(token_span, Expr::Parenthesized(Box::new(expr)))
             }

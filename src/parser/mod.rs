@@ -18,6 +18,7 @@ mod eval_context;
 mod expression;
 mod function;
 mod function_expression;
+mod in_context;
 mod literal;
 mod lookahead;
 mod member;
@@ -113,6 +114,7 @@ struct Parser {
     super_context: SuperContext,
     static_call_site_count: usize,
     arguments_reference: ArgumentsReference,
+    in_operator_allowed: bool,
     strict_mode: bool,
     function_declaration_context: FunctionDeclarationContext,
     await_expression_context: AwaitExpressionContext,
@@ -173,6 +175,7 @@ impl Parser {
             super_context: SuperContext::Forbidden,
             static_call_site_count: 0,
             arguments_reference: ArgumentsReference::Unreferenced,
+            in_operator_allowed: true,
             strict_mode,
             function_declaration_context: FunctionDeclarationContext::Var,
             await_expression_context: AwaitExpressionContext::Allowed,

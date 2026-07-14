@@ -13,7 +13,7 @@ impl Parser {
             return Ok(condition);
         }
 
-        let consequent = self.assignment()?;
+        let consequent = self.with_in_operator_allowed(true, Self::assignment)?;
         self.consume(&TokenKind::Colon, "expected ':' in conditional expression")?;
         let alternate = self.assignment()?;
         let start = condition.span();
@@ -90,7 +90,7 @@ impl Parser {
     }
 
     fn comparison(&mut self) -> Result<Expression> {
-        const COMPARISON_OPS: &[(&TokenKind, BinaryOp)] = &[
+        const COMPARISON_OPS_WITH_IN: &[(&TokenKind, BinaryOp)] = &[
             (&TokenKind::Less, BinaryOp::Less),
             (&TokenKind::LessEqual, BinaryOp::LessEqual),
             (&TokenKind::Greater, BinaryOp::Greater),
@@ -98,17 +98,32 @@ impl Parser {
             (&TokenKind::In, BinaryOp::In),
             (&TokenKind::InstanceOf, BinaryOp::InstanceOf),
         ];
+        const COMPARISON_OPS_WITHOUT_IN: &[(&TokenKind, BinaryOp)] = &[
+            (&TokenKind::Less, BinaryOp::Less),
+            (&TokenKind::LessEqual, BinaryOp::LessEqual),
+            (&TokenKind::Greater, BinaryOp::Greater),
+            (&TokenKind::GreaterEqual, BinaryOp::GreaterEqual),
+            (&TokenKind::InstanceOf, BinaryOp::InstanceOf),
+        ];
         let seed = if let Some(private_in) = self.private_in_seed()? {
             private_in
         } else {
             self.shift()?
         };
-        self.left_assoc_from(seed, Self::shift, COMPARISON_OPS)
+        let operators = if self.in_operator_is_allowed() {
+            COMPARISON_OPS_WITH_IN
+        } else {
+            COMPARISON_OPS_WITHOUT_IN
+        };
+        self.left_assoc_from(seed, Self::shift, operators)
     }
 
     /// Parses the `#name in object` ergonomic brand check that may seed a
     /// relational chain when a private name directly precedes `in`.
     fn private_in_seed(&mut self) -> Result<Option<Expression>> {
+        if !self.in_operator_is_allowed() {
+            return Ok(None);
+        }
         let is_private_in = matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_)))
             && self.peek_kind_is(1, &TokenKind::In);
         if !is_private_in {

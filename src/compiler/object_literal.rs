@@ -42,6 +42,7 @@ impl BytecodeCompiler<'_> {
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;
+                    self.emit(BytecodeInstruction::ToPropertyKey);
                     let property = match accessor {
                         Some(kind) => BytecodeObjectProperty::ComputedAccessor { kind },
                         None if matches!(property.value.kind(), Expr::MethodFunction { .. }) => {

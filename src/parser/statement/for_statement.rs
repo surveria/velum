@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, DeclKind, Expr, Expression, ForInTarget, Statement, Stmt},
+    ast::{DeclKind, Expression, ForInTarget, Statement, Stmt},
     error::Result,
     lexer::TokenKind,
 };
@@ -72,7 +72,7 @@ impl Parser {
             .rollback_to(static_function_count, offset)?;
         self.arguments_reference = arguments_reference;
 
-        let init = self.for_init()?;
+        let init = self.with_in_operator_allowed(false, Self::for_init)?;
         let condition = if self.check(&TokenKind::Semicolon) {
             None
         } else {
@@ -316,13 +316,7 @@ impl Parser {
             return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         let expr = self.expression()?;
-        if matches!(
-            expr.kind(),
-            Expr::Binary {
-                op: BinaryOp::In,
-                ..
-            }
-        ) {
+        if self.check(&TokenKind::In) {
             return Err(
                 self.parse_error("unparenthesized 'in' is not allowed in a for initializer")
             );

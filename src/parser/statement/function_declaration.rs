@@ -51,6 +51,9 @@ impl Parser {
                     })
                 })
             })?;
+        if body.contains_use_strict {
+            self.validate_function_binding_in_strict_code(&name)?;
+        }
         self.validate_function_parameters(
             &parameters.bound_names,
             parameters.is_simple,
