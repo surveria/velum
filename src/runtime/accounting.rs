@@ -502,7 +502,8 @@ impl Context {
     fn record_suspended_execution_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         let footprint = self
             .suspended_async_execution_storage_footprint()?
-            .checked_add(self.suspended_generator_execution_storage_footprint()?)?;
+            .checked_add(self.suspended_generator_execution_storage_footprint()?)?
+            .checked_add(self.suspended_module_execution_storage_footprint()?)?;
         counter.record(VmStorageKind::Binding, footprint.binding_count())?;
         counter.record(VmStorageKind::CacheEntry, footprint.cache_entry_count())?;
         counter.record(

@@ -659,7 +659,7 @@ fn settles_top_level_await_through_module_jobs() -> TestResult {
     let mut loader = MapLoader::new([]);
     let value = context.eval_module_named(
         "main.js",
-        "let value = 0; for await (const item of [await Promise.resolve(40)]) { value = item; await 0; } for (const key in await Promise.resolve({ delta: 2 })) { value += 2; } value;",
+        "let value = 0; for await (const item of [await Promise.resolve(40)]) { value = item; await 0; } for (const key in await Promise.resolve({ delta: 2 })) { value += 2; } const read = () => value; read();",
         &mut loader,
     )?;
 
@@ -671,6 +671,37 @@ fn settles_top_level_await_through_module_jobs() -> TestResult {
         context.pending_job_count() == 0,
         "module evaluation left settled jobs queued",
     )
+}
+
+#[test]
+fn waits_for_the_async_cycle_root_before_running_external_importers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("setup.js", "globalThis.logs = [];".to_owned()),
+        (
+            "root.js",
+            "import 'leaf.js'; logs.push('root start'); await 1; logs.push('root end');".to_owned(),
+        ),
+        (
+            "leaf.js",
+            "import 'root.js'; logs.push('leaf start'); await 1; logs.push('leaf end');".to_owned(),
+        ),
+        (
+            "importer.js",
+            "import 'leaf.js'; logs.push('importer');".to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import 'setup.js'; import 'root.js'; import 'importer.js'; logs.join(',');",
+        &mut loader,
+    )?;
+
+    if value == Value::from("leaf start,leaf end,root start,root end,importer") {
+        return Ok(());
+    }
+    Err(format!("external cycle importer order mismatch: {value:?}").into())
 }
 
 #[test]

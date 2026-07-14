@@ -297,6 +297,15 @@ impl Context {
             if let Some(error) = module.evaluation_error_value() {
                 visitor.visit_value(VmRootKind::ModuleBinding, error)?;
             }
+            if let Some(value) = module.evaluation_value() {
+                visitor.visit_value(VmRootKind::ModuleBinding, value)?;
+            }
+            if let Some(promise) = module.evaluation_promise() {
+                visitor.visit_promise(VmRootKind::ModuleBinding, promise)?;
+            }
+            if let Some(execution) = module.execution() {
+                execution.visit_direct_roots(visitor)?;
+            }
         }
         Ok(())
     }

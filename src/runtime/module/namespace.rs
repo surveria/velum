@@ -271,7 +271,8 @@ impl Context {
                         .scope
                         .as_ref()
                         .and_then(|scope| scope.get(atom))
-                        .ok_or_else(|| Error::runtime("local module export is not declared"));
+                        .ok_or_else(|| Error::runtime("local module export is not declared"))
+                        .and_then(|cell| cell.terminal_alias_target());
                     resolving.remove(&key);
                     return result.map(ExportResolution::Found);
                 }

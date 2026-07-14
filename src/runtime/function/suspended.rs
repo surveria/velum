@@ -163,6 +163,18 @@ pub(in crate::runtime) struct SuspendedExecutionStorageFootprint {
 }
 
 impl SuspendedExecutionStorageFootprint {
+    pub(in crate::runtime) const fn from_counts(
+        bindings: usize,
+        cache_entries: usize,
+        execution_frames: usize,
+    ) -> Self {
+        Self {
+            bindings,
+            cache_entries,
+            execution_frames,
+        }
+    }
+
     pub(in crate::runtime) const fn binding_count(self) -> usize {
         self.bindings
     }

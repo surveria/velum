@@ -16,12 +16,14 @@ use crate::{
         },
         bytecode::BytecodeOutcome,
         control::{Completion, Suspension},
+        promise::PromiseId,
         property::static_names::StaticNameAtomCacheHandle,
     },
     value::Value,
 };
 
 mod deferred;
+mod evaluation;
 mod namespace;
 mod source;
 
@@ -84,6 +86,12 @@ pub(super) struct ModuleRecord {
     import_meta: Option<Value>,
     state: EvaluationState,
     evaluation_error: Option<Error>,
+    evaluation_promise: Option<PromiseId>,
+    evaluation_value: Option<Value>,
+    pending_async_dependencies: usize,
+    execution: Option<evaluation::DetachedModuleExecution>,
+    canonical_module: Option<usize>,
+    cycle_root: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -108,6 +116,7 @@ struct PendingModule {
     module_source: Option<Value>,
     module_source_binding: Option<BindingCell>,
     import_meta: Option<Value>,
+    canonical_module: Option<usize>,
 }
 
 impl PendingModule {
@@ -129,6 +138,7 @@ impl PendingModule {
             module_source: None,
             module_source_binding: None,
             import_meta: None,
+            canonical_module: None,
         }
     }
 
@@ -256,6 +266,54 @@ impl Context {
         self.evaluate_dynamic_module_graph(0, graph, request.phase())
     }
 
+    pub(in crate::runtime) fn begin_dynamic_module_namespace(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> Result<(PromiseId, Value)> {
+        if request.phase() != crate::syntax::ImportPhase::Evaluation {
+            return Err(Error::runtime(
+                "asynchronous module preparation requires evaluation phase",
+            ));
+        }
+        let mut loader = self
+            .dynamic_module_loader
+            .clone()
+            .ok_or_else(|| Error::runtime("dynamic module loader is not installed"))?;
+        let source = loader.load_dynamic(referrer, request)?;
+        let specifier = source.specifier().to_owned();
+        if let Some(module_index) = self
+            .modules
+            .iter()
+            .position(|module| module.name == specifier)
+        {
+            let promise = self.begin_persisted_module_evaluation(module_index)?;
+            let namespace = self
+                .modules
+                .get(module_index)
+                .ok_or_else(|| Error::runtime("cached dynamic module disappeared"))?
+                .namespace
+                .clone();
+            return Ok((promise, namespace));
+        }
+        let root = CompiledModule::compile_named(&specifier, source.source(), self.limits.clone())?;
+        let mut graph = vec![PendingModule::new(specifier.clone(), root, None)];
+        let mut indices = BTreeMap::from([(specifier, 0_usize)]);
+        self.load_module_dependencies(0, &mut graph, &mut indices, &mut loader)?;
+        self.instantiate_module_graph(&mut graph)?;
+        self.link_module_graph(&mut graph)?;
+        let root = self.modules.len();
+        self.persist_module_graph(graph)?;
+        let promise = self.begin_persisted_module_evaluation(root)?;
+        let namespace = self
+            .modules
+            .get(root)
+            .ok_or_else(|| Error::runtime("dynamic module namespace owner is missing"))?
+            .namespace
+            .clone();
+        Ok((promise, namespace))
+    }
+
     fn with_module_evaluation<T>(
         &mut self,
         evaluate: impl FnOnce(&mut Self) -> Result<T>,
@@ -362,6 +420,7 @@ impl Context {
     fn link_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
         self.initialize_module_source_objects(graph)?;
         self.initialize_module_namespaces(graph)?;
+        self.alias_canonical_module_graph_bindings(graph)?;
         self.validate_indirect_exports(graph)?;
         self.populate_module_namespaces(graph)?;
         for module_index in 0..graph.len() {
@@ -430,7 +489,7 @@ impl Context {
         Ok(())
     }
 
-    fn evaluate_module_script(
+    fn evaluate_module_script_suspending(
         &mut self,
         script: &crate::CompiledScript,
     ) -> Result<BytecodeOutcome> {
@@ -444,7 +503,27 @@ impl Context {
             atom_cache,
             binding_cache,
             BindingLayout::clone(script.binding_layout()),
-            |context| context.eval_bytecode_program_with_jobs(script.bytecode()),
+            |context| context.eval_bytecode_program_suspending(script.bytecode()),
+        )
+    }
+
+    fn resume_module_script(
+        &mut self,
+        script: &crate::CompiledScript,
+        activation_base: usize,
+        resume: Completion,
+    ) -> Result<BytecodeOutcome> {
+        let atom_cache = StaticNameAtomCacheHandle::new(
+            script.usage().static_name_count(),
+            script.usage().static_property_access_count(),
+            script.usage().static_call_site_count(),
+        );
+        let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
+        self.with_static_name_caches(
+            atom_cache,
+            binding_cache,
+            BindingLayout::clone(script.binding_layout()),
+            |context| context.resume_top_level_bytecode(activation_base, resume),
         )
     }
 
