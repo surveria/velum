@@ -397,7 +397,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         state
             .stack
-            .push(self.create_regexp_literal(pattern.as_str(), flags.as_str())?);
+            .push(self.create_regexp_literal_utf16(pattern.as_utf16(), flags.as_str())?);
         state.pc = next;
         Ok(None)
     }

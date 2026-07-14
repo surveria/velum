@@ -52,7 +52,7 @@ pub enum TokenKind {
     TemplateMiddle(TemplatePart),
     TemplateTail(TemplatePart),
     RegExp {
-        pattern: Rc<str>,
+        pattern: Rc<[u16]>,
         flags: Rc<str>,
     },
     Identifier(Rc<str>),

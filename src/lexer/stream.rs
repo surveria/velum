@@ -1,7 +1,7 @@
 use crate::{Error, SourceId, SourceSpan};
 
 use super::{
-    LexicalGoal, Token, TokenKind,
+    LexicalGoal, SourceText, Token, TokenKind,
     classification::token_kind_can_precede_regexp,
     scanner::{Lexer, LexerCheckpoint},
 };
@@ -23,7 +23,11 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
-    pub(crate) fn new(source: &str, source_id: SourceId, allow_html_comments: bool) -> Self {
+    pub(crate) fn from_source_text(
+        source: SourceText,
+        source_id: SourceId,
+        allow_html_comments: bool,
+    ) -> Self {
         let mut stream = Self {
             state: TokenStreamState {
                 lexer: Lexer::new(source, source_id, allow_html_comments),

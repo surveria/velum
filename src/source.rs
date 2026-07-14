@@ -6,6 +6,7 @@ const SOURCE_ID_DOMAIN: &[u8] = b"rs-quickjs-source-id-v1";
 const ANONYMOUS_SOURCE_TAG: u8 = 0;
 const NAMED_SOURCE_TAG: u8 = 1;
 const SOURCE_TEXT_TAG: u8 = 2;
+const SOURCE_UTF16_TEXT_TAG: u8 = 3;
 const STABLE_LENGTH_BYTES: usize = 16;
 
 /// A stable diagnostic identity for JavaScript source text.
@@ -49,6 +50,26 @@ impl SourceId {
         hash = fnv_1a_128(hash, &[SOURCE_TEXT_TAG]);
         hash = fnv_1a_128_usize(hash, source.len());
         hash = fnv_1a_128(hash, source.as_bytes());
+        if hash == Self::UNKNOWN.0 {
+            return Self(1);
+        }
+        Self(hash)
+    }
+
+    pub(crate) fn for_optional_name_utf16(name: Option<&str>, source: &[u16]) -> Self {
+        let mut hash = fnv_1a_128(FNV_1A_128_OFFSET_BASIS, SOURCE_ID_DOMAIN);
+        if let Some(name) = name {
+            hash = fnv_1a_128(hash, &[NAMED_SOURCE_TAG]);
+            hash = fnv_1a_128_usize(hash, name.len());
+            hash = fnv_1a_128(hash, name.as_bytes());
+        } else {
+            hash = fnv_1a_128(hash, &[ANONYMOUS_SOURCE_TAG]);
+        }
+        hash = fnv_1a_128(hash, &[SOURCE_UTF16_TEXT_TAG]);
+        hash = fnv_1a_128_usize(hash, source.len());
+        for unit in source {
+            hash = fnv_1a_128(hash, &unit.to_le_bytes());
+        }
         if hash == Self::UNKNOWN.0 {
             return Self(1);
         }

@@ -162,6 +162,23 @@ impl CompiledScript {
         Self::compile_with_name_and_mode(None, source, limits, &mode)
     }
 
+    pub(crate) fn compile_eval_utf16(
+        source: &[u16],
+        limits: RuntimeLimits,
+        context: EvalCompileContext,
+    ) -> Result<Self> {
+        let mode = CompileMode::eval(context);
+        let source_id = SourceId::for_optional_name_utf16(None, source);
+        Self::compile_with_source_text_parts(
+            None,
+            lexer::SourceText::from_utf16(source),
+            source_id,
+            limits,
+            &mode,
+        )
+        .map(|(script, _)| script)
+    }
+
     pub(crate) fn compile_module_named(
         source_name: &str,
         source: &str,
@@ -283,11 +300,29 @@ impl CompiledScript {
         limits: RuntimeLimits,
         mode: &CompileMode,
     ) -> Result<(Self, Option<ModuleSyntax>)> {
-        check_source_len(source, &limits)?;
-        check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
+        Self::compile_with_source_text_parts(
+            source_name,
+            lexer::SourceText::from_utf8(source),
+            source_id,
+            limits,
+            mode,
+        )
+    }
+
+    fn compile_with_source_text_parts(
+        source_name: Option<&str>,
+        source: lexer::SourceText,
+        source_id: SourceId,
+        limits: RuntimeLimits,
+        mode: &CompileMode,
+    ) -> Result<(Self, Option<ModuleSyntax>)> {
+        check_source_len_value(source.source_len(), &limits)?;
+        check_source_name_len(source_name, &limits)?;
+        let source_len = source.source_len();
+        let diagnostic_source = source.rendered().to_owned();
         let allow_html_comments = !matches!(mode, CompileMode::Module);
-        let tokens = lexer::TokenStream::new(source, source_id, allow_html_comments);
+        let tokens = lexer::TokenStream::from_source_text(source, source_id, allow_html_comments);
         let parsed = if matches!(mode, CompileMode::Module) {
             parser::parse_module_with_usage(tokens, limits)
         } else if let Some(context) = mode.eval_context() {
@@ -297,7 +332,7 @@ impl CompiledScript {
         } else {
             parser::parse_with_usage(tokens, limits)
         }
-        .map_err(|error| error.with_source(source_id, source))?;
+        .map_err(|error| error.with_source(source_id, &diagnostic_source))?;
         let module = parsed.module;
         let program = parsed.program;
         let binding_layout = match mode {
@@ -325,7 +360,7 @@ impl CompiledScript {
         let script = Self {
             bytecode,
             usage: CompiledScriptUsage {
-                source_len: source.len(),
+                source_len,
                 top_level_statement_count: parsed.usage.top_level_statement_count,
                 max_expression_depth: parsed.usage.max_expression_depth,
                 static_name_count: parsed.usage.static_name_count,
@@ -410,10 +445,6 @@ impl CompiledScript {
         }
         Ok(())
     }
-}
-
-fn check_source_len(source: &str, limits: &RuntimeLimits) -> Result<()> {
-    check_source_len_value(source.len(), limits)
 }
 
 fn check_source_len_value(source_len: usize, limits: &RuntimeLimits) -> Result<()> {

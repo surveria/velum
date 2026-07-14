@@ -890,6 +890,16 @@ impl<'a> Utf16Input<'a> {
     fn code_point_from_surrogates(high: u16, low: u16) -> u32 {
         (((high & 0x3ff) as u32) << 10 | (low & 0x3ff) as u32) + 0x1_0000
     }
+
+    fn is_code_point_boundary(&self, pos: <Self as InputIndexer>::Position) -> bool {
+        let offset = self.pos_to_offset(pos);
+        let previous = offset
+            .checked_sub(1)
+            .and_then(|index| self.input.get(index));
+        let current = self.input.get(offset);
+        !previous.is_some_and(|unit| Self::is_high_surrogate(*unit))
+            || !current.is_some_and(|unit| Self::is_low_surrogate(*unit))
+    }
 }
 
 #[cfg(feature = "utf16")]
@@ -1101,6 +1111,12 @@ impl<'a> InputIndexer for Utf16Input<'a> {
         } else {
             return false;
         };
+
+        if self.unicode()
+            && (!self.is_code_point_boundary(start) || !self.is_code_point_boundary(end))
+        {
+            return false;
+        }
 
         let new_range = &self.input[self.pos_to_offset(start)..self.pos_to_offset(end)];
         let old_range = &self.input[self.pos_to_offset(range.start)..self.pos_to_offset(range.end)];

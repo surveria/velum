@@ -170,6 +170,19 @@ function test262DeepEqual(actual, expected) {
         typeof actual !== "object" || typeof expected !== "object") {
         return false;
     }
+    let actualIsArray = Array.isArray(actual);
+    let expectedIsArray = Array.isArray(expected);
+    if (actualIsArray || expectedIsArray) {
+        if (!actualIsArray || !expectedIsArray || actual.length !== expected.length) {
+            return false;
+        }
+        for (let index = 0; index < actual.length; index += 1) {
+            if (!test262DeepEqual(actual[index], expected[index])) {
+                return false;
+            }
+        }
+        return true;
+    }
     let actualKeys = Object.keys(actual);
     let expectedKeys = Object.keys(expected);
     if (actualKeys.length !== expectedKeys.length) {
@@ -213,4 +226,34 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
     context
         .register_host_operation(CREATE_IS_HTML_DDA_HOST_NAME, HostOperation::CreateIsHtmlDda)?;
     context.eval(HOST_SOURCE).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use rs_quickjs::{Runtime, Value};
+
+    use super::{ASSERT_SOURCE, DEEP_EQUAL_SOURCE, STA_SOURCE};
+
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn deep_equal_compares_array_elements_without_enumerable_metadata() -> TestResult {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        context.eval(STA_SOURCE)?;
+        context.eval(ASSERT_SOURCE)?;
+        context.eval(DEEP_EQUAL_SOURCE)?;
+        let value = context.eval(
+            r#"
+            let actual = [[0, 1]];
+            actual.groups = undefined;
+            test262DeepEqual(actual, [[0, 1]]) &&
+                !test262DeepEqual(actual, [[0, 2]]) ? 42 : 0
+            "#,
+        )?;
+        if value == Value::Number(42.0) {
+            return Ok(());
+        }
+        Err(format!("unexpected deepEqual result: {value:?}").into())
+    }
 }

@@ -353,21 +353,38 @@ fn make_bracket_class(ct: CharacterClassType, positive: bool, icase: bool) -> ir
     ir::Node::Bracket(BracketContents { invert: false, cps })
 }
 
-fn add_class_atom(bc: &mut BracketContents, atom: ClassAtom) {
+fn add_class_atom(bc: &mut BracketContents, atom: ClassAtom, flags: api::Flags) {
     match atom {
-        ClassAtom::CodePoint(c) => bc.cps.add_one(c),
+        ClassAtom::CodePoint(c) => {
+            let mut cps = CodePointSet::default();
+            cps.add_one(c);
+            if flags.icase {
+                cps = unicode::add_icase_code_points(cps);
+            }
+            bc.cps.add_set(cps);
+        }
         ClassAtom::CharacterClass {
             class_type,
             positive,
         } => {
-            bc.cps.add_set(codepoints_from_class(class_type, positive));
-        }
-        ClassAtom::Range { iv, negate } => {
-            if negate {
-                bc.cps.add_set(iv.inverted());
-            } else {
-                bc.cps.add_set(iv);
+            let mut cps = codepoints_from_class_positive(class_type);
+            if flags.icase {
+                cps = unicode::add_icase_code_points(cps);
             }
+            bc.cps.add_set(if positive { cps } else { cps.inverted() });
+        }
+        ClassAtom::Range { mut iv, negate } => {
+            if flags.icase && negate && flags.unicode && !flags.unicode_sets {
+                iv = unicode::add_icase_code_points(iv.inverted());
+            } else {
+                if flags.icase {
+                    iv = unicode::add_icase_code_points(iv);
+                }
+                if negate {
+                    iv = iv.inverted();
+                }
+            }
+            bc.cps.add_set(iv);
         }
     }
 }
@@ -867,9 +884,6 @@ where
                 }
                 Some(']') => {
                     self.consume(']');
-                    if self.flags.icase {
-                        result.cps = unicode::add_icase_code_points(result.cps);
-                    }
                     return Ok(ir::Node::Bracket(result));
                 }
                 _ => {}
@@ -882,14 +896,18 @@ where
 
             // Check for a dash; we may have a range.
             if !self.try_consume('-') {
-                add_class_atom(&mut result, first);
+                add_class_atom(&mut result, first, self.flags);
                 continue;
             }
 
             let Some(second) = self.try_consume_bracket_class_atom()? else {
                 // No second atom. For example: [a-].
-                add_class_atom(&mut result, first);
-                add_class_atom(&mut result, ClassAtom::CodePoint(u32::from('-')));
+                add_class_atom(&mut result, first, self.flags);
+                add_class_atom(
+                    &mut result,
+                    ClassAtom::CodePoint(u32::from('-')),
+                    self.flags,
+                );
                 continue;
             };
 
@@ -901,10 +919,16 @@ where
                         "Range values reversed, start char code is greater than end char code.",
                     );
                 }
-                result.cps.add(Interval {
+                let mut codepoints = CodePointSet::new();
+                codepoints.add(Interval {
                     first: *c1,
                     last: *c2,
                 });
+                let range = ClassAtom::Range {
+                    iv: codepoints,
+                    negate: false,
+                };
+                add_class_atom(&mut result, range, self.flags);
 
                 continue;
             }
@@ -914,9 +938,13 @@ where
             }
 
             // If it does not match a range treat as any match single characters.
-            add_class_atom(&mut result, first);
-            add_class_atom(&mut result, ClassAtom::CodePoint(u32::from('-')));
-            add_class_atom(&mut result, second);
+            add_class_atom(&mut result, first, self.flags);
+            add_class_atom(
+                &mut result,
+                ClassAtom::CodePoint(u32::from('-')),
+                self.flags,
+            );
+            add_class_atom(&mut result, second, self.flags);
         }
     }
 
@@ -1762,35 +1790,35 @@ where
 
     #[allow(clippy::branches_sharing_code)]
     fn try_escape_unicode_sequence(&mut self) -> Option<u32> {
-        let mut orig_input = self.input.clone();
+        let orig_input = self.input.clone();
 
         // Support \u{X..X} (Unicode CodePoint)
-        if self.try_consume('{') {
-            let mut s = String::new();
+        if (self.flags.unicode || self.flags.unicode_sets) && self.try_consume('{') {
+            let mut value = 0_u32;
+            let mut has_digit = false;
             loop {
                 match self.next().and_then(char::from_u32) {
-                    Some('}') => break,
-                    Some(c) => s.push(c),
-                    None => {
-                        // Surrogates not supported in code point escapes.
+                    Some('}') if has_digit => return Some(value),
+                    Some('}') | None => {
                         self.input = orig_input;
                         return None;
                     }
-                }
-            }
-
-            match u32::from_str_radix(&s, 16) {
-                Ok(u) => {
-                    if u > 0x10_FFFF {
-                        self.input = orig_input;
-                        None
-                    } else {
-                        Some(u)
+                    Some(c) => {
+                        let Some(digit) = c.to_digit(16) else {
+                            self.input = orig_input;
+                            return None;
+                        };
+                        has_digit = true;
+                        let Some(next) = value
+                            .checked_mul(16)
+                            .and_then(|value| value.checked_add(digit))
+                            .filter(|value| *value <= 0x10_FFFF)
+                        else {
+                            self.input = orig_input;
+                            return None;
+                        };
+                        value = next;
                     }
-                }
-                _ => {
-                    self.input = orig_input;
-                    None
                 }
             }
         } else {
@@ -1807,15 +1835,15 @@ where
             }
             match u16::from_str_radix(&s, 16) {
                 Ok(u) => {
-                    if (0xD800..=0xDBFF).contains(&u) {
+                    if (self.flags.unicode || self.flags.unicode_sets)
+                        && (0xD800..=0xDBFF).contains(&u)
+                    {
                         // Found a high surrogate. Try to parse a low surrogate next
                         // to see if we can rebuild the original `char`
-
+                        let after_high = self.input.clone();
                         if !self.try_consume_str("\\u") {
                             return Some(u as u32);
                         }
-                        orig_input = self.input.clone();
-
                         // A poor man's try block to handle the backtracking
                         // in a single place instead of every time we want to return.
                         // This allows us to use `?` within the inner block without returning
@@ -1833,7 +1861,7 @@ where
                         })();
 
                         result.or_else(|| {
-                            self.input = orig_input;
+                            self.input = after_high;
                             Some(u as u32)
                         })
                     } else {

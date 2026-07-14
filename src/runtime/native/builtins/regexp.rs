@@ -80,8 +80,12 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(crate) fn create_regexp_literal(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        self.create_regexp_object_from_text(pattern, flags)
+    pub(crate) fn create_regexp_literal_utf16(
+        &mut self,
+        pattern: &[u16],
+        flags: &str,
+    ) -> Result<Value> {
+        self.create_regexp_object_from_utf16(pattern, flags)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_constructor(
@@ -199,11 +203,6 @@ impl Context {
         text.push_str(&flags);
         self.check_string_len(&text)?;
         self.heap_string_value(&text)
-    }
-
-    fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        let pattern = pattern.encode_utf16().collect::<Vec<_>>();
-        self.create_regexp_object_from_utf16(&pattern, flags)
     }
 
     fn create_regexp_object_from_utf16(&mut self, pattern: &[u16], flags: &str) -> Result<Value> {
@@ -606,10 +605,12 @@ impl Context {
     }
 
     fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
+        let last_index = self.regexp_last_index_utf16(this_value, input)?;
+        // ToLength(lastIndex) may execute user code, including RegExp.prototype.compile.
+        // Read the internal matcher only after that observable conversion has completed.
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = regexp.parsed_flags();
         self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
-        let last_index = self.regexp_last_index_utf16(this_value, input)?;
         let start = if flags.global() || flags.sticky() {
             last_index
         } else {

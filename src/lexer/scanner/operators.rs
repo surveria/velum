@@ -6,7 +6,9 @@ use crate::{
 
 impl Lexer {
     pub(super) fn simple(&mut self, kind: TokenKind) {
-        let offset = self.peek().map_or(self.source.len(), |(offset, _)| offset);
+        let offset = self
+            .peek()
+            .map_or(self.source.rendered_len(), |(offset, _)| offset);
         self.advance();
         self.push(kind, offset);
     }
