@@ -1,7 +1,10 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ast::{CatchClause, DeclKind, Expression, FunctionKind, Statement, Stmt, SwitchCase},
+    ast::{
+        BindingPattern, CatchClause, DeclKind, Expression, FunctionKind, Statement, StaticBinding,
+        Stmt, SwitchCase,
+    },
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -659,6 +662,7 @@ impl Parser {
         let start = self.current_span();
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
+            self.validate_declaration_binding_pattern(kind, &pattern)?;
             self.consume(
                 &TokenKind::Equal,
                 "destructuring declaration requires an initializer",
@@ -688,18 +692,34 @@ impl Parser {
         &mut self,
         kind: DeclKind,
         message: &str,
-    ) -> Result<crate::syntax::StaticBinding> {
-        if kind == DeclKind::Var
-            && !self.is_strict_mode()
-            && self.peek().is_some_and(|token| {
+    ) -> Result<StaticBinding> {
+        let name =
+            if kind == DeclKind::Var && !self.is_strict_mode() && self.peek().is_some_and(|token| {
                 token.kind == TokenKind::Let
                     || matches!(&token.kind, TokenKind::Identifier(name) if name.as_ref() == "let")
-            })
-        {
-            let name = self.consume_identifier(message)?;
-            return self.static_binding(name);
+            }) {
+                let name = self.consume_identifier(message)?;
+                self.static_binding(name)?
+            } else {
+                self.consume_binding_identifier(message)?
+            };
+        self.validate_declaration_binding(kind, &name)?;
+        Ok(name)
+    }
+
+    pub(super) fn validate_declaration_binding_pattern(
+        &self,
+        kind: DeclKind,
+        pattern: &BindingPattern,
+    ) -> Result<()> {
+        pattern.for_each_binding(&mut |binding| self.validate_declaration_binding(kind, binding))
+    }
+
+    fn validate_declaration_binding(&self, kind: DeclKind, binding: &StaticBinding) -> Result<()> {
+        if kind != DeclKind::Var && binding.as_str() == "let" {
+            return Err(self.parse_error("let is not a valid lexical binding identifier"));
         }
-        self.consume_binding_identifier(message)
+        Ok(())
     }
 
     fn declarations_stmt(&self, declarations: Vec<Statement>) -> Result<Stmt> {

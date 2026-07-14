@@ -155,6 +155,14 @@ fn parenthesized_logical_assignment_does_not_infer_anonymous_function_names() ->
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn rejects_parenthesized_call_logical_assignment_targets() -> TestResult {
+    for source in ["(f()) &&= 1", "(f()) ||= 1", "(f()) ??= 1"] {
+        ensure_error_contains(source, "invalid logical assignment target")?;
+    }
+    Ok(())
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

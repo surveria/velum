@@ -63,7 +63,8 @@ impl Parser {
         let mut declarations = Vec::new();
         loop {
             let start = self.current_span();
-            let name = self.consume_binding_identifier("expected resource binding name")?;
+            let name = self
+                .consume_declaration_binding_identifier(kind, "expected resource binding name")?;
             self.consume(
                 &TokenKind::Equal,
                 "resource declaration requires an initializer",

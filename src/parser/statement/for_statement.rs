@@ -198,6 +198,7 @@ impl Parser {
     ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
+            self.validate_declaration_binding_pattern(kind, &pattern)?;
             let Some(head) = self.match_for_head_kind() else {
                 return Ok(None);
             };

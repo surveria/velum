@@ -130,6 +130,20 @@ fn symbol_prototype_has_a_tag_and_boxed_symbols_do_not_use_string_special_case()
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn symbol_to_string_falls_back_to_object_for_a_non_string_tag() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        Object.defineProperty(Symbol.prototype, Symbol.toStringTag, { value: 1 });
+        Object.prototype.toString.call(Symbol()) === "[object Object]" &&
+            Object.prototype.toString.call(Object(Symbol())) === "[object Object]"
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
