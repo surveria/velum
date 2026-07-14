@@ -384,9 +384,13 @@ impl BytecodeCompiler<'_> {
             || matches!(
                 binding.operand(),
                 crate::binding_metadata::BindingOperand::Unresolved
-                    | crate::binding_metadata::BindingOperand::Global { .. }
-                    | crate::binding_metadata::BindingOperand::EvalVariable { .. }
             )
+            || (binding.strict_write()
+                && matches!(
+                    binding.operand(),
+                    crate::binding_metadata::BindingOperand::Global { .. }
+                        | crate::binding_metadata::BindingOperand::EvalVariable { .. }
+                ))
             || super::binding_effects::expression_contains_direct_eval(expr);
         if requires_resolved_reference {
             self.emit(BytecodeInstruction::ResolveBinding(binding.clone()));
