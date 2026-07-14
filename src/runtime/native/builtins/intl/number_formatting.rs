@@ -131,9 +131,16 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let number = self.number_receiver_value(this_value)?;
+        self.eval_numeric_to_locale_string(args, &Value::Number(number))
+    }
+
+    pub(in crate::runtime::native) fn eval_numeric_to_locale_string(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        value: &Value,
+    ) -> Result<Value> {
         let formatter = self.parse_number_format(args)?;
-        let input = self.number_format_input(&Value::Number(number))?;
-        let output = format_number(&formatter, input)?;
+        let output = format_number(&formatter, self.number_format_input(value)?)?;
         self.heap_string_value(&output.text)
     }
 
@@ -541,10 +548,18 @@ fn push_style_suffix(
                 value: value.to_owned(),
             });
         }
-        "percent" => parts.push(NumberPart {
-            kind: "percentSign",
-            value: "%".to_owned(),
-        }),
+        "percent" => {
+            if locale_starts_with(formatter, "de") || locale_starts_with(formatter, "pt") {
+                parts.push(NumberPart {
+                    kind: "literal",
+                    value: "\u{00a0}".to_owned(),
+                });
+            }
+            parts.push(NumberPart {
+                kind: "percentSign",
+                value: "%".to_owned(),
+            });
+        }
         "unit" if formatter.unit.as_deref() == Some("percent") => parts.push(NumberPart {
             kind: "unit",
             value: "%".to_owned(),

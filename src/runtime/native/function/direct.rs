@@ -624,6 +624,10 @@ impl Context {
         use crate::runtime::generator::GeneratorResumeKind;
 
         let (resume, asynchronous) = match kind {
+            NativeFunctionKind::AsyncIteratorDispose => {
+                return Some(self.eval_async_iterator_prototype_dispose(this_value));
+            }
+            NativeFunctionKind::AsyncIteratorSelf => return Some(Ok(this_value.clone())),
             NativeFunctionKind::GeneratorNext => (GeneratorResumeKind::Next, false),
             NativeFunctionKind::GeneratorReturn => (GeneratorResumeKind::Return, false),
             NativeFunctionKind::GeneratorThrow => (GeneratorResumeKind::Throw, false),

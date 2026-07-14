@@ -22,6 +22,9 @@ use super::{
     SYMBOL_FUNCTION_LENGTH, SYMBOL_KEY_FOR_FUNCTION_LENGTH, SYMBOL_NAME,
 };
 
+const ASYNC_ITERATOR_DISPOSE_NAME: &str = "[Symbol.asyncDispose]";
+const ASYNC_ITERATOR_SELF_NAME: &str = "[Symbol.asyncIterator]";
+
 impl NativeFunctionKind {
     pub(super) const fn core_length(self) -> Option<f64> {
         if let Some(length) = self.promise_length() {
@@ -64,7 +67,11 @@ impl NativeFunctionKind {
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
-            Self::Print | Self::ThrowTypeError | Self::TypedArrayIntrinsic => Some(0.0),
+            Self::AsyncIteratorDispose
+            | Self::AsyncIteratorSelf
+            | Self::Print
+            | Self::ThrowTypeError
+            | Self::TypedArrayIntrinsic => Some(0.0),
             Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
             Self::ProxyRevocable => Some(PROXY_REVOCABLE_FUNCTION_LENGTH),
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
@@ -87,6 +94,8 @@ impl NativeFunctionKind {
             Self::AsyncGeneratorNext | Self::GeneratorNext => Some("next"),
             Self::AsyncGeneratorReturn | Self::GeneratorReturn => Some("return"),
             Self::AsyncGeneratorThrow | Self::GeneratorThrow => Some("throw"),
+            Self::AsyncIteratorDispose => Some(ASYNC_ITERATOR_DISPOSE_NAME),
+            Self::AsyncIteratorSelf => Some(ASYNC_ITERATOR_SELF_NAME),
             Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
             Self::SharedArrayBuffer => Some(SHARED_ARRAY_BUFFER_NAME),
             Self::Boolean => Some(BOOLEAN_NAME),

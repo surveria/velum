@@ -305,6 +305,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     AsyncGeneratorNext,
     AsyncGeneratorReturn,
     AsyncGeneratorThrow,
+    AsyncIteratorDispose,
+    AsyncIteratorSelf,
     AsyncDisposableStack(super::async_disposable_stack_kind::AsyncDisposableStackFunctionKind),
     Boolean,
     BooleanPrototypeToString,

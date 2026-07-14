@@ -217,6 +217,11 @@ impl Context {
         let done = to_boolean(self, &done_value)?;
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
         if !done {
+            let value = if continuation.await_yielded_values {
+                self.create_async_from_sync_value_wrapper(&mut continuation.source, value, true)?
+            } else {
+                value
+            };
             return Ok(YieldDelegateStep::DelegatedYield(
                 DelegatedYield::async_value(value, continuation.await_yielded_values),
             ));
