@@ -36,6 +36,8 @@ pub enum HostOperation {
     EvalScript,
     /// Creates the callable Annex B host exotic carrying `[[IsHTMLDDA]]`.
     CreateIsHtmlDda,
+    /// Returns the active realm's `%AbstractModuleSource%` intrinsic.
+    GetAbstractModuleSource,
 }
 
 pub trait IntoJsValue {
@@ -674,6 +676,9 @@ impl Context {
             HostOperation::CreateIsHtmlDda => self.create_internal_host_function_value(
                 HostFunction::is_html_dda("IsHTMLDDA".to_owned()),
             ),
+            HostOperation::GetAbstractModuleSource => {
+                self.abstract_module_source_constructor_value()
+            }
         }
     }
 

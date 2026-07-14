@@ -6,6 +6,7 @@ const DETACH_NAME: &str = "hostDetachArrayBuffer";
 const COLLECT_GARBAGE_NAME: &str = "hostCollectGarbage";
 const CREATE_IS_HTML_DDA_NAME: &str = "hostCreateIsHTMLDDA";
 const EVAL_SCRIPT_NAME: &str = "hostEvalScript";
+const GET_ABSTRACT_MODULE_SOURCE_NAME: &str = "hostGetAbstractModuleSource";
 
 #[test]
 fn collects_garbage_during_active_evaluation_without_losing_live_values() -> TestResult {
@@ -72,6 +73,33 @@ fn creates_callable_is_html_dda_host_exotics() -> TestResult {
         return Ok(());
     }
     Err(format!("expected IsHTMLDDA semantic invariants, got {value:?}").into())
+}
+
+#[test]
+fn exposes_abstract_module_source_intrinsic_descriptors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(
+        GET_ABSTRACT_MODULE_SOURCE_NAME,
+        HostOperation::GetAbstractModuleSource,
+    )?;
+    let value = context.eval(
+        "var constructor = hostGetAbstractModuleSource(); \
+         var prototype = constructor.prototype; \
+         var tag = Object.getOwnPropertyDescriptor(prototype, Symbol.toStringTag); \
+         delete prototype[Symbol.toStringTag]; \
+         Object.defineProperty(prototype, Symbol.toStringTag, tag); \
+         var threw = false; \
+         try { new constructor(); } catch (error) { threw = error instanceof TypeError; } \
+         typeof constructor === 'function' && constructor.name === 'AbstractModuleSource' && \
+             constructor.length === 0 && Object.getPrototypeOf(prototype) === Object.prototype && \
+             typeof tag.get === 'function' && tag.set === undefined && !tag.enumerable && \
+             tag.configurable && tag.get.call(262) === undefined && threw ? 42 : 0",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected AbstractModuleSource intrinsic invariants, got {value:?}").into())
 }
 
 #[test]

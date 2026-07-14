@@ -222,6 +222,7 @@ impl CompiledScript {
                     match entry.import_name {
                         parser::ModuleImportName::Name(name) => ModuleImportName::Name(name),
                         parser::ModuleImportName::Namespace => ModuleImportName::Namespace,
+                        parser::ModuleImportName::Source => ModuleImportName::Source,
                     },
                     entry.local_name,
                 )
@@ -256,6 +257,10 @@ impl CompiledScript {
                             }
                         }
                     }
+                    Some((request, parser::ModuleImportName::Source)) => ModuleExport::Source {
+                        export_name,
+                        request: request.specifier().to_owned(),
+                    },
                     None => ModuleExport::Local {
                         export_name,
                         local_name,

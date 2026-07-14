@@ -79,6 +79,66 @@ fn records_static_import_phases_and_attributes() -> TestResult {
 }
 
 #[test]
+fn records_source_phase_imports_and_re_exports() -> TestResult {
+    let runtime = Runtime::new();
+    let module = runtime.compile_module_named(
+        "app/main.js",
+        "import source dependency from '<module source>'; export { dependency };",
+    )?;
+    let request = module
+        .module_requests()
+        .first()
+        .ok_or("source-phase module request metadata is missing")?;
+
+    ensure(
+        request.phase() == ImportPhase::Source,
+        "source-phase request metadata mismatch",
+    )?;
+    ensure(
+        matches!(
+            module
+                .imports()
+                .first()
+                .map(rs_quickjs::ModuleImport::import_name),
+            Some(ModuleImportName::Source)
+        ),
+        "source-phase import metadata is missing",
+    )?;
+    ensure(
+        matches!(
+            module.exports().first(),
+            Some(ModuleExport::Source {
+                export_name,
+                request,
+            }) if export_name == "dependency" && request == "<module source>"
+        ),
+        "source-phase re-export metadata is missing",
+    )
+}
+
+#[test]
+fn links_source_phase_imports_without_evaluating_the_source_module() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(
+        "hostGetAbstractModuleSource",
+        rs_quickjs::HostOperation::GetAbstractModuleSource,
+    )?;
+    context.eval("var AbstractModuleSource = hostGetAbstractModuleSource();")?;
+    let mut loader = SourcePhaseLoader;
+    let value = context.eval_module_named(
+        "main.js",
+        "import source dependency from '<module source>'; dependency instanceof AbstractModuleSource;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Bool(true),
+        "source-phase import did not expose an AbstractModuleSource instance",
+    )
+}
+
+#[test]
 fn enforces_module_specific_early_errors() -> TestResult {
     let runtime = Runtime::new();
     let duplicate = runtime.compile_module_named(
@@ -649,6 +709,17 @@ impl ModuleLoader for MapLoader {
             .cloned()
             .ok_or_else(|| Error::runtime(format!("missing test module '{request}'")))?;
         Ok(ModuleSource::new(request, source))
+    }
+}
+
+struct SourcePhaseLoader;
+
+impl ModuleLoader for SourcePhaseLoader {
+    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+        Ok(
+            ModuleSource::new(request, "globalThis.sourceModuleEvaluated = true;")
+                .with_module_source_class_name("Module"),
+        )
     }
 }
 

@@ -50,6 +50,7 @@ pub type DynamicModuleRequest = ModuleRequest;
 pub struct ModuleSource {
     specifier: String,
     source: String,
+    module_source_class_name: Option<String>,
 }
 
 impl ModuleSource {
@@ -58,7 +59,16 @@ impl ModuleSource {
         Self {
             specifier: specifier.into(),
             source: source.into(),
+            module_source_class_name: None,
         }
+    }
+
+    /// Marks this loader result as having a host-provided source-phase
+    /// representation with the supplied `@@toStringTag` class name.
+    #[must_use]
+    pub fn with_module_source_class_name(mut self, class_name: impl Into<String>) -> Self {
+        self.module_source_class_name = Some(class_name.into());
+        self
     }
 
     #[must_use]
@@ -69,6 +79,11 @@ impl ModuleSource {
     #[must_use]
     pub const fn source(&self) -> &str {
         self.source.as_str()
+    }
+
+    #[must_use]
+    pub fn module_source_class_name(&self) -> Option<&str> {
+        self.module_source_class_name.as_deref()
     }
 }
 
@@ -108,6 +123,7 @@ pub trait ModuleLoader {
 pub enum ModuleImportName {
     Name(String),
     Namespace,
+    Source,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -177,6 +193,10 @@ pub enum ModuleExport {
         request: String,
     },
     DeferredNamespace {
+        export_name: String,
+        request: String,
+    },
+    Source {
         export_name: String,
         request: String,
     },

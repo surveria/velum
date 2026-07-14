@@ -9,6 +9,8 @@ const MODULE_TYPE_ATTRIBUTE: &str = "type";
 const JSON_MODULE_TYPE: &str = "json";
 const TEXT_MODULE_TYPE: &str = "text";
 const BYTES_MODULE_TYPE: &str = "bytes";
+const MODULE_SOURCE_SPECIFIER: &str = "<module source>";
+const MODULE_SOURCE_CLASS_NAME: &str = "Module";
 
 #[derive(Clone)]
 pub struct Test262ModuleLoader {
@@ -63,6 +65,10 @@ impl Test262ModuleLoader {
         referrer: &str,
         request: &ModuleRequest,
     ) -> rs_quickjs::Result<ModuleSource> {
+        if request.specifier() == MODULE_SOURCE_SPECIFIER {
+            return Ok(ModuleSource::new(MODULE_SOURCE_SPECIFIER, "")
+                .with_module_source_class_name(MODULE_SOURCE_CLASS_NAME));
+        }
         let Some(module_type) = Self::module_type(request) else {
             return self.load_source(referrer, request.specifier());
         };

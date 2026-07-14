@@ -24,6 +24,10 @@ impl ModuleRecord {
         &self.deferred_namespace
     }
 
+    pub(in crate::runtime) const fn module_source(&self) -> Option<&Value> {
+        self.module_source.as_ref()
+    }
+
     pub(in crate::runtime) const fn import_meta(&self) -> Option<&Value> {
         self.import_meta.as_ref()
     }
@@ -249,9 +253,7 @@ impl Context {
                     }
                     result
                 }
-                ImportPhase::Source => Err(Error::runtime(
-                    "source-phase static module evaluation is unavailable",
-                )),
+                ImportPhase::Source => Ok(Value::Undefined),
             };
             result?;
         }
@@ -391,6 +393,7 @@ impl Context {
                 scope: Some(scope),
                 namespace,
                 deferred_namespace,
+                module_source: pending.module_source,
                 import_meta: pending.import_meta,
                 state: EvaluationState::Pending,
                 evaluation_error: None,

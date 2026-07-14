@@ -467,10 +467,7 @@ impl Context {
         let Some(function) = self.optional_descriptor_value(descriptor, property)? else {
             return Ok(None);
         };
-        if !matches!(
-            function,
-            Value::Undefined | Value::Function(_) | Value::NativeFunction(_)
-        ) {
+        if function != Value::Undefined && !self.semantic_is_callable(&function)? {
             return Err(Error::type_error(format!(
                 "property descriptor field '{property}' must be callable or undefined"
             )));
