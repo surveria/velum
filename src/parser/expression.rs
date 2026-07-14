@@ -149,6 +149,13 @@ impl Parser {
         self.call_suffix(expr)
     }
 
+    pub(super) fn left_hand_side_expression(&mut self) -> Result<Expression> {
+        if self.match_kind(&TokenKind::New) {
+            return self.new_expr();
+        }
+        self.call()
+    }
+
     fn call_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
         let mut has_optional_chain = false;
         loop {

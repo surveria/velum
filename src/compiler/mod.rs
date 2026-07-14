@@ -474,7 +474,7 @@ impl<'a> BytecodeCompiler<'a> {
                     &class.fields,
                     FunctionCompileMode::new(crate::syntax::FunctionKind::Ordinary, true),
                     self.layout,
-                    None,
+                    self.source_text(self.current_span),
                 )?,
                 members: members.into(),
                 fields: fields.into(),

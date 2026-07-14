@@ -367,6 +367,24 @@ fn exposes_method_metadata() -> TestResult {
     )
 }
 
+#[test]
+fn does_not_optimize_class_constructors_as_numeric_comparators() -> TestResult {
+    eval_is_42(
+        r#"
+        class NumericComparator {
+            constructor(left, right) { return left - right; }
+        }
+        let rejected = false;
+        try {
+            [2, 1].sort(NumericComparator);
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        rejected ? 42 : 0
+        "#,
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

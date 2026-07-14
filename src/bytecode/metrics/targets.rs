@@ -22,6 +22,7 @@ impl BytecodeAssignmentTarget {
                 .metrics()
                 .combine(property.metrics())
                 .combine(BytecodeMetrics::property_operands(1)),
+            Self::SuperProperty { property, .. } => property.metrics(),
         }
     }
 }

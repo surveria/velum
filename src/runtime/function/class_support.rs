@@ -364,6 +364,10 @@ impl Context {
         })
     }
 
+    pub(in crate::runtime) fn is_class_constructor(&self, id: FunctionId) -> Result<bool> {
+        Ok(self.function(id)?.class_constructor.is_class())
+    }
+
     /// Defines the class instance fields on a freshly created object with
     /// `this` bound to it while initializers run, in declaration order.
     pub(in crate::runtime) fn initialize_class_fields(

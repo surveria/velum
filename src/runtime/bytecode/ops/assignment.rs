@@ -59,6 +59,12 @@ pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
         object: Value,
         name: PrivateNameId,
     },
+    SuperProperty {
+        base: Value,
+        receiver: Value,
+        property: DynamicPropertyKey,
+        strict: bool,
+    },
 }
 
 impl BytecodeAssignmentReference {
@@ -101,6 +107,12 @@ impl BytecodeAssignmentReference {
                 context.get_cached_dynamic_property_value(object, &property, *access)
             }
             Self::PrivateProperty { object, name } => context.read_private_slot(object, name),
+            Self::SuperProperty {
+                base,
+                receiver,
+                property,
+                ..
+            } => context.get_super_property(base, receiver, property.lookup()),
         }
     }
 
@@ -158,6 +170,18 @@ impl BytecodeAssignmentReference {
             Self::PrivateProperty { object, name } => {
                 context.write_private_slot(object, name, value)
             }
+            Self::SuperProperty {
+                base,
+                receiver,
+                property,
+                strict,
+            } => context.set_super_property_parts(
+                base,
+                receiver,
+                &mut property.clone(),
+                value,
+                *strict,
+            ),
         }
     }
 
@@ -175,6 +199,7 @@ impl BytecodeAssignmentReference {
                 property_value,
                 ..
             } => vec![object, property_value],
+            Self::SuperProperty { base, receiver, .. } => vec![base, receiver],
         }
     }
 }
@@ -592,6 +617,9 @@ impl Context {
                 let name = self.resolve_private_name(property)?;
                 Ok(BytecodeAssignmentReference::PrivateProperty { object, name })
             }
+            BytecodeAssignmentTarget::SuperProperty { property, strict } => {
+                self.eval_super_assignment_reference(property, *strict)
+            }
         }
     }
 
@@ -653,6 +681,9 @@ impl Context {
                 let name = self.resolve_private_name(property)?;
                 self.write_private_slot(&object, &name, value)
             }
+            BytecodeAssignmentTarget::SuperProperty { property, strict } => self
+                .eval_super_assignment_reference(property, *strict)?
+                .set(self, value),
         }
     }
 }

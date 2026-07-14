@@ -129,7 +129,7 @@ impl Parser {
             .map(|name| self.static_binding(name))
             .transpose()?;
         let heritage = if self.match_kind(&TokenKind::Extends) {
-            Some(self.call()?)
+            Some(self.left_hand_side_expression()?)
         } else {
             None
         };

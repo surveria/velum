@@ -87,6 +87,21 @@ fn preserves_retained_dynamic_function_source() -> TestResult {
 }
 
 #[test]
+fn retains_exact_class_source_without_parentheses() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let anonymous = (class {});
+        class /* marker */ Named {}
+        anonymous.toString() === "class {}" &&
+            Named.toString() === "class /* marker */ Named {}" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_non_callable_receivers() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

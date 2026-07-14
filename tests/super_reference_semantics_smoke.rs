@@ -124,6 +124,21 @@ fn super_constructor_is_resolved_after_argument_evaluation() -> TestResult {
 }
 
 #[test]
+fn super_constructor_reference_is_prepared_before_arguments() -> TestResult {
+    expect_true(
+        r#"
+        class Base { constructor(value) { this.value = value; } }
+        class Derived extends Base {
+            constructor() {
+                super((Object.setPrototypeOf(Derived, null), 42));
+            }
+        }
+        new Derived().value === 42
+        "#,
+    )
+}
+
+#[test]
 fn constructor_arrows_resolve_super_properties_from_the_instance_prototype() -> TestResult {
     expect_true(
         r"
@@ -158,7 +173,7 @@ fn derived_native_construction_uses_the_new_target_prototype() -> TestResult {
 }
 
 #[test]
-fn deleting_super_properties_throws_before_reference_preparation() -> TestResult {
+fn deleting_computed_super_properties_evaluates_the_key_before_throwing() -> TestResult {
     expect_true(
         r#"
         var keyEvaluations = 0;
@@ -167,13 +182,46 @@ fn deleting_super_properties_throws_before_reference_preparation() -> TestResult
                 try {
                     delete super[(keyEvaluations += 1, "value")];
                 } catch (error) {
-                    return error instanceof ReferenceError && keyEvaluations === 0;
+                    return error instanceof ReferenceError && keyEvaluations === 1;
                 }
                 return false;
             }
         };
         Object.setPrototypeOf(object, null);
         object.method()
+        "#,
+    )
+}
+
+#[test]
+fn destructuring_and_for_of_assign_through_super_references() -> TestResult {
+    expect_true(
+        r#"
+        var writes = [];
+        var base = {
+            set first(value) { writes.push("first:" + value); },
+            set second(value) { writes.push("second:" + value); }
+        };
+        var object = {
+            __proto__: base,
+            assign() {
+                [super.first, super["second"]] = [1, 2];
+                for (super.first of [3, 4]) {}
+            }
+        };
+        object.assign();
+        writes.join(",") === "first:1,second:2,first:3,first:4"
+        "#,
+    )
+}
+
+#[test]
+fn class_heritage_accepts_new_expressions() -> TestResult {
+    expect_true(
+        r#"
+        class Base {}
+        class Derived extends new Proxy(Base, {}) {}
+        new Derived() instanceof Base
         "#,
     )
 }

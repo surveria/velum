@@ -376,6 +376,10 @@ pub enum BytecodeAssignmentTarget {
         object: BytecodeBlock,
         property: BytecodePrivateName,
     },
+    SuperProperty {
+        property: BytecodeSuperProperty,
+        strict: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -487,7 +491,7 @@ pub enum BytecodeInstruction {
         property: BytecodeDynamicProperty,
         strict: bool,
     },
-    DeleteSuperProperty,
+    DeleteSuperProperty(Option<BytecodeBlock>),
     DeleteValue,
     UpdateBinding {
         name: BytecodeBinding,
@@ -713,6 +717,7 @@ pub enum BytecodeInstruction {
     CreateClass {
         class: Rc<BytecodeClass>,
     },
+    PrepareSuperConstructor,
     CallSuper {
         arg_count: usize,
     },
