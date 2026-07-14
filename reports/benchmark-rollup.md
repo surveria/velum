@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260714T030348Z.md`
-- Task: PR #621: runtime: complete expression and class Test262 residuals
-- Performance: 5.29x (4/5 >1.00x) (from `rsqjs-test-report-20260714T030348Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T030348Z.md`)
+- `rsqjs-test-report-20260714T042900Z.md`
+- Task: PR #622: runtime: complete binding and legacy expression residuals
+- Performance: 5.39x (4/5 >1.00x) (from `rsqjs-test-report-20260714T042900Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T042900Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 101821 passed / 757 failed (99.26%) (from `rsqjs-test-report-20260714T030348Z.md`)
+- Full Test262: 101909 passed / 669 failed (99.35%) (from `rsqjs-test-report-20260714T042900Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -562,3 +562,4 @@ Latest report:
 | `20260714T005158Z` `a3597a9` PR #619: runtime: complete Annex B IsHTMLDDA residual semantics | 5.27x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101705 passed / 873 failed (99.15%) |
 | `20260714T020123Z` `e5d6492` PR #620: runtime: complete staging runtime residual batch | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101760 passed / 818 failed (99.20%) |
 | `20260714T030348Z` `fb77830` PR #621: runtime: complete expression and class Test262 residuals | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101821 passed / 757 failed (99.26%) |
+| `20260714T042900Z` `3935e3e` PR #622: runtime: complete binding and legacy expression residuals | 5.39x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 101909 passed / 669 failed (99.35%) |
