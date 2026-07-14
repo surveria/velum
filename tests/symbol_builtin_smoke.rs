@@ -28,6 +28,8 @@ typeof Symbol === "function" &&
     emptyDescription.description === undefined &&
     first.toString() === "Symbol(slot)" &&
     boxed.toString() === "Symbol(slot)" &&
+    Object.prototype.toString.call(first) === "[object Symbol]" &&
+    Object.prototype.toString.call(boxed) === "[object Symbol]" &&
     first.valueOf() === first &&
     boxed.valueOf() === first &&
     Object(first).valueOf() === first &&

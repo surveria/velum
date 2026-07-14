@@ -32,15 +32,24 @@ impl Context {
     ) -> Result<Value> {
         let this_id = self.collection_from_this(this_value, CollectionKind::Set)?;
         let record = self.get_set_record(&Self::set_first_arg(&args))?;
+        let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
         let (result, result_id) = self.new_set_object()?;
         for item in self.set_items(this_id)? {
             self.collection_set(result_id, item.clone(), item)?;
         }
-        for key in self.set_record_keys(&record)? {
+        loop {
             self.step()?;
-            self.collection_set(result_id, key.clone(), key)?;
+            match self.iterator_step(&mut source)? {
+                IteratorStep::Value(key) => {
+                    self.collection_set(result_id, key.clone(), key)?;
+                }
+                IteratorStep::Done => return Ok(result),
+                IteratorStep::Abrupt(completion) => {
+                    completion.into_result()?;
+                    return Ok(result);
+                }
+            }
         }
-        Ok(result)
     }
 
     pub(in crate::runtime::native) fn eval_set_intersection(
@@ -52,17 +61,38 @@ impl Context {
         let record = self.get_set_record(&Self::set_first_arg(&args))?;
         let (result, result_id) = self.new_set_object()?;
         if Self::set_size_as_f64(self.collection_len(this_id)?) <= record.size {
-            for item in self.set_items(this_id)? {
-                self.step()?;
-                if self.set_record_has(&record, &item)? {
-                    self.collection_set(result_id, item.clone(), item)?;
+            self.with_collection_cursor_pin(this_id, |context| {
+                let mut cursor = 0usize;
+                while let Some((index, item, _value)) =
+                    context.collection_entry_at_or_after(this_id, cursor)?
+                {
+                    cursor = index
+                        .checked_add(1)
+                        .ok_or_else(|| Error::limit("Set intersection cursor overflowed"))?;
+                    context.step()?;
+                    if context.set_record_has(&record, &item)? {
+                        context.collection_set(result_id, item.clone(), item)?;
+                    }
                 }
-            }
+                Ok(())
+            })?;
         } else {
-            for key in self.set_record_keys(&record)? {
+            let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
+            loop {
                 self.step()?;
-                if self.collection_has(this_id, &key)? && !self.collection_has(result_id, &key)? {
-                    self.collection_set(result_id, key.clone(), key)?;
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(key)
+                        if self.collection_has(this_id, &key)?
+                            && !self.collection_has(result_id, &key)? =>
+                    {
+                        self.collection_set(result_id, key.clone(), key)?;
+                    }
+                    IteratorStep::Value(_) => {}
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
+                        completion.into_result()?;
+                        break;
+                    }
                 }
             }
         }
@@ -106,19 +136,28 @@ impl Context {
     ) -> Result<Value> {
         let this_id = self.collection_from_this(this_value, CollectionKind::Set)?;
         let record = self.get_set_record(&Self::set_first_arg(&args))?;
+        let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
         let (result, result_id) = self.new_set_object()?;
         for item in self.set_items(this_id)? {
             self.collection_set(result_id, item.clone(), item)?;
         }
-        for key in self.set_record_keys(&record)? {
+        loop {
             self.step()?;
-            if self.collection_has(this_id, &key)? {
-                self.collection_delete(result_id, &key)?;
-            } else if !self.collection_has(result_id, &key)? {
-                self.collection_set(result_id, key.clone(), key)?;
+            match self.iterator_step(&mut source)? {
+                IteratorStep::Value(key) if self.collection_has(this_id, &key)? => {
+                    self.collection_delete(result_id, &key)?;
+                }
+                IteratorStep::Value(key) if !self.collection_has(result_id, &key)? => {
+                    self.collection_set(result_id, key.clone(), key)?;
+                }
+                IteratorStep::Value(_) => {}
+                IteratorStep::Done => return Ok(result),
+                IteratorStep::Abrupt(completion) => {
+                    completion.into_result()?;
+                    return Ok(result);
+                }
             }
         }
-        Ok(result)
     }
 
     pub(in crate::runtime::native) fn eval_set_is_subset_of(

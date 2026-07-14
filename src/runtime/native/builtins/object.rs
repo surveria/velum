@@ -427,15 +427,15 @@ impl Context {
             return Err(Error::type_error("property descriptor must be an object"));
         }
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        let enumerable = self.optional_descriptor_enumerable(value)?;
+        let configurable = self.optional_descriptor_configurable(value)?;
+        let data_value = self.optional_descriptor_value(value, DESCRIPTOR_VALUE_PROPERTY)?;
+        roots.add_values(data_value.iter())?;
+        let writable = self.optional_descriptor_writable(value)?;
         let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;
         roots.add_values(get.iter())?;
         let set = self.optional_descriptor_accessor(value, DESCRIPTOR_SET_PROPERTY)?;
         roots.add_values(set.iter())?;
-        let data_value = self.optional_descriptor_value(value, DESCRIPTOR_VALUE_PROPERTY)?;
-        roots.add_values(data_value.iter())?;
-        let writable = self.optional_descriptor_writable(value)?;
-        let enumerable = self.optional_descriptor_enumerable(value)?;
-        let configurable = self.optional_descriptor_configurable(value)?;
         if get.is_some() || set.is_some() {
             if data_value.is_some() || writable.is_some() {
                 return Err(Error::type_error(

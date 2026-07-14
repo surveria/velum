@@ -31,6 +31,8 @@ const TAG_FUNCTION: &str = "Function";
 const TAG_ERROR: &str = "Error";
 const TAG_BOOLEAN: &str = "Boolean";
 const TAG_NUMBER: &str = "Number";
+const TAG_BIGINT: &str = "BigInt";
+const TAG_SYMBOL: &str = "Symbol";
 const TAG_STRING: &str = "String";
 const TAG_DATE: &str = "Date";
 const TAG_REGEXP: &str = "RegExp";
@@ -101,7 +103,8 @@ impl Context {
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => TAG_FUNCTION,
             Value::Bool(_) => TAG_BOOLEAN,
             Value::Number(_) => TAG_NUMBER,
-            Value::BigInt(_) | Value::Symbol(_) => TAG_OBJECT,
+            Value::BigInt(_) => TAG_BIGINT,
+            Value::Symbol(_) => TAG_SYMBOL,
             Value::String(_) => TAG_STRING,
         };
         let object = self.object_to_object(this_value)?;
@@ -469,9 +472,9 @@ impl Context {
         match self.objects.primitive_value(id)? {
             Some(ObjectPrimitiveValue::Bool(_)) => Ok(TAG_BOOLEAN),
             Some(ObjectPrimitiveValue::Number(_)) => Ok(TAG_NUMBER),
-            Some(ObjectPrimitiveValue::BigInt(_) | ObjectPrimitiveValue::Symbol(_)) | None => {
-                Ok(TAG_OBJECT)
-            }
+            Some(ObjectPrimitiveValue::BigInt(_)) => Ok(TAG_BIGINT),
+            Some(ObjectPrimitiveValue::Symbol(_)) => Ok(TAG_SYMBOL),
+            None => Ok(TAG_OBJECT),
         }
     }
 
