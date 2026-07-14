@@ -317,7 +317,9 @@ impl Context {
         };
         let length_tracking = buffer.is_resizable() && requested_length.is_none();
         let length = if let Some(requested) = requested_length {
-            let required = self.typed_array_byte_length(element_kind, requested)?;
+            let required = requested.checked_mul(element_size).ok_or_else(|| {
+                Error::exception(ErrorName::RangeError, TYPED_ARRAY_BUFFER_RANGE_ERROR)
+            })?;
             if required > available {
                 return Err(Error::exception(
                     ErrorName::RangeError,
@@ -484,10 +486,10 @@ impl Context {
                 TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
             ));
         }
-        if length > self.limits.max_object_properties {
+        if length > self.limits.max_byte_buffer_len {
             return Err(Error::limit(format!(
                 "typed array byte length exceeded {}",
-                self.limits.max_object_properties
+                self.limits.max_byte_buffer_len
             )));
         }
         Ok(())

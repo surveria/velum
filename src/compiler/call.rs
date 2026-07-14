@@ -5,7 +5,9 @@ use crate::{
     value::Value,
 };
 
-use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, has_spread_arg};
+use super::{
+    BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, InstructionIndex, has_spread_arg,
+};
 
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_tail_call_expr(&mut self, expr: &Expression) -> Result<bool> {
@@ -114,13 +116,7 @@ impl BytecodeCompiler<'_> {
                     native: NativeCallTarget::from_property_name(property.as_str()),
                     arg_count: args.len(),
                 });
-                let end_jump = self.emit_jump();
-                let nullish_address = self.current_address();
-                self.patch_jump(nullish_jump, nullish_address)?;
-                self.emit(BytecodeInstruction::Pop);
-                self.emit(BytecodeInstruction::PushUndefined);
-                let end_address = self.current_address();
-                self.patch_jump(end_jump, end_address)
+                self.finish_optional_call(nullish_jump)
             }
             Expr::ComputedMember {
                 object,
@@ -218,13 +214,7 @@ impl BytecodeCompiler<'_> {
                 self.emit(BytecodeInstruction::CallStaticMemberSpread {
                     property: Self::compile_property(property, *access),
                 });
-                let end_jump = self.emit_jump();
-                let nullish_address = self.current_address();
-                self.patch_jump(nullish_jump, nullish_address)?;
-                self.emit(BytecodeInstruction::Pop);
-                self.emit(BytecodeInstruction::PushUndefined);
-                let end_address = self.current_address();
-                self.patch_jump(end_jump, end_address)
+                self.finish_optional_call(nullish_jump)
             }
             Expr::ComputedMember {
                 object,
@@ -275,6 +265,16 @@ impl BytecodeCompiler<'_> {
                 Ok(())
             }
         }
+    }
+
+    fn finish_optional_call(&mut self, nullish_jump: InstructionIndex) -> Result<()> {
+        let end_jump = self.emit_jump();
+        let nullish_address = self.current_address();
+        self.patch_jump(nullish_jump, nullish_address)?;
+        self.emit(BytecodeInstruction::Pop);
+        self.emit(BytecodeInstruction::PushUndefined);
+        let end_address = self.current_address();
+        self.patch_jump(end_jump, end_address)
     }
 
     pub(super) fn compile_args(&mut self, args: &[Expression]) -> Result<()> {

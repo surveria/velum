@@ -8,6 +8,7 @@ const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
 const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
 const DEFAULT_MAX_STRING_LEN: usize = 65_536;
 const DEFAULT_MAX_BIGINT_BITS: usize = 8_388_608;
+const DEFAULT_MAX_BYTE_BUFFER_LEN: usize = 65_536;
 const DEFAULT_MAX_BINDINGS: usize = 4_096;
 const DEFAULT_MAX_OBJECTS: usize = 4_096;
 const DEFAULT_MAX_OBJECT_PROPERTIES: usize = 4_096;
@@ -21,6 +22,8 @@ pub struct RuntimeLimits {
     pub max_string_len: usize,
     /// Maximum bit length of a materialized `BigInt` result.
     pub max_bigint_bits: usize,
+    /// Maximum byte length of one `ArrayBuffer` or `SharedArrayBuffer`.
+    pub max_byte_buffer_len: usize,
     pub max_bindings: usize,
     pub max_objects: usize,
     pub max_object_properties: usize,
@@ -36,6 +39,7 @@ impl Default for RuntimeLimits {
             max_runtime_steps: DEFAULT_MAX_RUNTIME_STEPS,
             max_string_len: DEFAULT_MAX_STRING_LEN,
             max_bigint_bits: DEFAULT_MAX_BIGINT_BITS,
+            max_byte_buffer_len: DEFAULT_MAX_BYTE_BUFFER_LEN,
             max_bindings: DEFAULT_MAX_BINDINGS,
             max_objects: DEFAULT_MAX_OBJECTS,
             max_object_properties: DEFAULT_MAX_OBJECT_PROPERTIES,

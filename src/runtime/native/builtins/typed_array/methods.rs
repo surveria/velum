@@ -166,7 +166,7 @@ impl Context {
             return Some(Err(error));
         }
         let result = match kind {
-            TypedArrayFunctionKind::At => self.eval_direct_array_at(args, this_value),
+            TypedArrayFunctionKind::At => self.eval_typed_array_at(args, this_value),
             TypedArrayFunctionKind::Fill => self.eval_typed_array_fill(args, this_value),
             TypedArrayFunctionKind::Join => match self.typed_array_receiver(this_value) {
                 Ok((_, view)) => {
@@ -187,6 +187,26 @@ impl Context {
             }
         };
         Some(result)
+    }
+
+    fn eval_typed_array_at(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
+        let (id, view) = self.typed_array_receiver(this_value)?;
+        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
+        let length = view.length();
+        let length_number = Self::typed_array_usize_number(length)?;
+        let target = if relative >= 0.0 {
+            relative
+        } else {
+            length_number + relative
+        };
+        if target < 0.0 || target >= length_number {
+            return Ok(Value::Undefined);
+        }
+        let index = Self::finite_nonnegative_integer_to_usize(target, TYPED_ARRAY_LENGTH_ERROR)?;
+        Ok(self
+            .objects
+            .typed_array_value(id, index)?
+            .unwrap_or(Value::Undefined))
     }
 
     pub(super) fn typed_array_iterable_values(

@@ -153,42 +153,63 @@ impl Context {
             instruction @ BytecodeInstruction::ScopedBlock { .. } => {
                 self.eval_bytecode_scoped_block_dispatch(state, instruction, next)
             }
-            BytecodeInstruction::Jump(target) => {
-                state.pc = *target;
-                Ok(None)
-            }
-            BytecodeInstruction::JumpIfFalse(target) => {
-                let value = state.stack.pop()?;
-                let condition = to_boolean(self, &value)?;
-                state.pc = if condition { next } else { *target };
-                Ok(None)
-            }
-            BytecodeInstruction::JumpIfFalseKeep(target) => {
-                let value = state.stack.peek()?;
-                let condition = to_boolean(self, value)?;
-                state.pc = if condition { next } else { *target };
-                Ok(None)
-            }
-            BytecodeInstruction::JumpIfTrueKeep(target) => {
-                let value = state.stack.peek()?;
-                let condition = to_boolean(self, value)?;
-                state.pc = if condition { *target } else { next };
-                Ok(None)
-            }
-            BytecodeInstruction::JumpIfNullishKeep(target) => {
-                let value = state.stack.peek()?;
-                state.pc = if matches!(value, Value::Undefined | Value::Null) {
-                    *target
-                } else {
-                    next
-                };
-                Ok(None)
+            instruction @ (BytecodeInstruction::Jump(_)
+            | BytecodeInstruction::JumpIfFalse(_)
+            | BytecodeInstruction::JumpIfFalseKeep(_)
+            | BytecodeInstruction::JumpIfTrueKeep(_)
+            | BytecodeInstruction::JumpIfNullishKeep(_)) => {
+                self.eval_bytecode_jump_instruction(state, instruction, next)
             }
             BytecodeInstruction::Complete(completion) => {
                 state.complete(completion.clone()).map(Some)
             }
             _ => Err(Error::runtime("bytecode control instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_jump_instruction(
+        &self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        state.pc = match instruction {
+            BytecodeInstruction::Jump(target) => *target,
+            BytecodeInstruction::JumpIfFalse(target) => {
+                let value = state.stack.pop()?;
+                if to_boolean(self, &value)? {
+                    next
+                } else {
+                    *target
+                }
+            }
+            BytecodeInstruction::JumpIfFalseKeep(target) => {
+                let value = state.stack.peek()?;
+                if to_boolean(self, value)? {
+                    next
+                } else {
+                    *target
+                }
+            }
+            BytecodeInstruction::JumpIfTrueKeep(target) => {
+                let value = state.stack.peek()?;
+                if to_boolean(self, value)? {
+                    *target
+                } else {
+                    next
+                }
+            }
+            BytecodeInstruction::JumpIfNullishKeep(target) => {
+                let value = state.stack.peek()?;
+                if matches!(value, Value::Undefined | Value::Null) {
+                    *target
+                } else {
+                    next
+                }
+            }
+            _ => return Err(Error::runtime("bytecode jump instruction mismatch")),
+        };
+        Ok(None)
     }
 
     fn eval_bytecode_scoped_block_dispatch(

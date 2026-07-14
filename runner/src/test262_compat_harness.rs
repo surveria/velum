@@ -17,7 +17,16 @@ var $262 = {
         monotonicNow: __rsqjsTest262AgentMonotonicNow
     },
     createRealm: function createRealm() {
-        return { global: __rsqjsTest262CreateRealm() };
+        var realmGlobal = __rsqjsTest262CreateRealm();
+        realmGlobal.$262 = {
+            global: realmGlobal,
+            detachArrayBuffer: $262.detachArrayBuffer,
+            IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
+            agent: $262.agent,
+            createRealm: $262.createRealm,
+            evalScript: realmGlobal.eval
+        };
+        return { global: realmGlobal };
     },
     evalScript: function evalScript(source) {
         return (0, eval)(source);
