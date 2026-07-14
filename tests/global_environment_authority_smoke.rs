@@ -95,6 +95,19 @@ fn delete_observes_global_property_configurability() -> TestResult {
     ensure_equal(&value, &OwnedValue::Number(42.0))
 }
 
+#[test]
+fn deleting_a_lazy_builtin_does_not_extend_the_global_object() -> TestResult {
+    let source = r#"
+        Object.preventExtensions(globalThis);
+        let deleted = delete Function;
+        deleted && typeof Function === "undefined" &&
+            Array.isArray(Object.getOwnPropertyNames(globalThis)) ? 42 : 0
+    "#;
+    let mut vm = Vm::new();
+    let value = vm.eval_owned(source)?;
+    ensure_equal(&value, &OwnedValue::Number(42.0))
+}
+
 fn ensure_equal(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
     if actual == expected {
         return Ok(());

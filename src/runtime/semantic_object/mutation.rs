@@ -224,12 +224,16 @@ impl Context {
         let deletion = match object_ref.value {
             Value::Object(id) => {
                 self.evaluate_deferred_module_namespace_property(*id, property)?;
-                if self.is_global_object_id(*id)
-                    && self
-                        .global_object_property_descriptor(*id, property)?
-                        .is_some_and(|descriptor| !descriptor.configurable().is_yes())
-                {
-                    return Ok(Some(SemanticPropertyDelete::Resolved(false)));
+                if self.is_global_object_id(*id) {
+                    if let Some(descriptor) = self.objects.own_property_descriptor(*id, property)? {
+                        if !descriptor.configurable().is_yes() {
+                            return Ok(Some(SemanticPropertyDelete::Resolved(false)));
+                        }
+                    } else if let Some(deleted) =
+                        self.delete_virtual_global_object_property(*id, property)?
+                    {
+                        return Ok(Some(SemanticPropertyDelete::Resolved(deleted)));
+                    }
                 }
                 if self.objects.is_proxy(*id) {
                     SemanticPropertyDelete::Resolved(self.proxy_delete(*id, property)?)

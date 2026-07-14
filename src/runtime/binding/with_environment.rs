@@ -15,15 +15,33 @@ const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct WithBindingReference {
     object: Value,
+    provides_implicit_this: bool,
 }
 
 impl WithBindingReference {
-    pub(in crate::runtime) const fn new(object: Value) -> Self {
-        Self { object }
+    const fn with_object(object: Value) -> Self {
+        Self {
+            object,
+            provides_implicit_this: true,
+        }
+    }
+
+    const fn eval_var(object: Value) -> Self {
+        Self {
+            object,
+            provides_implicit_this: false,
+        }
     }
 
     pub(in crate::runtime) const fn object(&self) -> &Value {
         &self.object
+    }
+
+    pub(in crate::runtime) fn call_this_value(&self) -> Value {
+        if self.provides_implicit_this {
+            return self.object.clone();
+        }
+        Value::Undefined
     }
 
     pub(in crate::runtime) fn get(
@@ -185,13 +203,13 @@ impl Context {
                 DynamicEnvironment::With(object) if remaining_with_environments > 0 => {
                     remaining_with_environments = remaining_with_environments.saturating_sub(1);
                     if self.with_object_has_binding(&object, binding.name().as_str())? {
-                        return Ok(Some(WithBindingReference::new(object)));
+                        return Ok(Some(WithBindingReference::with_object(object)));
                     }
                 }
                 DynamicEnvironment::EvalVar(object) if resolves_eval_var => {
                     let lookup = self.property_lookup(binding.name().as_str());
                     if self.has_property_value_with_lookup(&object, lookup)? {
-                        return Ok(Some(WithBindingReference::new(object)));
+                        return Ok(Some(WithBindingReference::eval_var(object)));
                     }
                 }
                 DynamicEnvironment::With(_) | DynamicEnvironment::EvalVar(_) => {}

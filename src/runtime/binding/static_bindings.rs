@@ -470,7 +470,30 @@ impl Context {
         &self,
         binding: &BytecodeBinding,
     ) -> Result<bool> {
+        if matches!(binding.operand(), BindingOperand::Global { .. }) {
+            let Some(cell) = self.get_binding_bytecode(binding)? else {
+                return Ok(false);
+            };
+            let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {
+                return Ok(false);
+            };
+            return Ok(self
+                .realm
+                .globals
+                .get(atom)
+                .is_some_and(|global| global.same_cell(&cell)));
+        }
         if binding.operand() != BindingOperand::Unresolved {
+            if matches!(binding.operand(), BindingOperand::Upvalue { .. })
+                && let Some(atom) = self.lookup_static_name_atom(binding.name().name())?
+                && let Some(location @ BindingLocation::Local { .. }) =
+                    self.resolve_binding_location(atom)
+                && self
+                    .binding_at_location(location)?
+                    .is_some_and(|cell| cell.kind() == DeclKind::Var)
+            {
+                return Ok(false);
+            }
             return Ok(true);
         }
         let Some(atom) = self.lookup_static_name_atom(binding.name().name())? else {

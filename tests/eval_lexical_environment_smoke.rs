@@ -193,6 +193,27 @@ fn annex_b_eval_preserves_existing_globals_after_separate_scripts() -> TestResul
 }
 
 #[test]
+fn nested_eval_closures_observe_deletable_var_bindings() -> TestResult {
+    expect_true(
+        r#"
+        function captureVarDelete() {
+            return eval("var value; () => delete value");
+        }
+        function captureFunctionDelete() {
+            return eval("function value() {} (() => delete value)");
+        }
+        function captureLetDelete() {
+            return eval("let value; () => delete value");
+        }
+        var deleteVar = captureVarDelete();
+        var deleteFunction = captureFunctionDelete();
+        deleteVar() && deleteVar() && deleteFunction() && deleteFunction() &&
+            captureLetDelete()() === false
+        "#,
+    )
+}
+
+#[test]
 fn configurable_eval_vars_do_not_block_later_global_lexicals() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

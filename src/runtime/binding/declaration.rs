@@ -496,7 +496,7 @@ impl Context {
                     Value::Undefined,
                     PropertyWritable::Yes,
                     PropertyEnumerable::Yes,
-                    PropertyConfigurable::No,
+                    PropertyConfigurable::Yes,
                 )?;
             }
             return Ok(());

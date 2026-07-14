@@ -565,7 +565,7 @@ impl Context {
     ) -> Result<CallReference> {
         if let Some(reference) = self.resolve_with_binding(callee)? {
             let function = reference.get(self, callee)?;
-            let this_value = reference.object().clone();
+            let this_value = reference.call_this_value();
             return self
                 .call_reference_from_value(callee, native, strict, function)
                 .map(|reference| reference.with_this(this_value));

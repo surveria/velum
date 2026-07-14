@@ -163,6 +163,39 @@ fn parameter_eval_var_environment_keeps_dynamic_scope_order() -> TestResult {
 }
 
 #[test]
+fn parameter_eval_var_bindings_do_not_supply_an_implicit_this() -> TestResult {
+    assert_script(
+        r#"
+        function evaluate(result = eval(`
+            function strictReceiver() {
+                "use strict";
+                return this;
+            }
+            with ({}) {
+                strictReceiver();
+            }
+        `)) {
+            return result;
+        }
+        evaluate() === undefined ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn parameter_eval_var_bindings_are_deletable() -> TestResult {
+    assert_script(
+        r#"
+        function capture(remove = eval("var value; () => delete value")) {
+            return remove;
+        }
+        var remove = capture();
+        remove() && remove() ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn direct_eval_parameter_arguments_conflicts_are_syntax_errors() -> TestResult {
     assert_script(
         r#"
