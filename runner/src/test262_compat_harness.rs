@@ -1,12 +1,14 @@
 use rs_quickjs::{Context, HostOperation};
 
 const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
+const COLLECT_GARBAGE_HOST_NAME: &str = "__rsqjsTest262CollectGarbage";
 const CREATE_REALM_HOST_NAME: &str = "__rsqjsTest262CreateRealm";
 const CREATE_IS_HTML_DDA_HOST_NAME: &str = "__rsqjsTest262CreateIsHTMLDDA";
 
 const HOST_SOURCE: &str = r"
 var $262 = {
     global: globalThis,
+    gc: __rsqjsTest262CollectGarbage,
     detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
     IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
     agent: {
@@ -20,6 +22,7 @@ var $262 = {
         var realmGlobal = __rsqjsTest262CreateRealm();
         realmGlobal.$262 = {
             global: realmGlobal,
+            gc: $262.gc,
             detachArrayBuffer: $262.detachArrayBuffer,
             IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
             agent: $262.agent,
@@ -201,6 +204,7 @@ pub fn source(name: &str) -> Option<&'static str> {
 }
 
 pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
+    context.register_host_operation(COLLECT_GARBAGE_HOST_NAME, HostOperation::CollectGarbage)?;
     context.register_host_operation(
         DETACH_ARRAY_BUFFER_HOST_NAME,
         HostOperation::DetachArrayBuffer,

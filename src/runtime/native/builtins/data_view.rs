@@ -71,6 +71,9 @@ impl Context {
         };
         let byte_offset =
             Self::length_to_usize(self.to_index(values.get(1))?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;
+        if buffer.is_detached() {
+            return Err(Error::type_error("DataView buffer is detached"));
+        }
         let Some(available) = buffer.byte_length().checked_sub(byte_offset) else {
             return Err(Error::exception(
                 ErrorName::RangeError,
@@ -83,6 +86,9 @@ impl Context {
         {
             let requested =
                 Self::length_to_usize(self.to_index(values.get(2))?, DATA_VIEW_LENGTH_LIMIT_ERROR)?;
+            if buffer.is_detached() {
+                return Err(Error::type_error("DataView buffer is detached"));
+            }
             if requested > available {
                 return Err(Error::exception(
                     ErrorName::RangeError,

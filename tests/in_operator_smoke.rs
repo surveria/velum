@@ -61,7 +61,9 @@ fn supports_in_operator_for_objects_and_arrays() -> TestResult {
 #[test]
 fn rejects_in_operator_for_non_object_rhs() -> TestResult {
     ensure_error_contains(r#""slot" in null"#, "operator 'in'")?;
-    ensure_error_contains(r#""slot" in 1"#, "operator 'in'")
+    ensure_error_contains(r#""slot" in 1"#, "operator 'in'")?;
+    ensure_error_contains(r#""length" in "text""#, "operator 'in'")?;
+    ensure_error_contains(r#""slot" in true"#, "operator 'in'")
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

@@ -379,6 +379,7 @@ impl Parser {
         loop {
             let start = self.current_span();
             let name = self.consume_identifier("expected label name")?;
+            self.validate_strict_identifier_reference(name.as_str())?;
             if (self.yield_identifier_is_reserved() || self.is_strict_mode())
                 && name.as_str() == super::YIELD_IDENTIFIER_NAME
             {

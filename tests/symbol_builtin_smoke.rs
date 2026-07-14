@@ -107,6 +107,29 @@ fn exposes_redefinable_symbol_to_primitive() -> TestResult {
     ensure_value(&value, &Value::Bool(true))
 }
 
+#[test]
+fn symbol_prototype_has_a_tag_and_boxed_symbols_do_not_use_string_special_case() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let descriptor = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);
+        let rejected = false;
+        try {
+            String(Object(Symbol("boxed")));
+        } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        descriptor.value === "Symbol" &&
+            descriptor.writable === false &&
+            descriptor.enumerable === false &&
+            descriptor.configurable === true &&
+            String(Symbol("primitive")) === "Symbol(primitive)" && rejected ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

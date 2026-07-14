@@ -85,6 +85,25 @@ fn computed_proto_object_literal_property_is_data_property() -> TestResult {
 }
 
 #[test]
+fn object_literal_data_properties_replace_prior_accessor_descriptors() -> TestResult {
+    let value = eval(
+        r#"
+        let object = {
+            get slot() { return 1; },
+            set slot(value) {},
+            slot: 42
+        };
+        let descriptor = Object.getOwnPropertyDescriptor(object, "slot");
+        descriptor.value === 42 && descriptor.writable && descriptor.enumerable &&
+            descriptor.configurable && descriptor.get === undefined &&
+            descriptor.set === undefined ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_computed_symbol_object_literal_property_names() -> TestResult {
     let value = eval(
         r#"

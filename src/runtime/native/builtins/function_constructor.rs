@@ -144,6 +144,9 @@ impl Context {
         kind: FunctionKind,
     ) -> Result<Value> {
         let source = self.function_constructor_source(args, kind)?;
+        self.check_string_len(&source.parameters)?;
+        self.compile(&source.parameters)
+            .map_err(dynamic_compilation_error)?;
         self.check_string_len(&source.compile)?;
         let script = self
             .compile(&source.compile)
@@ -425,6 +428,7 @@ impl Context {
 }
 
 struct GeneratedFunctionSource {
+    parameters: String,
     compile: String,
     display: String,
 }
@@ -436,7 +440,12 @@ fn generated_function_source(
 ) -> GeneratedFunctionSource {
     let display = function_source(params, body, kind, Some(GENERATED_FUNCTION_NAME));
     let compile = format!("({})", function_source(params, body, kind, None));
-    GeneratedFunctionSource { compile, display }
+    let parameters = format!("({})", function_source(params, "", kind, None));
+    GeneratedFunctionSource {
+        parameters,
+        compile,
+        display,
+    }
 }
 
 fn function_source(params: &str, body: &str, kind: FunctionKind, name: Option<&str>) -> String {

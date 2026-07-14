@@ -128,6 +128,35 @@ fn function_constructor_rejects_invalid_source() -> TestResult {
 }
 
 #[test]
+fn function_constructor_rejects_parameter_text_that_escapes_the_parameter_list() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let rejected = 0;
+        let cases = [
+            ["/*", "*/) {"],
+            ["//", ") {"],
+            ["a = `", "` ) {"],
+            [") { var x = function (", "} "],
+            ["x = function (", "}) {"]
+        ];
+        for (let entry of cases) {
+            try {
+                Function(entry[0], entry[1]);
+            } catch (error) {
+                if (error instanceof SyntaxError) rejected = rejected + 1;
+            }
+        }
+        rejected
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(5.0))
+}
+
+#[test]
 fn function_constructor_throws_catchable_syntax_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

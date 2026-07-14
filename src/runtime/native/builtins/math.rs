@@ -66,6 +66,20 @@ macro_rules! math_unary_method {
     };
 }
 
+fn accurate_atanh(value: f64) -> f64 {
+    if value == 0.0 || value.is_nan() {
+        return value;
+    }
+    let magnitude = value.abs();
+    let result = if magnitude < 0.5 {
+        let square = magnitude * magnitude;
+        0.5 * (2.0 * magnitude + 2.0 * square / (1.0 - magnitude)).ln_1p()
+    } else {
+        0.5 * (2.0 * magnitude / (1.0 - magnitude)).ln_1p()
+    };
+    result.copysign(value)
+}
+
 impl Context {
     pub(in crate::runtime::native) fn math_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(MATH_NAME) {
@@ -163,7 +177,7 @@ impl Context {
         Self::math_number(y.atan2(x))
     }
 
-    math_unary_method!(eval_math_atanh, eval_direct_math_atanh, f64::atanh);
+    math_unary_method!(eval_math_atanh, eval_direct_math_atanh, accurate_atanh);
     math_unary_method!(eval_math_cbrt, eval_direct_math_cbrt, f64::cbrt);
     math_unary_method!(eval_math_ceil, eval_direct_math_ceil, f64::ceil);
 

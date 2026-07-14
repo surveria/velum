@@ -175,6 +175,13 @@ impl Parser {
 fn is_strict_future_reserved_word(name: &str) -> bool {
     matches!(
         name,
-        "implements" | "interface" | "package" | "private" | "protected" | "public" | "static"
+        "implements"
+            | "interface"
+            | "let"
+            | "package"
+            | "private"
+            | "protected"
+            | "public"
+            | "static"
     )
 }

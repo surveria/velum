@@ -3,7 +3,55 @@ use rs_quickjs::{HostOperation, Runtime, Value, VmStorageKind};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 const DETACH_NAME: &str = "hostDetachArrayBuffer";
+const COLLECT_GARBAGE_NAME: &str = "hostCollectGarbage";
 const CREATE_IS_HTML_DDA_NAME: &str = "hostCreateIsHTMLDDA";
+
+#[test]
+fn collects_garbage_during_active_evaluation_without_losing_live_values() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(COLLECT_GARBAGE_NAME, HostOperation::CollectGarbage)?;
+    let value = context.eval(
+        "(function() { \
+             var live = { answer: 42 }; \
+             var discarded = { nested: [1, 2, 3] }; \
+             hostCollectGarbage(); \
+             return live.answer; \
+         })()",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected live value to survive host GC, got {value:?}").into())
+}
+
+#[test]
+fn host_gc_preserves_detached_buffer_constructor_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(COLLECT_GARBAGE_NAME, HostOperation::CollectGarbage)?;
+    context.register_host_operation(DETACH_NAME, HostOperation::DetachArrayBuffer)?;
+    let value = context.eval(
+        "(function() { \
+             var buffer = new ArrayBuffer(4096); \
+             var offset = { valueOf: function() { \
+                 hostDetachArrayBuffer(buffer); \
+                 hostCollectGarbage(); \
+                 return 2048; \
+             } }; \
+             try { \
+                 new DataView(buffer, offset); \
+             } catch (error) { \
+                 return error.constructor === TypeError && buffer.byteLength === 0 ? 42 : 0; \
+             } \
+             return 0; \
+         })()",
+    )?;
+    if value == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected detached DataView construction to throw TypeError, got {value:?}").into())
+}
 
 #[test]
 fn creates_callable_is_html_dda_host_exotics() -> TestResult {

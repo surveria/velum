@@ -393,7 +393,7 @@ pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
     })
 }
 
-const fn is_ecmascript_string_whitespace(ch: char) -> bool {
+pub(in crate::runtime) const fn is_ecmascript_string_whitespace(ch: char) -> bool {
     ch.is_whitespace() || ch == '\u{FEFF}'
 }
 
