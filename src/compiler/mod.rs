@@ -350,6 +350,12 @@ impl<'a> BytecodeCompiler<'a> {
         self.emit(BytecodeInstruction::JumpIfTrueKeep(BytecodeAddress::new(0)))
     }
 
+    fn emit_jump_if_nullish_keep(&mut self) -> InstructionIndex {
+        self.emit(BytecodeInstruction::JumpIfNullishKeep(
+            BytecodeAddress::new(0),
+        ))
+    }
+
     fn patch_jump(&mut self, index: InstructionIndex, target: BytecodeAddress) -> Result<()> {
         let instruction = self
             .instructions
@@ -358,7 +364,8 @@ impl<'a> BytecodeCompiler<'a> {
         if let BytecodeInstruction::Jump(address)
         | BytecodeInstruction::JumpIfFalse(address)
         | BytecodeInstruction::JumpIfFalseKeep(address)
-        | BytecodeInstruction::JumpIfTrueKeep(address) = instruction
+        | BytecodeInstruction::JumpIfTrueKeep(address)
+        | BytecodeInstruction::JumpIfNullishKeep(address) = instruction
         {
             *address = target;
             return Ok(());

@@ -70,8 +70,10 @@ impl Context {
             IteratorFunctionKind::HelperReturn(id) => self.eval_iterator_helper_return(id),
             IteratorFunctionKind::StaticNext(id) => self.eval_iterator_static_next(id),
             IteratorFunctionKind::StaticReturn(id) => self.eval_iterator_static_return(id),
-            IteratorFunctionKind::WrapNext(id) => self.eval_wrapped_iterator_next(id),
-            IteratorFunctionKind::WrapReturn(id) => self.eval_wrapped_iterator_return(id),
+            IteratorFunctionKind::WrapNext(id) => self.eval_wrapped_iterator_next(id, this_value),
+            IteratorFunctionKind::WrapReturn(id) => {
+                self.eval_wrapped_iterator_return(id, this_value)
+            }
         };
         Some(result)
     }

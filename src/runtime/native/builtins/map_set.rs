@@ -758,8 +758,21 @@ impl Context {
         &mut self,
         this_value: &Value,
     ) -> Result<CollectionIteratorId> {
-        if !matches!(this_value, Value::Object(_)) {
+        let Some(kind) = self.iterator_receiver_state_function_kind(this_value)? else {
             return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        };
+        let NativeFunctionKind::CollectionIteratorNext(iterator) = kind else {
+            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+        };
+        Ok(iterator)
+    }
+
+    pub(in crate::runtime::native) fn iterator_receiver_state_function_kind(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Option<NativeFunctionKind>> {
+        if !matches!(this_value, Value::Object(_)) {
+            return Ok(None);
         }
         let key = self.intern_property_key(COLLECTION_ITERATOR_STATE_PROPERTY)?;
         let property =
@@ -767,16 +780,12 @@ impl Context {
         let Some(OwnPropertyDescriptor::Data(descriptor)) =
             self.semantic_own_property_descriptor(this_value, &property)?
         else {
-            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+            return Ok(None);
         };
         let Value::NativeFunction(id) = descriptor.value() else {
-            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
+            return Ok(None);
         };
-        let NativeFunctionKind::CollectionIteratorNext(iterator) = self.native_function(id)?.kind()
-        else {
-            return Err(Error::type_error(COLLECTION_ITERATOR_RECEIVER_ERROR));
-        };
-        Ok(iterator)
+        Ok(Some(self.native_function(id)?.kind()))
     }
 }
 

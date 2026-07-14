@@ -5,10 +5,13 @@ use crate::{
         abstract_operations::{IteratorSource, IteratorStep},
         collections::{CollectionIteratorId, InnerIteratorState, IteratorHelperMode},
         control::Completion,
+        native::IteratorFunctionKind,
         object::{ObjectPropertyInit, PropertyEnumerable},
     },
     value::Value,
 };
+
+use super::NativeFunctionKind;
 
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
@@ -406,8 +409,10 @@ impl Context {
 
     pub(in crate::runtime::native) fn eval_wrapped_iterator_next(
         &mut self,
-        state_id: CollectionIteratorId,
+        _state_id: CollectionIteratorId,
+        this_value: &Value,
     ) -> Result<Value> {
+        let state_id = self.wrapped_iterator_receiver_state(this_value)?;
         let (iterator, next) = {
             let state = self.wrapped_iterator_state(state_id)?;
             (state.iterator.clone(), state.next.clone())
@@ -420,8 +425,10 @@ impl Context {
 
     pub(in crate::runtime::native) fn eval_wrapped_iterator_return(
         &mut self,
-        state_id: CollectionIteratorId,
+        _state_id: CollectionIteratorId,
+        this_value: &Value,
     ) -> Result<Value> {
+        let state_id = self.wrapped_iterator_receiver_state(this_value)?;
         let iterator = self.wrapped_iterator_state(state_id)?.iterator.clone();
         let return_method = self.get_named_method(&iterator, ITERATOR_RETURN_NAME)?;
         let Some(return_method) = return_method else {
@@ -431,6 +438,20 @@ impl Context {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
+    }
+
+    fn wrapped_iterator_receiver_state(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<CollectionIteratorId> {
+        let Some(NativeFunctionKind::Iterator(IteratorFunctionKind::WrapNext(state_id))) =
+            self.iterator_receiver_state_function_kind(this_value)?
+        else {
+            return Err(Error::type_error(
+                "WrapForValidIterator method requires a compatible receiver",
+            ));
+        };
+        Ok(state_id)
     }
 }
 

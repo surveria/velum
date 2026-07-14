@@ -101,6 +101,27 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
+            Expr::OptionalMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                let nullish_jump = self.emit_jump_if_nullish_keep();
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::CallStaticMember {
+                    property: Self::compile_property(property, *access),
+                    native: NativeCallTarget::from_property_name(property.as_str()),
+                    arg_count: args.len(),
+                });
+                let end_jump = self.emit_jump();
+                let nullish_address = self.current_address();
+                self.patch_jump(nullish_jump, nullish_address)?;
+                self.emit(BytecodeInstruction::Pop);
+                self.emit(BytecodeInstruction::PushUndefined);
+                let end_address = self.current_address();
+                self.patch_jump(end_jump, end_address)
+            }
             Expr::ComputedMember {
                 object,
                 property,
@@ -184,6 +205,26 @@ impl BytecodeCompiler<'_> {
                     property: Self::compile_property(property, *access),
                 });
                 Ok(())
+            }
+            Expr::OptionalMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                let nullish_jump = self.emit_jump_if_nullish_keep();
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallStaticMemberSpread {
+                    property: Self::compile_property(property, *access),
+                });
+                let end_jump = self.emit_jump();
+                let nullish_address = self.current_address();
+                self.patch_jump(nullish_jump, nullish_address)?;
+                self.emit(BytecodeInstruction::Pop);
+                self.emit(BytecodeInstruction::PushUndefined);
+                let end_address = self.current_address();
+                self.patch_jump(end_jump, end_address)
             }
             Expr::ComputedMember {
                 object,

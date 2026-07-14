@@ -739,5 +739,6 @@ pub enum BytecodeInstruction {
     JumpIfFalse(BytecodeAddress),
     JumpIfFalseKeep(BytecodeAddress),
     JumpIfTrueKeep(BytecodeAddress),
+    JumpIfNullishKeep(BytecodeAddress),
     Complete(BytecodeCompletion),
 }

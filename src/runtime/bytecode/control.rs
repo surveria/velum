@@ -175,6 +175,15 @@ impl Context {
                 state.pc = if condition { *target } else { next };
                 Ok(None)
             }
+            BytecodeInstruction::JumpIfNullishKeep(target) => {
+                let value = state.stack.peek()?;
+                state.pc = if matches!(value, Value::Undefined | Value::Null) {
+                    *target
+                } else {
+                    next
+                };
+                Ok(None)
+            }
             BytecodeInstruction::Complete(completion) => {
                 state.complete(completion.clone()).map(Some)
             }

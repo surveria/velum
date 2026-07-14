@@ -176,6 +176,7 @@ impl Context {
             | BytecodeInstruction::JumpIfFalse(_)
             | BytecodeInstruction::JumpIfFalseKeep(_)
             | BytecodeInstruction::JumpIfTrueKeep(_)
+            | BytecodeInstruction::JumpIfNullishKeep(_)
             | BytecodeInstruction::Complete(_) => {
                 self.eval_bytecode_control_instruction(state, instruction, next)
             }

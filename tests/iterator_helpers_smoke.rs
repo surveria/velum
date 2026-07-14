@@ -339,3 +339,27 @@ fn iterator_from_observes_strings_and_accepts_callable_objects() -> TestResult {
         "a,b:string:1,2",
     )
 }
+
+#[test]
+fn iterator_from_observes_proxy_prototype_and_caches_next() -> TestResult {
+    ensure_string(
+        r#"
+        const log = [];
+        const handlerProxy = new Proxy({}, {
+          get: (target, key, receiver) => (...args) => {
+            log.push(`${key}: ${args[1]?.toString()}`);
+            const item = Reflect[key](...args);
+            return typeof item === "function" ? item.bind(receiver) : item;
+          }
+        });
+        const iterator = new Proxy({
+          next: () => ({ done: false, value: 0 })
+        }, handlerProxy);
+        const wrapped = Iterator.from(iterator);
+        wrapped.next();
+        wrapped.next();
+        log.join("|")
+        "#,
+        "get: Symbol(Symbol.iterator)|get: next|getPrototypeOf: undefined",
+    )
+}

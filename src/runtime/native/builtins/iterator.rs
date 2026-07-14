@@ -503,6 +503,24 @@ impl Context {
         Ok(callback)
     }
 
+    fn iterator_inherits_prototype(&mut self, iterator: &Value, target: ObjectId) -> Result<bool> {
+        let target = Value::Object(target);
+        let mut current = iterator.clone();
+        loop {
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
+                return Ok(false);
+            };
+            if crate::runtime::abstract_operations::same_value(&prototype, &target) {
+                return Ok(true);
+            }
+            if matches!(prototype, Value::Null) {
+                return Ok(false);
+            }
+            self.step()?;
+            current = prototype;
+        }
+    }
+
     fn close_after_iterator_validation_error(&mut self, iterator: &Value, error: Error) -> Error {
         let mut source = crate::runtime::abstract_operations::IteratorSource::Protocol {
             iterator: iterator.clone(),
@@ -665,13 +683,11 @@ impl Context {
     ) -> Result<Value> {
         let input = first_arg(&args);
         let iterator = self.iterator_flattenable_source(&input)?;
+        let next = self.iterator_direct_next(&iterator)?;
         let prototype = self.iterator_prototype_object_id()?;
-        if let Value::Object(id) = &iterator
-            && self.objects.prototype_chain_has_object(*id, prototype)?
-        {
+        if self.iterator_inherits_prototype(&iterator, prototype)? {
             return Ok(iterator);
         }
-        let next = self.iterator_direct_next(&iterator)?;
         let wrap_prototype = self.wrapped_iterator_prototype_id()?;
         let id = self.create_wrapped_iterator(iterator, next)?;
         let next_fn = self.create_native_function(
@@ -692,8 +708,13 @@ impl Context {
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("wrapped iterator object creation failed"));
         };
-        self.define_non_enumerable_object_property(*object_id, ITERATOR_NEXT_NAME, next_fn)?;
+        self.define_non_enumerable_object_property(
+            *object_id,
+            ITERATOR_NEXT_NAME,
+            next_fn.clone(),
+        )?;
         self.define_non_enumerable_object_property(*object_id, ITERATOR_RETURN_NAME, return_fn)?;
+        self.define_collection_iterator_state(*object_id, next_fn)?;
         Ok(object)
     }
 
