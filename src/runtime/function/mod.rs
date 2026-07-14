@@ -15,6 +15,7 @@ use crate::{
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
+mod activation_setup;
 mod arguments;
 mod callback_fast_path;
 mod class_support;
@@ -445,6 +446,8 @@ impl Context {
             scope_template,
         } = self.function_call_setup(id)?;
         let (super_binding, derived_super_binding) = activation_super_bindings(id, super_binding);
+        let initialize_base_fields = self.is_base_class_constructor(id);
+        let field_receiver = initialize_base_fields.then(|| this_value.clone());
         let packed_args = if bytecode.has_rest_parameter() {
             Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
         } else {
@@ -459,14 +462,8 @@ impl Context {
             super_binding,
             private_environment,
         )?;
-        if let Some(self_binding) = self_binding {
-            let self_scope = self.named_function_self_scope(id, self_binding)?;
-            if let Err(error) = self.push_lexical_scope_with(self_scope) {
-                self.leave_function_local_frame(local_base)?;
-                self.pop_call_activation(local_base)?;
-                return Err(error);
-            }
-        }
+        self.initialize_base_fields_at_activation(id, field_receiver.as_ref(), local_base)?;
+        self.push_optional_function_self_scope(id, self_binding, local_base)?;
         let scope_result = self.function_call_scope(
             scope_template.as_deref(),
             &param_atoms,

@@ -7,7 +7,6 @@ use crate::{
         Statement, StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
-    bytecode::BytecodeFunctionInit,
     error::{Error, Result},
     syntax::{FunctionKind, StaticFunctionId, StaticName},
 };
@@ -18,6 +17,7 @@ use super::{
     FunctionCompileMode,
 };
 
+mod bytecode_compile;
 mod expression_collector;
 
 struct FunctionCompileSpec<'a> {
@@ -235,31 +235,6 @@ impl AnnexBFunctionStatement for Stmt {
     }
 }
 
-impl BytecodeFunction {
-    pub(super) fn compile(
-        self_binding: Option<StaticBinding>,
-        arguments_binding: Option<StaticBinding>,
-        params: &[FunctionParam],
-        statements: &[Statement],
-        mode: FunctionCompileMode,
-        layout: &BindingLayout,
-    ) -> Result<Self> {
-        let collected = CaptureBindingCollector::collect_function(params, statements);
-        let uses_arguments = collected.uses_arguments || arguments_binding.is_some();
-        Ok(Self::new(BytecodeFunctionInit {
-            self_binding,
-            arguments_binding,
-            params: compile_params(params, layout)?,
-            body: BytecodeBlock::compile_function_statements(statements, mode.kind, layout)?,
-            hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
-            capture_bindings: collected.bindings,
-            uses_arguments,
-            strict: mode.strict,
-            simple_parameters: params.iter().all(FunctionParam::is_simple_binding),
-        }))
-    }
-}
-
 fn compile_params(
     params: &[FunctionParam],
     layout: &BindingLayout,
@@ -389,19 +364,6 @@ struct CollectedFunctionBindings {
 const ARGUMENTS_BINDING_NAME: &str = "arguments";
 
 impl CaptureBindingCollector {
-    fn collect_function(
-        params: &[FunctionParam],
-        statements: &[Statement],
-    ) -> CollectedFunctionBindings {
-        let mut collector = Self::default();
-        collector.collect_param_defaults(params);
-        collector.collect_statements(statements);
-        CollectedFunctionBindings {
-            bindings: Rc::from(collector.bindings.into_boxed_slice()),
-            uses_arguments: collector.uses_arguments,
-        }
-    }
-
     fn collect_param_defaults(&mut self, params: &[FunctionParam]) {
         for param in params {
             if let Some(default) = &param.default {

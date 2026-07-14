@@ -305,14 +305,13 @@ impl Context {
             .release_count(crate::runtime::VmStorageKind::CacheEntry, removed_count)
     }
 
-    /// True when the function is a derived class constructor whose fields
-    /// initialize after `super()` instead of at construction entry.
-    pub(in crate::runtime) fn is_derived_class_constructor(&self, id: FunctionId) -> bool {
+    pub(in crate::runtime) fn is_base_class_constructor(&self, id: FunctionId) -> bool {
         self.function(id).is_ok_and(|function| {
-            function
-                .super_binding
-                .as_ref()
-                .is_some_and(|binding| binding.constructor.is_some())
+            function.class_constructor.is_class()
+                && function
+                    .super_binding
+                    .as_ref()
+                    .is_none_or(|binding| binding.constructor.is_none())
         })
     }
 

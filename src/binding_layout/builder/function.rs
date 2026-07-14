@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        Expr, Expression, FunctionParam, ObjectProperty, ObjectPropertyKey, Statement,
-        StaticBinding, StaticFunctionId,
+        ClassLiteral, Expr, Expression, FunctionParam, ObjectProperty, ObjectPropertyKey,
+        Statement, StaticBinding, StaticFunctionId,
     },
     binding_metadata::{FunctionScopeId, ScopeId, types::ScopeKind},
     error::Result,
@@ -87,6 +87,46 @@ impl LayoutBuilder {
         parent_scope: ScopeId,
         parent_function: FunctionScopeId,
     ) -> Result<()> {
+        self.analyze_function_with_additional(
+            id,
+            bindings,
+            params,
+            body,
+            (parent_scope, parent_function),
+            std::iter::empty(),
+        )
+    }
+
+    pub(super) fn analyze_class_constructor(
+        &mut self,
+        class: &ClassLiteral,
+        parent_scope: ScopeId,
+        parent_function: FunctionScopeId,
+    ) -> Result<()> {
+        self.analyze_function_with_additional(
+            class.constructor.id,
+            FunctionBindings::new(None, class.constructor.arguments_binding.as_ref()),
+            &class.constructor.params,
+            &class.constructor.body,
+            (parent_scope, parent_function),
+            class
+                .fields
+                .iter()
+                .filter(|field| !field.is_static)
+                .filter_map(|field| field.initializer.as_ref()),
+        )
+    }
+
+    fn analyze_function_with_additional<'a>(
+        &mut self,
+        id: StaticFunctionId,
+        bindings: FunctionBindings<'_>,
+        params: &[FunctionParam],
+        body: &[Statement],
+        parent: (ScopeId, FunctionScopeId),
+        additional_expressions: impl IntoIterator<Item = &'a Expression>,
+    ) -> Result<()> {
+        let (parent_scope, parent_function) = parent;
         let function = self.add_function(Some(parent_function));
         self.record_static_function(id, function)?;
         let function_parent_scope = if let Some(self_binding) = bindings.self_binding {
@@ -129,7 +169,11 @@ impl LayoutBuilder {
             function_scope
         };
         self.collect_annex_b_var_bindings(body, body_scope)?;
-        self.analyze_statements(body, body_scope, body_scope, function)
+        self.analyze_statements(body, body_scope, body_scope, function)?;
+        for expression in additional_expressions {
+            self.analyze_expr(expression, parent_scope, function)?;
+        }
+        Ok(())
     }
 
     pub(super) fn analyze_nested_function(

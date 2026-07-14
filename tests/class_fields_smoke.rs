@@ -202,6 +202,23 @@ fn arrow_function_fields_capture_this() -> TestResult {
 }
 
 #[test]
+fn field_initializers_capture_the_inner_class_name() -> TestResult {
+    ensure_string(
+        r#"
+        let Direct = class InnerDirect {
+            value = InnerDirect;
+            deferred = () => InnerDirect;
+        };
+        const direct = new Direct();
+        const result = direct.value === Direct && direct.deferred() === Direct;
+        Direct = null;
+        "" + (result && direct.deferred() === direct.value)
+        "#,
+        "true",
+    )
+}
+
+#[test]
 fn fields_are_enumerable_own_properties() -> TestResult {
     ensure_string(
         r#"

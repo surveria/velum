@@ -339,13 +339,7 @@ impl BytecodeCompiler<'_> {
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
         ) || !matches!(expr.kind(), Expr::Literal(_) | Expr::StringLiteral { .. })
         {
-            let target = self.compile_assignment_target_with_strict(target, strict)?;
-            self.emit(BytecodeInstruction::LogicalAssignment {
-                op,
-                target,
-                value: BytecodeBlock::compile_expression(expr, self.layout)?,
-            });
-            return Ok(());
+            return self.compile_deferred_assignment(op, strict, target, expr);
         }
         match target.kind() {
             Expr::Identifier(name) => {
@@ -411,6 +405,34 @@ impl BytecodeCompiler<'_> {
                 "invalid bytecode compound assignment target",
             )),
         }
+    }
+
+    fn compile_deferred_assignment(
+        &mut self,
+        op: BinaryOp,
+        strict: bool,
+        target: &Expression,
+        expr: &Expression,
+    ) -> Result<()> {
+        let logical = matches!(
+            op,
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+        );
+        let value = match target.kind() {
+            Expr::Identifier(name)
+                if logical && BytecodeCompiler::is_anonymous_function_definition(expr) =>
+            {
+                BytecodeBlock::compile_expression_with_inferred_name(
+                    expr,
+                    name.name(),
+                    self.layout,
+                )?
+            }
+            _ => BytecodeBlock::compile_expression(expr, self.layout)?,
+        };
+        let target = self.compile_assignment_target_with_strict(target, strict)?;
+        self.emit(BytecodeInstruction::LogicalAssignment { op, target, value });
+        Ok(())
     }
 
     /// Compiles `obj.#name` reads: the object is pushed and the private

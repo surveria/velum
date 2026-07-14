@@ -58,6 +58,22 @@ fn infers_names_for_parameter_and_destructuring_defaults() -> TestResult {
 }
 
 #[test]
+fn infers_names_for_logical_assignment_values() -> TestResult {
+    expect_string(
+        r#"
+        let andValue = true;
+        let orValue = false;
+        let nullishValue = null;
+        andValue &&= () => {};
+        orValue ||= function() {};
+        nullishValue ??= class {};
+        andValue.name + "|" + orValue.name + "|" + nullishValue.name
+        "#,
+        "andValue|orValue|nullishValue",
+    )
+}
+
+#[test]
 fn names_object_methods_accessors_and_computed_definitions() -> TestResult {
     expect_string(
         r#"
