@@ -326,7 +326,7 @@ impl ObjectHeap {
             if let Some(value) = object.get_own_array_index(&self.shapes, index)? {
                 return Ok(Some(value));
             }
-            current = object.prototype;
+            current = object.ordinary_prototype_id();
         }
         Ok(None)
     }

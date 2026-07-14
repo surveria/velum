@@ -748,15 +748,13 @@ impl Context {
             self.initialize_class_fields(id, &instance)?;
             return Ok(instance);
         }
-        let prototype = self
-            .constructor_instance_prototype_with_default(&new_target, NativeFunctionKind::Object)?;
-        let constructor_key = self.object_constructor_property_key()?;
-        let object = self.objects.create_with_prototype(
-            Some(prototype),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
+        let prototype = self.constructor_instance_semantic_prototype_with_default(
+            &new_target,
+            NativeFunctionKind::Object,
         )?;
+        let object = self
+            .objects
+            .create_with_semantic_prototype(Some(prototype), self.limits.max_objects)?;
         match self.eval_function_completion_with_this_and_new_target(
             id,
             args,
@@ -778,17 +776,5 @@ impl Context {
                 completion.into_function_result().map(|_| object)
             }
         }
-    }
-
-    fn constructor_instance_prototype(
-        &mut self,
-        new_target: &Value,
-    ) -> Result<Option<crate::value::ObjectId>> {
-        let prototype = self.get_named(new_target, CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
-        let Value::Object(id) = prototype else {
-            return Ok(None);
-        };
-        self.objects.validate_id(id)?;
-        Ok(Some(id))
     }
 }

@@ -24,7 +24,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         let length = string_code_unit_count(value.as_utf16())?;
         let mut object = Object::string(value);
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.define_property(
             length_key,
             STRING_LENGTH_PROPERTY,

@@ -77,7 +77,7 @@ impl ObjectHeap {
                     keys.push(name);
                 }
             }
-            object.prototype
+            object.ordinary_prototype_id()
         };
         if let Some(prototype) = prototype {
             self.collect_keys(prototype, atoms, keys, visited_objects, visited_names)?;

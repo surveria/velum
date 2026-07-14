@@ -53,7 +53,18 @@ impl Context {
             Value::Object(id) if self.objects.is_proxy(*id) => {
                 self.proxy_set_prototype_of(*id, prototype)?
             }
-            Value::Object(id) => self.objects.try_set_prototype_value(*id, &prototype)?,
+            Value::Object(id) => {
+                if !matches!(prototype, Value::Null)
+                    && self.semantic_object_ref(&prototype)?.is_none()
+                {
+                    return Ok(Some(false));
+                }
+                if self.semantic_prototype_chain_contains(&prototype, target)? {
+                    false
+                } else {
+                    self.objects.try_set_prototype_value(*id, &prototype)?
+                }
+            }
             Value::Function(id) => {
                 self.set_function_static_parent(*id, prototype)?;
                 true

@@ -21,7 +21,7 @@ impl ObjectHeap {
             {
                 return Ok(property.accessor().is_some());
             }
-            current = object.prototype;
+            current = object.ordinary_prototype_id();
         }
         Ok(false)
     }
@@ -68,7 +68,7 @@ impl ObjectHeap {
                 {
                     return Ok(true);
                 }
-                current = object.prototype;
+                current = object.ordinary_prototype_id();
             }
         }
         Ok(false)

@@ -83,6 +83,38 @@ fn supports_constructor_return_object_and_primitive_rules() -> TestResult {
 }
 
 #[test]
+fn supports_callable_constructor_prototypes() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function CallablePrototype() {}
+        CallablePrototype.kind = "callable";
+        Object.defineProperty(CallablePrototype, "answer", {
+            set: function(value) { this.stored = value; }
+        });
+        function Factory() {}
+        Factory.prototype = CallablePrototype;
+
+        let instance = new Factory();
+        instance.answer = 42;
+        let literal = { __proto__: CallablePrototype };
+
+        Object.getPrototypeOf(instance) === CallablePrototype &&
+            CallablePrototype.isPrototypeOf(instance) &&
+            instance.kind === "callable" &&
+            instance.stored === 42 &&
+            typeof instance.call === "function" &&
+            Object.getPrototypeOf(literal) === CallablePrototype &&
+            literal.kind === "callable" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_new_on_non_function_bindings() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

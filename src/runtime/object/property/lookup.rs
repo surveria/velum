@@ -237,7 +237,10 @@ impl ObjectHeap {
                 }
                 return Ok(CacheablePropertyLookup::hit(guard, key, hit));
             }
-            current = object.prototype;
+            if object.has_semantic_prototype() {
+                return Ok(CacheablePropertyLookup::uncacheable(guard));
+            }
+            current = object.ordinary_prototype_id();
             depth = depth.next()?;
         }
 

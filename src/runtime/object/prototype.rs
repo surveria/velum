@@ -6,10 +6,7 @@ use crate::{
 use super::property::{
     CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
 };
-use super::{
-    AccessorWriteDisposition, ObjectHeap, ObjectPropertyValue, OwnPropertyDescriptor,
-    PropertyLookup,
-};
+use super::{ObjectHeap, ObjectPropertyValue, PropertyLookup};
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
 
@@ -48,21 +45,24 @@ impl ObjectHeap {
         }
 
         let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
-        let mut current = object.prototype;
+        let mut current = object.ordinary_prototype_id();
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
             if object.has_own(property, &self.shapes)? {
                 return Ok(true);
             }
-            current = object.prototype;
+            current = object.ordinary_prototype_id();
         }
         Ok(false)
     }
 
     pub(crate) fn set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<()> {
         let prototype = match value {
-            Value::Object(prototype) => Some(*prototype),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Some(value.clone()),
             Value::Null => None,
             _ => return Ok(()),
         };
@@ -71,7 +71,7 @@ impl ObjectHeap {
                 "Object.prototype has an immutable prototype",
             ));
         }
-        if let Some(prototype) = prototype
+        if let Some(Value::Object(prototype)) = prototype
             && self.prototype_chain_contains(prototype, id)?
         {
             return Err(Error::type_error(PROTOTYPE_CYCLE_SET_ERROR));
@@ -92,14 +92,17 @@ impl ObjectHeap {
 
     pub(crate) fn try_set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<bool> {
         let prototype = match value {
-            Value::Object(prototype) => Some(*prototype),
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Some(value.clone()),
             Value::Null => None,
             _ => return Ok(true),
         };
         if self.object_prototype == Some(id) && prototype.is_some() {
             return Ok(false);
         }
-        if let Some(prototype) = prototype
+        if let Some(Value::Object(prototype)) = prototype
             && self.prototype_chain_contains(prototype, id)?
         {
             return Ok(false);
@@ -124,45 +127,15 @@ impl ObjectHeap {
     ) -> Result<bool> {
         let object = self.object(id)?;
         let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
-        let mut current = object.prototype;
+        let mut current = object.ordinary_prototype_id();
         while let Some(current_id) = current {
             budget.enter_next()?;
             if current_id == target {
                 return Ok(true);
             }
-            current = self.object(current_id)?.prototype;
+            current = self.object(current_id)?.ordinary_prototype_id();
         }
         Ok(false)
-    }
-
-    /// Resolves how an assignment to `property` on `id` interacts with
-    /// accessor properties: the first object on the chain that owns the
-    /// property decides. A data property (or no property at all) keeps
-    /// ordinary write semantics.
-    pub(crate) fn accessor_write_target(
-        &self,
-        id: ObjectId,
-        property: PropertyLookup<'_>,
-    ) -> Result<AccessorWriteDisposition> {
-        let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
-        let mut current = Some(id);
-        while let Some(current_id) = current {
-            budget.enter_next()?;
-            let object = self.object(current_id)?;
-            if object.has_own(property, &self.shapes)? {
-                if let Some(OwnPropertyDescriptor::Accessor(accessor)) =
-                    self.own_property_descriptor(current_id, property)?
-                {
-                    if accessor.has_setter() {
-                        return Ok(AccessorWriteDisposition::Setter(accessor.set()));
-                    }
-                    return Ok(AccessorWriteDisposition::NoSetter);
-                }
-                return Ok(AccessorWriteDisposition::None);
-            }
-            current = object.prototype;
-        }
-        Ok(AccessorWriteDisposition::None)
     }
 
     fn prototype_property_value_in_chain(
@@ -176,14 +149,14 @@ impl ObjectHeap {
         }
 
         let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
-        let mut current = object.prototype;
+        let mut current = object.ordinary_prototype_id();
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
             if let Some(value) = object.get_own(property, &self.shapes)? {
                 return Ok(Some(value));
             }
-            current = object.prototype;
+            current = object.ordinary_prototype_id();
         }
         Ok(None)
     }
@@ -196,18 +169,22 @@ impl ObjectHeap {
             if current_id == target {
                 return Ok(true);
             }
-            current = self.object(current_id)?.prototype;
+            current = self.object(current_id)?.ordinary_prototype_id();
         }
         Ok(false)
     }
 
     pub(crate) fn prototype_value(&self, id: ObjectId) -> Result<Value> {
         let object = self.object(id)?;
-        Ok(object.prototype.map_or(Value::Null, Value::Object))
+        Ok(object.prototype.clone().unwrap_or(Value::Null))
     }
 
     pub(crate) fn prototype_chain_has_typed_array(&self, id: ObjectId) -> Result<bool> {
-        let mut current = self.object(id)?.prototype;
+        let root = self.object(id)?;
+        if root.has_semantic_prototype() {
+            return Ok(true);
+        }
+        let mut current = root.ordinary_prototype_id();
         let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
         while let Some(current_id) = current {
             budget.enter_next()?;
@@ -215,7 +192,10 @@ impl ObjectHeap {
             if object.typed_array.is_some() {
                 return Ok(true);
             }
-            current = object.prototype;
+            if object.has_semantic_prototype() {
+                return Ok(true);
+            }
+            current = object.ordinary_prototype_id();
         }
         Ok(false)
     }

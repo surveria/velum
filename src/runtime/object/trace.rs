@@ -82,10 +82,10 @@ impl Object {
                 .visit_strong_edges(VmObjectEdgeKind::Property, visitor)?;
         }
         self.array_storage.visit_strong_edges(visitor)?;
-        if let Some(prototype) = self.prototype {
+        if let Some(prototype) = &self.prototype {
             visitor.visit(
                 VmObjectEdgeKind::Prototype,
-                StrongEdgeReference::Object(prototype),
+                StrongEdgeReference::Value(prototype),
             )?;
         }
         if let Some(string) = &self.string_value {

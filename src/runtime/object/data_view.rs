@@ -430,7 +430,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<ObjectId> {
         let mut object = Object::ordinary();
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.data_view = Some(view);
         self.push_object(object, max_objects)
     }

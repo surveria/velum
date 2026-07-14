@@ -32,7 +32,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<Value> {
         let mut object = Object::date(value);
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         self.push_object(object, max_objects).map(Value::Object)
     }
 

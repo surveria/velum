@@ -61,8 +61,12 @@ impl ObjectHeap {
             }
         }
         object.prototype = match literal_prototype {
-            Some(prototype) => prototype.into_object_id(),
-            None => Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?),
+            Some(prototype) => prototype.into_value(),
+            None => Some(Value::Object(self.object_prototype_id(
+                constructor_key,
+                max_objects,
+                max_properties,
+            )?)),
         };
 
         self.push_object(object, max_objects).map(Value::Object)
@@ -95,7 +99,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         let length = ArrayLength::from_usize(element_count)?;
         let mut object = Object::array(length);
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.append_packed_default_value_iter(elements, element_count, max_properties)?;
 
         self.push_object(object, max_objects).map(Value::Object)
@@ -109,7 +113,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         let length = ArrayLength::from_usize(length)?;
         let mut object = Object::array(length);
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         self.push_object(object, max_objects).map(Value::Object)
     }
 
@@ -124,6 +128,16 @@ impl ObjectHeap {
             .map(Value::Object)
     }
 
+    pub(in crate::runtime) fn create_with_semantic_prototype(
+        &mut self,
+        prototype: Option<Value>,
+        max_objects: usize,
+    ) -> Result<Value> {
+        let mut object = Object::ordinary();
+        object.prototype = prototype;
+        self.push_object(object, max_objects).map(Value::Object)
+    }
+
     pub(in crate::runtime) fn create_boxed_primitive(
         &mut self,
         value: ObjectPrimitiveValue,
@@ -131,7 +145,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<Value> {
         let mut object = Object::boxed_primitive(value);
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         self.push_object(object, max_objects).map(Value::Object)
     }
 
@@ -149,7 +163,7 @@ impl ObjectHeap {
             max_properties,
         )?;
         let mut object = Object::ordinary();
-        object.prototype = prototype;
+        object.prototype = prototype.map(Value::Object);
         self.push_object(object, max_objects)
     }
 
@@ -159,7 +173,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<Value> {
         let mut object = Object::ordinary();
-        object.prototype = prototype;
+        object.prototype = prototype.map(Value::Object);
         self.push_object(object, max_objects).map(Value::Object)
     }
 
@@ -170,7 +184,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<ObjectId> {
         let mut object = Object::ordinary();
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.regexp_value = Some(value);
         self.push_object(object, max_objects)
     }
@@ -280,7 +294,7 @@ impl ObjectHeap {
             max_properties,
         )?;
         let mut object = Object::ordinary();
-        object.prototype = prototype;
+        object.prototype = prototype.map(Value::Object);
         object.define(
             property.key,
             property.name,
@@ -346,7 +360,7 @@ impl ObjectHeap {
             let object_prototype =
                 self.object_prototype_id(constructor_key, max_objects, max_properties)?;
             let mut object = Object::array(ArrayLength::from_usize(0)?);
-            object.prototype = Some(object_prototype);
+            object.prototype = Some(Value::Object(object_prototype));
             let id = self.push_object(object, max_objects)?;
             self.storage_ledger
                 .grow_count(VmStorageKind::Association, 1)?;

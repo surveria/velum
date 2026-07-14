@@ -261,12 +261,31 @@ impl Context {
         new_target: &Value,
         default_kind: NativeFunctionKind,
     ) -> Result<ObjectId> {
-        if let Some(prototype) = self.constructor_instance_prototype(new_target)? {
+        let prototype =
+            self.constructor_instance_semantic_prototype_with_default(new_target, default_kind)?;
+        let Value::Object(prototype) = prototype else {
+            return Err(Error::runtime(
+                "constructor requires an ordinary-object prototype",
+            ));
+        };
+        Ok(prototype)
+    }
+
+    pub(in crate::runtime) fn constructor_instance_semantic_prototype_with_default(
+        &mut self,
+        new_target: &Value,
+        default_kind: NativeFunctionKind,
+    ) -> Result<Value> {
+        let prototype =
+            self.get_named(new_target, crate::runtime::CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
+        if self.semantic_object_ref(&prototype)?.is_some() {
             return Ok(prototype);
         }
         let realm = self.callable_realm_index(new_target)?;
         self.with_realm(realm, |context| {
-            context.native_constructor_default_prototype(default_kind)
+            context
+                .native_constructor_default_prototype(default_kind)
+                .map(Value::Object)
         })
     }
 

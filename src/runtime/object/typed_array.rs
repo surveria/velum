@@ -472,7 +472,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<ObjectId> {
         let mut object = Object::ordinary();
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.byte_buffer = Some(buffer);
         self.push_object(object, max_objects)
     }
@@ -484,7 +484,7 @@ impl ObjectHeap {
         max_objects: usize,
     ) -> Result<ObjectId> {
         let mut object = Object::ordinary();
-        object.prototype = Some(prototype);
+        object.prototype = Some(Value::Object(prototype));
         object.typed_array = Some(view);
         self.push_object(object, max_objects)
     }
