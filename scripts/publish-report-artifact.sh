@@ -557,79 +557,34 @@ stage_report_outputs() {
   cargo run --manifest-path runner/Cargo.toml -- --aggregate-reports reports/test-runs
 }
 
-create_report_commit_payload() {
-  local payload_path="$1"
-  local repository="$2"
-  local expected_head="$3"
-  local headline="$4"
-  local body="$5"
-  shift 5
+create_main_report_commit() {
+  local headline="$1"
+  local body="$2"
+  shift 2
 
-  python3 - "${payload_path}" "${repository}" "${expected_head}" "${headline}" "${body}" "$@" <<'PY'
-import base64
-import json
-import pathlib
-import sys
-
-payload_path, repository, expected_head, headline, body, *paths = sys.argv[1:]
-additions = []
-for path in paths:
-    contents = pathlib.Path(path).read_bytes()
-    additions.append({
-        "path": path,
-        "contents": base64.b64encode(contents).decode("ascii"),
-    })
-
-query = """
-mutation($input: CreateCommitOnBranchInput!) {
-  createCommitOnBranch(input: $input) {
-    commit {
-      oid
-      url
-    }
-  }
-}
-"""
-payload = {
-    "query": query,
-    "variables": {
-        "input": {
-            "branch": {
-                "repositoryNameWithOwner": repository,
-                "branchName": "main",
-            },
-            "expectedHeadOid": expected_head,
-            "message": {
-                "headline": headline,
-                "body": body,
-            },
-            "fileChanges": {
-                "additions": additions,
-            },
-        },
-    },
-}
-pathlib.Path(payload_path).write_text(json.dumps(payload), encoding="utf-8")
-PY
-}
-
-create_signed_main_commit() {
-  local repository="$1"
-  local headline="$2"
-  local body="$3"
-  shift 3
-
-  local expected_head payload_path commit_oid
-  expected_head="$(git rev-parse HEAD)"
-  payload_path="$(mktemp)"
-  create_report_commit_payload "${payload_path}" "${repository}" "${expected_head}" "${headline}" "${body}" "$@"
-  if ! commit_oid="$(gh api graphql --input "${payload_path}" --jq '.data.createCommitOnBranch.commit.oid')"; then
-    rm -f "${payload_path}"
+  if ! git diff --cached --quiet; then
+    printf 'refusing report commit with pre-existing staged changes\n' >&2
     return 1
   fi
-  rm -f "${payload_path}"
-  [[ -n "${commit_oid}" ]] || return 1
-  printf 'signed GitHub report commit: %s\n' "${commit_oid}"
+
+  local expected_head tree_oid commit_oid
+  expected_head="$(git rev-parse HEAD)"
+  git add -- "$@"
+  if git diff --cached --quiet -- "$@"; then
+    git restore --staged -- "$@"
+    printf 'canonical report outputs are already up to date\n'
+    return 0
+  fi
+  tree_oid="$(git write-tree)"
+  if ! commit_oid="$(printf '%s\n\n%s\n' "${headline}" "${body}" | \
+    git commit-tree "${tree_oid}" -p "${expected_head}")"; then
+    git restore --staged -- "$@"
+    return 1
+  fi
+  git restore --staged -- "$@"
+  [[ "${commit_oid}" =~ ^[0-9a-f]{40}$ ]] || return 1
+  git push origin "${commit_oid}:refs/heads/main" || return 1
+  printf 'report-only Git commit: %s\n' "${commit_oid}"
 }
 
 reset_report_outputs() {
@@ -733,16 +688,16 @@ commit_and_push() {
   body="$(printf 'Source commit: %s\n\nSource tree: %s\n\nSource workflow run: %s\n' \
     "${source_commit}" "${expected_tree}" "${source_run}")"
 
-  if create_signed_main_commit "${repository}" "${headline}" "${body}" \
+  if create_main_report_commit "${headline}" "${body}" \
     "${commit_paths[@]}"; then
     return 0
   fi
 
-  printf 'initial signed report commit failed; retrying once on latest origin/main\n' >&2
+  printf 'initial report-only push failed; retrying once on latest origin/main\n' >&2
   reset_report_outputs "${target_report}" "${target_report_yaml}" "${target_jetstream_report}"
   checkout_latest_main
   stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report:-}" "${jetstream_report_file:-}" "${source_test262_baseline:-}"
-  create_signed_main_commit "${repository}" "${headline}" "${body}" \
+  create_main_report_commit "${headline}" "${body}" \
     "${commit_paths[@]}"
 }
 
@@ -753,7 +708,6 @@ fi
 need_cmd gh
 need_cmd git
 need_cmd cargo
-need_cmd python3
 need_cmd base64
 
 repository="${GITHUB_REPOSITORY:-}"

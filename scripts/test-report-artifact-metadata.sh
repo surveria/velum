@@ -203,4 +203,37 @@ headline="$(report_commit_headline '' '' 20260710T212554Z)"
 [[ "${headline}" == 'Add rsqjs report 20260710T212554Z (CI) [skip ci]' ]] ||
   fail_test "changed the report commit headline fallback"
 
+publisher_remote="${tmp_dir}/publisher-remote.git"
+publisher_worktree="${tmp_dir}/publisher-worktree"
+git init --quiet --bare --initial-branch=main "${publisher_remote}"
+git init --quiet --initial-branch=main "${publisher_worktree}"
+pushd "${publisher_worktree}" >/dev/null
+git config user.name test-publisher
+git config user.email test-publisher@example.invalid
+printf 'base\n' > base.txt
+git add base.txt
+git commit --quiet -m base
+base_commit="$(git rev-parse HEAD)"
+git remote add origin "${publisher_remote}"
+git push --quiet -u origin main
+printf 'published\n' > report.txt
+create_main_report_commit 'report headline' 'report body' report.txt >/dev/null ||
+  fail_test "failed to push a report-only commit"
+published_commit="$(git --git-dir="${publisher_remote}" rev-parse refs/heads/main)"
+[[ "${published_commit}" != "${base_commit}" ]] || fail_test "did not advance remote main"
+[[ "$(git rev-parse HEAD)" == "${base_commit}" ]] ||
+  fail_test "moved the local main branch while publishing"
+[[ "$(git --git-dir="${publisher_remote}" show "${published_commit}:report.txt")" == published ]] ||
+  fail_test "published report commit has the wrong contents"
+[[ "$(git --git-dir="${publisher_remote}" show -s --format=%s "${published_commit}")" == \
+  'report headline' ]] || fail_test "published report commit has the wrong headline"
+printf 'stale publisher\n' > report.txt
+if create_main_report_commit 'stale headline' 'stale body' report.txt >/dev/null 2>&1; then
+  fail_test "accepted a non-fast-forward report publication"
+fi
+git diff --cached --quiet || fail_test "left staged changes after a rejected publication"
+[[ "$(git --git-dir="${publisher_remote}" rev-parse refs/heads/main)" == "${published_commit}" ]] ||
+  fail_test "changed remote main after a rejected report publication"
+popd >/dev/null
+
 printf 'report artifact metadata parser tests passed\n'
