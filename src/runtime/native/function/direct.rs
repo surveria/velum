@@ -21,6 +21,30 @@ const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
 }
 
 impl Context {
+    pub(crate) fn eval_cached_native_property_call(
+        &mut self,
+        access: StaticPropertyAccessId,
+        callee: &Value,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        if !self.optional_optimizations_enabled() {
+            return self.call_value(callee, args, this_value.clone());
+        }
+        if let Value::NativeFunction(id) = callee {
+            if let Some(kind) = self.cached_static_property_native_call_kind(access, *id)? {
+                self.record_native_call_cache_hit();
+                return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
+            }
+            let kind = self.native_function(*id)?.kind();
+            self.record_native_call_cache_miss();
+            self.remember_static_property_native_call_kind(access, *id, kind)?;
+            return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
+        }
+        self.record_native_call_cache_slow_path();
+        self.call_value(callee, args, this_value.clone())
+    }
+
     pub(crate) fn eval_direct_native_property_call(
         &mut self,
         target: NativeCallTarget,

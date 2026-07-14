@@ -1,6 +1,7 @@
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{Expr, Expression, StaticCallSiteId, StaticName, StaticPropertyAccessId},
+    bytecode::BytecodePreparedNativeCall,
     error::Result,
     value::Value,
 };
@@ -156,8 +157,8 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::StaticMember {
             property: Self::compile_property(property, access),
         });
-        let native =
-            NativeCallTarget::from_property_name(property.as_str()).map(|target| (target, access));
+        let native = NativeCallTarget::from_property_name(property.as_str())
+            .map(|target| BytecodePreparedNativeCall::Direct { target, access });
         self.compile_prepared_receiver_call(site, args, native)
     }
 
@@ -183,8 +184,8 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::StaticMember {
             property: Self::compile_property(property, access),
         });
-        let native =
-            NativeCallTarget::from_property_name(property.as_str()).map(|target| (target, access));
+        let native = NativeCallTarget::from_property_name(property.as_str())
+            .map(|target| BytecodePreparedNativeCall::Direct { target, access });
         self.compile_prepared_receiver_call(site, args, native)?;
         self.finish_optional_call(nullish_jump)
     }
@@ -212,7 +213,12 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::ComputedMember {
             property: Self::compile_dynamic_property(access),
         });
-        let native = computed_property_native_target(property).map(|target| (target, access));
+        let native = Some(
+            computed_property_native_target(property)
+                .map_or(BytecodePreparedNativeCall::Cached { access }, |target| {
+                    BytecodePreparedNativeCall::Direct { target, access }
+                }),
+        );
         self.compile_prepared_receiver_call(site, args, native)
     }
 
@@ -285,7 +291,7 @@ impl BytecodeCompiler<'_> {
         &mut self,
         site: StaticCallSiteId,
         args: &[Expression],
-        native: Option<(NativeCallTarget, StaticPropertyAccessId)>,
+        native: Option<BytecodePreparedNativeCall>,
     ) -> Result<()> {
         self.compile_args(args)?;
         self.emit(BytecodeInstruction::CallValueWithReceiver {

@@ -204,7 +204,12 @@ impl BytecodeInstruction {
                 BytecodeMetrics::property_operands(1).combine(BytecodeMetrics::native_call(*native))
             }
             Self::CallValueWithReceiver { native, .. } => {
-                BytecodeMetrics::native_call(native.map(|(target, _)| target))
+                BytecodeMetrics::native_call(native.and_then(|prepared| match prepared {
+                    crate::bytecode::BytecodePreparedNativeCall::Direct { target, .. } => {
+                        Some(target)
+                    }
+                    crate::bytecode::BytecodePreparedNativeCall::Cached { .. } => None,
+                }))
             }
             Self::NumberUnary(_)
             | Self::NumberBinary(_)

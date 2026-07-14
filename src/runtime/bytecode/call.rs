@@ -2,7 +2,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     bytecode::{
         BytecodeAddress, BytecodeCallSite, BytecodeDynamicProperty, BytecodeInstruction,
-        BytecodeObjectProperty, BytecodeProperty,
+        BytecodeObjectProperty, BytecodePreparedNativeCall, BytecodeProperty,
     },
     error::{Error, Result},
     runtime::{Context, control::Completion, function::BytecodeFunctionInit},
@@ -220,18 +220,21 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         site: BytecodeCallSite,
-        native: Option<(NativeCallTarget, crate::syntax::StaticPropertyAccessId)>,
+        native: Option<BytecodePreparedNativeCall>,
         arg_count: usize,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let args = state.stack.tail(arg_count)?;
         let callee = state.stack.value_before_tail(arg_count, 0)?.clone();
         let receiver = state.stack.value_before_tail(arg_count, 1)?.clone();
-        let completion = if let Some((target, access)) = native {
-            self.eval_direct_native_property_call(target, access, &callee, args, &receiver)
-                .map(Completion::Normal)?
-        } else {
-            self.eval_cached_call_completion(site, &callee, args, receiver)?
+        let completion = match native {
+            Some(BytecodePreparedNativeCall::Direct { target, access }) => self
+                .eval_direct_native_property_call(target, access, &callee, args, &receiver)
+                .map(Completion::Normal)?,
+            Some(BytecodePreparedNativeCall::Cached { access }) => self
+                .eval_cached_native_property_call(access, &callee, args, &receiver)
+                .map(Completion::Normal)?,
+            None => self.eval_cached_call_completion(site, &callee, args, receiver)?,
         };
         let Completion::Normal(value) = completion else {
             return Ok(Some(completion));

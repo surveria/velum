@@ -71,6 +71,17 @@ impl BytecodeObjectProperty {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodePreparedNativeCall {
+    Direct {
+        target: NativeCallTarget,
+        access: StaticPropertyAccessId,
+    },
+    Cached {
+        access: StaticPropertyAccessId,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunctionDeclaration {
     name: BytecodeBinding,
@@ -599,7 +610,7 @@ pub enum BytecodeInstruction {
     },
     CallValueWithReceiver {
         site: BytecodeCallSite,
-        native: Option<(NativeCallTarget, StaticPropertyAccessId)>,
+        native: Option<BytecodePreparedNativeCall>,
         arg_count: usize,
     },
     TailCallValue {
