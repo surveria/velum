@@ -426,6 +426,23 @@ fn nested_direct_eval_closures_capture_transitive_lexical_bindings() -> TestResu
     )
 }
 
+#[test]
+fn direct_eval_vars_shadow_captured_upvalues_after_reference_resolution() -> TestResult {
+    expect_true(
+        r#"
+        function outer() {
+            var value = 3;
+            var inner = (function () {
+                value *= (eval("var value = 2"), 4);
+                return value;
+            })();
+            return value === 12 && inner === 2;
+        }
+        outer()
+        "#,
+    )
+}
+
 fn expect_true(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

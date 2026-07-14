@@ -13,6 +13,8 @@ use crate::{
     value::Value,
 };
 
+use super::location::BindingLocation;
+
 const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
 
 #[derive(Debug, Clone)]
@@ -414,6 +416,15 @@ impl Context {
                 captured,
                 count_with_environments(captured),
             );
+        }
+        if matches!(binding.operand(), BindingOperand::Upvalue { .. }) {
+            let atom = self.intern_static_name_atom(binding.name().name())?;
+            if matches!(
+                self.resolve_binding_location(atom),
+                Some(BindingLocation::Local { .. })
+            ) {
+                return Ok(None);
+            }
         }
         let count = usize::try_from(binding.with_environment_count())
             .map_err(|_| Error::limit("with environment count exceeded addressable range"))?;
