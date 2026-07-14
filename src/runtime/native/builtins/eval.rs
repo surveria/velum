@@ -8,6 +8,7 @@ use crate::{
 
 use super::{EVAL_NAME, NativeFunctionKind, dynamic_compilation_error};
 
+#[derive(Clone, Copy)]
 enum EvalSource<'a> {
     Utf8(&'a str),
     Utf16(&'a [u16]),

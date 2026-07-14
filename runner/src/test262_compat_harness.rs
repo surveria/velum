@@ -244,12 +244,12 @@ mod tests {
         context.eval(ASSERT_SOURCE)?;
         context.eval(DEEP_EQUAL_SOURCE)?;
         let value = context.eval(
-            r#"
+            r"
             let actual = [[0, 1]];
             actual.groups = undefined;
             test262DeepEqual(actual, [[0, 1]]) &&
                 !test262DeepEqual(actual, [[0, 2]]) ? 42 : 0
-            "#,
+            ",
         )?;
         if value == Value::Number(42.0) {
             return Ok(());

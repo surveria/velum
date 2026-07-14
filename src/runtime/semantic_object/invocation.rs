@@ -263,6 +263,10 @@ impl Context {
             );
         }
 
+        if kind == NativeFunctionKind::RegExp && !same_value(constructor, new_target) {
+            return self.construct_regexp_with_new_target(args, new_target);
+        }
+
         let eager_prototype = if native_constructor_resolves_prototype_before_arguments(kind)
             && !same_value(constructor, new_target)
         {
@@ -299,9 +303,8 @@ impl Context {
 const fn native_constructor_resolves_prototype_before_arguments(kind: NativeFunctionKind) -> bool {
     matches!(
         kind,
-        NativeFunctionKind::RegExp
-            | NativeFunctionKind::Intl(
-                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
-            )
+        NativeFunctionKind::Intl(
+            IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
+        )
     )
 }

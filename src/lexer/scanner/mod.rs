@@ -43,7 +43,7 @@ pub(super) struct Lexer {
 }
 
 impl Lexer {
-    pub(super) fn new(source: SourceText, source_id: SourceId, allow_html_comments: bool) -> Self {
+    pub(super) const fn new(source: SourceText, source_id: SourceId, html_comments: bool) -> Self {
         Self {
             source,
             source_id,
@@ -51,7 +51,7 @@ impl Lexer {
             pending: None,
             line_terminator_before: false,
             line_start: true,
-            allow_html_comments,
+            allow_html_comments: html_comments,
             template_substitutions: Vec::new(),
         }
     }

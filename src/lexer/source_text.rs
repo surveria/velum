@@ -5,14 +5,14 @@ use crate::{Error, Result};
 const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
 
 #[derive(Clone)]
-pub(crate) struct SourceText {
+pub struct SourceText {
     rendered: Rc<str>,
     source_len: usize,
     surrogate_units: Rc<BTreeMap<usize, u16>>,
 }
 
 impl SourceText {
-    pub(crate) fn from_utf8(source: &str) -> Self {
+    pub fn from_utf8(source: &str) -> Self {
         Self {
             rendered: Rc::from(source),
             source_len: source.len(),
@@ -20,7 +20,7 @@ impl SourceText {
         }
     }
 
-    pub(crate) fn from_utf16(source: &[u16]) -> Self {
+    pub fn from_utf16(source: &[u16]) -> Self {
         let mut rendered = String::new();
         let mut surrogate_units = BTreeMap::new();
         for decoded in char::decode_utf16(source.iter().copied()) {
@@ -39,23 +39,23 @@ impl SourceText {
         }
     }
 
-    pub(crate) fn rendered(&self) -> &str {
+    pub fn rendered(&self) -> &str {
         self.rendered.as_ref()
     }
 
-    pub(crate) const fn source_len(&self) -> usize {
+    pub const fn source_len(&self) -> usize {
         self.source_len
     }
 
-    pub(crate) fn rendered_len(&self) -> usize {
+    pub fn rendered_len(&self) -> usize {
         self.rendered.len()
     }
 
-    pub(crate) fn surrogate_at(&self, offset: usize) -> Option<u16> {
+    pub fn surrogate_at(&self, offset: usize) -> Option<u16> {
         self.surrogate_units.get(&offset).copied()
     }
 
-    pub(crate) fn append_utf16_character(&self, output: &mut Vec<u16>, offset: usize, ch: char) {
+    pub fn append_utf16_character(&self, output: &mut Vec<u16>, offset: usize, ch: char) {
         if let Some(unit) = self.surrogate_at(offset) {
             output.push(unit);
         } else {
@@ -64,7 +64,7 @@ impl SourceText {
         }
     }
 
-    pub(crate) fn utf16_range(&self, start: usize, end: usize) -> Result<Vec<u16>> {
+    pub fn utf16_range(&self, start: usize, end: usize) -> Result<Vec<u16>> {
         let source = self
             .rendered
             .get(start..end)

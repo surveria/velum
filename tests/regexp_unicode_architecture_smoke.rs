@@ -39,13 +39,15 @@ fn regexp_observable_steps_reload_current_internal_state() -> TestResult {
                 return "g";
             }
         };
+        const original = /a/;
         const newTarget = Object.defineProperty(function() {}.bind(null), "prototype", {
             get() {
                 prototypeRead = true;
+                original.compile("b");
                 return RegExp.prototype;
             }
         });
-        const constructed = Reflect.construct(RegExp, [/a/, flags], newTarget);
+        const constructed = Reflect.construct(RegExp, [original, flags], newTarget);
 
         const recompiled = /old/g;
         recompiled.lastIndex = {
@@ -57,6 +59,7 @@ fn regexp_observable_steps_reload_current_internal_state() -> TestResult {
         const current = recompiled.exec("new");
 
         constructed.flags === "g" &&
+            constructed.source === "a" && original.source === "b" &&
             Object.getPrototypeOf(constructed) === RegExp.prototype &&
             current[0] === "new" && recompiled.source === "new" ? 42 : 0
         "#,

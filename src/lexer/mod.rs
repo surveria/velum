@@ -6,7 +6,7 @@ mod support;
 mod template;
 mod token;
 
-pub(crate) use source_text::SourceText;
+pub use source_text::SourceText;
 pub use stream::TokenStream;
 pub use token::{NumberToken, StringToken, TemplatePart, Token, TokenKind};
 
