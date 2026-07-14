@@ -388,6 +388,7 @@ pub enum BytecodeInstruction {
         strict: bool,
     },
     CallValueSpread,
+    CallValueWithReceiverSpread,
     CallStaticMemberSpread {
         property: BytecodeProperty,
     },
@@ -428,6 +429,7 @@ pub enum BytecodeInstruction {
     },
     StoreLast,
     Pop,
+    Duplicate,
     Unary(UnaryOp),
     NumberUnary(BytecodeNumericUnaryOp),
     Await,
@@ -587,6 +589,10 @@ pub enum BytecodeInstruction {
         arg_count: usize,
     },
     CallValue {
+        site: BytecodeCallSite,
+        arg_count: usize,
+    },
+    CallValueWithReceiver {
         site: BytecodeCallSite,
         arg_count: usize,
     },

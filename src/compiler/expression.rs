@@ -68,6 +68,7 @@ impl BytecodeCompiler<'_> {
             }
             Expr::Spread(_) => return Err(Self::spread_outside_literal_error()),
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
+            Expr::OptionalChain(expr) => return self.compile_optional_chain(expr),
             Expr::Sequence(expressions) => return self.compile_sequence_expr(expressions),
             Expr::Await(_) | Expr::Yield { .. } => return self.compile_suspend_expr(expr),
             Expr::Unary { op, strict, expr } => {
@@ -100,7 +101,11 @@ impl BytecodeCompiler<'_> {
                 property,
                 access,
             } => return self.compile_static_member_expr(object, property, *access),
-            Expr::OptionalMember { .. } => return self.compile_optional_static_member_expr(expr),
+            Expr::OptionalMember { .. }
+            | Expr::OptionalComputedMember { .. }
+            | Expr::OptionalPrivateMember { .. } => {
+                return self.compile_optional_member_expression(expr);
+            }
             Expr::ComputedMember {
                 object,
                 property,
@@ -112,13 +117,8 @@ impl BytecodeCompiler<'_> {
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),
-            Expr::Call {
-                callee,
-                site,
-                strict,
-                args,
-            } => {
-                return self.compile_call_expr(callee, *site, *strict, args);
+            Expr::Call { .. } | Expr::OptionalCall { .. } => {
+                return self.compile_call_expression(expr);
             }
             Expr::DynamicImport {
                 phase,
@@ -131,6 +131,21 @@ impl BytecodeCompiler<'_> {
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_call_expression(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Call {
+                callee,
+                site,
+                strict,
+                args,
+            } => self.compile_call_expr(callee, *site, *strict, args),
+            Expr::OptionalCall {
+                callee, site, args, ..
+            } => self.compile_optional_call_expr(callee, *site, args),
+            _ => Err(Error::runtime("expression is not a call")),
+        }
     }
 
     fn compile_template_object(

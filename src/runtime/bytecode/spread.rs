@@ -175,6 +175,19 @@ impl Context {
         Ok(Self::push_spread_completion(state, completion, next))
     }
 
+    pub(super) fn eval_bytecode_call_value_with_receiver_spread(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let packed = state.stack.pop()?;
+        let args = self.spread_call_arguments(&packed)?;
+        let callee = state.stack.pop()?;
+        let receiver = state.stack.pop()?;
+        let completion = self.call(&callee, &args, receiver)?;
+        Ok(Self::push_spread_completion(state, completion, next))
+    }
+
     pub(super) fn eval_bytecode_call_static_member_spread(
         &mut self,
         state: &mut BytecodeState,

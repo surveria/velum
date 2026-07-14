@@ -6,6 +6,8 @@ use crate::{
 
 use super::LayoutBuilder;
 
+mod helpers;
+
 impl LayoutBuilder {
     pub(super) fn analyze_expr(
         &mut self,
@@ -33,6 +35,7 @@ impl LayoutBuilder {
             Expr::Class(class) => self.analyze_class(class, scope, function),
             Expr::SuperCall { args } => self.analyze_exprs(args, scope, function),
             Expr::Parenthesized(expr)
+            | Expr::OptionalChain(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Await(expr)
@@ -51,11 +54,7 @@ impl LayoutBuilder {
                 condition,
                 consequent,
                 alternate,
-            } => {
-                self.analyze_expr(condition, scope, function)?;
-                self.analyze_expr(consequent, scope, function)?;
-                self.analyze_expr(alternate, scope, function)
-            }
+            } => self.analyze_conditional(condition, consequent, alternate, scope, function),
             Expr::Assignment { name, expr, .. } => {
                 self.resolve(name, scope, function)?;
                 self.analyze_expr(expr, scope, function)
@@ -89,16 +88,19 @@ impl LayoutBuilder {
             Expr::Member { object, .. }
             | Expr::OptionalMember { object, .. }
             | Expr::PrivateMember { object, .. }
+            | Expr::OptionalPrivateMember { object, .. }
             | Expr::PrivateIn { object, .. } => self.analyze_expr(object, scope, function),
             Expr::ComputedMember {
+                object, property, ..
+            }
+            | Expr::OptionalComputedMember {
                 object, property, ..
             } => {
                 self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(property, scope, function)
             }
-            Expr::Call { callee, args, .. } => {
-                self.analyze_expr(callee, scope, function)?;
-                self.analyze_exprs(args, scope, function)
+            Expr::Call { .. } | Expr::OptionalCall { .. } | Expr::New { .. } => {
+                self.analyze_call_like(expr.kind(), scope, function)
             }
             Expr::DynamicImport {
                 specifier, options, ..
@@ -108,10 +110,6 @@ impl LayoutBuilder {
             }
             Expr::Object(properties) => self.analyze_object_properties(properties, scope, function),
             Expr::Array(elements) => self.analyze_exprs(elements, scope, function),
-            Expr::New { constructor, args } => {
-                self.analyze_expr(constructor, scope, function)?;
-                self.analyze_exprs(args, scope, function)
-            }
         }
     }
 

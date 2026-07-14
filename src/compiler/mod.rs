@@ -29,6 +29,7 @@ mod hoist;
 mod inferred_name;
 mod member;
 mod object_literal;
+mod optional_chain;
 mod pattern;
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";

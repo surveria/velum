@@ -1,8 +1,8 @@
 use crate::{
     api::native_call::NativeCallTarget,
     bytecode::{
-        BytecodeAddress, BytecodeDynamicProperty, BytecodeInstruction, BytecodeObjectProperty,
-        BytecodeProperty,
+        BytecodeAddress, BytecodeCallSite, BytecodeDynamicProperty, BytecodeInstruction,
+        BytecodeObjectProperty, BytecodeProperty,
     },
     error::{Error, Result},
     runtime::{Context, control::Completion, function::BytecodeFunctionInit},
@@ -22,6 +22,7 @@ impl Context {
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::TailCallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::CallValueWithReceiver { .. }
             | BytecodeInstruction::TailCallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. } => {
@@ -45,6 +46,9 @@ impl Context {
             } => self.eval_bytecode_call_binding_spread(state, callee, *native, *strict, next),
             BytecodeInstruction::CallValueSpread => {
                 self.eval_bytecode_call_value_spread(state, next)
+            }
+            BytecodeInstruction::CallValueWithReceiverSpread => {
+                self.eval_bytecode_call_value_with_receiver_spread(state, next)
             }
             BytecodeInstruction::CallStaticMemberSpread { property } => {
                 self.eval_bytecode_call_static_member_spread(state, property, next)
@@ -162,6 +166,9 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::CallValueWithReceiver { site, arg_count } => {
+                self.eval_bytecode_call_value_with_receiver(state, *site, *arg_count, next)
+            }
             BytecodeInstruction::CallStaticMember {
                 property,
                 native,
@@ -203,6 +210,28 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode invocation instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_call_value_with_receiver(
+        &mut self,
+        state: &mut BytecodeState,
+        site: BytecodeCallSite,
+        arg_count: usize,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let args = state.stack.tail(arg_count)?;
+        let callee = state.stack.value_before_tail(arg_count, 0)?.clone();
+        let receiver = state.stack.value_before_tail(arg_count, 1)?.clone();
+        let completion = self.eval_cached_call_completion(site, &callee, args, receiver)?;
+        let Completion::Normal(value) = completion else {
+            return Ok(Some(completion));
+        };
+        state.stack.drop_tail(arg_count)?;
+        state.stack.pop()?;
+        state.stack.pop()?;
+        state.stack.push(value);
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_computed_member_call_completion(

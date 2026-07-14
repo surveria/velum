@@ -18,6 +18,8 @@ use super::{
     FunctionCompileMode,
 };
 
+mod expression_collector;
+
 struct FunctionCompileSpec<'a> {
     id: StaticFunctionId,
     name: Option<StaticName>,
@@ -606,11 +608,8 @@ impl CaptureBindingCollector {
             Expr::Class(class) => self.collect_class(class),
             Expr::SuperCall { args } => self.collect_exprs(args),
             Expr::Identifier(binding) => self.collect_binding(binding),
-            Expr::New { constructor, args } => {
-                self.collect_expr(constructor);
-                self.collect_exprs(args);
-            }
             Expr::Parenthesized(expr)
+            | Expr::OptionalChain(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Update { expr, .. }
@@ -630,11 +629,7 @@ impl CaptureBindingCollector {
                 condition,
                 consequent,
                 alternate,
-            } => {
-                self.collect_expr(condition);
-                self.collect_expr(consequent);
-                self.collect_expr(alternate);
-            }
+            } => self.collect_conditional_expr(condition, consequent, alternate),
             Expr::Assignment { name, expr, .. } => {
                 self.collect_binding(name);
                 self.collect_expr(expr);
@@ -669,16 +664,19 @@ impl CaptureBindingCollector {
             Expr::Member { object, .. }
             | Expr::OptionalMember { object, .. }
             | Expr::PrivateMember { object, .. }
+            | Expr::OptionalPrivateMember { object, .. }
             | Expr::PrivateIn { object, .. } => self.collect_expr(object),
             Expr::ComputedMember {
+                object, property, ..
+            }
+            | Expr::OptionalComputedMember {
                 object, property, ..
             } => {
                 self.collect_expr(object);
                 self.collect_expr(property);
             }
-            Expr::Call { callee, args, .. } => {
-                self.collect_expr(callee);
-                self.collect_exprs(args);
+            Expr::Call { .. } | Expr::OptionalCall { .. } | Expr::New { .. } => {
+                self.collect_call_like_expr(expr.kind());
             }
             Expr::DynamicImport {
                 specifier, options, ..
