@@ -9,6 +9,18 @@ fn preserves_labeled_break_completion_value() -> TestResult {
 }
 
 #[test]
+fn updates_empty_if_branch_completions() -> TestResult {
+    expect_value(
+        "1; do { if (true) { break; } } while (false)",
+        &Value::Undefined,
+    )?;
+    expect_value(
+        "2; do { if (false) {} else { 3; break; } } while (false)",
+        &Value::Number(3.0),
+    )
+}
+
+#[test]
 fn rejects_continue_to_non_iteration_label() -> TestResult {
     expect_error_contains(
         r"
@@ -35,6 +47,10 @@ fn rejects_labeled_lexical_and_async_function_declarations() -> TestResult {
     expect_error_contains(
         "label: async function f() {}",
         "async function declaration is not allowed as a label body",
+    )?;
+    expect_error_contains(
+        "if (true) first: second: function f() {}",
+        "labelled function declaration is not allowed as an if body",
     )
 }
 
