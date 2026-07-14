@@ -25,7 +25,7 @@ fn object_methods_use_the_home_object_and_actual_receiver() -> TestResult {
 #[test]
 fn super_writes_updates_and_compound_assignments_target_the_receiver() -> TestResult {
     expect_true(
-        r#"
+        r"
         var proto = { count: 1 };
         var object = {
             __proto__: proto,
@@ -36,7 +36,7 @@ fn super_writes_updates_and_compound_assignments_target_the_receiver() -> TestRe
             }
         };
         object.update() === 2 && object.count === 2 && proto.count === 1
-        "#,
+        ",
     )
 }
 

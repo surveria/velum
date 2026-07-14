@@ -32,7 +32,7 @@ enum JsonParseChildren {
 }
 
 impl JsonParseRecord {
-    fn scalar(original: Value, source: Vec<u16>) -> Self {
+    const fn scalar(original: Value, source: Vec<u16>) -> Self {
         Self {
             original,
             source: Some(source),
@@ -40,7 +40,7 @@ impl JsonParseRecord {
         }
     }
 
-    fn array(original: Value, children: Vec<Self>) -> Self {
+    const fn array(original: Value, children: Vec<Self>) -> Self {
         Self {
             original,
             source: None,
@@ -48,7 +48,7 @@ impl JsonParseRecord {
         }
     }
 
-    fn object(original: Value, children: Vec<(String, Self)>) -> Self {
+    const fn object(original: Value, children: Vec<(String, Self)>) -> Self {
         Self {
             original,
             source: None,

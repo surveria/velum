@@ -184,14 +184,14 @@ fn supports_computed_object_literal_methods() -> TestResult {
 #[test]
 fn object_method_parameter_defaults_can_access_super() -> TestResult {
     let value = eval(
-        r#"
+        r"
         let base = { value: 40 };
         let object = {
             answer(value = super.value) { return value + 2; }
         };
         Object.setPrototypeOf(object, base);
         object.answer()
-        "#,
+        ",
     )?;
 
     ensure_value(&value, &Value::Number(42.0))
