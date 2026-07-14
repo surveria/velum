@@ -230,6 +230,27 @@ fn strict_functions_and_methods_bind_arguments() -> TestResult {
 }
 
 #[test]
+fn restricted_arguments_thrower_is_frozen() -> TestResult {
+    ensure_value(
+        &eval(
+            r#"
+            const thrower = function () {
+                "use strict";
+                return Object.getOwnPropertyDescriptor(arguments, "callee").get;
+            }();
+            const descriptor = Object.getOwnPropertyDescriptor(thrower, "length");
+            descriptor.value === 0 &&
+                descriptor.writable === false &&
+                descriptor.enumerable === false &&
+                descriptor.configurable === false &&
+                Object.isFrozen(thrower)
+            "#,
+        )?,
+        &Value::Bool(true),
+    )
+}
+
+#[test]
 fn arguments_iterate_and_spread() -> TestResult {
     ensure_string(
         r#"

@@ -7,7 +7,9 @@ use crate::{
             PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
             PropertyWritable, TypedArrayPropertyIndex,
         },
-        property::{DynamicPropertyKey, delete_property},
+        property::{
+            DynamicPropertyKey, StringPropertyValue, delete_property, utf16_string_property_value,
+        },
     },
     value::Value,
 };
@@ -290,6 +292,15 @@ impl Context {
         if let Some(deletion) = self.semantic_property_delete(object, property)? {
             return self.finish_semantic_property_delete(deletion, property);
         }
+        if let Value::String(value) = object
+            && property.key().is_none_or(|key| key.symbol_id().is_none())
+            && !matches!(
+                utf16_string_property_value(value.as_utf16(), property.name())?,
+                StringPropertyValue::Missing
+            )
+        {
+            return Ok(false);
+        }
         delete_property(&mut self.objects, object, property)
     }
 
@@ -302,6 +313,21 @@ impl Context {
         value: Value,
         receiver: &Value,
     ) -> Result<Option<bool>> {
+        if self.semantic_object_ref(target)?.is_none() {
+            if let Value::String(string) = target
+                && property.key().is_none_or(|key| key.symbol_id().is_none())
+                && !matches!(
+                    utf16_string_property_value(string.as_utf16(), property.name())?,
+                    StringPropertyValue::Missing
+                )
+            {
+                return Ok(Some(false));
+            }
+            let Some(prototype) = self.primitive_prototype_value(target)? else {
+                return Ok(None);
+            };
+            return self.semantic_reflect_property_write(&prototype, property, value, receiver);
+        }
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return Ok(None);
         };
@@ -424,6 +450,20 @@ impl Context {
         {
             let length = self.array_length_from_value(&value)?;
             return self.objects.set_array_length(*id, length);
+        }
+        if existing_descriptor.is_some()
+            && let Value::Object(id) = receiver
+            && self.objects.is_proxy(*id)
+        {
+            let update =
+                PropertyUpdate::Data(DataPropertyUpdate::new(Some(value), None, None, None));
+            let descriptor_value = self.create_property_update_object(&update)?;
+            return self.semantic_define_own_property_update_with_descriptor(
+                receiver,
+                property,
+                update,
+                &descriptor_value,
+            );
         }
         if existing_descriptor.is_none()
             && let Value::Object(id) = receiver

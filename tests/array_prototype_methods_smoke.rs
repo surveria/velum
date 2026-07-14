@@ -111,7 +111,7 @@ fn supports_push_and_pop_on_array_like_objects() -> TestResult {
 }
 
 #[test]
-fn keeps_non_configurable_pop_on_generic_path() -> TestResult {
+fn rejects_pop_when_the_last_property_is_non_configurable() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
@@ -124,17 +124,22 @@ fn keeps_non_configurable_pop_on_generic_path() -> TestResult {
             enumerable: true,
             writable: true
         });
-        let popped = values.pop();
-        print("descriptor", popped, values.length, values[1], "1" in values);
-        popped === 2 &&
-            values.length === 1 &&
+        let typeError = false;
+        try {
+            values.pop();
+        } catch (error) {
+            typeError = error instanceof TypeError;
+        }
+        print("descriptor", typeError, values.length, values[1], "1" in values);
+        typeError &&
+            values.length === 2 &&
             values[1] === 2 &&
             ("1" in values) ? 42 : 0
         "#,
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_output(context.output(), &["descriptor 2 1 2 true".to_owned()])
+    ensure_output(context.output(), &["descriptor true 2 2 true".to_owned()])
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

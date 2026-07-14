@@ -150,7 +150,7 @@ fn supports_shift_and_unshift_on_array_like_objects() -> TestResult {
 }
 
 #[test]
-fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
+fn rejects_shift_and_unshift_at_non_writable_indices() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
@@ -163,7 +163,12 @@ fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
             enumerable: true,
             configurable: true
         });
-        let first = shifted.shift();
+        let shiftTypeError = false;
+        try {
+            shifted.shift();
+        } catch (error) {
+            shiftTypeError = error instanceof TypeError;
+        }
 
         let unshifted = [3];
         Object.defineProperty(unshifted, "0", {
@@ -172,15 +177,22 @@ fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
             enumerable: true,
             configurable: true
         });
-        let length = unshifted.unshift(1, 2);
+        let unshiftTypeError = false;
+        try {
+            unshifted.unshift(1, 2);
+        } catch (error) {
+            unshiftTypeError = error instanceof TypeError;
+        }
 
-        first === 1 &&
-            shifted.length === 2 &&
+        shiftTypeError &&
+            shifted.length === 3 &&
             shifted[0] === 1 &&
-            shifted[1] === 3 &&
-            length === 3 &&
+            shifted[1] === 2 &&
+            shifted[2] === 3 &&
+            unshiftTypeError &&
+            unshifted.length === 3 &&
             unshifted[0] === 3 &&
-            unshifted[1] === 2 &&
+            unshifted[1] === undefined &&
             unshifted[2] === 3 ? 42 : 0
         "#,
     )?;
@@ -189,7 +201,7 @@ fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
 }
 
 #[test]
-fn keeps_descriptor_modified_holey_arrays_on_generic_paths() -> TestResult {
+fn rejects_shift_and_unshift_at_non_configurable_indices() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
@@ -203,7 +215,12 @@ fn keeps_descriptor_modified_holey_arrays_on_generic_paths() -> TestResult {
             configurable: false
         });
         shifted[2] = "tail";
-        let first = shifted.shift();
+        let shiftTypeError = false;
+        try {
+            shifted.shift();
+        } catch (error) {
+            shiftTypeError = error instanceof TypeError;
+        }
 
         let unshifted = Array(2);
         Object.defineProperty(unshifted, "1", {
@@ -212,14 +229,21 @@ fn keeps_descriptor_modified_holey_arrays_on_generic_paths() -> TestResult {
             enumerable: true,
             configurable: false
         });
-        let length = unshifted.unshift("head");
+        let unshiftTypeError = false;
+        try {
+            unshifted.unshift("head");
+        } catch (error) {
+            unshiftTypeError = error instanceof TypeError;
+        }
 
-        first === "zero" &&
-            shifted.length === 2 &&
+        shiftTypeError &&
+            shifted.length === 3 &&
             shifted[0] === "zero" &&
-            shifted[1] === "tail" &&
-            length === 3 &&
-            unshifted[0] === "head" &&
+            shifted[1] === undefined &&
+            shifted[2] === "tail" &&
+            unshiftTypeError &&
+            unshifted.length === 3 &&
+            unshifted[0] === undefined &&
             unshifted[1] === "tail" &&
             unshifted[2] === "tail" ? 42 : 0
         "#,

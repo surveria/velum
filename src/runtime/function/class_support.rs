@@ -61,6 +61,7 @@ pub(in crate::runtime) enum ResolvedClassField {
     Public {
         key: crate::runtime::object::PropertyKey,
         name: String,
+        infer_name: bool,
         initializer: Option<crate::bytecode::BytecodeBlock>,
     },
     Private {
@@ -373,7 +374,15 @@ impl Context {
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
             match field {
-                ResolvedClassField::Public { key, name, .. } => {
+                ResolvedClassField::Public {
+                    key,
+                    name,
+                    infer_name,
+                    ..
+                } => {
+                    if *infer_name {
+                        self.set_function_name(&value, name, None)?;
+                    }
                     let update = crate::runtime::object::PropertyUpdate::Data(
                         crate::runtime::object::DataPropertyUpdate::new(
                             Some(value.clone()),

@@ -86,6 +86,29 @@ fn keeps_global_this_isolated_per_context() -> TestResult {
     ensure_value(&second_value, &Value::Number(42.0))
 }
 
+#[test]
+fn lists_unmaterialized_standard_global_properties() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let names = Object.getOwnPropertyNames(globalThis);
+        let expected = [
+            "NaN", "Infinity", "undefined", "eval", "parseInt", "parseFloat",
+            "isNaN", "isFinite", "decodeURI", "decodeURIComponent", "encodeURI",
+            "encodeURIComponent", "Object", "Function", "Array", "String",
+            "Boolean", "Number", "Date", "RegExp", "Error", "EvalError",
+            "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError",
+            "Math", "JSON"
+        ];
+        expected.every(function (name) { return names.includes(name); }) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

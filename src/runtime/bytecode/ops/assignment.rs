@@ -188,9 +188,7 @@ impl Context {
         value: Value,
         strict: bool,
     ) -> Result<()> {
-        if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
-            || (!strict && self.bytecode_property_target_is_plain_array(object)?)
-        {
+        if !strict && self.bytecode_property_target_is_plain_array(object)? {
             return self.set_static_property_value(object, property, access, value);
         }
         if self.try_set_cached_static_own_property_value(object, property, access, value.clone())? {
@@ -211,9 +209,7 @@ impl Context {
         value: Value,
         strict: bool,
     ) -> Result<()> {
-        if bytecode_property_set_uses_sloppy_primitive_path(object, strict)
-            || (!strict && self.bytecode_property_target_is_plain_array(object)?)
-        {
+        if !strict && self.bytecode_property_target_is_plain_array(object)? {
             return self.set_cached_dynamic_property_value(object, property, access, value);
         }
         if self.try_set_cached_dynamic_own_property_value(
@@ -665,10 +661,6 @@ const fn bytecode_set_failure(strict: bool) -> SetFailureBehavior {
     } else {
         SetFailureBehavior::ReturnFalse
     }
-}
-
-const fn bytecode_property_set_uses_sloppy_primitive_path(object: &Value, strict: bool) -> bool {
-    !strict && !matches!(object, Value::Object(_) | Value::Undefined | Value::Null)
 }
 
 fn logical_assignment_should_store(context: &Context, op: BinaryOp, value: &Value) -> Result<bool> {

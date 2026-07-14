@@ -1,7 +1,9 @@
 use crate::{
     error::Result,
     runtime::binding::scope::BindingCell,
-    runtime::native::{GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, UNDEFINED_NAME},
+    runtime::native::{
+        DEFAULT_GLOBAL_BINDING_NAMES, GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, UNDEFINED_NAME,
+    },
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
         OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
@@ -270,6 +272,22 @@ impl Context {
 
     pub(crate) fn is_global_object_id(&self, id: ObjectId) -> bool {
         self.global_object_realm(id).is_some()
+    }
+
+    pub(in crate::runtime) fn virtual_global_object_property_names(
+        &mut self,
+        id: ObjectId,
+    ) -> Result<Vec<&'static str>> {
+        let Some(realm) = self.global_object_realm(id) else {
+            return Ok(Vec::new());
+        };
+        self.with_realm(realm, |context| {
+            Ok(DEFAULT_GLOBAL_BINDING_NAMES
+                .iter()
+                .copied()
+                .filter(|name| !context.global_object_name_is_authoritative(name))
+                .collect())
+        })
     }
 
     pub(crate) fn global_object_property_value(

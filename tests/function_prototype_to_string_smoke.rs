@@ -13,10 +13,13 @@ fn formats_source_unavailable_callables_as_native_functions() -> TestResult {
         let ordinary = function named() {};
         let bound = ordinary.bind(null);
         let proxy = new Proxy(ordinary, {});
-        let callables = [ordinary, bound, proxy, hostNoop, Array, Math.abs];
-        callables.every(function (callable) {
+        let anonymousCallables = [ordinary, bound, proxy, hostNoop];
+        let anonymousSources = anonymousCallables.every(function (callable) {
             return source.call(callable) === "function () { [native code] }";
-        }) ? 42 : 0
+        });
+        anonymousSources &&
+            source.call(Array) === "function Array() { [native code] }" &&
+            source.call(Math.abs) === "function abs() { [native code] }" ? 42 : 0
         "#,
     )?;
     ensure_value(&value, &Value::Number(42.0))

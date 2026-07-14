@@ -377,10 +377,10 @@ fn supports_object_literals_and_properties() -> TestResult {
         &Value::Number(42.0),
     )?;
 
-    let Err(error) = eval("let value = 1; value.name = 2;") else {
-        return Err("expected property assignment on non-object to fail".into());
-    };
-    ensure_error_contains(&error, "property assignment")
+    expect_value(
+        "let value = 1; let assigned = value.name = 2; assigned === 2 && value.name === undefined ? 42 : 0",
+        &Value::Number(42.0),
+    )
 }
 
 #[test]
@@ -436,10 +436,10 @@ fn supports_computed_properties() -> TestResult {
         &Value::from("ReferenceError:'missing' is not defined"),
     )?;
 
-    let Err(error) = eval("let value = 1; value['name'] = 2;") else {
-        return Err("expected computed property assignment on non-object to fail".into());
-    };
-    ensure_error_contains(&error, "property assignment")
+    expect_value(
+        "let value = 1; let assigned = value['name'] = 2; assigned === 2 && value.name === undefined ? 42 : 0",
+        &Value::Number(42.0),
+    )
 }
 
 #[test]

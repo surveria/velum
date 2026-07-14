@@ -107,6 +107,25 @@ fn has_instance_matches_prototype_chain() -> TestResult {
 }
 
 #[test]
+fn has_instance_recursively_unwraps_bound_functions() -> TestResult {
+    eval_is_42(
+        r"
+        function Constructor() {}
+        let instance = new Constructor();
+        let bound = Constructor.bind(null);
+        let doubleBound = bound.bind(null);
+        let tripleBound = doubleBound.bind(null);
+        instance instanceof bound &&
+            instance instanceof doubleBound &&
+            instance instanceof tripleBound &&
+            Function.prototype[Symbol.hasInstance].call(tripleBound, instance)
+            ? 42
+            : 0
+        ",
+    )
+}
+
+#[test]
 fn has_instance_returns_false_for_non_objects_and_non_callables() -> TestResult {
     eval_is_42(
         r#"

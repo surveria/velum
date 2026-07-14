@@ -312,6 +312,7 @@ impl Context {
         let Value::NativeFunction(id) = thrower else {
             return Err(Error::runtime("ThrowTypeError intrinsic is not native"));
         };
+        self.native_function_mut(id)?.properties_mut().freeze();
         self.realm.throw_type_error = Some(id);
         reservation.commit()?;
         Ok(Value::NativeFunction(id))
@@ -335,6 +336,9 @@ impl Context {
     ) -> Result<Value> {
         let source = if let Value::Function(id) = this_value {
             self.function_source_text(*id)?
+        } else if let Value::NativeFunction(id) = this_value {
+            let kind = self.native_function(*id)?.kind();
+            crate::runtime::function::native_function_source_text(kind)
         } else if self.semantic_is_callable(this_value)? {
             NATIVE_FUNCTION_SOURCE_TEXT.to_owned()
         } else {

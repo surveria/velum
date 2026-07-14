@@ -218,7 +218,7 @@ impl Context {
         )
     }
 
-    fn bigint_constructor_prototype(&mut self) -> Result<ObjectId> {
+    pub(in crate::runtime) fn bigint_constructor_prototype(&mut self) -> Result<ObjectId> {
         let Value::NativeFunction(id) = self.bigint_constructor_value()? else {
             return Err(Error::runtime("BigInt constructor value is not native"));
         };

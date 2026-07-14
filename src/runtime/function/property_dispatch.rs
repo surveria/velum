@@ -10,7 +10,7 @@ use crate::{
     value::{FunctionId, HostFunctionId, NativeFunctionId, Value},
 };
 
-use super::properties::FunctionPropertyKind;
+use super::{FUNCTION_PROTOTYPE_CALLER_PROPERTY, properties::FunctionPropertyKind};
 use crate::runtime::native::NativeFunctionKind;
 
 impl Context {
@@ -171,7 +171,11 @@ impl Context {
         if Self::is_restricted_property(property)
             && !self.function_uses_restricted_prototype(id, property)?
         {
-            return Ok(Value::Undefined);
+            return Ok(if property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY {
+                self.legacy_function_caller_value(id)?
+            } else {
+                Value::Undefined
+            });
         }
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent
@@ -192,6 +196,32 @@ impl Context {
             return Ok(Value::Undefined);
         };
         self.finish_semantic_property_read(read, receiver, property)
+    }
+
+    fn legacy_function_caller_value(&self, id: FunctionId) -> Result<Value> {
+        let mut found_callee = false;
+        let caller = self
+            .activation_frames
+            .iter()
+            .rev()
+            .filter_map(crate::runtime::activation::ActivationFrame::function_id)
+            .find(|active| {
+                if found_callee {
+                    return true;
+                }
+                found_callee = *active == id;
+                false
+            });
+        let Some(caller) = caller else {
+            return Ok(Value::Null);
+        };
+        if self.function_uses_restricted_prototype(
+            caller,
+            PropertyLookup::new(FUNCTION_PROTOTYPE_CALLER_PROPERTY, None),
+        )? {
+            return Ok(Value::Null);
+        }
+        Ok(Value::Function(caller))
     }
 
     pub(crate) fn get_host_function_property_lookup(

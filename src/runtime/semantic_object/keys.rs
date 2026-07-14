@@ -214,7 +214,12 @@ impl Context {
     }
 
     fn ordinary_own_property_keys(&mut self, id: crate::value::ObjectId) -> Result<Vec<Value>> {
-        let names = self.objects.own_property_names(id, &self.atoms)?;
+        let mut names = self.objects.own_property_names(id, &self.atoms)?;
+        for virtual_name in self.virtual_global_object_property_names(id)? {
+            if !names.iter().any(|name| name == virtual_name) {
+                names.push(virtual_name.to_owned());
+            }
+        }
         let symbols = self.objects.own_property_symbols(id, &self.symbols)?;
         let mut keys = self.property_name_values(names)?;
         keys.extend(symbols.into_iter().map(Value::Symbol));

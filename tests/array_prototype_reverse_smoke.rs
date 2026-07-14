@@ -102,7 +102,7 @@ fn supports_array_reverse_method() -> TestResult {
 }
 
 #[test]
-fn keeps_descriptor_modified_arrays_on_generic_reverse_path() -> TestResult {
+fn rejects_reverse_when_a_lower_property_is_not_writable() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
@@ -115,8 +115,13 @@ fn keeps_descriptor_modified_arrays_on_generic_reverse_path() -> TestResult {
             enumerable: true,
             configurable: true
         });
-        values.reverse();
-        values[0] === 1 && values[1] === 2 && values[2] === 1 ? 42 : 0
+        let typeError = false;
+        try {
+            values.reverse();
+        } catch (error) {
+            typeError = error instanceof TypeError;
+        }
+        typeError && values[0] === 1 && values[1] === 2 && values[2] === 3 ? 42 : 0
         "#,
     )?;
 
@@ -124,7 +129,7 @@ fn keeps_descriptor_modified_arrays_on_generic_reverse_path() -> TestResult {
 }
 
 #[test]
-fn keeps_descriptor_modified_holey_arrays_on_generic_reverse_path() -> TestResult {
+fn rejects_reverse_when_a_lower_property_is_not_configurable() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
@@ -137,11 +142,17 @@ fn keeps_descriptor_modified_holey_arrays_on_generic_reverse_path() -> TestResul
             enumerable: true,
             configurable: false
         });
-        values.reverse();
-        values[0] === "zero" &&
-            values[2] === "zero" &&
+        let typeError = false;
+        try {
+            values.reverse();
+        } catch (error) {
+            typeError = error instanceof TypeError;
+        }
+        typeError &&
+            values[0] === "zero" &&
+            values[2] === undefined &&
             ("0" in values) &&
-            ("2" in values) ? 42 : 0
+            !("2" in values) ? 42 : 0
         "#,
     )?;
 

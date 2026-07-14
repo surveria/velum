@@ -537,10 +537,16 @@ impl<'a> BytecodeCompiler<'a> {
         let mut fields = Vec::with_capacity(class.fields.len());
         for field in &class.fields {
             let key = self.compile_class_element_key(&field.key, private_names)?;
+            let infer_name_from_computed_key = field.name.is_none()
+                && field
+                    .initializer
+                    .as_ref()
+                    .is_some_and(Self::is_anonymous_function_definition);
             fields.push(BytecodeClassField {
                 key,
                 is_static: field.is_static,
                 name: field.name.clone(),
+                infer_name_from_computed_key,
                 initializer: field
                     .initializer
                     .as_ref()

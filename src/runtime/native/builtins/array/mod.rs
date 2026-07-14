@@ -119,7 +119,7 @@ impl Context {
             && u32::try_from(end).is_ok()
             && !self
                 .objects
-                .array_index_range_has_accessor_in_chain(*id, length, end)?
+                .array_index_range_has_mutation_barrier_in_chain(*id, length, end)?
         {
             return self
                 .objects
@@ -162,7 +162,7 @@ impl Context {
             && let Some(length) = self.objects.array_len_if_array(*id)?
             && !self
                 .objects
-                .array_index_range_has_accessor_in_chain(*id, 0, length)?
+                .array_index_range_has_mutation_barrier_in_chain(*id, 0, length)?
         {
             return self
                 .objects
@@ -188,11 +188,13 @@ impl Context {
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
             && self.objects.array_length_is_writable(*id)?
-            && !self.objects.array_index_range_has_accessor_in_chain(
-                *id,
-                length.saturating_sub(1),
-                length,
-            )?
+            && !self
+                .objects
+                .array_index_range_has_mutation_barrier_in_chain(
+                    *id,
+                    length.saturating_sub(1),
+                    length,
+                )?
             && !self.objects.prototype_chain_has_array_index_in_range(
                 *id,
                 length.saturating_sub(1),
@@ -222,6 +224,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -253,6 +256,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -284,6 +288,7 @@ impl Context {
         let search = search.unwrap_or(&default_search);
         if let Value::Object(id) = this_value
             && let Some(length) = self.objects.array_len_if_array(*id)?
+            && Self::array_search_bound_is_primitive(from_index)
             && !self
                 .objects
                 .array_index_range_has_accessor_in_chain(*id, 0, length)?
@@ -422,7 +427,7 @@ impl Context {
             && self.objects.array_length_is_writable(*id)?
             && !self
                 .objects
-                .array_index_range_has_accessor_in_chain(*id, 0, length)?
+                .array_index_range_has_mutation_barrier_in_chain(*id, 0, length)?
         {
             return self
                 .objects
@@ -467,7 +472,7 @@ impl Context {
             && let Some(end) = length.checked_add(args.len())
             && !self
                 .objects
-                .array_index_range_has_accessor_in_chain(*id, 0, end)?
+                .array_index_range_has_mutation_barrier_in_chain(*id, 0, end)?
         {
             return self
                 .objects

@@ -3,8 +3,8 @@ use crate::{
     runtime::Context,
     runtime::object::{PropertyKey, PropertyLookup},
     runtime::property::{
-        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
-        has_property, utf16_string_property_value,
+        DynamicPropertyKey, PropertyValue, StringPropertyValue, has_property,
+        utf16_string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -122,6 +122,26 @@ impl Context {
         }
     }
 
+    pub(in crate::runtime) fn primitive_prototype_value(
+        &mut self,
+        receiver: &Value,
+    ) -> Result<Option<Value>> {
+        let prototype = match receiver {
+            Value::Bool(_) => self.boolean_constructor_prototype()?,
+            Value::Number(_) => self.number_constructor_prototype()?,
+            Value::BigInt(_) => self.bigint_constructor_prototype()?,
+            Value::String(_) => self.string_constructor_prototype()?,
+            Value::Symbol(_) => self.symbol_constructor_prototype()?,
+            Value::Undefined
+            | Value::Null
+            | Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => return Ok(None),
+        };
+        Ok(Some(Value::Object(prototype)))
+    }
+
     pub(in crate::runtime) fn get_prototype_property_value_with_receiver(
         &mut self,
         prototype: ObjectId,
@@ -138,8 +158,15 @@ impl Context {
         receiver: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        let value = get_property_with_receiver(&self.objects, prototype, receiver, property)?;
-        self.runtime_property_value(value)
+        let prototype = Value::Object(prototype);
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&prototype, receiver, property)?
+        else {
+            return Err(crate::error::Error::type_error(
+                "primitive prototype is not an object",
+            ));
+        };
+        self.finish_semantic_property_read(read, receiver, property)
     }
 
     pub(in crate::runtime) fn has_dynamic_property_value(

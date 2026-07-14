@@ -54,6 +54,7 @@ const ARRAY_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ARRAY_UNSCOPABLES_SYMBOL_DISPLAY: &str = "[Symbol.unscopables]";
 const SYMBOL_UNSCOPABLES_PROPERTY: &str = "unscopables";
 const ARRAY_UNSCOPABLE_PROPERTIES: &[&str] = &[
+    ARRAY_PROTOTYPE_AT_PROPERTY,
     ARRAY_PROTOTYPE_COPY_WITHIN_PROPERTY,
     "entries",
     ARRAY_PROTOTYPE_FILL_PROPERTY,
