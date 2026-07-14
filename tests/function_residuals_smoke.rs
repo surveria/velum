@@ -38,6 +38,21 @@ fn sloppy_function_caller_reflection_returns_null() -> TestResult {
 }
 
 #[test]
+fn sloppy_function_caller_reflection_exposes_a_sloppy_caller() -> TestResult {
+    assert_script(
+        r"
+        function caller() {
+            return callee();
+        }
+        function callee() {
+            return callee.caller;
+        }
+        caller() === caller && callee() === null ? 42 : 0
+        ",
+    )
+}
+
+#[test]
 fn bound_functions_derive_metadata_and_has_instance() -> TestResult {
     assert_script(
         r#"
