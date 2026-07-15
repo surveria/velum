@@ -246,6 +246,51 @@ fn setters_handle_invalid_dates_and_timezone_offset() -> TestResult {
 }
 
 #[test]
+fn date_setters_coerce_all_arguments_before_computing_the_result() -> TestResult {
+    ensure_string(
+        r#"
+        const effects = [];
+        const observed = (label, value) => ({
+            valueOf() {
+                effects.push(label);
+                return value;
+            }
+        });
+        new Date(0).setHours(
+            observed("hour", NaN),
+            observed("minute", 1),
+            observed("second", 2),
+            observed("millisecond", 3)
+        );
+        new Date(NaN).setFullYear(
+            observed("year", NaN),
+            observed("month", 4),
+            observed("date", 5)
+        );
+        effects.join("|")
+        "#,
+        "hour|minute|second|millisecond|year|month|date",
+    )
+}
+
+#[test]
+fn date_space_forms_allow_flexible_fields_without_weakening_iso_t_forms() -> TestResult {
+    ensure_string(
+        r#"
+        [
+            new Date("1997-3-8 1:1:1.01").getTime()
+                === new Date("1997-03-08T01:01:01.01").getTime(),
+            new Date("+001997-3-8 11:19:20").getTime()
+                === new Date("1997-03-08T11:19:20").getTime(),
+            Number.isNaN(new Date("1997-3-8T11:19:20").getTime()),
+            Number.isNaN(new Date("1997-03-08T1:1:1").getTime())
+        ].join("|")
+        "#,
+        "true|true|true|true",
+    )
+}
+
+#[test]
 fn symbol_to_primitive_uses_date_ordering() -> TestResult {
     ensure_string(
         r#"

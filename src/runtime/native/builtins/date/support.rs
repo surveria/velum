@@ -151,17 +151,6 @@ pub(super) fn integer_component(
     Ok(Some(integer))
 }
 
-pub(super) fn integer_component_with_default(
-    context: &mut Context,
-    value: Option<&Value>,
-    default: i64,
-) -> Result<Option<i64>> {
-    if value.is_none() {
-        return Ok(Some(default));
-    }
-    integer_component(context, value)
-}
-
 pub(super) fn normalize_component_year(year: i64) -> i64 {
     if (0..=99).contains(&year) {
         return year.saturating_add(YEAR_OFFSET_1900);
@@ -254,6 +243,9 @@ pub(super) fn parse_date_string(text: &str) -> Result<DateValue> {
     if let Some(value) = parse_legacy_date_string(text) {
         return Ok(value);
     }
+    if let Some((date, time)) = text.split_once(' ') {
+        return parse_space_date_time(date, time);
+    }
     let (date, time) = match text.split_once(ISO_DATE_TIME_SEPARATOR) {
         Some((date, time)) => (date, Some(time)),
         None => (text, None),
@@ -275,6 +267,69 @@ pub(super) fn parse_date_string(text: &str) -> Result<DateValue> {
         second,
         millisecond,
     ))
+}
+
+fn parse_space_date_time(date: &str, time: &str) -> Result<DateValue> {
+    let Some((year, month, day)) = parse_flexible_date_part(date) else {
+        return Ok(DateValue::Invalid);
+    };
+    let Some((hour, minute, second, millisecond)) = parse_flexible_time_part(time)? else {
+        return Ok(DateValue::Invalid);
+    };
+    Ok(make_date_value(
+        year,
+        month
+            .checked_sub(1)
+            .ok_or_else(|| Error::runtime("parsed Date month underflowed"))?,
+        day,
+        hour,
+        minute,
+        second,
+        millisecond,
+    ))
+}
+
+fn parse_flexible_date_part(text: &str) -> Option<(i64, i64, i64)> {
+    let mut parts = text.rsplitn(3, '-');
+    let day = parse_one_or_two_digits(parts.next()?)?;
+    let month = parse_one_or_two_digits(parts.next()?)?;
+    let year = parse_date_year(parts.next()?)?;
+    is_valid_month_day(year, month, day).then_some((year, month, day))
+}
+
+fn parse_flexible_time_part(text: &str) -> Result<Option<(i64, i64, i64, i64)>> {
+    let mut parts = text.split(':');
+    let Some(hour) = parts.next().and_then(parse_one_or_two_digits) else {
+        return Ok(None);
+    };
+    let Some(minute) = parts.next().and_then(parse_one_or_two_digits) else {
+        return Ok(None);
+    };
+    let (second, millisecond) = if let Some(text) = parts.next() {
+        parse_flexible_second_and_millisecond(text)?
+    } else {
+        (Some(0), 0)
+    };
+    if parts.next().is_some() {
+        return Ok(None);
+    }
+    let Some(second) = second else {
+        return Ok(None);
+    };
+    if hour > 23 || minute > 59 || second > 59 {
+        return Ok(None);
+    }
+    Ok(Some((hour, minute, second, millisecond)))
+}
+
+fn parse_flexible_second_and_millisecond(text: &str) -> Result<(Option<i64>, i64)> {
+    let Some((second, fraction)) = text.split_once('.') else {
+        return Ok((parse_one_or_two_digits(text), 0));
+    };
+    let Some(second) = parse_one_or_two_digits(second) else {
+        return Ok((None, 0));
+    };
+    parse_millisecond_fraction(fraction).map(|millisecond| (Some(second), millisecond))
 }
 
 fn parse_legacy_date_string(text: &str) -> Option<DateValue> {
@@ -405,6 +460,13 @@ fn parse_millisecond_fraction(text: &str) -> Result<i64> {
 
 fn parse_fixed_digits(text: &str, count: usize) -> Option<i64> {
     if text.len() != count || !text.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<i64>().ok()
+}
+
+fn parse_one_or_two_digits(text: &str) -> Option<i64> {
+    if !(1..=2).contains(&text.len()) || !text.chars().all(|ch| ch.is_ascii_digit()) {
         return None;
     }
     text.parse::<i64>().ok()
