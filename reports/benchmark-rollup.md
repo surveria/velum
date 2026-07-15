@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260715T030547Z.md`
-- Task: PR #639: architecture: repair lexical environment instantiation
-- Performance: 6.77x (4/5 >1.00x) (from `rsqjs-test-report-20260715T030547Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T030547Z.md`)
+- `rsqjs-test-report-20260715T033659Z.md`
+- Task: PR #640: architecture: unify Intl locale negotiation
+- Performance: 6.74x (4/5 >1.00x) (from `rsqjs-test-report-20260715T033659Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T033659Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102479 passed / 99 failed (99.90%) (from `rsqjs-test-report-20260715T030547Z.md`)
+- Full Test262: 102500 passed / 78 failed (99.92%) (from `rsqjs-test-report-20260715T033659Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -574,3 +574,4 @@ Latest report:
 | `20260715T012904Z` `14aaaf5` PR #637: bytecode: complete proper tail-position expression lowering | 6.73x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102431 passed / 147 failed (99.86%) |
 | `20260715T020622Z` `6e7655a` PR #638: runner: use canonical pinned Test262 harness semantics | 6.69x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102463 passed / 115 failed (99.89%) |
 | `20260715T030547Z` `66af6bb` PR #639: architecture: repair lexical environment instantiation | 6.77x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102479 passed / 99 failed (99.90%) |
+| `20260715T033659Z` `af8c62f` PR #640: architecture: unify Intl locale negotiation | 6.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102500 passed / 78 failed (99.92%) |
