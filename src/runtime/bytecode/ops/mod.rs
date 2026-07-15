@@ -22,7 +22,7 @@ use crate::{
     runtime::{
         Context,
         abstract_operations::{
-            abstract_equality, number_strict_equality, strict_equality, to_boolean,
+            abstract_equality, number_strict_equality, same_value, strict_equality, to_boolean,
         },
     },
     syntax::{BinaryOp, DeclKind, UnaryOp},
@@ -325,7 +325,7 @@ impl Context {
             return Ok(Value::Bool(false));
         }
         let target = self.instanceof_target_prototype(right)?;
-        let matches = self.value_prototype_chain_has_object(left, target)?;
+        let matches = self.value_prototype_chain_has_value(left, &target)?;
         Ok(Value::Bool(matches))
     }
 
@@ -380,42 +380,38 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         match value {
-            Value::Function(_) | Value::NativeFunction(_) | Value::Object(_) => {
-                self.get_method(value, key.lookup())
-            }
+            Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Object(_) => self.get_method(value, key.lookup()),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
             | Value::BigInt(_)
             | Value::String(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_) => Ok(None),
+            | Value::Symbol(_) => Ok(None),
         }
     }
 
-    fn instanceof_target_prototype(&mut self, right: &Value) -> Result<crate::value::ObjectId> {
+    fn instanceof_target_prototype(&mut self, right: &Value) -> Result<Value> {
         if !self.semantic_is_callable(right)? {
             return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));
         }
         let prototype = self.get_named(right, INSTANCEOF_PROTOTYPE_PROPERTY)?;
-        let Value::Object(id) = prototype else {
+        if self.semantic_object_ref(&prototype)?.is_none() {
             return Err(Error::type_error(INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR));
-        };
-        Ok(id)
+        }
+        Ok(prototype)
     }
 
-    fn value_prototype_chain_has_object(
-        &mut self,
-        value: &Value,
-        target: crate::value::ObjectId,
-    ) -> Result<bool> {
+    fn value_prototype_chain_has_value(&mut self, value: &Value, target: &Value) -> Result<bool> {
         let mut current = value.clone();
         loop {
             let Some(prototype) = self.semantic_get_prototype(&current)? else {
                 return Ok(false);
             };
-            if matches!(prototype, Value::Object(id) if id == target) {
+            if same_value(&prototype, target) {
                 return Ok(true);
             }
             if matches!(prototype, Value::Null) {

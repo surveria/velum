@@ -64,11 +64,17 @@ fn creates_callable_is_html_dda_host_exotics() -> TestResult {
     let value = context.eval(
         "var dda = hostCreateIsHTMLDDA(); \
          dda.answer = 42; \
+         function Superclass() {} \
+         Superclass.prototype = dda; \
+         class Derived extends Superclass {} \
+         var derived = new Derived(); \
          !dda && typeof dda === 'undefined' && \
          dda == null && null == dda && dda == undefined && undefined == dda && \
          dda !== null && dda !== undefined && Object.is(dda, dda) && \
          dda() === null && dda.answer === 42 && \
-         Object.getPrototypeOf(dda) === Function.prototype ? 42 : 0",
+         Object.getPrototypeOf(dda) === Function.prototype && \
+         Object.getPrototypeOf(Derived.prototype) === dda && \
+         derived instanceof Derived && derived instanceof Superclass ? 42 : 0",
     )?;
     if value == Value::Number(42.0) {
         return Ok(());
