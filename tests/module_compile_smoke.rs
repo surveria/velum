@@ -14,6 +14,7 @@ fn compiles_module_requests_imports_and_exports() -> TestResult {
         "app/main.js",
         r#"
             import primary, { value as localValue } from "./dep.js";
+            import { "*" as starName } from "./dep.js";
             import * as tools from "./tools.js";
             export { localValue as renamed };
             export * from "./extra.js";
@@ -26,7 +27,7 @@ fn compiles_module_requests_imports_and_exports() -> TestResult {
         module.requests() == ["./dep.js", "./tools.js", "./extra.js", "./namespace.js"],
         "unexpected module requests",
     )?;
-    ensure(module.imports().len() == 3, "unexpected import count")?;
+    ensure(module.imports().len() == 4, "unexpected import count")?;
     ensure(
         matches!(
         module
@@ -36,6 +37,10 @@ fn compiles_module_requests_imports_and_exports() -> TestResult {
         Some(ModuleImportName::Name(name)) if name == "default"
         ),
         "default import metadata is missing",
+    )?;
+    ensure(
+        matches!(module.imports().get(2).map(rs_quickjs::ModuleImport::import_name), Some(ModuleImportName::Name(name)) if name == "*"),
+        "string-named star import metadata is missing",
     )?;
     ensure(
         module.exports().iter().any(|entry| {

@@ -23,13 +23,11 @@ enum ArrowParameters {
     Single,
     Parenthesized,
 }
-
 #[derive(Debug, Clone, Copy)]
 struct ArrowSignature {
     is_async: bool,
     parameters: ArrowParameters,
 }
-
 impl Parser {
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
@@ -232,7 +230,11 @@ impl Parser {
             let expr = self.new_target_expr(new_span)?;
             return self.call_suffix(expr);
         }
-        if self.match_kind(&TokenKind::Import) {
+        let import_meta = self.peek_kind_is(1, &TokenKind::Dot)
+            && self.peek_token(2).is_some_and(|token| {
+                token.is_unescaped_identifier_named(IMPORT_META_PROPERTY_NAME)
+            });
+        if self.check(&TokenKind::Import) && !import_meta {
             return Err(Error::parse_at(
                 "import call cannot be used as a constructor",
                 new_span,

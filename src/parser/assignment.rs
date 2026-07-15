@@ -64,6 +64,8 @@ impl Parser {
                         | TokenKind::RParen
                         | TokenKind::RBracket
                         | TokenKind::RBrace
+                        | TokenKind::TemplateMiddle(_)
+                        | TokenKind::TemplateTail(_)
                         | TokenKind::Eof
                 )
             ) {

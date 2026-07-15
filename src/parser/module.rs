@@ -113,10 +113,10 @@ impl Parser {
         let mut pending = Vec::new();
         if source_phase {
             let binding = self.consume_binding_identifier("expected source import binding")?;
-            pending.push((SOURCE_KEYWORD.to_owned(), binding));
+            pending.push((ModuleImportName::Source, binding));
         } else if !self.check(&TokenKind::Star) && !self.check(&TokenKind::LBrace) {
             let binding = self.consume_binding_identifier("expected default import binding")?;
-            pending.push(("default".to_owned(), binding));
+            pending.push((ModuleImportName::Name("default".to_owned()), binding));
             if self.match_kind(&TokenKind::Comma) {
                 self.module_import_tail(&mut pending)?;
             }
@@ -131,13 +131,7 @@ impl Parser {
             let local_name = binding.name().as_str().to_owned();
             module.imports.push(ModuleImportEntry {
                 request: request.clone(),
-                import_name: if phase == ImportPhase::Source {
-                    ModuleImportName::Source
-                } else if import_name == "*" {
-                    ModuleImportName::Namespace
-                } else {
-                    ModuleImportName::Name(import_name)
-                },
+                import_name,
                 local_name,
             });
             statements.push(
@@ -163,12 +157,12 @@ impl Parser {
 
     fn module_import_tail(
         &mut self,
-        pending: &mut Vec<(String, crate::syntax::StaticBinding)>,
+        pending: &mut Vec<(ModuleImportName, crate::syntax::StaticBinding)>,
     ) -> Result<()> {
         if self.match_kind(&TokenKind::Star) {
             self.consume_contextual_module_word(AS_KEYWORD)?;
             let binding = self.consume_binding_identifier("expected namespace import binding")?;
-            pending.push(("*".to_owned(), binding));
+            pending.push((ModuleImportName::Namespace, binding));
             return Ok(());
         }
         self.consume(&TokenKind::LBrace, "expected '{' before named imports")?;
@@ -183,7 +177,7 @@ impl Parser {
                 }
                 self.static_binding(name)?
             };
-            pending.push((import_name, local_name));
+            pending.push((ModuleImportName::Name(import_name), local_name));
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }

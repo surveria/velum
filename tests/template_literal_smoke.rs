@@ -254,6 +254,23 @@ fn rejects_unterminated_substitution_with_open_brace() -> TestResult {
     )
 }
 
+#[test]
+fn template_continuations_terminate_an_empty_yield_operand() -> TestResult {
+    let value = eval(
+        r#"
+        function* values() {
+            return `1${ yield }3${ 4 }5`;
+        }
+        let iterator = values();
+        let first = iterator.next();
+        let second = iterator.next(2);
+        !first.done && first.value === undefined &&
+            second.done && second.value === "12345" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
