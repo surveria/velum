@@ -11,11 +11,13 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::NativeFunctionKind;
+use super::{
+    NativeFunctionKind,
+    iterator::{ITERATOR_NEXT_NAME, ITERATOR_RETURN_NAME},
+};
 
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
-const ITERATOR_RETURN_NAME: &str = "return";
 const ITERATOR_STEP_CHARGE: usize = 1;
 const FLAT_MAP_PRIMITIVE_ERROR: &str = "Iterator.prototype.flatMap result must be an object";
 
@@ -29,6 +31,22 @@ enum HelperPlan {
 }
 
 impl Context {
+    pub(super) fn install_iterator_helper_prototype_methods(
+        &mut self,
+        prototype: ObjectId,
+    ) -> Result<()> {
+        let next = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeNext),
+            Value::Undefined,
+        )?;
+        let return_fn = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeReturn),
+            Value::Undefined,
+        )?;
+        self.define_non_enumerable_object_property(prototype, ITERATOR_NEXT_NAME, next)?;
+        self.define_non_enumerable_object_property(prototype, ITERATOR_RETURN_NAME, return_fn)
+    }
+
     pub(super) fn iterator_inherits_prototype(
         &mut self,
         iterator: &Value,

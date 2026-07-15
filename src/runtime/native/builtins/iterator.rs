@@ -25,8 +25,8 @@ use super::{
 pub(in crate::runtime) const ITERATOR_GLOBAL_NAME: &str = "Iterator";
 const ITERATOR_TAG: &str = "Iterator";
 const ITERATOR_HELPER_TAG: &str = "Iterator Helper";
-const ITERATOR_NEXT_NAME: &str = "next";
-const ITERATOR_RETURN_NAME: &str = "return";
+pub(super) const ITERATOR_NEXT_NAME: &str = "next";
+pub(super) const ITERATOR_RETURN_NAME: &str = "return";
 const PROTOTYPE_PROPERTY_NAME: &str = "prototype";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
@@ -419,19 +419,6 @@ impl Context {
             ));
         };
         Ok((helper_prototype, wrapped_prototype, collection_prototype))
-    }
-
-    fn install_iterator_helper_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        let next = self.create_native_function(
-            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeNext),
-            Value::Undefined,
-        )?;
-        let return_fn = self.create_native_function(
-            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeReturn),
-            Value::Undefined,
-        )?;
-        self.define_non_enumerable_object_property(prototype, ITERATOR_NEXT_NAME, next)?;
-        self.define_non_enumerable_object_property(prototype, ITERATOR_RETURN_NAME, return_fn)
     }
 
     fn iterator_intrinsic_prototype_ids(&self) -> Result<(ObjectId, ObjectId, ObjectId)> {

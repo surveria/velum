@@ -699,7 +699,6 @@ negative:
         ensure_bool(limits.max_object_properties == 4_194_304)?;
         ensure_bool(limits.max_statements == 4_194_304)
     }
-
     #[test]
     fn accepts_single_async_completion_signal() -> TestResult {
         ensure_unit(ensure_async_completion(
