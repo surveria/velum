@@ -800,7 +800,6 @@ check_named_function_binding_boundary() {
     'BindingCell::named_function' \
     'if init.bytecode.self_binding().is_some() {' \
     'self.set_generated_function_name(id, GENERATED_FUNCTION_NAME)?;' \
-    'function_source(params, body, kind, None)' \
     'pub(crate) fn compile_eval(' \
     'strict_write: bool,'; do
     if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then

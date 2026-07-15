@@ -433,14 +433,44 @@ struct GeneratedFunctionSource {
     display: String,
 }
 
+#[derive(Clone, Copy)]
+enum GeneratedFunctionSourceUse {
+    Compilation,
+    Display,
+}
+
 fn generated_function_source(
     params: &str,
     body: &str,
     kind: FunctionKind,
 ) -> GeneratedFunctionSource {
-    let display = function_source(params, body, kind, Some(GENERATED_FUNCTION_NAME), true);
-    let compile = format!("({})", function_source(params, body, kind, None, false));
-    let parameters = format!("({})", function_source(params, "", kind, None, false));
+    let display = function_source(
+        params,
+        body,
+        kind,
+        Some(GENERATED_FUNCTION_NAME),
+        GeneratedFunctionSourceUse::Display,
+    );
+    let compile = format!(
+        "({})",
+        function_source(
+            params,
+            body,
+            kind,
+            None,
+            GeneratedFunctionSourceUse::Compilation,
+        )
+    );
+    let parameters = format!(
+        "({})",
+        function_source(
+            params,
+            "",
+            kind,
+            None,
+            GeneratedFunctionSourceUse::Compilation,
+        )
+    );
     GeneratedFunctionSource {
         parameters,
         compile,
@@ -453,13 +483,15 @@ fn function_source(
     body: &str,
     kind: FunctionKind,
     name: Option<&str>,
-    display: bool,
+    source_use: GeneratedFunctionSourceUse,
 ) -> String {
     let async_prefix = if kind.is_async() { "async " } else { "" };
     let generator_marker = if kind.is_generator() { "*" } else { "" };
     let name = name.map_or("", |name| name);
     let name_separator = if name.is_empty() { "" } else { " " };
-    let parameter_line_terminator = if display || dynamic_parameters_need_line_terminator(params) {
+    let parameter_line_terminator = if matches!(source_use, GeneratedFunctionSourceUse::Display)
+        || dynamic_parameters_need_line_terminator(params)
+    {
         "\n"
     } else {
         ""
