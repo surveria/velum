@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 
 pub const HEX_ESCAPE_DIGITS: usize = 2;
 pub const UNICODE_ESCAPE_DIGITS: usize = 4;
-pub const MAX_BRACED_UNICODE_ESCAPE_DIGITS: usize = 6;
 pub const MAX_UNICODE_CODE_POINT: u32 = 0x10_FFFF;
 pub const RADIX_BINARY: u32 = 2;
 pub const RADIX_OCTAL: u32 = 8;
