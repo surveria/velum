@@ -28,8 +28,8 @@ const ITERATOR_UNARY_LENGTH: f64 = 1.0;
 const ITERATOR_NULLARY_LENGTH: f64 = 0.0;
 
 /// Native function kinds owned by the `Iterator` global and its helper
-/// objects. Helper `next`/`return` variants carry the per-instance state id
-/// in the same arena that backs collection iterator snapshots.
+/// objects. Helper prototype methods recover per-instance state from their
+/// receiver; state-token variants retain ids in the collection arena.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum IteratorFunctionKind {
     Constructor,
@@ -57,8 +57,9 @@ pub(in crate::runtime) enum IteratorFunctionKind {
     PrototypeConstructorSetter,
     PrototypeToStringTagGetter,
     PrototypeToStringTagSetter,
+    HelperPrototypeNext,
+    HelperPrototypeReturn,
     HelperNext(CollectionIteratorId),
-    HelperReturn(CollectionIteratorId),
     StaticNext(CollectionIteratorId),
     StaticReturn(CollectionIteratorId),
     WrapNext(CollectionIteratorId),
@@ -74,8 +75,9 @@ impl IteratorFunctionKind {
             | Self::PrototypeDispose
             | Self::PrototypeConstructorGetter
             | Self::PrototypeToStringTagGetter
+            | Self::HelperPrototypeNext
+            | Self::HelperPrototypeReturn
             | Self::HelperNext(_)
-            | Self::HelperReturn(_)
             | Self::StaticNext(_)
             | Self::StaticReturn(_)
             | Self::WrapNext(_)
@@ -121,10 +123,11 @@ impl IteratorFunctionKind {
             Self::PrototypeConstructorSetter => ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_NAME,
             Self::PrototypeToStringTagGetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_NAME,
             Self::PrototypeToStringTagSetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_NAME,
-            Self::HelperNext(_) | Self::StaticNext(_) | Self::WrapNext(_) => {
-                ITERATOR_HELPER_NEXT_NAME
-            }
-            Self::HelperReturn(_) | Self::StaticReturn(_) | Self::WrapReturn(_) => {
+            Self::HelperPrototypeNext
+            | Self::HelperNext(_)
+            | Self::StaticNext(_)
+            | Self::WrapNext(_) => ITERATOR_HELPER_NEXT_NAME,
+            Self::HelperPrototypeReturn | Self::StaticReturn(_) | Self::WrapReturn(_) => {
                 ITERATOR_HELPER_RETURN_NAME
             }
         }
@@ -135,7 +138,6 @@ impl IteratorFunctionKind {
     pub(in crate::runtime::native) const fn state_id(self) -> Option<CollectionIteratorId> {
         match self {
             Self::HelperNext(id)
-            | Self::HelperReturn(id)
             | Self::StaticNext(id)
             | Self::StaticReturn(id)
             | Self::WrapNext(id)
@@ -160,7 +162,9 @@ impl IteratorFunctionKind {
             | Self::PrototypeConstructorGetter
             | Self::PrototypeConstructorSetter
             | Self::PrototypeToStringTagGetter
-            | Self::PrototypeToStringTagSetter => None,
+            | Self::PrototypeToStringTagSetter
+            | Self::HelperPrototypeNext
+            | Self::HelperPrototypeReturn => None,
         }
     }
 

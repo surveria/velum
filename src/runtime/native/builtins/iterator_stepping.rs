@@ -162,6 +162,14 @@ impl Context {
         result
     }
 
+    pub(in crate::runtime::native) fn eval_iterator_helper_next_method(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let state_id = self.iterator_helper_receiver_state(this_value)?;
+        self.eval_iterator_helper_next(state_id)
+    }
+
     fn eval_iterator_helper_next_active(
         &mut self,
         state_id: CollectionIteratorId,
@@ -427,6 +435,31 @@ impl Context {
                 .into_result()?;
         }
         self.create_iterator_result_object(Value::Undefined, true)
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_helper_return_method(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let state_id = self.iterator_helper_receiver_state(this_value)?;
+        self.eval_iterator_helper_return(state_id)
+    }
+
+    fn iterator_helper_receiver_state(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<CollectionIteratorId> {
+        let Some(kind) = self.iterator_receiver_state_function_kind(this_value)? else {
+            return Err(Error::type_error(
+                "Iterator helper method requires a helper receiver",
+            ));
+        };
+        let NativeFunctionKind::Iterator(IteratorFunctionKind::HelperNext(state_id)) = kind else {
+            return Err(Error::type_error(
+                "Iterator helper method requires a helper receiver",
+            ));
+        };
+        Ok(state_id)
     }
 
     pub(in crate::runtime::native) fn eval_wrapped_iterator_next(

@@ -589,8 +589,9 @@ const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot>
         IteratorFunctionKind::PrototypeToStringTagSetter => {
             Some(ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT)
         }
-        IteratorFunctionKind::HelperNext(_)
-        | IteratorFunctionKind::HelperReturn(_)
+        IteratorFunctionKind::HelperPrototypeNext
+        | IteratorFunctionKind::HelperPrototypeReturn
+        | IteratorFunctionKind::HelperNext(_)
         | IteratorFunctionKind::StaticNext(_)
         | IteratorFunctionKind::StaticReturn(_)
         | IteratorFunctionKind::WrapNext(_)
