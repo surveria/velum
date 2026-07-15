@@ -167,7 +167,7 @@ impl Context {
         Ok(self.collection(id)?.entry_index(key).is_some())
     }
 
-    /// Inserts or updates an entry, normalizing -0 keys to +0 per spec.
+    /// Inserts or updates an entry, normalizing -0 keys and Set values to +0.
     pub(in crate::runtime) fn collection_set(
         &mut self,
         id: CollectionId,
@@ -175,6 +175,11 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = canonicalize_keyed_collection_key(key);
+        let value = if self.collection(id)?.kind == CollectionKind::Set {
+            key.clone()
+        } else {
+            value
+        };
         if let Some(index) = self.collection(id)?.entry_index(&key) {
             self.collection_mut(id)?.replace_value(index, value)?;
             return Ok(());

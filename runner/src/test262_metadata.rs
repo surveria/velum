@@ -40,14 +40,16 @@ const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_BYTE_BUFFER_LEN: usize = 8_388_608;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
 const TEST262_MAX_OBJECTS: usize = 1_000_000;
-const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
+// Canonical assertion helpers run inside exhaustive staging loops, so the
+// corpus budget includes their dispatch while still bounding runaway cases.
+const TEST262_MAX_RUNTIME_STEPS: usize = 250_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 33_554_432;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
 const TEST262_MAX_STRING_LEN: usize = 33_554_432;
 #[cfg(test)]
 const COMPAT_STA_SOURCE: &str = test262_compat_harness::STA_SOURCE;
 #[cfg(test)]
-const COMPAT_ASSERT_SOURCE: &str = test262_compat_harness::ASSERT_SOURCE;
+const AGENT_ASSERT_SOURCE: &str = test262_compat_harness::AGENT_ASSERT_SOURCE;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Test262Outcome {
@@ -247,6 +249,7 @@ fn execute_variant_result(
 
     let mut loader = Test262ModuleLoader::new(test262_dir);
     context.set_dynamic_module_loader(loader.clone());
+    context.begin_runtime_step_budget();
     let result = if metadata.has_flag(FLAG_MODULE) {
         context.eval_module_named(relative_path, source, &mut loader)
     } else {
@@ -502,7 +505,7 @@ mod tests {
     use rs_quickjs::{Error, Runtime, Value};
 
     use super::{
-        ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_ASSERT_SOURCE, COMPAT_STA_SOURCE,
+        AGENT_ASSERT_SOURCE, ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_STA_SOURCE,
         DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE, FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW,
         HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE, HARNESS_STA, MODULE_VARIANT, RAW_VARIANT,
         STRICT_VARIANT, Test262Metadata, VariantPlan, ensure_async_completion,
@@ -664,11 +667,11 @@ negative:
     }
 
     #[test]
-    fn compatibility_assert_preserves_mandatory_global_helpers() -> TestResult {
+    fn agent_assert_preserves_mandatory_global_helpers() -> TestResult {
         let runtime = Runtime::new();
         let mut context = runtime.context();
         context.eval(COMPAT_STA_SOURCE)?;
-        context.eval(COMPAT_ASSERT_SOURCE)?;
+        context.eval(AGENT_ASSERT_SOURCE)?;
         let result = context.eval(
             r#"
                 isNegativeZero(-0) &&
