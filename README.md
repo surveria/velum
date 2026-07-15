@@ -1,4 +1,4 @@
-<h1 align="center">rs-quickjs</h1>
+<h1 align="center">Velum</h1>
 
 <p align="center">
   <strong>A from-scratch ECMAScript bytecode engine in Rust.</strong><br>
@@ -23,7 +23,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#why-rs-quickjs">Why rs-quickjs</a> ·
+  <a href="#why-velum">Why Velum</a> ·
   <a href="#interesting-internals">Internals</a> ·
   <a href="#roadmap">Roadmap</a>
 </p>
@@ -57,7 +57,7 @@ GPT-5.5. Development then moved to GPT-5.6 SOL in extra-high reasoning mode,
 with one developer continuously directing, reviewing, and integrating the work
 of multiple agents.
 
-`rs-quickjs` demonstrates a new scale of individual software development: one
+Velum demonstrates a new scale of individual software development: one
 person can now coordinate several capable engineering agents and produce a
 large, tested systems project in days rather than months. This was not a short
 demo or a generated wrapper; the result is an independent language engine with
@@ -82,7 +82,14 @@ The project initially used `QuickJS` as a behavioral and performance comparison;
 that historical baseline remains visible in the benchmark graph while the
 engine itself follows its own Rust architecture.
 
-## Why rs-quickjs
+## Why Velum
+
+[Velum](https://www.merriam-webster.com/dictionary/velum) (pronounced
+**VEE-lum**) comes from the Latin *vēlum*: sail, canopy, veil, covering. The
+name carries two complementary ideas. A sail is a lightweight structure that
+draws power from its environment, just as the engine receives capabilities
+from its embedder. A membrane is a deliberate boundary, reflecting the
+controlled interface between Rust and JavaScript.
 
 - **Broad ECMAScript conformance.** The complete pinned Test262 profile is a
   required, exact-tree correctness check rather than an aspirational feature
@@ -130,7 +137,7 @@ exact evidence.
 
 ## What this engine is not
 
-`rs-quickjs` implements ECMAScript, not a browser or server runtime.
+Velum implements ECMAScript, not a browser or server runtime.
 
 - There is no DOM, HTML, CSS, rendering, `fetch`, browser event loop, or other
   Web Platform API.
@@ -268,8 +275,9 @@ vendors the Rust `regress` implementation as a separate local crate and enables
 its checked `prohibit-unsafe` execution paths. The preserved upstream source
 still contains feature-dependent `unsafe` implementations, so the repository
 does not claim that every vendored source line is `unsafe`-free. A native
-`rs-quickjs` `RegExp` compiler and executor is planned to remove this exception
-and bring regular expressions under the same engine-owned safety rules.
+A native Velum `RegExp` compiler and executor is planned to remove this
+exception and bring regular expressions under the same engine-owned safety
+rules.
 
 ## Testing and reproducibility
 
