@@ -167,12 +167,7 @@ impl Context {
                 )))
             }
             BytecodeInstruction::TailCallValueWithReceiver { arg_count } => {
-                let args = state.stack.tail(*arg_count)?.to_vec();
-                let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let receiver = state.stack.value_before_tail(*arg_count, 1)?.clone();
-                Ok(Some(Completion::TailCall(
-                    crate::runtime::control::TailCall::new(callee, args, receiver),
-                )))
+                self.eval_bytecode_tail_call_value_with_receiver(state, *arg_count)
             }
             BytecodeInstruction::CallBinding {
                 callee,
@@ -253,6 +248,19 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode invocation instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_tail_call_value_with_receiver(
+        &mut self,
+        state: &mut BytecodeState,
+        arg_count: usize,
+    ) -> Result<Option<Completion>> {
+        let args = state.stack.tail(arg_count)?.to_vec();
+        let callee = state.stack.value_before_tail(arg_count, 0)?.clone();
+        let receiver = state.stack.value_before_tail(arg_count, 1)?.clone();
+        Ok(Some(Completion::TailCall(
+            crate::runtime::control::TailCall::new(callee, args, receiver),
+        )))
     }
 
     fn eval_bytecode_call_value_with_receiver(
