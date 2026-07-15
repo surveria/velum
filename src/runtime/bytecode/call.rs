@@ -167,7 +167,7 @@ impl Context {
                 )))
             }
             BytecodeInstruction::TailCallValueWithReceiver { arg_count } => {
-                self.eval_bytecode_tail_call_value_with_receiver(state, *arg_count)
+                Self::eval_bytecode_tail_call_value_with_receiver(state, *arg_count)
             }
             BytecodeInstruction::CallBinding {
                 callee,
@@ -251,8 +251,7 @@ impl Context {
     }
 
     fn eval_bytecode_tail_call_value_with_receiver(
-        &mut self,
-        state: &mut BytecodeState,
+        state: &BytecodeState,
         arg_count: usize,
     ) -> Result<Option<Completion>> {
         let args = state.stack.tail(arg_count)?.to_vec();
