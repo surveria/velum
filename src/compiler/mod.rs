@@ -332,6 +332,13 @@ impl<'a> BytecodeCompiler<'a> {
         kind: DeclKind,
         init: Option<&Expression>,
     ) -> Result<()> {
+        if kind == DeclKind::Var
+            && let Some(init) = init
+        {
+            self.compile_binding_assignment_expr(name, false, true, init)?;
+            self.emit(BytecodeInstruction::Pop);
+            return Ok(());
+        }
         if let Some(init) = init {
             self.compile_expr_with_inferred_name(init, name.name())?;
         }

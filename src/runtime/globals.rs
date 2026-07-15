@@ -9,7 +9,7 @@ use crate::{
         OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
         PropertyLookup, PropertyUpdate, PropertyWritable,
     },
-    runtime::property::{get_property, has_property},
+    runtime::property::get_property,
     runtime::{Context, VmStorageKind},
     storage::atom::AtomId,
     storage::string_heap::JsString,
@@ -23,7 +23,16 @@ impl Context {
             return self.builtin_value(name);
         };
         let lookup = self.property_lookup(name);
-        self.global_object_property_value(global_object, lookup)
+        let object = Value::Object(global_object);
+        if !self.has_property_value_with_lookup(&object, lookup)? {
+            return Ok(None);
+        }
+        let Some(read) = self.semantic_property_read_with_receiver(&object, &object, lookup)?
+        else {
+            return Ok(None);
+        };
+        self.finish_semantic_property_read(read, &object, lookup)
+            .map(Some)
     }
 
     pub(crate) fn delete_unresolved_global_property(&mut self, name: &str) -> Result<bool> {
@@ -318,7 +327,7 @@ impl Context {
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<Value>> {
         let object = Value::Object(id);
-        if has_property(&self.objects, &object, lookup)? {
+        if self.objects.has_own(id, lookup)? {
             let value = get_property(&self.objects, &object, lookup)?;
             return self.runtime_property_value(value).map(Some);
         }
@@ -346,15 +355,14 @@ impl Context {
         id: ObjectId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Option<bool>> {
-        let object = Value::Object(id);
-        if has_property(&self.objects, &object, lookup)? {
+        if self.objects.has_own(id, lookup)? {
             return Ok(Some(true));
         }
         if self.global_object_name_is_authoritative(lookup.name()) {
-            return Ok(Some(false));
+            return Ok(None);
         }
         self.global_binding_property_value(lookup.name())
-            .map(|value| Some(value.is_some()))
+            .map(|value| value.map(|_| true))
     }
 
     pub(crate) fn global_object_property_descriptor(

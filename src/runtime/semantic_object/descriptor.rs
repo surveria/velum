@@ -89,6 +89,11 @@ impl Context {
         {
             return self.define_array_length_update(*id, property, update);
         }
+        let current = self.semantic_own_property_descriptor(target, property)?;
+        let extensible = self.semantic_is_extensible(target)?.unwrap_or(false);
+        if !is_compatible_property_update(extensible, &update, current.as_ref()) {
+            return Ok(false);
+        }
         if let Value::Object(id) = object_ref.value
             && self.is_global_object_id(*id)
             && self

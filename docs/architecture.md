@@ -154,6 +154,14 @@ metadata, and error rules. `assert.throws` is installed by the JavaScript test
 harness. The compiler and bytecode model contain no source-name recognizers or
 harness-only instructions for either function.
 
+The virtual global-binding layer synthesizes only own-property facts. Global
+prototype traversal belongs to the shared semantic `[[HasProperty]]`,
+receiver-aware `[[Get]]`, and `[[Set]]` owners, so Proxy prototypes observe the
+global object as receiver. Sloppy creation of an absent global also delegates
+to `Set(..., Throw = false)`, preserving non-extensibility without turning a
+false result into an engine error. Variable initializers resolve their binding
+reference before evaluating the right-hand side, including inside `with`.
+
 Removing the parser AST itself is a separate front-end redesign, not fallback
 cleanup. It requires a direct parser-to-frontend-IR or parser-to-bytecode
 pipeline that still preserves binding analysis, diagnostics, resource
