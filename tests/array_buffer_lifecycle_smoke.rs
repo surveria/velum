@@ -189,6 +189,61 @@ fn separates_byte_buffer_and_object_property_limits() -> TestResult {
     Err(format!("expected byte buffer resource limit, got {error:?}").into())
 }
 
+#[test]
+fn resolves_new_target_prototypes_before_backing_store_limits() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        function ExpectedError() {}
+        function throwingNewTarget(trace) {
+            let target = function () {}.bind(null);
+            Object.defineProperty(target, "prototype", {
+                get() {
+                    trace.push("prototype");
+                    throw new ExpectedError();
+                }
+            });
+            return target;
+        }
+        function hugeLength(trace) {
+            return {
+                valueOf() {
+                    trace.push("length");
+                    return 7 * 1125899906842624;
+                }
+            };
+        }
+
+        let arrayTrace = [];
+        let arrayThrew = false;
+        try {
+            Reflect.construct(
+                ArrayBuffer,
+                [hugeLength(arrayTrace)],
+                throwingNewTarget(arrayTrace)
+            );
+        } catch (error) {
+            arrayThrew = error instanceof ExpectedError;
+        }
+        let sharedTrace = [];
+        let sharedThrew = false;
+        try {
+            Reflect.construct(
+                SharedArrayBuffer,
+                [hugeLength(sharedTrace)],
+                throwingNewTarget(sharedTrace)
+            );
+        } catch (error) {
+            sharedThrew = error instanceof ExpectedError;
+        }
+        arrayThrew && sharedThrew && arrayTrace.join() === "length,prototype" &&
+            sharedTrace.join() === "length,prototype" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

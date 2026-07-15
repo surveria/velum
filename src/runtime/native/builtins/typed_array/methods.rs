@@ -286,7 +286,7 @@ impl Context {
     }
 
     fn eval_typed_array_set(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
-        let (target_id, target) = self.typed_array_receiver(this_value)?;
+        let (target_id, target) = self.typed_array_branded_receiver(this_value)?;
         target.ensure_mutable()?;
         let target_length = target.length();
         let source = args.first().cloned().unwrap_or(Value::Undefined);

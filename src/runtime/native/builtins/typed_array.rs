@@ -96,16 +96,40 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let index = self.to_index(args.as_slice().first())?;
+        self.construct_array_buffer_with_optional_new_target(args.as_slice(), None)
+    }
+
+    pub(in crate::runtime) fn construct_array_buffer_with_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        self.construct_array_buffer_with_optional_new_target(args, Some(new_target))
+    }
+
+    fn construct_array_buffer_with_optional_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: Option<&Value>,
+    ) -> Result<Value> {
+        let index = self.to_index(args.first())?;
         let length = Self::length_to_usize(index, TYPED_ARRAY_LENGTH_LIMIT_ERROR)?;
-        self.check_byte_buffer_length(length)?;
-        let max_byte_length = self.array_buffer_max_byte_length_option(args.as_slice().get(1))?;
+        let max_byte_length = self.array_buffer_max_byte_length_option(args.get(1))?;
         if max_byte_length.is_some_and(|maximum| maximum < length) {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 "ArrayBuffer maxByteLength is smaller than byteLength",
             ));
         }
+        let prototype = if let Some(new_target) = new_target {
+            Some(self.constructor_instance_prototype_with_default(
+                new_target,
+                NativeFunctionKind::ArrayBuffer,
+            )?)
+        } else {
+            None
+        };
+        self.check_byte_buffer_length(length)?;
         if let Some(maximum) = max_byte_length {
             self.check_byte_buffer_length(maximum)?;
         }
@@ -113,6 +137,12 @@ impl Context {
             || ByteBuffer::new(length, ByteBufferOrigin::EngineOwned),
             |maximum| ByteBuffer::new_resizable(length, maximum),
         );
+        if let Some(prototype) = prototype {
+            return self
+                .objects
+                .create_array_buffer(buffer, prototype, self.limits.max_objects)
+                .map(Value::Object);
+        }
         self.create_array_buffer_value(buffer)
     }
 
@@ -286,9 +316,6 @@ impl Context {
             self.to_index(byte_offset)?,
             TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
         )?;
-        if buffer.is_detached() {
-            return Err(Error::type_error("ArrayBuffer is detached"));
-        }
         let element_size = element_kind.bytes_per_element();
         if !byte_offset.is_multiple_of(element_size) {
             return Err(Error::exception(

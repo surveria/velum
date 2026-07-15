@@ -1,6 +1,8 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{HostOperation, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+const DETACH_NAME: &str = "hostDetachArrayBuffer";
 
 #[test]
 fn typed_array_at_uses_internal_length() -> TestResult {
@@ -54,6 +56,131 @@ fn typed_array_integrity_accounts_for_indexed_elements() -> TestResult {
             !Object.isSealed(sealed) && !Object.isFrozen(frozen) &&
             Object.isSealed(empty) && Object.isFrozen(empty) ? 42 : 0
         ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn variable_length_views_control_prevent_extensions_and_integrity() -> TestResult {
+    ensure_eval(
+        r"
+        let rab = new ArrayBuffer(8, { maxByteLength: 16 });
+        let rabFixed = new Int32Array(rab, 0, 0);
+        let rabTracking = new Int32Array(rab);
+        let gsab = new SharedArrayBuffer(8, { maxByteLength: 16 });
+        let gsabFixed = new Int32Array(gsab, 0, 0);
+        let gsabTracking = new Int32Array(gsab);
+
+        let rabPrevented = Reflect.preventExtensions(rabFixed);
+        let trackingPrevented = Reflect.preventExtensions(rabTracking);
+        let gsabFixedPrevented = Reflect.preventExtensions(gsabFixed);
+        let gsabTrackingPrevented = Reflect.preventExtensions(gsabTracking);
+        let rabSealThrew = false;
+        try { Object.seal(new Int32Array(rab, 0, 0)); } catch (error) {
+            rabSealThrew = error instanceof TypeError;
+        }
+        let gsabTrackingSealThrew = false;
+        try { Object.seal(new Int32Array(gsab)); } catch (error) {
+            gsabTrackingSealThrew = error instanceof TypeError;
+        }
+        let gsabEmpty = new Int32Array(gsab, 0, 0);
+        Object.seal(gsabEmpty);
+
+        !rabPrevented && !trackingPrevented && gsabFixedPrevented &&
+            !gsabTrackingPrevented && rabSealThrew && gsabTrackingSealThrew &&
+            Object.isSealed(gsabEmpty) ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn observes_coercion_before_detached_backing_store_checks() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(DETACH_NAME, HostOperation::DetachArrayBuffer)?;
+    let actual = context.eval(
+        r"
+        let constructorBuffer = new ArrayBuffer(0);
+        hostDetachArrayBuffer(constructorBuffer);
+        let alignmentWon = false;
+        try { new Int32Array(constructorBuffer, 1, 0); } catch (error) {
+            alignmentWon = error instanceof RangeError;
+        }
+
+        let targetBuffer = new ArrayBuffer(4);
+        let target = new Int32Array(targetBuffer);
+        hostDetachArrayBuffer(targetBuffer);
+        let marker = {};
+        let offsetWon = false;
+        try {
+            target.set(null, { valueOf() { throw marker; } });
+        } catch (error) {
+            offsetWon = error === marker;
+        }
+        alignmentWon && offsetWon ? 42 : 0
+        ",
+    )?;
+    if actual == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected detached backing-store ordering, got {actual:?}").into())
+}
+
+#[test]
+fn validates_typed_array_arguments_before_allocation_prototype_access() -> TestResult {
+    ensure_eval(
+        r#"
+        let prototypeReads = [];
+        let marker = {};
+        let newTarget = function () {}.bind(null);
+        Object.defineProperty(newTarget, "prototype", {
+            get() {
+                prototypeReads.push("prototype");
+                throw marker;
+            }
+        });
+
+        let primitiveValidatedFirst = false;
+        try {
+            Reflect.construct(Int32Array, [Symbol()], newTarget);
+        } catch (error) {
+            primitiveValidatedFirst = error instanceof TypeError && prototypeReads.length === 0;
+        }
+
+        let buffer = new ArrayBuffer(0);
+        let bufferAllocatedFirst = false;
+        try {
+            Reflect.construct(Int32Array, [buffer, Symbol(), 0], newTarget);
+        } catch (error) {
+            bufferAllocatedFirst = error === marker && prototypeReads.join() === "prototype";
+        }
+        primitiveValidatedFirst && bufferAllocatedFirst ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn rejects_immutable_typed_array_set_before_argument_access() -> TestResult {
+    ensure_eval(
+        r#"
+        let immutable = new Uint8Array([1, 2, 3]).buffer.transferToImmutable();
+        let target = new Uint8Array(immutable);
+        let calls = [];
+        let source = {
+            get length() { calls.push("source.length"); return 1; },
+            get 0() { calls.push("source[0]"); return 9; }
+        };
+        let offset = {
+            valueOf() { calls.push("offset"); return 0; }
+        };
+        let rejected = false;
+        try { target.set(source, offset); } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        rejected && calls.length === 0 && target.join() === "1,2,3" ? 42 : 0
+        "#,
         &Value::Number(42.0),
     )
 }

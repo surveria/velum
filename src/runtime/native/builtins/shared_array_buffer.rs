@@ -51,19 +51,50 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let length = Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_ERROR)?;
-        self.check_byte_buffer_length(length)?;
-        let maximum = self.array_buffer_max_byte_length_option(args.as_slice().get(1))?;
+        self.construct_shared_array_buffer_with_optional_new_target(args.as_slice(), None)
+    }
+
+    pub(in crate::runtime) fn construct_shared_array_buffer_with_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        self.construct_shared_array_buffer_with_optional_new_target(args, Some(new_target))
+    }
+
+    fn construct_shared_array_buffer_with_optional_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: Option<&Value>,
+    ) -> Result<Value> {
+        let length = Self::length_to_usize(self.to_index(args.first())?, LENGTH_ERROR)?;
+        let maximum = self.array_buffer_max_byte_length_option(args.get(1))?;
         if maximum.is_some_and(|maximum| maximum < length) {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 "SharedArrayBuffer maxByteLength is smaller than byteLength",
             ));
         }
+        let prototype = if let Some(new_target) = new_target {
+            Some(self.constructor_instance_prototype_with_default(
+                new_target,
+                NativeFunctionKind::SharedArrayBuffer,
+            )?)
+        } else {
+            None
+        };
+        self.check_byte_buffer_length(length)?;
         if let Some(maximum) = maximum {
             self.check_byte_buffer_length(maximum)?;
         }
-        self.create_shared_array_buffer_value(ByteBuffer::new_shared(length, maximum))
+        let buffer = ByteBuffer::new_shared(length, maximum);
+        if let Some(prototype) = prototype {
+            return self
+                .objects
+                .create_array_buffer(buffer, prototype, self.limits.max_objects)
+                .map(Value::Object);
+        }
+        self.create_shared_array_buffer_value(buffer)
     }
 
     pub(in crate::runtime::native) fn eval_shared_array_buffer_native_function_kind(
