@@ -147,6 +147,7 @@ impl Context {
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallValueWithReceiver { .. }
             | BytecodeInstruction::TailCallValue { .. }
+            | BytecodeInstruction::TailCallValueWithReceiver { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }

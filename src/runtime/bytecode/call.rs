@@ -5,13 +5,41 @@ use crate::{
         BytecodeObjectProperty, BytecodePreparedNativeCall, BytecodeProperty,
     },
     error::{Error, Result},
-    runtime::{Context, control::Completion, function::BytecodeFunctionInit},
+    runtime::{CallReference, Context, control::Completion, function::BytecodeFunctionInit},
     value::Value,
 };
 
 use super::state::BytecodeState;
 
 impl Context {
+    fn eval_bytecode_identifier_tail_call(
+        &mut self,
+        callee: &crate::bytecode::BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
+        args: &[Value],
+    ) -> Result<Completion> {
+        let reference = self.eval_bytecode_identifier_call_reference(callee, native, strict)?;
+        if matches!(
+            &reference,
+            CallReference::DirectNative {
+                target: NativeCallTarget::Eval,
+                ..
+            }
+        ) {
+            return match self.eval_call_reference_completion(reference, args)? {
+                Completion::Normal(value) => Ok(Completion::Return(value)),
+                Completion::Throw(value) => Ok(Completion::Throw(value)),
+                other => Err(Error::runtime(format!(
+                    "direct eval tail call produced invalid completion {other:?}"
+                ))),
+            };
+        }
+        Ok(Completion::TailCall(
+            reference.into_tail_call(args.to_vec()),
+        ))
+    }
+
     pub(super) fn eval_bytecode_call_instruction(
         &mut self,
         state: &mut BytecodeState,
@@ -24,6 +52,7 @@ impl Context {
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallValueWithReceiver { .. }
             | BytecodeInstruction::TailCallValue { .. }
+            | BytecodeInstruction::TailCallValueWithReceiver { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. } => {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
@@ -128,7 +157,6 @@ impl Context {
             } => {
                 let args = state.stack.tail(*arg_count)?;
                 self.eval_bytecode_identifier_tail_call(callee, *native, *strict, args)
-                    .map(Completion::TailCall)
                     .map(Some)
             }
             BytecodeInstruction::TailCallValue { arg_count } => {
@@ -136,6 +164,14 @@ impl Context {
                 let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
                 Ok(Some(Completion::TailCall(
                     crate::runtime::control::TailCall::new(callee, args, Value::Undefined),
+                )))
+            }
+            BytecodeInstruction::TailCallValueWithReceiver { arg_count } => {
+                let args = state.stack.tail(*arg_count)?.to_vec();
+                let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
+                let receiver = state.stack.value_before_tail(*arg_count, 1)?.clone();
+                Ok(Some(Completion::TailCall(
+                    crate::runtime::control::TailCall::new(callee, args, receiver),
                 )))
             }
             BytecodeInstruction::CallBinding {
