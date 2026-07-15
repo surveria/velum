@@ -515,7 +515,7 @@ impl Context {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
-        let mut result = self.eval_function_body::<CAN_SUSPEND>(
+        let result = self.eval_function_body::<CAN_SUSPEND>(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -526,18 +526,34 @@ impl Context {
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result.map(|completion| (completion, TailCallReturnMode::Ordinary));
         }
-        if let Ok(completion) = result {
-            result = self.dispose_active_binding_scope(completion);
-        }
-        let binding_result = self.pop_function_binding_storage(
+        self.finish_function_call(
+            id,
             local_base,
             arguments_binding.is_some(),
             self_binding.is_some(),
-        );
+            derived_super_binding.as_ref(),
+            result,
+        )
+    }
+
+    fn finish_function_call(
+        &mut self,
+        id: FunctionId,
+        local_base: usize,
+        has_arguments_binding: bool,
+        has_self_binding: bool,
+        derived_super_binding: Option<&Rc<FunctionSuperBinding>>,
+        mut result: Result<Completion>,
+    ) -> Result<(Completion, TailCallReturnMode)> {
+        if let Ok(completion) = result {
+            result = self.dispose_active_binding_scope(completion);
+        }
+        let binding_result =
+            self.pop_function_binding_storage(local_base, has_arguments_binding, has_self_binding);
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
-        let return_mode = self.function_return_mode(id, derived_super_binding.as_ref())?;
+        let return_mode = self.function_return_mode(id, derived_super_binding)?;
         result.map(|completion| (completion, return_mode))
     }
 

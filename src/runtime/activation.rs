@@ -345,7 +345,7 @@ impl LegacyFunctionArguments {
         self.object = Some(object);
     }
 
-    pub(in crate::runtime) fn object(&self) -> Option<&Value> {
+    pub(in crate::runtime) const fn object(&self) -> Option<&Value> {
         self.object.as_ref()
     }
 

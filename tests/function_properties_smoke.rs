@@ -99,14 +99,14 @@ fn reuses_the_implicit_arguments_object_for_legacy_introspection() -> TestResult
     let mut context = runtime.context();
 
     let value = context.eval(
-        r#"
+        r"
         function probe(value) {
             let same = probe.arguments === arguments;
             probe.arguments[0] = 42;
             return same && value === 42 && arguments[0] === 42;
         }
         probe(1) && probe.arguments === null ? 42 : 0
-        "#,
+        ",
     )?;
 
     ensure_value(&value, &Value::Number(42.0))
