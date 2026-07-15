@@ -64,6 +64,9 @@
 !/runner/src/**/
 !/runner/src/**/*.rs
 
+!/fuzzing-test/
+!/fuzzing-test/.gitignore
+
 !/tests/
 !/tests/**/
 !/tests/**/*.md

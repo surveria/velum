@@ -1,0 +1,100 @@
+# Velum Fuzzilli Testing
+
+This directory contains an opt-in local Fuzzilli target for security and
+robustness testing of the Velum engine. It is intentionally excluded from the
+ordinary CI workflows.
+
+The upstream Fuzzilli repository does not ship a populated, engine-independent
+corpus. A normal run starts from Fuzzilli's generative bootstrap, executes
+programs against the instrumented Velum target, and retains only FuzzIL samples
+that add stable Velum coverage. Later runs can resume from those local samples.
+
+## What the integration tests
+
+The target builds Velum with LLVM sanitizer coverage, AddressSanitizer, release
+optimizations, debug assertions, checked arithmetic, and aborting Rust panics.
+Fuzzilli then generates syntactically valid JavaScript, executes each program in
+a fresh Velum runtime through its persistent REPRL process, and records new
+coverage or failures. Useful findings include process crashes, sanitizer
+failures, aborting assertions, hangs, and reproducible resource failures.
+
+This initial lane does not compare Velum output with V8 or another JavaScript
+engine. JavaScript syntax and runtime exceptions are ordinary rejected samples,
+not engine crashes.
+
+## Layout
+
+- `FUZZILLI_REVISION` pins the upstream Fuzzilli commit.
+- `patches/` adds the local Velum profile to the pinned checkout.
+- `driver/` contains the small Rust utility used to start and summarize runs.
+- `velum-reprl/` is a standalone Rust workspace containing the persistent
+  target and sanitizer-coverage bridge.
+- `scripts/` bootstraps and builds the local campaign.
+- `fuzzilli/`, `runs/`, and build outputs are generated locally and ignored.
+
+## Prerequisites
+
+- Git and a C compiler;
+- Swift for building Fuzzilli;
+- the Rust nightly toolchain for sanitizer coverage.
+
+On the current Ubuntu host, Swift can be installed with:
+
+```bash
+sudo apt install swiftlang
+```
+
+## Bootstrap and build
+
+```bash
+./fuzzing-test/scripts/bootstrap-fuzzilli.sh
+./fuzzing-test/scripts/build.sh
+```
+
+The bootstrap script clones the exact pinned Fuzzilli revision into the ignored
+`fuzzing-test/fuzzilli/` directory and applies the tracked Velum profile patch.
+The build script compiles Fuzzilli and an AddressSanitizer-instrumented Velum
+REPRL target.
+
+Set `VELUM_FUZZ_SANITIZER=none` only for instrumentation diagnostics where
+AddressSanitizer itself prevents the target from starting.
+
+## Run a local campaign
+
+```bash
+cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml --
+```
+
+By default the utility builds the prerequisites, starts one Fuzzilli worker, and
+runs until Ctrl-C. Fuzzilli receives the terminal interrupt, finishes its
+current operation, and saves the corpus before exiting. Every session receives
+a new directory below `fuzzing-test/runs/`.
+
+For a bounded smoke run or a chosen output path:
+
+```bash
+cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml -- \
+    --iterations 1000 --jobs 1 --output /tmp/velum-fuzz-smoke
+```
+
+Unique crash reproducers are saved as `crashes/*.js` together with their FuzzIL
+form. Duplicate crashes are kept separately below `crashes/duplicates/`. Pass
+`--diagnostics` only when needed: it also retains timeouts and ordinary rejected
+programs and can use substantial disk space.
+
+Re-run a saved JavaScript case against the same instrumented target with:
+
+```bash
+cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml -- \
+    --reproduce fuzzing-test/runs/session-123/crashes/program_0.js
+```
+
+Use `--skip-build` on either command when the Fuzzilli and target binaries are
+already current. Session data and build outputs are deliberately untracked.
+
+## CI policy
+
+No GitHub Actions job invokes these scripts, downloads Fuzzilli, installs Swift,
+or uploads fuzzing artifacts. The lane remains an explicit local or separately
+scheduled security-testing activity until its runtime, storage, and triage
+behavior are understood well enough to justify dedicated automation.
