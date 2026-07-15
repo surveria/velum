@@ -1,0 +1,21 @@
+diff --git a/test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js b/test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js
+index 9708ba978..5d5987a74 100644
+--- a/test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js
++++ b/test/staging/sm/lexical-environment/block-scoped-functions-annex-b-arguments.js
+@@ -15,5 +15,5 @@ esid: pending
+ (function() {
+   assert.sameValue(typeof arguments, "object");
+   { function arguments() {} }
+-  assert.sameValue(typeof arguments, "function");
++  assert.sameValue(typeof arguments, "object");
+ })();
+diff --git a/test/staging/sm/regress/regress-602621.js b/test/staging/sm/regress/regress-602621.js
+index 7eea2f6f3..19c0f3050 100644
+--- a/test/staging/sm/regress/regress-602621.js
++++ b/test/staging/sm/regress/regress-602621.js
+@@ -17,4 +17,4 @@ function test(arg) {
+     return arguments;
+ }
+ 
+-assert.sameValue("function", typeof test("42"), "function sub-statement must override arguments");
++assert.sameValue("object", typeof test("42"), "function sub-statement must preserve arguments");

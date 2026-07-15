@@ -12,6 +12,7 @@ test262_url="https://github.com/tc39/test262.git"
 patch_dir="${repo_root}/tests/corpora/test262/patches"
 test262_patches=(
   "${patch_dir}/f2d1435644797268dca1f7988cad5a4e89ccd8d2.patch"
+  "${patch_dir}/staging-annex-b-arguments-object.patch"
 )
 
 log() {
