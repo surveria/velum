@@ -81,6 +81,18 @@ Fuzzilli receives the terminal interrupt, finishes its current operation, and
 saves the corpus before exiting. Every session receives a new directory below
 `fuzzing-test/runs/`.
 
+Use a human-readable duration when the campaign should stop automatically. The
+driver sends the same graceful interrupt when the time limit expires:
+
+```bash
+./fuzzing-test/run.sh --duration 30s
+./fuzzing-test/run.sh --duration 2m
+./fuzzing-test/run.sh --duration 1h
+```
+
+`--duration` and `--iterations` may be combined; the first reached limit stops
+the campaign. Without either option, only Ctrl-C stops it.
+
 For a bounded smoke run or a chosen output path:
 
 ```bash
@@ -99,6 +111,18 @@ Unique crash reproducers are saved as `crashes/*.js` together with their FuzzIL
 form. Duplicate crashes are kept separately below `crashes/duplicates/`. Pass
 `--diagnostics` only when needed: it also retains timeouts and ordinary rejected
 programs and can use substantial disk space.
+
+Fuzzilli stdout and stderr are captured in one detailed log. The launcher prints
+the temporary live path before execution so a second terminal or an agent can
+follow it with `tail -f`. On shutdown that file moves into the session directory
+as a timestamped `fuzzilli-*.log`, and the final path is printed again. The
+driver appends the same summary it prints to the terminal: a `tabled` table with
+generated and valid cases, engine executions, corpus additions, crash and
+timeout events, and new saved finding counts. At most the 10 latest new crash or
+timeout JavaScript paths are printed below the table; every reproducer remains
+available in the session directories even when the displayed list is truncated.
+The detailed log additionally records the complete untruncated list of new
+problem-file paths for later agent analysis.
 
 Re-run a saved JavaScript case against the same instrumented target with:
 
