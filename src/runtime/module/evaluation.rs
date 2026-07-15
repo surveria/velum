@@ -292,47 +292,72 @@ impl Context {
                         &mut asynchronous,
                     )?;
                     for asynchronous_dependency in asynchronous {
-                        self.start_module_evaluation(asynchronous_dependency, visiting)?;
+                        if let Some(error) = self.start_module_dependency_and_collect_wait(
+                            module_index,
+                            visiting,
+                            asynchronous_dependency,
+                            &mut pending,
+                        )? {
+                            return Ok(StartedModuleDependencies::Rejected(error));
+                        }
                     }
                 }
                 ImportPhase::Evaluation => {
-                    if let Some(cycle_start) = visiting
-                        .iter()
-                        .position(|candidate| *candidate == dependency.index)
-                    {
-                        self.mark_module_cycle(visiting, cycle_start, dependency.index)?;
-                        continue;
-                    }
-                    self.start_module_evaluation(dependency.index, visiting)?;
-                    let wait_index =
-                        self.module_dependency_wait_target(module_index, dependency.index)?;
-                    let dependency_promise = self.module_evaluation_promise(wait_index)?;
-                    let dependency_module = self
-                        .modules
-                        .get(wait_index)
-                        .ok_or_else(|| Error::runtime("persisted module dependency disappeared"))?;
-                    match dependency_module.state {
-                        EvaluationState::Evaluated => {}
-                        EvaluationState::Errored => {
-                            let error =
-                                dependency_module.evaluation_error.clone().ok_or_else(|| {
-                                    Error::runtime("dependency evaluation error is missing")
-                                })?;
-                            return Ok(StartedModuleDependencies::Rejected(error));
-                        }
-                        EvaluationState::Evaluating => {
-                            pending.push((dependency_promise, wait_index));
-                        }
-                        EvaluationState::Pending => {
-                            return Err(Error::runtime(
-                                "persisted module dependency did not start",
-                            ));
-                        }
+                    if let Some(error) = self.start_module_dependency_and_collect_wait(
+                        module_index,
+                        visiting,
+                        dependency.index,
+                        &mut pending,
+                    )? {
+                        return Ok(StartedModuleDependencies::Rejected(error));
                     }
                 }
             }
         }
         Ok(StartedModuleDependencies::Pending(pending))
+    }
+
+    fn start_module_dependency_and_collect_wait(
+        &mut self,
+        module_index: usize,
+        visiting: &mut Vec<usize>,
+        dependency_index: usize,
+        pending: &mut Vec<(PromiseId, usize)>,
+    ) -> Result<Option<Error>> {
+        if let Some(cycle_start) = visiting
+            .iter()
+            .position(|candidate| *candidate == dependency_index)
+        {
+            self.mark_module_cycle(visiting, cycle_start, dependency_index)?;
+            return Ok(None);
+        }
+        self.start_module_evaluation(dependency_index, visiting)?;
+        let wait_index = self.module_dependency_wait_target(module_index, dependency_index)?;
+        let dependency_promise = self.module_evaluation_promise(wait_index)?;
+        let dependency_module = self
+            .modules
+            .get(wait_index)
+            .ok_or_else(|| Error::runtime("persisted module dependency disappeared"))?;
+        match dependency_module.state {
+            EvaluationState::Evaluated => Ok(None),
+            EvaluationState::Errored => dependency_module
+                .evaluation_error
+                .clone()
+                .map(Some)
+                .ok_or_else(|| Error::runtime("dependency evaluation error is missing")),
+            EvaluationState::Evaluating => {
+                if !pending
+                    .iter()
+                    .any(|(_, dependency)| *dependency == wait_index)
+                {
+                    pending.push((dependency_promise, wait_index));
+                }
+                Ok(None)
+            }
+            EvaluationState::Pending => {
+                Err(Error::runtime("persisted module dependency did not start"))
+            }
+        }
     }
 
     fn mark_module_cycle(

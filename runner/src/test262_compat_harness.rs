@@ -28,7 +28,7 @@ var $262 = {
             gc: $262.gc,
             detachArrayBuffer: $262.detachArrayBuffer,
             IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
-            AbstractModuleSource: realmGlobal.__rsqjsTest262GetAbstractModuleSource(),
+            AbstractModuleSource: __rsqjsTest262GetAbstractModuleSource(realmGlobal),
             agent: $262.agent,
             createRealm: $262.createRealm,
             evalScript: realmGlobal.eval

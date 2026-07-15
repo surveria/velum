@@ -269,6 +269,17 @@ impl Context {
             })
     }
 
+    pub(crate) fn with_global_object_realm<T>(
+        &mut self,
+        global: ObjectId,
+        operation: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let realm = self
+            .global_object_realm(global)
+            .ok_or_else(|| Error::type_error("object is not a realm global"))?;
+        self.with_realm(realm, operation)
+    }
+
     pub(in crate::runtime) fn constructor_instance_prototype_with_default(
         &mut self,
         new_target: &Value,

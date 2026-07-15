@@ -36,7 +36,8 @@ pub enum HostOperation {
     EvalScript,
     /// Creates the callable Annex B host exotic carrying `[[IsHTMLDDA]]`.
     CreateIsHtmlDda,
-    /// Returns the active realm's `%AbstractModuleSource%` intrinsic.
+    /// Returns `%AbstractModuleSource%` for the active realm or for an optional
+    /// VM-owned realm global supplied as the first argument.
     GetAbstractModuleSource,
 }
 
@@ -676,9 +677,15 @@ impl Context {
             HostOperation::CreateIsHtmlDda => self.create_internal_host_function_value(
                 HostFunction::is_html_dda("IsHTMLDDA".to_owned()),
             ),
-            HostOperation::GetAbstractModuleSource => {
-                self.abstract_module_source_constructor_value()
-            }
+            HostOperation::GetAbstractModuleSource => match args.first() {
+                None | Some(Value::Undefined) => self.abstract_module_source_constructor_value(),
+                Some(Value::Object(global)) => self.with_global_object_realm(*global, |context| {
+                    context.abstract_module_source_constructor_value()
+                }),
+                Some(_) => Err(Error::type_error(
+                    "AbstractModuleSource realm target must be a realm global object",
+                )),
+            },
         }
     }
 

@@ -377,6 +377,32 @@ fn defers_static_namespace_evaluation_until_a_string_property_is_read() -> TestR
 }
 
 #[test]
+fn waits_for_async_dependencies_discovered_through_deferred_imports() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("setup.js", "globalThis.moduleTrace = '';".to_owned()),
+        (
+            "async.js",
+            "globalThis.moduleTrace += 'a'; await Promise.resolve(); \
+             globalThis.moduleTrace += 'b'; export const value = 1;"
+                .to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import 'setup.js'; import defer * as namespace from 'async.js'; \
+         globalThis.moduleTrace;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::String("ab".to_owned().into()),
+        "deferred async dependency did not settle before its importer",
+    )
+}
+
+#[test]
 fn namespace_re_exports_share_sealed_null_prototype_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
