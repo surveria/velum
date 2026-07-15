@@ -27,7 +27,7 @@ Interactive keys:\n\
   Enter              Execute the current buffer\n\
   Ctrl-J             Insert a newline\n\
   Shift-Enter        Insert a newline when reported distinctly by the terminal\n\
-  Ctrl-C             Cancel the current edit\n\
+  Ctrl-C             Exit the shell\n\
   Ctrl-D             Exit when the buffer is empty\n\
 \n\
 Interactive commands:\n\
@@ -146,7 +146,10 @@ fn run_interactive() -> anyhow::Result<()> {
                 render_interactive(&submission);
                 entry = entry.saturating_add(1);
             }
-            Err(ReadlineError::Interrupted) => println!("^C"),
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                break;
+            }
             Err(ReadlineError::Eof) => {
                 println!();
                 break;

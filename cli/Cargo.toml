@@ -19,6 +19,9 @@ anyhow = "1"
 rustyline = { version = "18.0.1", default-features = false, features = ["custom-bindings"] }
 velum = { path = ".." }
 
+[dev-dependencies]
+portable-pty = "0.9.0"
+
 [lints]
 workspace = true
 

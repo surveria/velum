@@ -38,8 +38,8 @@ a distinct modified key; some terminals encode it identically to Enter.
 The same JavaScript context is reused until `.reset` or process exit, so global
 bindings, functions, and objects remain available to later submissions.
 
-Available shell commands are `.help`, `.reset`, `.gc`, and `.exit`. Ctrl-C
-cancels the current edit, while Ctrl-D exits when the edit buffer is empty.
+Available shell commands are `.help`, `.reset`, `.gc`, and `.exit`. Ctrl-C exits
+the shell immediately, while Ctrl-D exits when the edit buffer is empty.
 
 Velum provides ECMAScript rather than Node.js or browser APIs. Use `print(...)`
 for output. `console.log`, filesystem APIs, networking, timers, and package
