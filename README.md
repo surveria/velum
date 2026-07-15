@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="reports/test-runs/rsqjs-test-report-20260715T084223Z.md"><img alt="Test262: 102,578 of 102,578" src="https://img.shields.io/badge/Test262-102%2C578%20%2F%20102%2C578-2ea44f?style=for-the-badge"></a>
+  <a href="reports/test-runs/rsqjs-test-report-20260715T084223Z.md"><img alt="Test262 conformance: 102,578 of 102,578" src="https://img.shields.io/badge/Test262-102%2C578%20%2F%20102%2C578-2ea44f?style=for-the-badge"></a>
   <a href="Cargo.toml"><img alt="Rust: unsafe denied" src="https://img.shields.io/badge/Rust-unsafe%20denied-dea584?style=for-the-badge&amp;logo=rust&amp;logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-007ec6?style=for-the-badge"></a>
 </p>
