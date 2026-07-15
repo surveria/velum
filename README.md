@@ -39,7 +39,7 @@ produce a large, tested systems project in days rather than months.
 
 The numbers above come from Git history and GitHub as of the stated snapshot.
 The Rust line count includes the engine, runner, and tests, and excludes 43,473
-lines in the vendored RegExp crate. The first commit contained 1,306 lines of
+lines in the vendored `RegExp` crate. The first commit contained 1,306 lines of
 project-authored Rust.
 
 ## Current status
@@ -50,7 +50,7 @@ project-authored Rust.
   <img alt="Benchmark and Test262 history" src="reports/benchmark-summary-light.svg">
 </picture>
 
-The project initially used QuickJS as a behavioral and performance comparison;
+The project initially used `QuickJS` as a behavioral and performance comparison;
 that historical baseline remains visible in the benchmark graph while the
 engine itself follows its own Rust architecture.
 
@@ -86,7 +86,7 @@ strict, module, and raw variants. Major areas include:
   atomics;
 - `Map`, `Set`, weak collections, `WeakRef`, and `FinalizationRegistry`;
 - `Proxy`, `Reflect`, realms, and `ShadowRealm`;
-- `BigInt`, symbols, modern RegExp semantics, and exact UTF-16 strings;
+- `BigInt`, symbols, modern `RegExp` semantics, and exact UTF-16 strings;
 - explicit resource management with disposable and async-disposable stacks;
 - `Temporal` and the ECMA-402 `Intl` families included by the pinned corpus;
 - Annex B and the staged proposal tests present in the pinned snapshot.
@@ -235,12 +235,12 @@ denies panic-oriented APIs such as `unwrap`, `expect`, `panic!`, unchecked
 indexing patterns, and dangerous numeric casts through a combination of strict
 project rules and rustc/Clippy configuration.
 
-RegExp is the current exception to the broader all-source story. The engine
+`RegExp` is the current exception to the broader all-source story. The engine
 vendors the Rust `regress` implementation as a separate local crate and enables
 its checked `prohibit-unsafe` execution paths. The preserved upstream source
 still contains feature-dependent `unsafe` implementations, so the repository
 does not claim that every vendored source line is `unsafe`-free. A native
-`rs-quickjs` RegExp compiler and executor is planned to remove this exception
+`rs-quickjs` `RegExp` compiler and executor is planned to remove this exception
 and bring regular expressions under the same engine-owned safety rules.
 
 ## Testing and reproducibility
@@ -253,7 +253,7 @@ Correctness is built around exact inputs and exact source trees:
 - same-engine checks with optional optimizations disabled;
 - exact-tree CI artifacts, canonical YAML summaries, and derived Markdown
   reports;
-- prepared project benchmarks and a separate JetStream shell lane.
+- prepared project benchmarks and a separate `JetStream` shell lane.
 
 The repository records the engine commit, runner commit, tested tree, workflow
 run, corpus provenance, pass baseline, and benchmark methodology. A green
@@ -280,11 +280,11 @@ used around mature engines and scalable systems such as
 [JavaScriptCore](https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/jsc.cpp),
 and [ClusterFuzz/OSS-Fuzz](https://google.github.io/clusterfuzz/):
 
-- coverage-guided fuzzers for the lexer, parser, compiler, VM, RegExp, module
+- coverage-guided fuzzers for the lexer, parser, compiler, VM, `RegExp`, module
   loader, value-transfer boundaries, and public embedding API;
 - grammar- and structure-aware JavaScript generation so mutations continue to
   reach deep language semantics;
-- differential execution against V8, SpiderMonkey, and JavaScriptCore on a
+- differential execution against V8, `SpiderMonkey`, and `JavaScriptCore` on a
   normalized, deterministic, host-independent subset;
 - differential execution between enabled and disabled optimization modes;
 - metamorphic tests which apply semantics-preserving source transformations and
@@ -334,5 +334,5 @@ boundary.
 
 ## License
 
-The engine is MIT-licensed. The vendored RegExp crate retains its upstream MIT
+The engine is MIT-licensed. The vendored `RegExp` crate retains its upstream MIT
 OR Apache-2.0 licensing and provenance files.
