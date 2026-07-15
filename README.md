@@ -370,5 +370,7 @@ boundary.
 
 ## License
 
-The engine is [MIT-licensed](LICENSE). The vendored `RegExp` crate retains its
-upstream MIT OR Apache-2.0 licensing and provenance files.
+The engine is
+[MIT-licensed](https://github.com/surveria/rs-quickjs/blob/main/LICENSE). The
+vendored `RegExp` crate retains its upstream MIT OR Apache-2.0 licensing and
+provenance files.
