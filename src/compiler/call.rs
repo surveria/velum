@@ -7,7 +7,8 @@ use crate::{
 };
 
 use super::{
-    BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, InstructionIndex, has_spread_arg,
+    BinaryOp, BytecodeCallSite, BytecodeCompiler, BytecodeCompletion, BytecodeInstruction,
+    InstructionIndex, has_spread_arg,
 };
 
 #[derive(Clone, Copy)]
@@ -18,24 +19,98 @@ struct OptionalCallTarget {
 
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_tail_call_expr(&mut self, expr: &Expression) -> Result<bool> {
-        let Expr::Call {
-            callee,
-            strict: true,
-            args,
-            ..
-        } = expr.kind()
-        else {
-            return Ok(false);
-        };
-        if has_spread_arg(args) {
+        if !Self::has_call_in_supported_tail_position(expr) {
             return Ok(false);
         }
+        self.compile_tail_position_expr(expr)?;
+        Ok(true)
+    }
+
+    fn has_call_in_supported_tail_position(expr: &Expression) -> bool {
+        match expr.kind() {
+            Expr::Call {
+                callee,
+                strict: true,
+                args,
+                ..
+            } => !has_spread_arg(args) && Self::supports_tail_call_target(callee),
+            Expr::Parenthesized(expr) => Self::has_call_in_supported_tail_position(expr),
+            Expr::Sequence(expressions) => expressions
+                .last()
+                .is_some_and(Self::has_call_in_supported_tail_position),
+            Expr::Binary {
+                op: BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing,
+                right,
+                ..
+            } => Self::has_call_in_supported_tail_position(right),
+            Expr::Conditional {
+                consequent,
+                alternate,
+                ..
+            } => {
+                Self::has_call_in_supported_tail_position(consequent)
+                    || Self::has_call_in_supported_tail_position(alternate)
+            }
+            _ => false,
+        }
+    }
+
+    fn supports_tail_call_target(callee: &Expression) -> bool {
+        match callee.kind() {
+            Expr::Parenthesized(callee) => Self::supports_tail_call_target(callee),
+            Expr::PrivateMember { .. }
+            | Expr::SuperMember { .. }
+            | Expr::SuperComputedMember { .. }
+            | Expr::OptionalMember { .. }
+            | Expr::OptionalComputedMember { .. }
+            | Expr::OptionalPrivateMember { .. }
+            | Expr::OptionalChain(_) => false,
+            _ => true,
+        }
+    }
+
+    fn compile_tail_position_expr(&mut self, expr: &Expression) -> Result<()> {
+        match expr.kind() {
+            Expr::Call {
+                callee,
+                strict: true,
+                args,
+                ..
+            } if !has_spread_arg(args) && Self::supports_tail_call_target(callee) => {
+                self.compile_direct_tail_call(callee, args)
+            }
+            Expr::Parenthesized(expr) => self.compile_tail_position_expr(expr),
+            Expr::Sequence(expressions) => self.compile_tail_position_sequence(expressions),
+            Expr::Binary {
+                op, left, right, ..
+            } if matches!(
+                op,
+                BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+            ) && Self::has_call_in_supported_tail_position(right) =>
+            {
+                self.compile_tail_position_binary(*op, left, right)
+            }
+            Expr::Conditional {
+                condition,
+                consequent,
+                alternate,
+            } if Self::has_call_in_supported_tail_position(consequent)
+                || Self::has_call_in_supported_tail_position(alternate) =>
+            {
+                self.compile_tail_position_conditional(condition, consequent, alternate)
+            }
+            _ => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
+                Ok(())
+            }
+        }
+    }
+
+    fn compile_direct_tail_call(&mut self, callee: &Expression, args: &[Expression]) -> Result<()> {
         match callee.kind() {
             Expr::Identifier(name) => {
                 let native = NativeCallTarget::from_binding_name(name.as_str());
-                if native == Some(NativeCallTarget::Eval) {
-                    return Ok(false);
-                }
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::TailCallBinding {
                     callee: self.compile_binding(name)?,
@@ -44,26 +119,38 @@ impl BytecodeCompiler<'_> {
                     arg_count: args.len(),
                 });
             }
-            Expr::Parenthesized(callee) => {
-                let nested = Expression::new(
-                    Expr::Call {
-                        callee: callee.clone(),
-                        site: match expr.kind() {
-                            Expr::Call { site, .. } => *site,
-                            _ => return Ok(false),
-                        },
-                        strict: true,
-                        args: args.clone(),
-                    },
-                    expr.span(),
-                );
-                return self.compile_tail_call_expr(&nested);
+            Expr::Parenthesized(callee) => return self.compile_direct_tail_call(callee, args),
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.emit(BytecodeInstruction::Duplicate);
+                self.emit(BytecodeInstruction::StaticMember {
+                    property: Self::compile_property(property, *access),
+                });
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::TailCallValueWithReceiver {
+                    arg_count: args.len(),
+                });
             }
-            Expr::Member { .. }
-            | Expr::ComputedMember { .. }
-            | Expr::PrivateMember { .. }
-            | Expr::SuperMember { .. }
-            | Expr::SuperComputedMember { .. } => return Ok(false),
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.emit(BytecodeInstruction::Duplicate);
+                self.compile_expr(property)?;
+                self.emit(BytecodeInstruction::ComputedMember {
+                    property: Self::compile_dynamic_property(*access),
+                });
+                self.compile_args(args)?;
+                self.emit(BytecodeInstruction::TailCallValueWithReceiver {
+                    arg_count: args.len(),
+                });
+            }
             _ => {
                 self.compile_expr(callee)?;
                 self.compile_args(args)?;
@@ -72,7 +159,66 @@ impl BytecodeCompiler<'_> {
                 });
             }
         }
-        Ok(true)
+        Ok(())
+    }
+
+    fn compile_tail_position_sequence(&mut self, expressions: &[Expression]) -> Result<()> {
+        let Some((last, leading)) = expressions.split_last() else {
+            return Err(crate::error::Error::runtime(
+                "tail-position sequence expression cannot be empty",
+            ));
+        };
+        for expression in leading {
+            self.compile_expr(expression)?;
+            self.emit(BytecodeInstruction::Pop);
+        }
+        self.compile_tail_position_expr(last)
+    }
+
+    fn compile_tail_position_binary(
+        &mut self,
+        op: BinaryOp,
+        left: &Expression,
+        right: &Expression,
+    ) -> Result<()> {
+        self.compile_expr(left)?;
+        let short_circuit = match op {
+            BinaryOp::LogicalAnd => self.emit_jump_if_false_keep(),
+            BinaryOp::LogicalOr => self.emit_jump_if_true_keep(),
+            BinaryOp::NullishCoalescing => self.emit_jump_if_nullish_keep(),
+            _ => {
+                return Err(crate::error::Error::runtime(
+                    "tail-position binary expression is not short-circuiting",
+                ));
+            }
+        };
+        if op == BinaryOp::NullishCoalescing {
+            self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
+            let right_address = self.current_address();
+            self.patch_jump(short_circuit, right_address)?;
+            self.emit(BytecodeInstruction::Pop);
+            return self.compile_tail_position_expr(right);
+        }
+        self.emit(BytecodeInstruction::Pop);
+        self.compile_tail_position_expr(right)?;
+        let short_circuit_address = self.current_address();
+        self.patch_jump(short_circuit, short_circuit_address)?;
+        self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
+        Ok(())
+    }
+
+    fn compile_tail_position_conditional(
+        &mut self,
+        condition: &Expression,
+        consequent: &Expression,
+        alternate: &Expression,
+    ) -> Result<()> {
+        self.compile_expr(condition)?;
+        let alternate_jump = self.emit_jump_if_false();
+        self.compile_tail_position_expr(consequent)?;
+        let alternate_address = self.current_address();
+        self.patch_jump(alternate_jump, alternate_address)?;
+        self.compile_tail_position_expr(alternate)
     }
 
     pub(super) fn compile_call_expr(

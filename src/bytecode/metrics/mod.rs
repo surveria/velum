@@ -371,6 +371,7 @@ impl BytecodeInstruction {
             | Self::JumpIfNullishKeep(_)
             | Self::TailCallBinding { .. }
             | Self::TailCallValue { .. }
+            | Self::TailCallValueWithReceiver { .. }
             | Self::Complete(_) => BytecodeMetrics::empty(),
         };
         metrics.with_instruction()

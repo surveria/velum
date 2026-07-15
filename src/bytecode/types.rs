@@ -641,6 +641,9 @@ pub enum BytecodeInstruction {
     TailCallValue {
         arg_count: usize,
     },
+    TailCallValueWithReceiver {
+        arg_count: usize,
+    },
     CallStaticMember {
         property: BytecodeProperty,
         native: Option<NativeCallTarget>,

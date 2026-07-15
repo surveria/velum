@@ -530,17 +530,6 @@ impl Context {
         self.eval_call_reference_completion(reference, args)
     }
 
-    pub(crate) fn eval_bytecode_identifier_tail_call(
-        &mut self,
-        callee: &BytecodeBinding,
-        native: Option<NativeCallTarget>,
-        strict: bool,
-        args: &[Value],
-    ) -> Result<control::TailCall> {
-        self.eval_bytecode_identifier_call_reference(callee, native, strict)
-            .map(|reference| reference.into_tail_call(args.to_vec()))
-    }
-
     fn eval_call_reference_completion(
         &mut self,
         reference: CallReference,

@@ -12,6 +12,18 @@ use crate::{
 };
 
 impl Context {
+    pub(in crate::runtime) fn normalize_resumed_tail_call(
+        &mut self,
+        completion: Completion,
+    ) -> Result<Completion> {
+        let Completion::TailCall(request) = completion else {
+            return Ok(completion);
+        };
+        let (callee, args, call_this, return_mode) = request.into_parts();
+        let completion = tail_call_result(self.call(&callee, &args, call_this)?)?;
+        self.normalize_tail_call_return(completion, return_mode)
+    }
+
     pub(super) fn capture_function_lexical_this(
         &mut self,
         mode: BytecodeNewTargetMode,

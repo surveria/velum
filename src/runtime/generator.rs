@@ -481,6 +481,7 @@ impl Context {
         function: FunctionId,
         completion: Completion,
     ) -> Result<(GeneratorState, Value)> {
+        let completion = self.normalize_resumed_tail_call(completion)?;
         match completion {
             Completion::Suspend(Suspension::Yield(value)) => {
                 let execution = self.detach_function_execution(function)?;

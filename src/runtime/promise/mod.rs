@@ -221,6 +221,7 @@ impl Context {
         result_promise: PromiseId,
         completion: Completion,
     ) -> Result<()> {
+        let completion = self.normalize_resumed_tail_call(completion)?;
         match completion {
             Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
             Completion::Return(value) | Completion::ReturnDirect(value) => {
