@@ -47,6 +47,7 @@ pub enum BytecodeObjectProperty {
     Static(StaticName),
     StaticData(StaticName),
     StaticMethod(StaticName),
+    StaticPrototypeSetter(StaticName),
     StaticAccessor { key: StaticName, kind: AccessorKind },
     Computed,
     ComputedInferredName,
@@ -61,6 +62,7 @@ impl BytecodeObjectProperty {
             Self::Static(_)
             | Self::StaticData(_)
             | Self::StaticMethod(_)
+            | Self::StaticPrototypeSetter(_)
             | Self::StaticAccessor { .. }
             | Self::Spread => 1,
             Self::Computed

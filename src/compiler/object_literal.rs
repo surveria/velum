@@ -28,10 +28,14 @@ impl BytecodeCompiler<'_> {
             };
             match &property.key {
                 ObjectPropertyKey::Static(key) => {
-                    let operand = if property.kind == ObjectPropertyKind::Shorthand {
-                        BytecodeObjectProperty::StaticData(key.clone())
-                    } else {
-                        accessor.map_or_else(
+                    let operand = match property.kind {
+                        ObjectPropertyKind::Shorthand => {
+                            BytecodeObjectProperty::StaticData(key.clone())
+                        }
+                        ObjectPropertyKind::PrototypeSetter => {
+                            BytecodeObjectProperty::StaticPrototypeSetter(key.clone())
+                        }
+                        _ => accessor.map_or_else(
                             || {
                                 if matches!(property.value.kind(), Expr::MethodFunction { .. }) {
                                     BytecodeObjectProperty::StaticMethod(key.clone())
@@ -43,7 +47,7 @@ impl BytecodeCompiler<'_> {
                                 key: key.clone(),
                                 kind,
                             },
-                        )
+                        ),
                     };
                     operands.push(operand);
                 }

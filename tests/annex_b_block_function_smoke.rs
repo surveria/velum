@@ -131,6 +131,24 @@ fn nested_block_functions_preserve_annex_b_var_updates() -> TestResult {
 }
 
 #[test]
+fn block_function_named_arguments_preserves_the_implicit_binding() -> TestResult {
+    expect_true(
+        r#"
+        (function(...values) {
+            var original = arguments;
+            var called = false;
+            {
+                called = arguments() === undefined;
+                function arguments() {}
+            }
+            return called && arguments === original &&
+                arguments.length === 2 && values.length === 2;
+        }("camera", "lens"))
+        "#,
+    )
+}
+
+#[test]
 fn catch_binding_patterns_destructure_the_thrown_value() -> TestResult {
     expect_true(
         r"

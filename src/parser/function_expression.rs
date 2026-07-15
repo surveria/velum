@@ -87,6 +87,7 @@ impl Parser {
         Self::suppress_parameter_conflicting_annex_b_bindings(
             &mut statements,
             &parameters.params,
+            arguments_binding.as_ref(),
             strict,
         )?;
         let params = parameters.into_params();

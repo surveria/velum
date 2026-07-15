@@ -204,6 +204,7 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
+            Expr::OptionalChain(chain) => self.compile_delete_optional_chain(chain, strict),
             Expr::SuperMember { .. } => {
                 self.emit(BytecodeInstruction::DeleteSuperProperty(None));
                 Ok(())

@@ -246,6 +246,12 @@ impl Parser {
             let constructor = self.primary()?;
             self.member_suffix(constructor)?
         };
+        if self.check(&TokenKind::QuestionDot) {
+            return Err(Error::parse_at(
+                "optional chains cannot directly follow new expressions",
+                new_span,
+            ));
+        }
         let args = if self.match_kind(&TokenKind::LParen) {
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
