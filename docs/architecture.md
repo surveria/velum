@@ -84,6 +84,16 @@ parser AST modules directly. If execution needs a new construct, the construct
 must first be represented as bytecode-owned metadata and then executed through
 the VM.
 
+Contextual `await` grammar is owned by the parser boundary that introduces the
+context. Host script compilation may retain the explicit top-level-await
+extension for a future asynchronous evaluation API, while direct and indirect
+eval parse ECMAScript Script code and therefore reject a top-level await
+expression. Module code keeps `await` reserved across every nested ordinary
+function. Function parameters and bodies select their own async context, and
+class-field initializers neither inherit an enclosing async function's await
+expressions nor lose the Module reservation. These contexts are restored at
+every nested parse boundary instead of being inferred from emitted bytecode.
+
 Runtime and public API terminology should call guard misses `slow paths` or
 `generic semantic paths`. A guarded bytecode, inline-cache, direct-native, slot,
 shape, or dense-array specialization may take that slow path when its guard

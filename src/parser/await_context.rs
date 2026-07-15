@@ -15,6 +15,28 @@ pub(super) enum AwaitIdentifierContext {
 }
 
 impl Parser {
+    pub(super) fn forbid_top_level_await_expression(&mut self) {
+        self.await_expression_context = AwaitExpressionContext::Forbidden;
+    }
+
+    pub(super) fn with_function_await_context<T>(
+        &mut self,
+        expression_allowed: bool,
+        is_async: bool,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let identifier_reserved = is_async || self.is_module_goal();
+        self.with_await_context(expression_allowed, identifier_reserved, parse)
+    }
+
+    pub(super) fn with_class_field_await_context<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let identifier_reserved = self.is_module_goal();
+        self.with_await_context(false, identifier_reserved, parse)
+    }
+
     pub(super) fn with_await_context<T>(
         &mut self,
         expression_allowed: bool,

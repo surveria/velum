@@ -724,7 +724,7 @@ impl Parser {
         inherited_strict: bool,
         is_async: bool,
     ) -> Result<super::ParsedFunctionBody> {
-        self.with_await_context(is_async, is_async, |parser| {
+        self.with_function_await_context(is_async, is_async, |parser| {
             parser.with_yield_expression(false, |parser| {
                 if parser.match_kind(&TokenKind::LBrace) {
                     return parser.function_body(inherited_strict);

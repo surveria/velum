@@ -24,21 +24,24 @@ impl Parser {
             self.with_function_arguments_context(|parser| {
                 parser.with_new_target_scope(|parser| {
                     parser.with_super_context(false, false, |parser| {
-                        let parameters =
-                            parser.with_await_context(false, kind.is_async(), |parser| {
+                        let parameters = parser.with_function_await_context(
+                            false,
+                            kind.is_async(),
+                            |parser| {
                                 parser.with_yield_expression(false, |parser| {
                                     parser.with_yield_identifier_reserved(
                                         kind.is_generator(),
                                         Self::function_parameters,
                                     )
                                 })
-                            })?;
+                            },
+                        )?;
                         parser.consume(
                             &TokenKind::RParen,
                             "expected ')' after function parameters",
                         )?;
                         parser.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-                        let body = parser.with_await_context(
+                        let body = parser.with_function_await_context(
                             kind.is_async(),
                             kind.is_async(),
                             |parser| {

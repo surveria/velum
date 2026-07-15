@@ -421,9 +421,11 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.with_new_target_scope(|parser| {
-                parser.with_restricted_class_arguments(|parser| {
-                    parser.with_super_context(true, false, Self::assignment_expression)
+            Some(self.with_class_field_await_context(|parser| {
+                parser.with_new_target_scope(|parser| {
+                    parser.with_restricted_class_arguments(|parser| {
+                        parser.with_super_context(true, false, Self::assignment_expression)
+                    })
                 })
             })?)
         } else {
@@ -505,7 +507,7 @@ impl Parser {
             self.with_function_arguments_context(|parser| {
                 parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, allow_super_call, |parser| {
-                        let parameters = parser.with_await_context(
+                        let parameters = parser.with_function_await_context(
                             false,
                             function_kind.is_async(),
                             |parser| {
@@ -525,7 +527,7 @@ impl Parser {
                         Self::validate_class_member_parameters(kind, &parameters, member_offset)?;
                         parser
                             .consume(&TokenKind::LBrace, "expected '{' before class member body")?;
-                        let body = parser.with_await_context(
+                        let body = parser.with_function_await_context(
                             function_kind.is_async(),
                             function_kind.is_async(),
                             |parser| {
