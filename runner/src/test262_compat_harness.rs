@@ -58,7 +58,8 @@ let $DONOTEVALUATE = function () {
 };
 "#;
 
-pub const ASSERT_SOURCE: &str = r#"
+// Agent workers do not own a corpus loader, so they use this minimal assertion bootstrap.
+pub const AGENT_ASSERT_SOURCE: &str = r#"
 function isNegativeZero(value) {
     return value === 0 && 1 / value === -Infinity;
 }
@@ -160,60 +161,9 @@ assert._formatIdentityFreeValue = formatIdentityFreeValue;
 assert._toString = formatSimpleValue;
 "#;
 
-const DEEP_EQUAL_SOURCE: &str = r#"
-function test262DeepEqual(actual, expected) {
-    if (actual === expected) {
-        return true;
-    }
-    if (actual !== actual && expected !== expected) {
-        return true;
-    }
-    if (actual === null || expected === null ||
-        typeof actual !== "object" || typeof expected !== "object") {
-        return false;
-    }
-    let actualIsArray = Array.isArray(actual);
-    let expectedIsArray = Array.isArray(expected);
-    if (actualIsArray || expectedIsArray) {
-        if (!actualIsArray || !expectedIsArray || actual.length !== expected.length) {
-            return false;
-        }
-        for (let index = 0; index < actual.length; index += 1) {
-            if (!test262DeepEqual(actual[index], expected[index])) {
-                return false;
-            }
-        }
-        return true;
-    }
-    let actualKeys = Object.keys(actual);
-    let expectedKeys = Object.keys(expected);
-    if (actualKeys.length !== expectedKeys.length) {
-        return false;
-    }
-    for (let index = 0; index < actualKeys.length; index += 1) {
-        let key = actualKeys[index];
-        if (key !== expectedKeys[index] ||
-            !test262DeepEqual(actual[key], expected[key])) {
-            return false;
-        }
-    }
-    return true;
-}
-assert.deepEqual = function (actual, expected, message) {
-    if (test262DeepEqual(actual, expected)) {
-        return;
-    }
-    throw new Test262Error(message || "Expected structurally equal values");
-};
-assert.deepEqual._compare = test262DeepEqual;
-assert.deepEqual.format = String;
-"#;
-
 pub fn source(name: &str) -> Option<&'static str> {
     match name {
         "sta.js" => Some(STA_SOURCE),
-        "assert.js" => Some(ASSERT_SOURCE),
-        "deepEqual.js" => Some(DEEP_EQUAL_SOURCE),
         _ => None,
     }
 }
@@ -237,30 +187,18 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use rs_quickjs::{Runtime, Value};
-
-    use super::{ASSERT_SOURCE, DEEP_EQUAL_SOURCE, STA_SOURCE};
+    use super::{STA_SOURCE, source};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
     #[test]
-    fn deep_equal_compares_array_elements_without_enumerable_metadata() -> TestResult {
-        let runtime = Runtime::new();
-        let mut context = runtime.context();
-        context.eval(STA_SOURCE)?;
-        context.eval(ASSERT_SOURCE)?;
-        context.eval(DEEP_EQUAL_SOURCE)?;
-        let value = context.eval(
-            r"
-            let actual = [[0, 1]];
-            actual.groups = undefined;
-            test262DeepEqual(actual, [[0, 1]]) &&
-                !test262DeepEqual(actual, [[0, 2]]) ? 42 : 0
-            ",
-        )?;
-        if value == Value::Number(42.0) {
+    fn only_runner_specific_sta_is_overridden() -> TestResult {
+        if source("sta.js") == Some(STA_SOURCE)
+            && source("assert.js").is_none()
+            && source("deepEqual.js").is_none()
+        {
             return Ok(());
         }
-        Err(format!("unexpected deepEqual result: {value:?}").into())
+        Err("canonical Test262 assertion helpers must come from the pinned corpus".into())
     }
 }

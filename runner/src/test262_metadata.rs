@@ -47,7 +47,7 @@ const TEST262_MAX_STRING_LEN: usize = 33_554_432;
 #[cfg(test)]
 const COMPAT_STA_SOURCE: &str = test262_compat_harness::STA_SOURCE;
 #[cfg(test)]
-const COMPAT_ASSERT_SOURCE: &str = test262_compat_harness::ASSERT_SOURCE;
+const AGENT_ASSERT_SOURCE: &str = test262_compat_harness::AGENT_ASSERT_SOURCE;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Test262Outcome {
@@ -502,7 +502,7 @@ mod tests {
     use rs_quickjs::{Error, Runtime, Value};
 
     use super::{
-        ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_ASSERT_SOURCE, COMPAT_STA_SOURCE,
+        AGENT_ASSERT_SOURCE, ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_STA_SOURCE,
         DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE, FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW,
         HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE, HARNESS_STA, MODULE_VARIANT, RAW_VARIANT,
         STRICT_VARIANT, Test262Metadata, VariantPlan, ensure_async_completion,
@@ -664,11 +664,11 @@ negative:
     }
 
     #[test]
-    fn compatibility_assert_preserves_mandatory_global_helpers() -> TestResult {
+    fn agent_assert_preserves_mandatory_global_helpers() -> TestResult {
         let runtime = Runtime::new();
         let mut context = runtime.context();
         context.eval(COMPAT_STA_SOURCE)?;
-        context.eval(COMPAT_ASSERT_SOURCE)?;
+        context.eval(AGENT_ASSERT_SOURCE)?;
         let result = context.eval(
             r#"
                 isNegativeZero(-0) &&

@@ -256,7 +256,7 @@ fn run_worker(
         .eval(test262_compat_harness::STA_SOURCE)
         .map_err(|error| error.to_string())?;
     context
-        .eval(test262_compat_harness::ASSERT_SOURCE)
+        .eval(test262_compat_harness::AGENT_ASSERT_SOURCE)
         .map_err(|error| error.to_string())?;
     context
         .eval(WORKER_HOST_SOURCE)
