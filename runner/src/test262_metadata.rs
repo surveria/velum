@@ -40,7 +40,9 @@ const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_BYTE_BUFFER_LEN: usize = 8_388_608;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
 const TEST262_MAX_OBJECTS: usize = 1_000_000;
-const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
+// Canonical assertion helpers run inside exhaustive staging loops, so the
+// corpus budget includes their dispatch while still bounding runaway cases.
+const TEST262_MAX_RUNTIME_STEPS: usize = 250_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 33_554_432;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
 const TEST262_MAX_STRING_LEN: usize = 33_554_432;
@@ -247,6 +249,7 @@ fn execute_variant_result(
 
     let mut loader = Test262ModuleLoader::new(test262_dir);
     context.set_dynamic_module_loader(loader.clone());
+    context.begin_runtime_step_budget();
     let result = if metadata.has_flag(FLAG_MODULE) {
         context.eval_module_named(relative_path, source, &mut loader)
     } else {

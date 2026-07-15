@@ -346,13 +346,7 @@ impl Context {
             .runtime_steps
             .checked_add(1)
             .ok_or_else(|| Error::limit("runtime steps overflowed"))?;
-        if self.runtime_steps > self.limits.max_runtime_steps {
-            return Err(Error::limit(format!(
-                "runtime steps exceeded {}",
-                self.limits.max_runtime_steps
-            )));
-        }
-        Ok(())
+        self.check_runtime_step_budget()
     }
 
     pub(crate) fn charge_runtime_steps(&mut self, steps: usize) -> Result<()> {
@@ -360,7 +354,15 @@ impl Context {
             .runtime_steps
             .checked_add(steps)
             .ok_or_else(|| Error::limit("runtime steps overflowed"))?;
-        if self.runtime_steps > self.limits.max_runtime_steps {
+        self.check_runtime_step_budget()
+    }
+
+    fn check_runtime_step_budget(&self) -> Result<()> {
+        let budget_steps = self
+            .runtime_steps
+            .checked_sub(self.runtime_step_budget_origin)
+            .ok_or_else(|| Error::runtime("runtime step budget origin exceeded lifetime usage"))?;
+        if budget_steps > self.limits.max_runtime_steps {
             return Err(Error::limit(format!(
                 "runtime steps exceeded {}",
                 self.limits.max_runtime_steps

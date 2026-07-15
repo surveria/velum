@@ -64,6 +64,15 @@ impl Context {
         self.runtime_steps
     }
 
+    /// Starts a fresh runtime-step limit interval while preserving lifetime usage.
+    ///
+    /// Embedders can use this between trusted setup and untrusted execution so
+    /// `runtime_steps` remains cumulative while the configured limit applies to
+    /// the new execution phase.
+    pub const fn begin_runtime_step_budget(&mut self) {
+        self.runtime_step_budget_origin = self.runtime_steps;
+    }
+
     #[must_use]
     pub const fn atom_count(&self) -> usize {
         self.atoms.len()

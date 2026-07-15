@@ -157,6 +157,31 @@ fn normalizes_negative_zero_keys() -> TestResult {
 }
 
 #[test]
+fn normalizes_negative_zero_values_from_set_like_iterators() -> TestResult {
+    eval_is_42(
+        r"
+        let setLike = {
+            size: 1,
+            has: function () { return false; },
+            keys: function () { return [-0].values(); }
+        };
+        let unionValues = new Set([1]).union(setLike).values();
+        unionValues.next();
+        let unionValue = unionValues.next().value;
+        let intersectionValue = new Set([0, 1]).intersection(setLike).values().next().value;
+        let symmetricValues = new Set([1]).symmetricDifference(setLike).values();
+        symmetricValues.next();
+        let symmetricValue = symmetricValues.next().value;
+        1 / unionValue === Infinity &&
+            1 / intersectionValue === Infinity &&
+            1 / symmetricValue === Infinity
+            ? 42
+            : 0
+        ",
+    )
+}
+
+#[test]
 fn validates_set_like_argument() -> TestResult {
     eval_is_42(
         r"
