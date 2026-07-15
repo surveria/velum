@@ -37,8 +37,8 @@ const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 const TEST262_ERROR_SENTINEL_SOURCE: &str = "Test262Error.__rsqjsLastInstance";
 const TEST262_MAX_BINDINGS: usize = 65_536;
-const TEST262_MAX_BYTE_BUFFER_LEN: usize = 8_388_608;
-const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
+const TEST262_MAX_BYTE_BUFFER_LEN: usize = 33_554_432;
+const TEST262_MAX_OBJECT_PROPERTIES: usize = 4_194_304;
 const TEST262_MAX_OBJECTS: usize = 1_000_000;
 // Canonical assertion helpers run inside exhaustive staging loops, so the
 // corpus budget includes their dispatch while still bounding runaway cases.
@@ -509,7 +509,8 @@ mod tests {
         DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE, FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW,
         HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE, HARNESS_STA, MODULE_VARIANT, RAW_VARIANT,
         STRICT_VARIANT, Test262Metadata, VariantPlan, ensure_async_completion,
-        execution_error_matches, harness_names, parse_metadata, variant_id, variant_plans,
+        execution_error_matches, harness_names, parse_metadata, test262_limits, variant_id,
+        variant_plans,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -689,6 +690,13 @@ negative:
             "#,
         )?;
         ensure_value(&result, &Value::Bool(true))
+    }
+
+    #[test]
+    fn conformance_limits_cover_large_official_vectors() -> TestResult {
+        let limits = test262_limits();
+        ensure_bool(limits.max_byte_buffer_len == 33_554_432)?;
+        ensure_bool(limits.max_object_properties == 4_194_304)
     }
 
     #[test]
