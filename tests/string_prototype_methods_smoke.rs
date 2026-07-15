@@ -103,6 +103,23 @@ fn supports_string_prototype_methods() -> TestResult {
 }
 
 #[test]
+fn case_conversion_uses_current_unicode_data_and_preserves_lone_surrogates() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const loneHigh = String.fromCharCode(0xD800);
+        const loneLow = String.fromCharCode(0xDC00);
+        const garaySmallA = String.fromCodePoint(0x10D70);
+        loneHigh.toUpperCase().charCodeAt(0) === 0xD800 &&
+            loneLow.toLowerCase().charCodeAt(0) === 0xDC00 &&
+            garaySmallA.toUpperCase().codePointAt(0) === 0x10D50 ? 42 : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_nullish_string_prototype_receivers() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
