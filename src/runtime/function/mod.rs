@@ -536,27 +536,6 @@ impl Context {
         )
     }
 
-    fn finish_function_call(
-        &mut self,
-        id: FunctionId,
-        local_base: usize,
-        has_arguments_binding: bool,
-        has_self_binding: bool,
-        derived_super_binding: Option<&Rc<FunctionSuperBinding>>,
-        mut result: Result<Completion>,
-    ) -> Result<(Completion, TailCallReturnMode)> {
-        if let Ok(completion) = result {
-            result = self.dispose_active_binding_scope(completion);
-        }
-        let binding_result =
-            self.pop_function_binding_storage(local_base, has_arguments_binding, has_self_binding);
-        let activation_result = self.pop_call_activation(local_base);
-        binding_result?;
-        activation_result?;
-        let return_mode = self.function_return_mode(id, derived_super_binding)?;
-        result.map(|completion| (completion, return_mode))
-    }
-
     fn abort_function_scope_setup<T>(&mut self, local_base: usize, error: Error) -> Result<T> {
         self.leave_function_local_frame(local_base)?;
         self.pop_call_activation(local_base)?;

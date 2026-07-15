@@ -1,11 +1,17 @@
+use std::rc::Rc;
+
 use crate::{
     bytecode::BytecodeFunction,
     error::Result,
-    runtime::{Context, activation::DynamicEnvironment},
+    runtime::{
+        Context,
+        activation::DynamicEnvironment,
+        control::{Completion, TailCallReturnMode},
+    },
     value::{FunctionId, Value},
 };
 
-use super::FunctionSelfBinding;
+use super::{FunctionSelfBinding, FunctionSuperBinding};
 
 impl Context {
     pub(super) fn append_direct_eval_environment(
@@ -59,5 +65,26 @@ impl Context {
             return Err(error);
         }
         Ok(())
+    }
+
+    pub(super) fn finish_function_call(
+        &mut self,
+        id: FunctionId,
+        local_base: usize,
+        has_arguments_binding: bool,
+        has_self_binding: bool,
+        derived_super_binding: Option<&Rc<FunctionSuperBinding>>,
+        mut result: Result<Completion>,
+    ) -> Result<(Completion, TailCallReturnMode)> {
+        if let Ok(completion) = result {
+            result = self.dispose_active_binding_scope(completion);
+        }
+        let binding_result =
+            self.pop_function_binding_storage(local_base, has_arguments_binding, has_self_binding);
+        let activation_result = self.pop_call_activation(local_base);
+        binding_result?;
+        activation_result?;
+        let return_mode = self.function_return_mode(id, derived_super_binding)?;
+        result.map(|completion| (completion, return_mode))
     }
 }
