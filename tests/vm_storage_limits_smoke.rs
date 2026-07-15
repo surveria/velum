@@ -185,7 +185,7 @@ fn accounts_regexp_compile_replacement_transactionally() -> TestResult {
 
 #[test]
 fn enforces_retained_source_limits_and_keeps_vm_policies_isolated() -> TestResult {
-    const GENERATED_SOURCE: &str = "function anonymous() {\nreturn 1;\n}";
+    const GENERATED_SOURCE: &str = "function anonymous(\n) {\nreturn 1;\n}";
     let source_limits = VmStorageLimits::unlimited()
         .with_max_count(VmStorageKind::SourceRecord, 1)
         .with_max_payload_bytes(VmStorageKind::SourceRecord, GENERATED_SOURCE.len());
