@@ -327,10 +327,7 @@ impl Context {
                     let dependency = module
                         .dependency_for_specifier(request)
                         .ok_or_else(|| Error::runtime("source export dependency is missing"))?;
-                    let source = graph
-                        .get(dependency)
-                        .and_then(|pending| pending.module_source_binding.clone())
-                        .ok_or_else(|| Error::runtime("exported module source is missing"))?;
+                    let source = Self::required_module_source_binding(graph, dependency)?;
                     resolving.remove(&key);
                     return Ok(ExportResolution::Found(source));
                 }

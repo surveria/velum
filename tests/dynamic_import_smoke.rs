@@ -68,6 +68,37 @@ fn converts_abrupt_specifier_coercion_into_promise_rejection() -> TestResult {
 }
 
 #[test]
+fn rejects_source_phase_imports_from_source_text_modules_with_syntax_error() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let (loader, _requests) = RecordingLoader::new([
+        (
+            "bridge.js",
+            "import source value from './plain.js'; export { value };",
+        ),
+        ("plain.js", "export const value = 1;"),
+    ]);
+    context.set_dynamic_module_loader(loader);
+    context.eval(
+        "var sourcePhaseError; \
+         import('./bridge.js').catch(error => { \
+             sourcePhaseError = error; \
+         });",
+    )?;
+    let value = context.eval(
+        "sourcePhaseError instanceof SyntaxError ? true : \
+         sourcePhaseError && sourcePhaseError.name + ': ' + sourcePhaseError.message",
+    )?;
+    if value == Value::Bool(true) {
+        return Ok(());
+    }
+    Err(format!(
+        "source text module did not reject source-phase linking with SyntaxError: {value:?}"
+    )
+    .into())
+}
+
+#[test]
 fn propagates_abrupt_argument_evaluation_synchronously() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

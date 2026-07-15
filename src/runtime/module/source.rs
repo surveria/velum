@@ -10,7 +10,7 @@ use crate::{
         },
     },
     syntax::DeclKind,
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 use super::PendingModule;
@@ -33,6 +33,26 @@ impl Context {
             pending.module_source_binding = Some(binding);
         }
         Ok(())
+    }
+
+    pub(super) fn required_module_source_binding(
+        graph: &[PendingModule],
+        module_index: usize,
+    ) -> Result<BindingCell> {
+        let module = graph
+            .get(module_index)
+            .ok_or_else(|| Error::runtime("module source owner is missing"))?;
+        module
+            .module_source_binding
+            .clone()
+            .ok_or_else(|| Self::module_source_unavailable(&module.name))
+    }
+
+    pub(super) fn module_source_unavailable(module_name: &str) -> Error {
+        Error::exception(
+            ErrorName::SyntaxError,
+            format!("source phase import is unavailable for source text module '{module_name}'"),
+        )
     }
 
     pub(crate) fn abstract_module_source_constructor_value(&mut self) -> Result<Value> {

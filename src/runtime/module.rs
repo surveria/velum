@@ -348,9 +348,7 @@ impl Context {
             if request.phase() == crate::syntax::ImportPhase::Source
                 && module_source_class_name.is_none()
             {
-                return Err(Error::runtime(format!(
-                    "module '{canonical}' has no source-phase representation"
-                )));
+                return Err(Self::module_source_unavailable(&canonical));
             }
             let dependency = if let Some(existing) = indices.get(&canonical).copied() {
                 if let Some(class_name) = module_source_class_name {
@@ -452,10 +450,9 @@ impl Context {
                             })?
                         }
                     }
-                    ModuleImportName::Source => graph
-                        .get(dependency)
-                        .and_then(|module| module.module_source_binding.clone())
-                        .ok_or_else(|| Error::runtime("module source binding is missing"))?,
+                    ModuleImportName::Source => {
+                        Self::required_module_source_binding(graph, dependency)?
+                    }
                 };
                 linked.push((import.local_name().to_owned(), cell));
             }
