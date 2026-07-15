@@ -1,6 +1,6 @@
 use std::mem::size_of;
 
-use rs_quickjs::{JsString, JsSymbol, Value};
+use velum::{JsString, JsSymbol, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

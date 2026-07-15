@@ -1,19 +1,19 @@
 use std::env;
 
 use crate::build_info::runner_build_info;
-use rs_quickjs::engine_build_info;
 use serde::{Deserialize, Serialize};
+use velum::engine_build_info;
 
-const TIMESTAMP_ENV: &str = "RSQJS_REPORT_TIMESTAMP";
-const COMMIT_ENV: &str = "RSQJS_REPORT_COMMIT_SHA";
-const TREE_ENV: &str = "RSQJS_REPORT_TREE_SHA";
-const EVENT_ENV: &str = "RSQJS_REPORT_EVENT_NAME";
-const RUN_ID_ENV: &str = "RSQJS_REPORT_RUN_ID";
-const RUN_ATTEMPT_ENV: &str = "RSQJS_REPORT_RUN_ATTEMPT";
-const REPOSITORY_ENV: &str = "RSQJS_REPORT_REPOSITORY";
-const WORKFLOW_ENV: &str = "RSQJS_REPORT_WORKFLOW";
-const PR_NUMBER_ENV: &str = "RSQJS_REPORT_PR_NUMBER";
-const TASK_ENV: &str = "RSQJS_REPORT_TASK";
+const TIMESTAMP_ENV: &str = "VELUM_REPORT_TIMESTAMP";
+const COMMIT_ENV: &str = "VELUM_REPORT_COMMIT_SHA";
+const TREE_ENV: &str = "VELUM_REPORT_TREE_SHA";
+const EVENT_ENV: &str = "VELUM_REPORT_EVENT_NAME";
+const RUN_ID_ENV: &str = "VELUM_REPORT_RUN_ID";
+const RUN_ATTEMPT_ENV: &str = "VELUM_REPORT_RUN_ATTEMPT";
+const REPOSITORY_ENV: &str = "VELUM_REPORT_REPOSITORY";
+const WORKFLOW_ENV: &str = "VELUM_REPORT_WORKFLOW";
+const PR_NUMBER_ENV: &str = "VELUM_REPORT_PR_NUMBER";
+const TASK_ENV: &str = "VELUM_REPORT_TASK";
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RunMetadata {

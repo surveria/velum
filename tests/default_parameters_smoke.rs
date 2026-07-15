@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use velum::{Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -267,7 +267,7 @@ fn async_default_parameter_abrupt_completion_rejects_returned_promise() -> TestR
     ensure_value(&value, &Value::Bool(true))
 }
 
-fn eval(source: &str) -> rs_quickjs::Result<Value> {
+fn eval(source: &str) -> velum::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)
@@ -279,7 +279,7 @@ fn ensure_parse_error_contains(source: &str, expected: &str) -> TestResult {
     let Err(error) = context.eval(source) else {
         return Err(format!("expected '{source}' to fail").into());
     };
-    let rs_quickjs::Error::Parse { message, .. } = error else {
+    let velum::Error::Parse { message, .. } = error else {
         return Err(format!("expected parse error for '{source}', got {error:?}").into());
     };
     if message.contains(expected) {
@@ -294,7 +294,7 @@ fn ensure_parse_error(source: &str) -> TestResult {
     let Err(error) = context.eval(source) else {
         return Err(format!("expected '{source}' to fail").into());
     };
-    if matches!(error, rs_quickjs::Error::Parse { .. }) {
+    if matches!(error, velum::Error::Parse { .. }) {
         return Ok(());
     }
     Err(format!("expected parse error for '{source}', got {error:?}").into())

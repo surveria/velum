@@ -1,8 +1,8 @@
 use std::{borrow::Cow, collections::BTreeSet, fs, path::Path, time::Duration};
 
 use anyhow::{Context as _, bail};
-use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
+use velum::{Error, Runtime, RuntimeLimits};
 
 use super::{
     test262_agent::{Test262AgentCoordinator, install_async_report},
@@ -35,7 +35,7 @@ const NEGATIVE_PHASE_PARSE: &str = "parse";
 const NEGATIVE_PHASE_RESOLUTION: &str = "resolution";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_ERROR_NAME: &str = "Test262Error";
-const TEST262_ERROR_SENTINEL_SOURCE: &str = "Test262Error.__rsqjsLastInstance";
+const TEST262_ERROR_SENTINEL_SOURCE: &str = "Test262Error.__velumLastInstance";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_BYTE_BUFFER_LEN: usize = 33_554_432;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 4_194_304;
@@ -368,10 +368,10 @@ fn ensure_async_completion(relative_path: &str, output: &[String]) -> anyhow::Re
 }
 
 fn ensure_negative_result(
-    context: &mut rs_quickjs::Context,
+    context: &mut velum::Context,
     relative_path: &str,
     negative: &NegativeMetadata,
-    result: rs_quickjs::Result<rs_quickjs::Value>,
+    result: velum::Result<velum::Value>,
 ) -> anyhow::Result<()> {
     if negative.phase == NEGATIVE_PHASE_PARSE {
         return ensure_negative_parse_result(relative_path, negative, result);
@@ -392,7 +392,7 @@ fn ensure_negative_result(
 fn ensure_negative_resolution_result(
     relative_path: &str,
     negative: &NegativeMetadata,
-    result: rs_quickjs::Result<rs_quickjs::Value>,
+    result: velum::Result<velum::Value>,
 ) -> anyhow::Result<()> {
     match result {
         Ok(_) => bail!(
@@ -411,7 +411,7 @@ fn ensure_negative_resolution_result(
 fn ensure_negative_parse_result(
     relative_path: &str,
     negative: &NegativeMetadata,
-    result: rs_quickjs::Result<rs_quickjs::Value>,
+    result: velum::Result<velum::Value>,
 ) -> anyhow::Result<()> {
     match result {
         Ok(_) => bail!(
@@ -428,10 +428,10 @@ fn ensure_negative_parse_result(
 }
 
 fn ensure_negative_runtime_result(
-    context: &mut rs_quickjs::Context,
+    context: &mut velum::Context,
     relative_path: &str,
     negative: &NegativeMetadata,
-    result: rs_quickjs::Result<rs_quickjs::Value>,
+    result: velum::Result<velum::Value>,
 ) -> anyhow::Result<()> {
     match result {
         Ok(_) => bail!(
@@ -450,7 +450,7 @@ fn ensure_negative_runtime_result(
 }
 
 fn negative_runtime_error_matches(
-    context: &mut rs_quickjs::Context,
+    context: &mut velum::Context,
     error: &Error,
     expected_type: &str,
 ) -> bool {
@@ -502,7 +502,7 @@ struct HarnessSource {
 
 #[cfg(test)]
 mod tests {
-    use rs_quickjs::{Error, Runtime, Value};
+    use velum::{Error, Runtime, Value};
 
     use super::{
         AGENT_ASSERT_SOURCE, ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, COMPAT_STA_SOURCE,

@@ -11,7 +11,7 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn parses_benchmark_ratios_from_ascii_table() -> TestResult {
-    let text = r"# rs-quickjs Test Report
+    let text = r"# Velum Test Report
 
 ## Benchmarks
 
@@ -35,7 +35,7 @@ fn parses_benchmark_ratios_from_ascii_table() -> TestResult {
 
 #[test]
 fn prefers_current_budget_summary_counts() -> TestResult {
-    let text = r"# rs-quickjs Test Report
+    let text = r"# Velum Test Report
 
 ## Benchmarks
 
@@ -57,7 +57,7 @@ fn prefers_current_budget_summary_counts() -> TestResult {
 
 #[test]
 fn parses_full_test262_counts() -> TestResult {
-    let text = r"# rs-quickjs Test Report
+    let text = r"# Velum Test Report
 
 ## Test262 full corpus
 
@@ -75,7 +75,7 @@ fn parses_full_test262_counts() -> TestResult {
 
 #[test]
 fn rollup_prefers_variant_level_test262_counts() -> TestResult {
-    let text = r"# rs-quickjs Test Report
+    let text = r"# Velum Test Report
 
 ## Test262 file conformance
 
@@ -105,18 +105,18 @@ fn mixed_history_uses_yaml_for_new_reports_and_markdown_fallback_for_old_reports
     }
     let report_dir = root.join("test-runs");
     fs::create_dir_all(&report_dir)?;
-    let legacy_name = "rsqjs-test-report-20260708T000000Z.md";
+    let legacy_name = "velum-test-report-20260708T000000Z.md";
     fs::write(
         report_dir.join(legacy_name),
-        "# rs-quickjs Test Report\n\n## Benchmarks\n\n- Measured: 1\n- Over latency budget (1.00x): 0\n- Over memory budget (1.00x): 0\n\n| benchmark | latency_ratio | memory_ratio |\n| old | 1.10x | - |\n",
+        "# Velum Test Report\n\n## Benchmarks\n\n- Measured: 1\n- Over latency budget (1.00x): 0\n- Over memory budget (1.00x): 0\n\n| benchmark | latency_ratio | memory_ratio |\n| old | 1.10x | - |\n",
     )?;
 
-    let current_name = "rsqjs-test-report-20260709T000000Z.md";
+    let current_name = "velum-test-report-20260709T000000Z.md";
     fs::write(report_dir.join(current_name), "derived view")?;
     let summary = crate::report_schema_tests::sample_document()?.summary();
     let yaml = serde_yaml_ng::to_string(&summary)?;
     fs::write(
-        report_dir.join("rsqjs-test-report-20260709T000000Z.yaml"),
+        report_dir.join("velum-test-report-20260709T000000Z.yaml"),
         yaml,
     )?;
 
@@ -139,7 +139,7 @@ fn mixed_history_uses_yaml_for_new_reports_and_markdown_fallback_for_old_reports
 #[test]
 fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() -> TestResult {
     let root = std::env::temp_dir().join(format!(
-        "rsqjs-rollup-standalone-jetstream-{}",
+        "velum-rollup-standalone-jetstream-{}",
         std::process::id()
     ));
     if root.exists() {
@@ -150,14 +150,14 @@ fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() ->
     fs::create_dir_all(&report_dir)?;
     fs::create_dir_all(&jetstream_dir)?;
 
-    let test_name = "rsqjs-test-report-20260709T000000Z.md";
+    let test_name = "velum-test-report-20260709T000000Z.md";
     fs::write(report_dir.join(test_name), "derived test report")?;
     fs::write(
-        report_dir.join("rsqjs-test-report-20260709T000000Z.yaml"),
+        report_dir.join("velum-test-report-20260709T000000Z.yaml"),
         serde_yaml_ng::to_string(&crate::report_schema_tests::sample_document()?.summary())?,
     )?;
 
-    let jetstream_stem = "rsqjs-jetstream-report-20260710T031700Z";
+    let jetstream_stem = "velum-jetstream-report-20260710T031700Z";
     let jetstream_yaml = serde_yaml_ng::to_string(
         &crate::report_schema_tests::sample_jetstream_document()?.summary(),
     )?;
@@ -209,7 +209,7 @@ fn current_history_svg_charts_render_on_the_shared_main_commit_axis() -> TestRes
     let report_dir = repository_root.join("reports/test-runs");
     let records = super::parse_records(&report_dir)?;
     let timeline = CommitTimeline::discover(&report_dir, &records)?;
-    let chart_id = format!("rsqjs-commit-axis-chart-{}", std::process::id());
+    let chart_id = format!("velum-commit-axis-chart-{}", std::process::id());
     let light_svg_path = std::env::temp_dir().join(format!("{chart_id}-light.svg"));
     let dark_svg_path = std::env::temp_dir().join(format!("{chart_id}-dark.svg"));
     write_svg_chart(&records, &timeline, &light_svg_path, ChartTheme::Light)?;
@@ -237,7 +237,7 @@ fn current_history_svg_charts_render_on_the_shared_main_commit_axis() -> TestRes
 }
 
 fn temporary_report_root() -> PathBuf {
-    std::env::temp_dir().join(format!("rsqjs-rollup-mixed-{}", std::process::id()))
+    std::env::temp_dir().join(format!("velum-rollup-mixed-{}", std::process::id()))
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

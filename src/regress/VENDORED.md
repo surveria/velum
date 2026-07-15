@@ -9,7 +9,7 @@ ECMAScript-oriented regular expression compiler and executor maintained at
 - crates.io package: `regress` 0.11.1
 - upstream Git commit recorded by the package: `7e64ad5e6807b5503e5cc97a79e0f129b23c556b`
 - crates.io archive SHA-256: `158a764437582235e3501f683b93a0a6f8d825d04a789dbe5ed30b8799b8908a`
-- imported into rs-quickjs: 2026-07-11
+- imported into Velum: 2026-07-11
 - license: MIT OR Apache-2.0
 
 `LICENSE-MIT`, `LICENSE-APACHE`, `README.md`, `Cargo.toml.orig`, and every

@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --jetstream <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: velum-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --jetstream <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {

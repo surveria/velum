@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value, VmResourceUsage};
+use velum::{Engine, Value, VmResourceUsage};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -170,9 +170,9 @@ fn string_concat_uses_heap_dedup_and_respects_limits() -> TestResult {
     ensure_usize(after_repeated.string_bytes, after_first.string_bytes)?;
 
     let max_string_len = "camera-stream".len().saturating_sub(1);
-    let runtime = rs_quickjs::Runtime::with_limits(rs_quickjs::RuntimeLimits {
+    let runtime = velum::Runtime::with_limits(velum::RuntimeLimits {
         max_string_len,
-        ..rs_quickjs::RuntimeLimits::default()
+        ..velum::RuntimeLimits::default()
     });
     let mut context = runtime.context();
     let Err(error) = context.eval(r#""camera" + "-stream""#) else {

@@ -47,7 +47,7 @@ fn compact_jetstream_yaml_keeps_every_official_row_within_the_line_contract() ->
     )?;
     let markdown = render_report(&report);
     ensure_contains(&markdown, "case_elapsed")?;
-    ensure_contains(&markdown, "rsqjs_measure")?;
+    ensure_contains(&markdown, "velum_measure")?;
     ensure_contains(&markdown, "quickjs_measure")?;
     ensure_contains(&markdown, "latency_budget")?;
     ensure_contains(&markdown, "quality")?;
@@ -91,7 +91,7 @@ fn compact_jetstream_yaml_keeps_every_official_row_within_the_line_contract() ->
 
 #[test]
 fn current_schema_reads_the_tracked_pre_compact_v1_summary() -> TestResult {
-    let yaml = include_str!("../../reports/test-runs/rsqjs-test-report-20260709T230501Z.yaml");
+    let yaml = include_str!("../../reports/test-runs/velum-test-report-20260709T230501Z.yaml");
     let report: ReportSummary = serde_yaml_ng::from_str(yaml)?;
     report.validate()?;
     ensure_bool(
@@ -499,7 +499,7 @@ fn validate_parity_failure_contribution(counted_invalid: bool) -> TestResult {
 fn structured_report_renders_compatible_markdown_and_tsv() -> TestResult {
     let report = sample_document()?;
     let markdown = render_report(&report);
-    ensure_contains(&markdown, "# rs-quickjs Test Report")?;
+    ensure_contains(&markdown, "# Velum Test Report")?;
     ensure_contains(&markdown, "## Unit corpus")?;
     ensure_contains(&markdown, "array-index")?;
     ensure_contains(&markdown, "1.25x")?;
@@ -549,14 +549,14 @@ pub fn sample_document() -> Result<ReportDocument, anyhow::Error> {
                 source: "tests/benchmarks/array_index.js".to_owned(),
                 iterations: 30,
                 case_elapsed: "5.00 ms".to_owned(),
-                rsqjs_measure: "2.00 ms".to_owned(),
+                velum_measure: "2.00 ms".to_owned(),
                 quickjs_measure: "3.00 ms".to_owned(),
-                rsqjs_eval: "1.25 ms".to_owned(),
+                velum_eval: "1.25 ms".to_owned(),
                 quickjs_eval: "1.00 ms".to_owned(),
                 latency_ratio: "1.25x".to_owned(),
                 latency_budget: "🟡 > 1.00x".to_owned(),
                 memory_ratio: "-".to_owned(),
-                rsqjs_cv: "2.0%".to_owned(),
+                velum_cv: "2.0%".to_owned(),
                 quickjs_cv: "1.0%".to_owned(),
                 quality: "✅ valid".to_owned(),
                 detail: "sequential benchmark completed".to_owned(),

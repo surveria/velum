@@ -1,19 +1,19 @@
 [workspace]
 
 [package]
-name = "rsqjs-test-runner"
+name = "velum-test-runner"
 version = "0.2.30"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/surveria/rs-quickjs"
-description = "Test and benchmark runner for the rs-quickjs engine. Lives in the engine repository as a nested workspace and depends on the local engine crate through its public API."
+repository = "https://github.com/surveria/velum"
+description = "Test and benchmark runner for the Velum engine. Lives in the engine repository as a nested workspace and depends on the local engine crate through its public API."
 
 [[bin]]
-name = "rsqjs-test-runner"
+name = "velum-test-runner"
 path = "src/main.rs"
 
 [dependencies]
-rs-quickjs = { path = ".." }
+velum = { path = ".." }
 anyhow = "1"
 fs2 = "0.4"
 human-yaml = { git = "https://github.com/chertov/human-yaml.git", rev = "1b83913343223316678776f0c5329d4c577df0f5" }

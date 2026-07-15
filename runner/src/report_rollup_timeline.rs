@@ -9,9 +9,9 @@ use anyhow::{Context as _, bail};
 
 use super::ReportRecord;
 
-const TEST_REPORT_PREFIX: &str = "rsqjs-test-report-";
+const TEST_REPORT_MARKER: &str = "-test-report-";
 const TEST_REPORT_SUFFIX: &str = ".md";
-const JETSTREAM_REPORT_PREFIX: &str = "rsqjs-jetstream-report-";
+const JETSTREAM_REPORT_MARKER: &str = "-jetstream-report-";
 const JETSTREAM_REPORT_SUFFIX: &str = ".yaml";
 const JETSTREAM_REPORT_DIRECTORY: &str = "jetstream-runs";
 const MAIN_AXIS_DESCRIPTION: &str = "main first-parent commit";
@@ -104,7 +104,8 @@ impl CommitTimeline {
         let mut report_positions = BTreeMap::new();
         let mut pending_reports = Vec::new();
         for record in records {
-            if let Some(commit) = additions.get(&record.file_name) {
+            let addition_commit = report_key(&record.file_name).and_then(|key| additions.get(&key));
+            if let Some(commit) = addition_commit {
                 let position = commit_positions.get(commit).copied().with_context(|| {
                     format!(
                         "report '{}' was added by commit '{}' outside the main first-parent history",
@@ -307,25 +308,47 @@ fn parse_report_additions(text: &str) -> BTreeMap<String, String> {
         let Some(file_name) = Path::new(line).file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        if is_canonical_report_name(file_name) && !current_commit.is_empty() {
-            additions.insert(file_name.to_owned(), current_commit.clone());
+        if let Some(key) = report_key(file_name)
+            && !current_commit.is_empty()
+        {
+            additions
+                .entry(key)
+                .or_insert_with(|| current_commit.clone());
         }
     }
     additions
 }
 
-fn is_canonical_report_name(file_name: &str) -> bool {
-    valid_timestamped_name(file_name, TEST_REPORT_PREFIX, TEST_REPORT_SUFFIX)
-        || valid_timestamped_name(file_name, JETSTREAM_REPORT_PREFIX, JETSTREAM_REPORT_SUFFIX)
+fn report_key(file_name: &str) -> Option<String> {
+    timestamped_report_key(file_name, TEST_REPORT_MARKER, TEST_REPORT_SUFFIX, "test").or_else(
+        || {
+            timestamped_report_key(
+                file_name,
+                JETSTREAM_REPORT_MARKER,
+                JETSTREAM_REPORT_SUFFIX,
+                "jetstream",
+            )
+        },
+    )
 }
 
-fn valid_timestamped_name(file_name: &str, prefix: &str, suffix: &str) -> bool {
-    let Some(timestamp) = file_name
-        .strip_prefix(prefix)
-        .and_then(|value| value.strip_suffix(suffix))
-    else {
-        return false;
+fn timestamped_report_key(
+    file_name: &str,
+    marker: &str,
+    suffix: &str,
+    kind: &str,
+) -> Option<String> {
+    let stem = file_name.strip_suffix(suffix)?;
+    let Some((brand, timestamp)) = stem.rsplit_once(marker) else {
+        return None;
     };
+    if brand.is_empty() || !valid_report_timestamp(timestamp) {
+        return None;
+    }
+    Some(format!("{kind}:{timestamp}"))
+}
+
+fn valid_report_timestamp(timestamp: &str) -> bool {
     timestamp.len() == 16
         && timestamp
             .bytes()
@@ -336,7 +359,14 @@ fn valid_timestamped_name(file_name: &str, prefix: &str, suffix: &str) -> bool {
 }
 
 fn record_path(report_dir: &Path, reports_root: &Path, file_name: &str) -> PathBuf {
-    if file_name.starts_with(JETSTREAM_REPORT_PREFIX) {
+    if timestamped_report_key(
+        file_name,
+        JETSTREAM_REPORT_MARKER,
+        JETSTREAM_REPORT_SUFFIX,
+        "jetstream",
+    )
+    .is_some()
+    {
         return reports_root
             .join(JETSTREAM_REPORT_DIRECTORY)
             .join(file_name);
@@ -386,7 +416,7 @@ mod tests {
 
     use super::{
         CommitTimeline, MAIN_AXIS_DESCRIPTION, history_has_shallow_boundary,
-        parse_report_additions, repository_root_for_test,
+        parse_report_additions, report_key, repository_root_for_test,
     };
     use crate::report_rollup::{ReportContext, ReportRecord, parse_records};
 
@@ -397,17 +427,15 @@ mod tests {
         let first = "1111111111111111111111111111111111111111";
         let second = "2222222222222222222222222222222222222222";
         let text = format!(
-            "commit\t{first}\n\nreports/test-runs/rsqjs-test-report-20260710T000000Z.md\nreports/test-runs/rsqjs-test-report-20260710T000000Z.yaml\n\ncommit\t{second}\n\nreports/jetstream-runs/rsqjs-jetstream-report-20260710T010000Z.yaml\nreports/jetstream-runs/rsqjs-jetstream-report-20260710T010000Z-component.yaml\n"
+            "commit\t{first}\n\nreports/test-runs/former-test-report-20260710T000000Z.md\nreports/test-runs/former-test-report-20260710T000000Z.yaml\n\ncommit\t{second}\n\nreports/jetstream-runs/former-jetstream-report-20260710T010000Z.yaml\nreports/jetstream-runs/former-jetstream-report-20260710T010000Z-component.yaml\n"
         );
         let additions = parse_report_additions(&text);
-        ensure_commit(
-            additions.get("rsqjs-test-report-20260710T000000Z.md"),
-            first,
-        )?;
-        ensure_commit(
-            additions.get("rsqjs-jetstream-report-20260710T010000Z.yaml"),
-            second,
-        )?;
+        let test_key = report_key("velum-test-report-20260710T000000Z.md")
+            .ok_or("current test report name has no stable key")?;
+        let jetstream_key = report_key("velum-jetstream-report-20260710T010000Z.yaml")
+            .ok_or("current JetStream report name has no stable key")?;
+        ensure_commit(additions.get(&test_key), first)?;
+        ensure_commit(additions.get(&jetstream_key), second)?;
         if additions.len() == 2 {
             return Ok(());
         }
@@ -458,7 +486,7 @@ mod tests {
         let repository_root = repository_root_for_test()?;
         let reports_root = repository_root.join("target/rollup-pending");
         let report_dir = reports_root.join("test-runs");
-        let records = vec![empty_record("rsqjs-test-report-20260710T020000Z.md")];
+        let records = vec![empty_record("velum-test-report-20260710T020000Z.md")];
         let timeline = CommitTimeline::from_main_history(
             &report_dir,
             &reports_root,

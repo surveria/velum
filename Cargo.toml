@@ -5,21 +5,21 @@
 exclude = ["runner", "src/regress"]
 
 [package]
-name = "rs-quickjs"
+name = "velum"
 version = "0.2.130"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/surveria/rs-quickjs"
+repository = "https://github.com/surveria/velum"
 description = "An independent, embeddable ECMAScript bytecode engine written in Rust."
 readme = "README.md"
 
 [lib]
-name = "rs_quickjs"
+name = "velum"
 path = "src/lib.rs"
 
 [[bin]]
-name = "rsqjs"
-path = "src/bin/rsqjs.rs"
+name = "velum"
+path = "src/bin/velum.rs"
 
 # The engine is a standalone, dependency-light crate. The test/benchmark runner
 # lives in `runner/` as a separate nested workspace so its heavier dependencies

@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use rs_quickjs::{Engine, Value, VmStorageKind};
+use velum::{Engine, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

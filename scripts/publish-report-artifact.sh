@@ -5,14 +5,14 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-default_tested_source_archive_ref="refs/rsqjs/ci-tested-sources"
+default_tested_source_archive_ref="refs/velum/ci-tested-sources"
 default_legacy_tested_source_archive_ref="refs/heads/ci-tested-sources"
-tested_source_archive_local_branch="rsqjs-tested-source-archive"
-null_workflow_conclusion="__RSQJS_NULL_CONCLUSION__"
+tested_source_archive_local_branch="velum-tested-source-archive"
+null_workflow_conclusion="__VELUM_NULL_CONCLUSION__"
 default_artifact_wait_attempts=37
 default_artifact_wait_seconds=10
 test262_baseline_path="${repo_root}/tests/corpora/test262/full-pass-baseline.txt"
-test262_baseline_schema='# rsqjs-test262-pass-baseline-v2'
+test262_baseline_schema='# velum-test262-pass-baseline-v2'
 
 fail() {
   printf 'publish-report-artifact: %s\n' "$*" >&2
@@ -24,28 +24,28 @@ need_cmd() {
 }
 
 clear_metadata() {
-  unset RSQJS_ARTIFACT_SCHEMA RSQJS_ARTIFACT_REPORT_MODE
-  unset RSQJS_ARTIFACT_REPORT_FILE RSQJS_ARTIFACT_REPORT_RELATIVE_PATH
-  unset RSQJS_ARTIFACT_REPORT_YAML_FILE RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH
-  unset RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH
-  unset RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH
-  unset RSQJS_ARTIFACT_TIMESTAMP RSQJS_ARTIFACT_COMMIT_SHA RSQJS_ARTIFACT_TREE_SHA
-  unset RSQJS_ARTIFACT_EVENT_NAME RSQJS_ARTIFACT_RUN_ID RSQJS_ARTIFACT_RUN_ATTEMPT
-  unset RSQJS_ARTIFACT_REPOSITORY RSQJS_ARTIFACT_WORKFLOW
-  unset RSQJS_ARTIFACT_PR_NUMBER RSQJS_ARTIFACT_TASK
+  unset VELUM_ARTIFACT_SCHEMA VELUM_ARTIFACT_REPORT_MODE
+  unset VELUM_ARTIFACT_REPORT_FILE VELUM_ARTIFACT_REPORT_RELATIVE_PATH
+  unset VELUM_ARTIFACT_REPORT_YAML_FILE VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH
+  unset VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH
+  unset VELUM_ARTIFACT_JETSTREAM_REPORT_FILE VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH
+  unset VELUM_ARTIFACT_TIMESTAMP VELUM_ARTIFACT_COMMIT_SHA VELUM_ARTIFACT_TREE_SHA
+  unset VELUM_ARTIFACT_EVENT_NAME VELUM_ARTIFACT_RUN_ID VELUM_ARTIFACT_RUN_ATTEMPT
+  unset VELUM_ARTIFACT_REPOSITORY VELUM_ARTIFACT_WORKFLOW
+  unset VELUM_ARTIFACT_PR_NUMBER VELUM_ARTIFACT_TASK
 }
 
 valid_metadata_key() {
   case "$1" in
-    RSQJS_ARTIFACT_SCHEMA | RSQJS_ARTIFACT_REPORT_MODE | \
-      RSQJS_ARTIFACT_REPORT_FILE | RSQJS_ARTIFACT_REPORT_RELATIVE_PATH | \
-      RSQJS_ARTIFACT_REPORT_YAML_FILE | RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
-      RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE | RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH | \
-      RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE | RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH | \
-      RSQJS_ARTIFACT_TIMESTAMP | RSQJS_ARTIFACT_COMMIT_SHA | RSQJS_ARTIFACT_TREE_SHA | \
-      RSQJS_ARTIFACT_EVENT_NAME | RSQJS_ARTIFACT_RUN_ID | RSQJS_ARTIFACT_RUN_ATTEMPT | \
-      RSQJS_ARTIFACT_REPOSITORY | RSQJS_ARTIFACT_WORKFLOW | \
-      RSQJS_ARTIFACT_PR_NUMBER | RSQJS_ARTIFACT_TASK)
+    VELUM_ARTIFACT_SCHEMA | VELUM_ARTIFACT_REPORT_MODE | \
+      VELUM_ARTIFACT_REPORT_FILE | VELUM_ARTIFACT_REPORT_RELATIVE_PATH | \
+      VELUM_ARTIFACT_REPORT_YAML_FILE | VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
+      VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE | VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH | \
+      VELUM_ARTIFACT_JETSTREAM_REPORT_FILE | VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH | \
+      VELUM_ARTIFACT_TIMESTAMP | VELUM_ARTIFACT_COMMIT_SHA | VELUM_ARTIFACT_TREE_SHA | \
+      VELUM_ARTIFACT_EVENT_NAME | VELUM_ARTIFACT_RUN_ID | VELUM_ARTIFACT_RUN_ATTEMPT | \
+      VELUM_ARTIFACT_REPOSITORY | VELUM_ARTIFACT_WORKFLOW | \
+      VELUM_ARTIFACT_PR_NUMBER | VELUM_ARTIFACT_TASK)
       return 0
       ;;
     *)
@@ -80,17 +80,17 @@ read_metadata() {
 
 valid_report_file() {
   local file_name="$1"
-  [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
+  [[ "${file_name}" =~ ^velum-test-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
 }
 
 valid_report_yaml_file() {
   local file_name="$1"
-  [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z\.yaml$ ]]
+  [[ "${file_name}" =~ ^velum-test-report-[0-9]{8}T[0-9]{6}Z\.yaml$ ]]
 }
 
 valid_report_component_yaml_file() {
   local file_name="$1"
-  [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
+  [[ "${file_name}" =~ ^velum-test-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
 }
 
 valid_test262_baseline_candidate() {
@@ -108,7 +108,7 @@ valid_test262_baseline_candidate() {
 
 valid_jetstream_report_file() {
   local file_name="$1"
-  [[ "${file_name}" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
+  [[ "${file_name}" =~ ^velum-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
 }
 
 valid_artifact_relative_path() {
@@ -235,113 +235,113 @@ download_matching_artifact() {
       printf 'skipping artifact %s from run %s: download failed\n' "${artifact_id}" "${run_id}" >&2
       continue
     fi
-    metadata_file="${candidate}/rsqjs-report-metadata.env"
+    metadata_file="${candidate}/velum-report-metadata.env"
     if ! read_metadata "${metadata_file}"; then
       printf 'skipping artifact %s: missing or invalid metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_SCHEMA:-}" != "3" ]]; then
+    if [[ "${VELUM_ARTIFACT_SCHEMA:-}" != "3" ]]; then
       printf 'skipping artifact %s: unsupported metadata schema\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_REPORT_MODE:-}" != "${expected_mode}" ]]; then
+    if [[ "${VELUM_ARTIFACT_REPORT_MODE:-}" != "${expected_mode}" ]]; then
       printf 'skipping artifact %s: report mode mismatch\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_TREE_SHA:-}" != "${expected_tree}" ]]; then
+    if [[ "${VELUM_ARTIFACT_TREE_SHA:-}" != "${expected_tree}" ]]; then
       printf 'skipping artifact %s: tree mismatch\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_RUN_ID:-}" != "${RUN_ID}" \
-      || "${RSQJS_ARTIFACT_REPOSITORY:-}" != "${RUN_REPOSITORY}" \
-      || "${RSQJS_ARTIFACT_WORKFLOW:-}" != "${RUN_NAME}" \
-      || "${RSQJS_ARTIFACT_EVENT_NAME:-}" != "${RUN_EVENT}" ]] \
+    if [[ "${VELUM_ARTIFACT_RUN_ID:-}" != "${RUN_ID}" \
+      || "${VELUM_ARTIFACT_REPOSITORY:-}" != "${RUN_REPOSITORY}" \
+      || "${VELUM_ARTIFACT_WORKFLOW:-}" != "${RUN_NAME}" \
+      || "${VELUM_ARTIFACT_EVENT_NAME:-}" != "${RUN_EVENT}" ]] \
       || ! valid_artifact_run_attempt "${expected_mode}" \
-        "${RSQJS_ARTIFACT_RUN_ATTEMPT:-}" "${RUN_ATTEMPT}"; then
+        "${VELUM_ARTIFACT_RUN_ATTEMPT:-}" "${RUN_ATTEMPT}"; then
       printf 'skipping artifact %s: workflow metadata envelope mismatch\n' "${artifact_id}" >&2
       continue
     fi
     local metadata_commit_tree
-    if ! metadata_commit_tree="$(commit_tree_from_github "${repository}" "${RSQJS_ARTIFACT_COMMIT_SHA:-}")" \
+    if ! metadata_commit_tree="$(commit_tree_from_github "${repository}" "${VELUM_ARTIFACT_COMMIT_SHA:-}")" \
       || [[ "${metadata_commit_tree}" != "${expected_tree}" ]]; then
       printf 'skipping artifact %s: tested commit does not resolve to expected tree\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ -z "${RSQJS_ARTIFACT_REPORT_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH:-}" ]]; then
+    if [[ -z "${VELUM_ARTIFACT_REPORT_FILE:-}" || -z "${VELUM_ARTIFACT_REPORT_RELATIVE_PATH:-}" ]]; then
       printf 'skipping artifact %s: missing report path metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if ! valid_report_file "${RSQJS_ARTIFACT_REPORT_FILE}"; then
-      printf 'skipping artifact %s: invalid report file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_FILE}" >&2
+    if ! valid_report_file "${VELUM_ARTIFACT_REPORT_FILE}"; then
+      printf 'skipping artifact %s: invalid report file name %s\n' "${artifact_id}" "${VELUM_ARTIFACT_REPORT_FILE}" >&2
       continue
     fi
-    if [[ ! "${RSQJS_ARTIFACT_TIMESTAMP:-}" =~ ^[0-9]{8}T[0-9]{6}Z$ || "${RSQJS_ARTIFACT_REPORT_FILE}" != "rsqjs-test-report-${RSQJS_ARTIFACT_TIMESTAMP}.md" ]]; then
+    if [[ ! "${VELUM_ARTIFACT_TIMESTAMP:-}" =~ ^[0-9]{8}T[0-9]{6}Z$ || "${VELUM_ARTIFACT_REPORT_FILE}" != "velum-test-report-${VELUM_ARTIFACT_TIMESTAMP}.md" ]]; then
       printf 'skipping artifact %s: report timestamp metadata does not match file name\n' "${artifact_id}" >&2
       continue
     fi
-    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_FILE}"; then
+    if ! valid_artifact_relative_path "${VELUM_ARTIFACT_REPORT_RELATIVE_PATH}" test-runs "${VELUM_ARTIFACT_REPORT_FILE}"; then
       printf 'skipping artifact %s: invalid report relative path\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" \
-      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" ]]; then
+    if [[ ! -f "${candidate}/${VELUM_ARTIFACT_REPORT_RELATIVE_PATH}" \
+      || -L "${candidate}/${VELUM_ARTIFACT_REPORT_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: report file is absent\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ -z "${RSQJS_ARTIFACT_REPORT_YAML_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH:-}" ]]; then
+    if [[ -z "${VELUM_ARTIFACT_REPORT_YAML_FILE:-}" || -z "${VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH:-}" ]]; then
       printf 'skipping artifact %s: missing YAML summary path metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if ! valid_report_yaml_file "${RSQJS_ARTIFACT_REPORT_YAML_FILE}"; then
-      printf 'skipping artifact %s: invalid YAML summary file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_YAML_FILE}" >&2
+    if ! valid_report_yaml_file "${VELUM_ARTIFACT_REPORT_YAML_FILE}"; then
+      printf 'skipping artifact %s: invalid YAML summary file name %s\n' "${artifact_id}" "${VELUM_ARTIFACT_REPORT_YAML_FILE}" >&2
       continue
     fi
-    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_YAML_FILE}"; then
+    if ! valid_artifact_relative_path "${VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" test-runs "${VELUM_ARTIFACT_REPORT_YAML_FILE}"; then
       printf 'skipping artifact %s: invalid YAML summary relative path\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" \
-      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" ]]; then
+    if [[ ! -f "${candidate}/${VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" \
+      || -L "${candidate}/${VELUM_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: YAML summary file is absent\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ -z "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH:-}" ]]; then
+    if [[ -z "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE:-}" || -z "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH:-}" ]]; then
       printf 'skipping artifact %s: missing YAML component path metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if ! valid_report_component_yaml_file "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
-      printf 'skipping artifact %s: invalid YAML component file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" >&2
+    if ! valid_report_component_yaml_file "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
+      printf 'skipping artifact %s: invalid YAML component file name %s\n' "${artifact_id}" "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" >&2
       continue
     fi
-    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
+    if ! valid_artifact_relative_path "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" test-runs "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
       printf 'skipping artifact %s: invalid YAML component relative path\n' "${artifact_id}" >&2
       continue
     fi
-    local expected_yaml_file="${RSQJS_ARTIFACT_REPORT_FILE%.md}.yaml"
-    local expected_component_yaml_file="${RSQJS_ARTIFACT_REPORT_FILE%.md}-component.yaml"
-    if [[ "${RSQJS_ARTIFACT_REPORT_YAML_FILE}" != "${expected_yaml_file}" || "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" != "${expected_component_yaml_file}" ]]; then
+    local expected_yaml_file="${VELUM_ARTIFACT_REPORT_FILE%.md}.yaml"
+    local expected_component_yaml_file="${VELUM_ARTIFACT_REPORT_FILE%.md}-component.yaml"
+    if [[ "${VELUM_ARTIFACT_REPORT_YAML_FILE}" != "${expected_yaml_file}" || "${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" != "${expected_component_yaml_file}" ]]; then
       printf 'skipping artifact %s: YAML files do not match Markdown report name\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" \
-      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" ]]; then
+    if [[ ! -f "${candidate}/${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" \
+      || -L "${candidate}/${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: YAML component file is absent\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
-      if [[ -z "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -z "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
+    if [[ -n "${VELUM_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -n "${VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
+      if [[ -z "${VELUM_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -z "${VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
         printf 'skipping artifact %s: incomplete JetStream report metadata\n' "${artifact_id}" >&2
         continue
       fi
-      if ! valid_jetstream_report_file "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
-        printf 'skipping artifact %s: invalid JetStream report file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}" >&2
+      if ! valid_jetstream_report_file "${VELUM_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
+        printf 'skipping artifact %s: invalid JetStream report file name %s\n' "${artifact_id}" "${VELUM_ARTIFACT_JETSTREAM_REPORT_FILE}" >&2
         continue
       fi
-      if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" jetstream-runs "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
+      if ! valid_artifact_relative_path "${VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" jetstream-runs "${VELUM_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
         printf 'skipping artifact %s: invalid JetStream report relative path\n' "${artifact_id}" >&2
         continue
       fi
-      if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" ]]; then
+      if [[ ! -f "${candidate}/${VELUM_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" ]]; then
         printf 'skipping artifact %s: JetStream report file is absent\n' "${artifact_id}" >&2
         continue
       fi
@@ -361,13 +361,13 @@ download_matching_artifact_with_retry() {
   local expected_mode="$4"
   local target_dir="$5"
   local expected_run_id="${6:-}"
-  local attempts="${RSQJS_ARTIFACT_WAIT_ATTEMPTS:-${default_artifact_wait_attempts}}"
-  local wait_seconds="${RSQJS_ARTIFACT_WAIT_SECONDS:-${default_artifact_wait_seconds}}"
+  local attempts="${VELUM_ARTIFACT_WAIT_ATTEMPTS:-${default_artifact_wait_attempts}}"
+  local wait_seconds="${VELUM_ARTIFACT_WAIT_SECONDS:-${default_artifact_wait_seconds}}"
 
   [[ "${attempts}" =~ ^[1-9][0-9]*$ ]] ||
-    fail "RSQJS_ARTIFACT_WAIT_ATTEMPTS must be a positive decimal integer"
+    fail "VELUM_ARTIFACT_WAIT_ATTEMPTS must be a positive decimal integer"
   [[ "${wait_seconds}" =~ ^(0|[1-9][0-9]*)$ ]] ||
-    fail "RSQJS_ARTIFACT_WAIT_SECONDS must be a non-negative decimal integer"
+    fail "VELUM_ARTIFACT_WAIT_SECONDS must be a non-negative decimal integer"
   [[ -n "${target_dir}" ]] || fail "artifact retry target directory is empty"
 
   local attempt=1 artifact_dir
@@ -443,14 +443,14 @@ validate_full_ref() {
 }
 
 resolve_archive_ref() {
-  local archive_ref="${RSQJS_TESTED_SOURCE_ARCHIVE_REF:-}"
+  local archive_ref="${VELUM_TESTED_SOURCE_ARCHIVE_REF:-}"
   if [[ -z "${archive_ref}" ]]; then
-    local archive_name="${RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH:-}"
+    local archive_name="${VELUM_TESTED_SOURCE_ARCHIVE_BRANCH:-}"
     if [[ -n "${archive_name}" ]]; then
       archive_name="${archive_name#refs/heads/}"
       [[ "${archive_name}" != refs/* ]] ||
         fail "legacy archive branch must be a branch name: ${archive_name}"
-      archive_ref="refs/rsqjs/${archive_name}"
+      archive_ref="refs/velum/${archive_name}"
     else
       archive_ref="${default_tested_source_archive_ref}"
     fi
@@ -463,7 +463,7 @@ resolve_archive_ref() {
 }
 
 resolve_legacy_archive_ref() {
-  local legacy_ref="${RSQJS_TESTED_SOURCE_ARCHIVE_LEGACY_REF:-${default_legacy_tested_source_archive_ref}}"
+  local legacy_ref="${VELUM_TESTED_SOURCE_ARCHIVE_LEGACY_REF:-${default_legacy_tested_source_archive_ref}}"
   if [[ "${legacy_ref}" != refs/* ]]; then
     legacy_ref="refs/heads/${legacy_ref}"
   fi
@@ -644,7 +644,7 @@ report_commit_headline() {
     return 0
   fi
 
-  printf 'Add rsqjs report %s (CI) [skip ci]' "${timestamp}"
+  printf 'Add Velum report %s (CI) [skip ci]' "${timestamp}"
 }
 
 commit_and_push() {
@@ -685,7 +685,7 @@ commit_and_push() {
     return 0
   fi
 
-  local timestamp="${report_file#rsqjs-test-report-}"
+  local timestamp="${report_file#velum-test-report-}"
   timestamp="${timestamp%.md}"
   local headline
   headline="$(report_commit_headline "${source_task}" "${source_pull_request}" "${timestamp}")"
@@ -718,15 +718,15 @@ need_cmd base64
 repository="${GITHUB_REPOSITORY:-}"
 [[ -n "${repository}" ]] || fail "GITHUB_REPOSITORY is required"
 
-merge_commit="${RSQJS_MERGE_COMMIT_SHA:-}"
-[[ -n "${merge_commit}" ]] || fail "RSQJS_MERGE_COMMIT_SHA is required"
+merge_commit="${VELUM_MERGE_COMMIT_SHA:-}"
+[[ -n "${merge_commit}" ]] || fail "VELUM_MERGE_COMMIT_SHA is required"
 
-expected_tree="${RSQJS_EXPECTED_TREE_SHA:-}"
+expected_tree="${VELUM_EXPECTED_TREE_SHA:-}"
 if [[ -z "${expected_tree}" ]]; then
   expected_tree="$(git rev-parse "${merge_commit}^{tree}")"
 fi
-performance_artifact_name="${RSQJS_REPORT_ARTIFACT_NAME:-rsqjs-reports-${expected_tree}}"
-correctness_artifact_name="${RSQJS_CORRECTNESS_ARTIFACT_NAME:-rsqjs-correctness-${expected_tree}}"
+performance_artifact_name="${VELUM_REPORT_ARTIFACT_NAME:-velum-reports-${expected_tree}}"
+correctness_artifact_name="${VELUM_CORRECTNESS_ARTIFACT_NAME:-velum-correctness-${expected_tree}}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
@@ -734,28 +734,28 @@ trap 'rm -rf "${tmp_dir}"' EXIT
 current_run_id="${GITHUB_RUN_ID:-}"
 [[ "${current_run_id}" =~ ^[0-9]+$ ]] || fail "GITHUB_RUN_ID is required for performance artifact binding"
 performance_artifact_dir="$(download_matching_artifact "${repository}" "${performance_artifact_name}" "${expected_tree}" performance "${tmp_dir}/performance" "${current_run_id}")"
-performance_metadata_file="${performance_artifact_dir}/rsqjs-report-metadata.env"
+performance_metadata_file="${performance_artifact_dir}/velum-report-metadata.env"
 read_metadata "${performance_metadata_file}" || fail "failed to read performance artifact metadata"
-performance_component="${performance_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
-performance_timestamp="${RSQJS_ARTIFACT_TIMESTAMP:-}"
-source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
-performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
-source_pull_request="${RSQJS_ARTIFACT_PR_NUMBER:-}"
-source_task="${RSQJS_ARTIFACT_TASK:-}"
+performance_component="${performance_artifact_dir}/${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
+performance_timestamp="${VELUM_ARTIFACT_TIMESTAMP:-}"
+source_commit="${VELUM_ARTIFACT_COMMIT_SHA:-unknown}"
+performance_run="${VELUM_ARTIFACT_RUN_ID:-unknown}"
+source_pull_request="${VELUM_ARTIFACT_PR_NUMBER:-}"
+source_task="${VELUM_ARTIFACT_TASK:-}"
 
 correctness_artifact_dir="$(download_matching_artifact_with_retry "${repository}" \
   "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
-correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env"
+correctness_metadata_file="${correctness_artifact_dir}/velum-report-metadata.env"
 read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
-correctness_component="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
-correctness_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+correctness_component="${correctness_artifact_dir}/${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
+correctness_run="${VELUM_ARTIFACT_RUN_ID:-unknown}"
 source_test262_baseline="${correctness_artifact_dir}/test262-pass-baseline.txt"
 valid_test262_baseline_candidate "${source_test262_baseline}" ||
   fail "correctness artifact has no valid Test262 pass baseline candidate"
 
 [[ "${performance_timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] ||
   fail "invalid performance artifact timestamp: ${performance_timestamp}"
-report_file="rsqjs-test-report-${performance_timestamp}.md"
+report_file="velum-test-report-${performance_timestamp}.md"
 report_yaml_file="${report_file%.md}.yaml"
 composed_dir="${tmp_dir}/composed/test-runs"
 source_report="${composed_dir}/${report_file}"

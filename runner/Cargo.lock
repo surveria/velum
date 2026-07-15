@@ -908,43 +908,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rs-quickjs"
-version = "0.2.130"
-dependencies = [
- "anyhow",
- "icu_casemap",
- "icu_locale",
- "jiff-tzdb",
- "num-bigint",
- "num-traits",
- "parking_lot",
- "regress",
- "temporal_rs",
- "thiserror",
- "unicode-ident",
- "unicode-normalization",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "rsqjs-test-runner"
-version = "0.2.30"
-dependencies = [
- "anyhow",
- "fs2",
- "human-yaml",
- "parking_lot",
- "plotters",
- "rayon",
- "rquickjs",
- "rs-quickjs",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "tabled",
-]
-
-[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1252,6 +1215,43 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+
+[[package]]
+name = "velum"
+version = "0.2.130"
+dependencies = [
+ "anyhow",
+ "icu_casemap",
+ "icu_locale",
+ "jiff-tzdb",
+ "num-bigint",
+ "num-traits",
+ "parking_lot",
+ "regress",
+ "temporal_rs",
+ "thiserror",
+ "unicode-ident",
+ "unicode-normalization",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "velum-test-runner"
+version = "0.2.30"
+dependencies = [
+ "anyhow",
+ "fs2",
+ "human-yaml",
+ "parking_lot",
+ "plotters",
+ "rayon",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tabled",
+ "velum",
+]
 
 [[package]]
 name = "walkdir"

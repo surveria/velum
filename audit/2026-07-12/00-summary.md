@@ -1,4 +1,4 @@
-# rs-quickjs — Deep Engine Architecture Audit
+# Velum — Deep Engine Architecture Audit
 
 **Date:** 2026-07-12 · **Commit:** `a2afa9b2` (main) · **Scope:** ~145k lines of Rust (~43k of which is the vendored regress crate)
 

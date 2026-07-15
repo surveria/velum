@@ -1,0 +1,505 @@
+schema_version: 1
+detail_level: summary
+metadata:
+  timestamp: 20260712T061158Z
+  commit: 3dbeef59f3a2357e25cac291690492adbf799074
+  tree: 16da33316fa1e5412e423224777a1a70774b2cf6
+  event: schedule
+  run_id: '29182291963'
+  run_attempt: '1'
+  repository: surveria/velum
+  workflow: JetStream
+  pull_request: ''
+  task: JetStream shell benchmark lane
+  engine_version: 0.2.130
+  engine_commit: 3dbeef59f3a2357e25cac291690492adbf799074
+  runner_version: 0.2.30
+  runner_commit: 3dbeef59f3a2357e25cac291690492adbf799074
+environment:
+  operating_system: linux
+  architecture: x86_64
+  available_parallelism: 32
+  build_profile: release
+  kernel_release: 6.17.0-40-generic
+  cpu_model: AMD Ryzen 9 9950X3D 16-Core Processor
+  cpu_affinity: 0-31
+  scaling_governor: powersave
+configuration:
+  report_mode: jetstream
+  jetstream: enabled
+  quickjs_differential: not_configured
+  test262: not_configured
+  test262_mode: manifest
+  test262_path_filters: []
+  test262_flag_filters: []
+  benchmark_set: full
+  quickjs_baseline: read
+  benchmark:
+    reference_quickjs_compiled: false
+    warmup_duration_ns: 0
+    minimum_sample_duration_ns: 1500000000
+    samples: 3
+    minimum_operation_duration_ns: 1000000
+    maximum_cv_permille: 150
+    attempts: 1
+    maximum_operation_duration_ns: 90000000000
+    maximum_total_duration_ns: 240000000000
+  suite_max_duration_ns: 120000000000
+components:
+- mode: jetstream
+  timestamp: 20260712T061158Z
+  commit: 3dbeef59f3a2357e25cac291690492adbf799074
+  tree: 16da33316fa1e5412e423224777a1a70774b2cf6
+  run_id: '29182291963'
+  duration_ns: 120360309503
+duration_ns: 120360309503
+suites: []
+benchmarks:
+  name: ''
+  duration_ns: 0
+  counts:
+    measured: 0
+    in_process_measured: 0
+    failed: 0
+    invalid: 0
+    skipped_reference: 0
+    over_latency_budget: 0
+    over_memory_budget: 0
+jetstream:
+  name: JetStream Shell Benchmarks
+  duration_ns: 120360309503
+  counts:
+    total: 86
+    measured: 7
+    failed: 38
+    skipped: 41
+    unavailable_reference: 42
+    over_latency_budget: 6
+  row_details:
+    completeness: complete
+    recorded_rows: 86
+    omitted_rows: 0
+  rows:
+  - id: Air
+    status: failed
+    source: tests/external/jetstream/ARES-6/Air/symbols.js (+20 more)
+    reference_median_duration_ns: 50870000
+    reference_cv_permille: 4
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 498798 exceeded 262144; QuickJS reference completed'
+  - id: Basic
+    status: failed
+    source: tests/external/jetstream/ARES-6/Basic/ast.js (+8 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: member access ''length'' is not supported for undefined; cached reference unavailable: quickjs: Error: cannot read property ''length'' of undefined at lex (eval_script:474:9) at next (native) ...'
+  - id: ML
+    status: failed
+    source: tests/external/jetstream/ARES-6/ml/index.js (+1 more)
+    reference_median_duration_ns: 879360000
+    reference_cv_permille: 0
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''checkDimensions'' is not defined; QuickJS reference completed'
+  - id: Babylon
+    status: skipped
+    detail: requires async preload blobs and browser-oriented blob loading
+  - id: cdjs
+    status: failed
+    source: tests/external/jetstream/cdjs/constants.js (+11 more)
+    reference_median_duration_ns: 290780000
+    reference_cv_permille: 0
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: ''undefined'' is not callable; QuickJS reference completed'
+  - id: first-inspector-code-load
+    status: failed
+    source: tests/external/jetstream/code-load/code-first-load.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 2122272 exceeded 262144; cached reference unavailable: quickjs: Error: InspectorFrontendHost is not defined at <eval> (eval_script:117:21)'
+  - id: multi-inspector-code-load
+    status: failed
+    source: tests/external/jetstream/code-load/code-multi-load.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 2122293 exceeded 262144; cached reference unavailable: quickjs: Error: InspectorFrontendHost is not defined at <eval> (eval_script:116:21)'
+  - id: Box2D
+    status: failed
+    source: tests/external/jetstream/Octane/box2d.js
+    reference_median_duration_ns: 113600000
+    reference_cv_permille: 13
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: runtime error: update operator expects a number; QuickJS reference completed'
+  - id: octane-code-load
+    status: failed
+    source: tests/external/jetstream/Octane/code-first-load.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''indirectEval'' is not defined; cached reference unavailable: quickjs: Error: salt is not defined at setupCodeLoad (eval_script:94:3) at <eval> (eval_script:1563:1)'
+  - id: crypto
+    status: failed
+    source: tests/external/jetstream/Octane/crypto.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''setupEngine'' is not defined; cached reference unavailable: quickjs: Error: setupEngine is not defined at <eval> (eval_script:168:1)'
+  - id: delta-blue
+    status: failed
+    source: tests/external/jetstream/Octane/deltablue.js
+    reference_median_duration_ns: 101540000
+    reference_cv_permille: 4
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: ''undefined'' is not callable; QuickJS reference completed'
+  - id: earley-boyer
+    status: failed
+    source: tests/external/jetstream/Octane/earley-boyer.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: lexer error at 25081: legacy octal escape sequences are not supported; cached reference unavailable: quickjs: Error: Octal escape sequences are not allowed in strict mode at eval_script:1101:25'
+  - id: gbemu
+    status: failed
+    source: tests/external/jetstream/Octane/gbemu-part1.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 516816 exceeded 262144; cached reference unavailable: quickjs: Exception generated by quickjs: String(Ok("TypedArrayUnsupported"))'
+  - id: mandreel
+    status: failed
+    source: tests/external/jetstream/Octane/mandreel.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 4543878 exceeded 262144; cached reference unavailable: quickjs: Error: unexpected token in expression: '''' at eval_script:240028:10'
+  - id: navier-stokes
+    status: tracked_exception
+    source: tests/external/jetstream/Octane/navier-stokes.js
+    engine_median_duration_ns: 1546650000
+    engine_cv_permille: 2
+    reference_median_duration_ns: 85420000
+    reference_cv_permille: 9
+    latency_ratio_centi_units: 1810
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: pdfjs
+    status: failed
+    source: tests/external/jetstream/Octane/pdfjs.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 1466978 exceeded 262144; cached reference unavailable: quickjs: Error: not a function at calculateMD5Closure (eval_script:12621:15) at pdfjsWrapper (eval_script:12702:1) at call (nat...'
+  - id: raytrace
+    status: tracked_exception
+    source: tests/external/jetstream/Octane/raytrace.js
+    engine_median_duration_ns: 5572700000
+    engine_cv_permille: 28
+    reference_median_duration_ns: 247160000
+    reference_cv_permille: 10
+    latency_ratio_centi_units: 2254
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: regexp-octane
+    status: failed
+    source: tests/external/jetstream/Octane/regexp.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: lexer error at 4149: unterminated regular expression literal; cached reference unavailable: quickjs: Error: Wrong checksum. Found 1665806 but expected 1666156 at run (eval_script:1822:99) at RegExpRun (eval_script:74:19) ...'
+  - id: richards
+    status: tracked_exception
+    source: tests/external/jetstream/Octane/richards.js
+    engine_median_duration_ns: 5846180000
+    engine_cv_permille: 7
+    reference_median_duration_ns: 138790000
+    reference_cv_permille: 1
+    latency_ratio_centi_units: 4211
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: splay
+    status: failed
+    source: tests/external/jetstream/Octane/splay.js
+    reference_median_duration_ns: 691380000
+    reference_cv_permille: 62
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: Object record count exceeded 1000000; QuickJS reference completed'
+  - id: typescript-octane
+    status: failed
+    source: tests/external/jetstream/Octane/typescript-compiler.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 2512260 exceeded 262144; cached reference unavailable: quickjs: Error: invalid argument name in strict code at eval_script:1367:18'
+  - id: FlightPlanner
+    status: skipped
+    detail: requires compressed waypoints preload resource not vendored in the shell snapshot
+  - id: OfflineAssembler
+    status: failed
+    source: tests/external/jetstream/RexBench/OfflineAssembler/registers.js (+10 more)
+    reference_median_duration_ns: 52622090000
+    reference_cv_permille: 11
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 512528 exceeded 262144; QuickJS reference completed'
+  - id: UniPoker
+    status: tracked_exception
+    source: tests/external/jetstream/RexBench/UniPoker/poker.js (+2 more)
+    engine_median_duration_ns: 1261420000
+    engine_cv_permille: 17
+    reference_median_duration_ns: 69960000
+    reference_cv_permille: 7
+    latency_ratio_centi_units: 1803
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: validatorjs
+    status: failed
+    source: tests/external/jetstream/validatorjs/dist/bundle.es6.min.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 347057 exceeded 262144; cached reference unavailable: quickjs: Error: ValidatorJSBenchmark is not defined at <anonymous> (eval_script:27:344362) at <eval> (eval_script:27:344390)'
+  - id: hash-map
+    status: tracked_exception
+    source: tests/external/jetstream/simple/hash-map.js
+    engine_median_duration_ns: 7567720000
+    engine_cv_permille: 2
+    reference_median_duration_ns: 231760000
+    reference_cv_permille: 7
+    latency_ratio_centi_units: 3265
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: doxbee-promise
+    status: failed
+    source: tests/external/jetstream/simple/doxbee-promise.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''Benchmark'' is not defined; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:233:15)'
+  - id: doxbee-async
+    status: failed
+    source: tests/external/jetstream/simple/doxbee-async.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''Benchmark'' is not defined; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:213:15)'
+  - id: ai-astar
+    status: failed
+    source: tests/external/jetstream/SeaMonster/ai-astar.js
+    reference_median_duration_ns: 399250000
+    reference_cv_permille: 89
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 517197 exceeded 262144; QuickJS reference completed'
+  - id: gaussian-blur
+    status: failed
+    source: tests/external/jetstream/SeaMonster/gaussian-blur.js
+    reference_median_duration_ns: 593830000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: typed array byte length exceeded 1000000; QuickJS reference completed'
+  - id: stanford-crypto-aes
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 219890000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 486922 exceeded 262144; QuickJS reference completed'
+  - id: stanford-crypto-pbkdf2
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 155640000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: ''undefined'' is not callable; QuickJS reference completed'
+  - id: stanford-crypto-sha256
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 169360000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: ReferenceError: ''unescape'' is not defined; QuickJS reference completed'
+  - id: json-stringify-inspector
+    status: skipped
+    detail: requires compressed inspector JSON preload resource not vendored in the shell snapshot
+  - id: json-parse-inspector
+    status: skipped
+    detail: requires compressed inspector JSON preload resource not vendored in the shell snapshot
+  - id: bigint-noble-bls12-381
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 329464 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-noble-secp256k1
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 390029 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-noble-ed25519
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: resource limit exceeded: source length 302750 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-paillier
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: lexer error at 239969: decimal numeric literal cannot use BigInt suffix without BigInt support; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1...'
+  - id: bigint-bigdenary
+    status: failed
+    source: tests/external/jetstream/bigint/bigdenary-bundle.js (+1 more)
+    reference_median_duration_ns: 197740000
+    reference_cv_permille: 36
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: lexer error at 1787: decimal numeric literal cannot use BigInt suffix without BigInt support; QuickJS reference completed'
+  - id: proxy-mobx
+    status: failed
+    source: tests/external/jetstream/proxy/common.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: runtime error: Object.setPrototypeOf prototype must be an object or null; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:384:15)'
+  - id: proxy-vue
+    status: failed
+    source: tests/external/jetstream/proxy/common.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: Error: async JetStream workloads are not supported by the synchronous harness; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at ...'
+  - id: mobx-startup
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: jsdom-d3-startup
+    status: skipped
+    detail: requires browser startup preload data
+  - id: web-ssr
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: raytrace-public-class-fields
+    status: tracked_exception
+    source: tests/external/jetstream/class-fields/raytrace-public-class-fields.js
+    engine_median_duration_ns: 5356760000
+    engine_cv_permille: 11
+    reference_median_duration_ns: 280970000
+    reference_cv_permille: 8
+    latency_ratio_centi_units: 1906
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: raytrace-private-class-fields
+    status: failed
+    source: tests/external/jetstream/class-fields/raytrace-private-class-fields.js
+    reference_median_duration_ns: 362430000
+    reference_cv_permille: 10
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: runtime error: private name environment is not active; QuickJS reference completed'
+  - id: typescript-lib
+    status: skipped
+    detail: requires TypeScript preload project files
+  - id: async-fs
+    status: failed
+    source: tests/external/jetstream/generators/async-file-system.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: ''undefined'' is not a constructor; cached reference unavailable: quickjs: Error: not a function at computeIsLittleEndian (eval_script:55:19) at <eval> (eval_script:62:24)'
+  - id: sync-fs
+    status: failed
+    source: tests/external/jetstream/generators/sync-file-system.js
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: javascript exception: TypeError: ''undefined'' is not a constructor; cached reference unavailable: quickjs: Error: not a function at computeIsLittleEndian (eval_script:55:19) at <eval> (eval_script:62:24)'
+  - id: lazy-collections
+    status: failed
+    source: tests/external/jetstream/generators/lazy-collections.js
+    reference_median_duration_ns: 53940000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: lexer error at 15490: decimal numeric literal cannot use BigInt suffix without BigInt support; QuickJS reference completed'
+  - id: js-tokens
+    status: failed
+    source: tests/external/jetstream/generators/js-tokens.js
+    reference_median_duration_ns: 130600000
+    reference_cv_permille: 3
+    reference_source: quickjs_baseline
+    detail: 'Velum eval failed: runtime error: structured control unwind mismatch; QuickJS reference completed'
+  - id: threejs
+    status: skipped
+    detail: requires browser-adjacent Three.js bundle coverage
+  - id: HashSet-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: quicksort-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: gcc-loops-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tsf-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: richards-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: sqlite3-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Dart-flute-complex-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Dart-flute-todomvc-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Kotlin-compose-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: transformersjs-bert-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: transformersjs-whisper-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tfjs-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tfjs-wasm-simd
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: argon2-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: babylonjs-startup-es5
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: babylonjs-startup-es6
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: babylonjs-scene-es5
+    status: skipped
+    detail: requires browser scene assets and preload data
+  - id: babylonjs-scene-es6
+    status: skipped
+    detail: requires browser scene assets and preload data
+  - id: bomb-workers
+    status: skipped
+    detail: requires Worker APIs outside the current shell harness
+  - id: segmentation
+    status: skipped
+    detail: requires Worker APIs outside the current shell harness
+  - id: WSL
+    status: skipped
+    detail: requires the full WSL multi-file compiler corpus, not yet vendored
+  - id: sunspider-3d-cube
+    status: measured
+    source: tests/external/jetstream/SunSpider/3d-cube.js
+    engine_median_duration_ns: 2339940000
+    engine_cv_permille: 5
+    reference_source: quickjs_baseline
+    detail: 'JetStream shell workload completed; cached reference unavailable: quickjs: Error: LoopTime is not defined at run (eval_script:381:5) at runIteration (eval_script:389:13) at <eval> (eval_script:395:56)'
+  - id: sunspider-3d-raytrace
+    status: skipped
+    source: tests/external/jetstream/SunSpider/3d-raytrace.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-base64
+    status: skipped
+    source: tests/external/jetstream/SunSpider/base64.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-crypto-aes
+    status: skipped
+    source: tests/external/jetstream/SunSpider/crypto-aes.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-crypto-md5
+    status: skipped
+    source: tests/external/jetstream/SunSpider/crypto-md5.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-crypto-sha1
+    status: skipped
+    source: tests/external/jetstream/SunSpider/crypto-sha1.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-date-format-tofte
+    status: skipped
+    source: tests/external/jetstream/SunSpider/date-format-tofte.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-date-format-xparb
+    status: skipped
+    source: tests/external/jetstream/SunSpider/date-format-xparb.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-n-body
+    status: skipped
+    source: tests/external/jetstream/SunSpider/n-body.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-regex-dna
+    status: skipped
+    source: tests/external/jetstream/SunSpider/regex-dna.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-string-unpack-code
+    status: skipped
+    source: tests/external/jetstream/SunSpider/string-unpack-code.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case
+  - id: sunspider-tagcloud
+    status: skipped
+    source: tests/external/jetstream/SunSpider/tagcloud.js
+    detail: JetStream suite wall budget of 120 seconds was exhausted before this case

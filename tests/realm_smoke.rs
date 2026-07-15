@@ -1,6 +1,6 @@
-use rs_quickjs::{HostOperation, Runtime, Value};
+use velum::{HostOperation, Runtime, Value};
 
-type TestResult = rs_quickjs::Result<()>;
+type TestResult = velum::Result<()>;
 
 #[test]
 fn realms_share_vm_storage_but_isolate_globals_and_intrinsics() -> TestResult {
@@ -60,7 +60,7 @@ fn realm_handles_cannot_cross_vm_boundaries() -> TestResult {
     let error = second
         .eval_in_realm(&realm, "1")
         .err()
-        .ok_or_else(|| rs_quickjs::Error::runtime("foreign realm was accepted"))?;
+        .ok_or_else(|| velum::Error::runtime("foreign realm was accepted"))?;
     assert!(error.to_string().contains("another VM"));
     Ok(())
 }

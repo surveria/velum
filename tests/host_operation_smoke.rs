@@ -1,4 +1,4 @@
-use rs_quickjs::{HostOperation, Runtime, Value, VmStorageKind};
+use velum::{HostOperation, Runtime, Value, VmStorageKind};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -285,7 +285,7 @@ fn typed_array_callbacks_visit_initial_indices_after_detachment() -> TestResult 
     Err(format!("expected stable callback iteration, got {value:?}").into())
 }
 
-fn ensure_payload(context: &rs_quickjs::Context, expected: usize, label: &str) -> TestResult {
+fn ensure_payload(context: &velum::Context, expected: usize, label: &str) -> TestResult {
     let actual = context
         .storage_snapshot()?
         .payload_bytes(VmStorageKind::ByteBuffer);

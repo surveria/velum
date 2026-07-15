@@ -93,14 +93,14 @@ struct BenchmarkTableRow {
     source: String,
     iterations: u64,
     case_elapsed: String,
-    rsqjs_measure: String,
+    velum_measure: String,
     quickjs_measure: String,
-    rsqjs_eval: String,
+    velum_eval: String,
     quickjs_eval: String,
     latency_ratio: String,
     latency_budget: String,
     memory_ratio: String,
-    rsqjs_cv: String,
+    velum_cv: String,
     quickjs_cv: String,
     quality: String,
     detail: String,
@@ -120,7 +120,7 @@ pub fn render_report(report: &ReportDocument) -> String {
     sections.extend(super::report_metadata::render_section(&report.metadata));
     sections.extend([
         "Corpus sections preserve exact counts and bounded typed diagnostics. Individual case rows appear only when materialized; timing sections list only recorded rows.".to_owned(),
-        "The sibling `*.yaml` summary is the tracked machine-readable source; `*-component.yaml` and `*-timings.tsv` are bounded composition artifacts. Set `RSQJS_REPORT_EXHAUSTIVE=1` only for explicit per-case diagnostics.".to_owned(),
+        "The sibling `*.yaml` summary is the tracked machine-readable source; `*-component.yaml` and `*-timings.tsv` are bounded composition artifacts. Set `VELUM_REPORT_EXHAUSTIVE=1` only for explicit per-case diagnostics.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
         "Test262 file conformance collapses required variants by source file for dashboard comparison.".to_owned(),
         "Test262 full corpus keeps default, strict, module, and raw variants as diagnostic rows.".to_owned(),
@@ -199,7 +199,7 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
             "source",
             "iterations",
             "case_elapsed",
-            "rsqjs_measure",
+            "velum_measure",
             "quickjs_measure",
             "detail",
             "mode",
@@ -235,7 +235,7 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
     for row in &report.benchmarks.rows {
         let iterations = row.iterations.unwrap_or_default().to_string();
         let case_elapsed = optional_duration_text(row.case_duration_ns);
-        let rsqjs_measure = optional_duration_text(row.engine.wall_duration_ns);
+        let velum_measure = optional_duration_text(row.engine.wall_duration_ns);
         let quickjs_measure = optional_duration_text(row.reference.wall_duration_ns);
         let mode = methodology_mode(row.methodology.as_ref());
         let lifecycle = methodology_lifecycle(row.methodology.as_ref());
@@ -251,7 +251,7 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
                 &row.source,
                 &iterations,
                 &case_elapsed,
-                &rsqjs_measure,
+                &velum_measure,
                 &quickjs_measure,
                 &row.detail,
                 &mode,
@@ -514,14 +514,14 @@ fn benchmark_table_rows(suite: &BenchmarkSuite) -> Vec<BenchmarkTableRow> {
             source: row.source.clone(),
             iterations: row.iterations.unwrap_or_default(),
             case_elapsed: optional_duration_text(row.case_duration_ns),
-            rsqjs_measure: optional_duration_text(row.engine.wall_duration_ns),
+            velum_measure: optional_duration_text(row.engine.wall_duration_ns),
             quickjs_measure: optional_duration_text(row.reference.wall_duration_ns),
-            rsqjs_eval: measurement_median_text(&row.engine),
+            velum_eval: measurement_median_text(&row.engine),
             quickjs_eval: measurement_median_text(&row.reference),
             latency_ratio: ratio_text(row.latency_ratio_centi_units),
             latency_budget: row.latency_budget.label().to_owned(),
             memory_ratio: ratio_text(row.memory_ratio_centi_units),
-            rsqjs_cv: measurement_cv_text(&row.engine),
+            velum_cv: measurement_cv_text(&row.engine),
             quickjs_cv: measurement_cv_text(&row.reference),
             quality: row.quality.label().to_owned(),
             detail: row.detail.clone(),

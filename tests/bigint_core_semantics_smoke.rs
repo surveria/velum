@@ -1,4 +1,4 @@
-use rs_quickjs::{OwnedValue, Runtime, RuntimeLimits, Value};
+use velum::{OwnedValue, Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -85,7 +85,7 @@ fn bigint_to_string_falls_back_to_object_for_a_non_string_tag() -> TestResult {
 
 #[test]
 fn moves_ownerless_bigints_across_vm_boundaries() -> TestResult {
-    let engine = rs_quickjs::Engine::new();
+    let engine = velum::Engine::new();
     let mut first = engine.create_vm();
     let owned = first.eval_owned("9007199254740993n")?;
     ensure_owned_bigint(&owned, "9007199254740993")?;

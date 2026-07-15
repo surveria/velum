@@ -1,19 +1,19 @@
-var __rsqjsBenchLast = 0;
+var __velumBenchLast = 0;
 
-function __rsqjsBenchSetup() {
-    __rsqjsBenchLast = 0;
-    return __rsqjsBenchLast;
+function __velumBenchSetup() {
+    __velumBenchLast = 0;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchRun() {
+function __velumBenchRun() {
     var total = 0;
     for (var index = 0; index < 262144; index = index + 1) {
         total = total + (((index * 3) + 7) & 255);
     }
-    __rsqjsBenchLast = total;
-    return __rsqjsBenchLast;
+    __velumBenchLast = total;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchVerify() {
+function __velumBenchVerify() {
     return 33423360;
 }

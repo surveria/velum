@@ -1,7 +1,7 @@
 use anyhow::bail;
 
 use crate::{
-    bench_engines::{BenchEngine, REFERENCE_ENGINE_ID, RsqjsEngine, make_reference},
+    bench_engines::{BenchEngine, REFERENCE_ENGINE_ID, VelumEngine, make_reference},
     bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values},
     jetstream_baseline::{BaselineKey, BaselineOutcome, BaselineSample, JetStreamQuickjsBaseline},
     quickjs_baseline::detect_host_profile,
@@ -164,7 +164,7 @@ fn run_timed_case(
         REFERENCE_ENGINE_ID,
         host_profile,
     );
-    let ours = timing::timed(|| bench_measure::measure(config, || RsqjsEngine.eval(&source)));
+    let ours = timing::timed(|| bench_measure::measure(config, || VelumEngine.eval(&source)));
     let reference = measure_reference(config, reference, &quickjs_source, baseline, &baseline_key)?;
     let case_elapsed = timing::format_duration(case_timer.elapsed());
     Ok(match ours.value {
@@ -280,7 +280,7 @@ fn measured_with_reference_result(
 fn failed_with_reference(
     case: &JetStreamCase,
     detail: &str,
-    rsqjs_measure: String,
+    velum_measure: String,
     reference: ReferenceMeasurement,
     case_elapsed: String,
 ) -> JetStreamOutcome {
@@ -289,7 +289,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns {
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 quickjs_measure: reference.measure_text(),
             },
             timing::ReferenceColumns::measured(
@@ -305,7 +305,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns::failed_with_reference(
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 note.elapsed,
             ),
             timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
@@ -319,7 +319,7 @@ fn failed_with_reference(
                 case,
                 timing::MeasurementColumns {
                     case_elapsed,
-                    rsqjs_measure,
+                    velum_measure,
                     quickjs_measure: REFERENCE_MEASURE_CACHED.to_owned(),
                 },
                 timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
@@ -333,7 +333,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns {
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 quickjs_measure: NOT_MEASURED.to_owned(),
             },
             timing::ReferenceColumns::not_measured(REFERENCE_BASELINE_MISSING),
@@ -346,7 +346,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns {
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 quickjs_measure: NOT_MEASURED.to_owned(),
             },
             timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
@@ -416,7 +416,7 @@ fn measured_with_reference(
     if let Some(detail) = quality_failure_detail(ours.value, Some(reference.stats)) {
         let measurements = timing::MeasurementColumns {
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: reference.measure_text(),
         };
         let quickjs = timing::ReferenceColumns::measured(
@@ -446,17 +446,17 @@ fn measured_with_reference(
             status: jetstream_status(budget.over_budget).to_owned(),
             source: case.source_label(),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: reference.measure_text(),
             reference_source: reference.source.to_owned(),
-            rsqjs_time: format_duration(ours.value.median()),
+            velum_time: format_duration(ours.value.median()),
             quickjs_time: format_duration(reference.stats.median()),
             latency_ratio: ratio_values(
                 ours.value.median().as_nanos(),
                 reference.stats.median().as_nanos(),
             ),
             latency_budget: budget.label.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: reference.stats.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
             detail: jetstream_detail(&detail_text(budget.over_budget)),
@@ -503,14 +503,14 @@ fn measured_without_reference(
             status: "✅ measured".to_owned(),
             source: case.source_label(),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: NOT_MEASURED.to_owned(),
             reference_source: reference_source.to_owned(),
-            rsqjs_time: format_duration(ours.value.median()),
+            velum_time: format_duration(ours.value.median()),
             quickjs_time: reference_time.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: "🟡 no reference".to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: jetstream_detail(&reference_detail.map_or_else(
@@ -555,14 +555,14 @@ fn reference_unavailable(
             status: "✅ measured".to_owned(),
             source: case.source_label(),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: timing::format_duration(note.elapsed),
             reference_source: REFERENCE_SOURCE_LIVE.to_owned(),
-            rsqjs_time: format_duration(ours.value.median()),
+            velum_time: format_duration(ours.value.median()),
             quickjs_time: REFERENCE_NOT_AVAILABLE.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: LATENCY_NOT_AVAILABLE.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: jetstream_detail(&format!(
@@ -593,14 +593,14 @@ fn invalid_measurement_outcome(
             status: STATUS_INVALID_BENCHMARK.to_owned(),
             source: case.source_label(),
             case_elapsed: measurements.case_elapsed,
-            rsqjs_measure: measurements.rsqjs_measure,
+            velum_measure: measurements.velum_measure,
             quickjs_measure: measurements.quickjs_measure,
             reference_source: reference_source.to_owned(),
-            rsqjs_time: format_duration(ours.value.median()),
+            velum_time: format_duration(ours.value.median()),
             quickjs_time: quickjs.eval,
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: LATENCY_INVALID.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
             detail: jetstream_detail(detail),
@@ -646,14 +646,14 @@ fn failed_row(
         status: STATUS_FAILED.to_owned(),
         source: case.source_label(),
         case_elapsed: measurements.case_elapsed,
-        rsqjs_measure: measurements.rsqjs_measure,
+        velum_measure: measurements.velum_measure,
         quickjs_measure: measurements.quickjs_measure,
         reference_source: reference_source.to_owned(),
-        rsqjs_time: NOT_MEASURED.to_owned(),
+        velum_time: NOT_MEASURED.to_owned(),
         quickjs_time: quickjs.eval,
         latency_ratio: NOT_MEASURED.to_owned(),
         latency_budget: NOT_MEASURED.to_owned(),
-        rsqjs_cv: NOT_MEASURED.to_owned(),
+        velum_cv: NOT_MEASURED.to_owned(),
         quickjs_cv: quickjs.cv,
         quality,
         detail: jetstream_detail(detail),
@@ -667,14 +667,14 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
             status: STATUS_SKIPPED.to_owned(),
             source: case.source_label(),
             case_elapsed: NOT_MEASURED.to_owned(),
-            rsqjs_measure: NOT_MEASURED.to_owned(),
+            velum_measure: NOT_MEASURED.to_owned(),
             quickjs_measure: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
-            rsqjs_time: NOT_MEASURED.to_owned(),
+            velum_time: NOT_MEASURED.to_owned(),
             quickjs_time: NOT_MEASURED.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: NOT_MEASURED.to_owned(),
-            rsqjs_cv: NOT_MEASURED.to_owned(),
+            velum_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
             detail: jetstream_detail(reason),
@@ -696,7 +696,7 @@ fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -
         return None;
     }
     let mut reasons = Vec::new();
-    collect_quality_reasons(&mut reasons, "rsqjs", ours);
+    collect_quality_reasons(&mut reasons, "velum", ours);
     if let Some(reference) = reference {
         collect_quality_reasons(&mut reasons, "quickjs", reference);
     }

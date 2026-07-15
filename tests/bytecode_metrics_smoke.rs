@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, io};
 
-use rs_quickjs::Engine;
+use velum::Engine;
 
 type TestResult = Result<(), Box<dyn StdError>>;
 

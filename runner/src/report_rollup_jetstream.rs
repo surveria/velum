@@ -3,12 +3,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const JETSTREAM_REPORT_PREFIX: &str = "rsqjs-jetstream-report-";
+const JETSTREAM_REPORT_PREFIX: &str = "velum-jetstream-report-";
 const JETSTREAM_REPORT_SUFFIX: &str = ".md";
 const JETSTREAM_YAML_SUFFIX: &str = ".yaml";
 const JETSTREAM_REPORT_DIR: &str = "jetstream-runs";
 const JETSTREAM_SECTION: &str = "JetStream Shell Benchmarks";
-const TEST_REPORT_PREFIX: &str = "rsqjs-test-report-";
+const TEST_REPORT_PREFIX: &str = "velum-test-report-";
 const TEST_REPORT_SUFFIX: &str = ".md";
 const BUDGET_RATIO: f64 = 1.00;
 

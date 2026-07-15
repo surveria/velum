@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 default_repo_root="$(cd "${script_dir}/.." && pwd)"
-repo_root="${RSQJS_ARCHITECTURE_ROOT:-${default_repo_root}}"
+repo_root="${VELUM_ARCHITECTURE_ROOT:-${default_repo_root}}"
 script_name="check-architecture-boundaries"
 
 # Guard architectural properties, not incidental source shape. Intentional
@@ -1968,7 +1968,7 @@ expect_guard_failure() {
 
   prepare_fixture "${fixture_root}"
   "${mutator}" "${fixture_root}"
-  if RSQJS_ARCHITECTURE_ROOT="${fixture_root}" "${BASH_SOURCE[0]}" >"${output}" 2>&1; then
+  if VELUM_ARCHITECTURE_ROOT="${fixture_root}" "${BASH_SOURCE[0]}" >"${output}" 2>&1; then
     fail "self-test '${name}' did not reject its mutation"
   fi
   if ! grep -F -q "${marker}" "${output}"; then

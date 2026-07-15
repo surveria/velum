@@ -3,7 +3,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use rs_quickjs::{DynamicModuleRequest, Error, ModuleLoader, ModuleRequest, ModuleSource};
+use velum::{DynamicModuleRequest, Error, ModuleLoader, ModuleRequest, ModuleSource};
 
 const MODULE_TYPE_ATTRIBUTE: &str = "type";
 const JSON_MODULE_TYPE: &str = "json";
@@ -24,7 +24,7 @@ impl Test262ModuleLoader {
         }
     }
 
-    fn resolve(referrer: &str, request: &str) -> rs_quickjs::Result<PathBuf> {
+    fn resolve(referrer: &str, request: &str) -> velum::Result<PathBuf> {
         let request_path = Path::new(request);
         let unresolved = if request_path.is_absolute() {
             return Err(Error::runtime(
@@ -41,7 +41,7 @@ impl Test262ModuleLoader {
         normalize_relative_module_path(&unresolved)
     }
 
-    fn load_source(&self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load_source(&self, referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         let relative = Self::resolve(referrer, request)?;
         let source = fs::read_to_string(self.test262_dir.join(&relative)).map_err(|error| {
             Error::runtime(format!(
@@ -64,7 +64,7 @@ impl Test262ModuleLoader {
         &self,
         referrer: &str,
         request: &ModuleRequest,
-    ) -> rs_quickjs::Result<ModuleSource> {
+    ) -> velum::Result<ModuleSource> {
         if request.specifier() == MODULE_SOURCE_SPECIFIER {
             return Ok(ModuleSource::new(MODULE_SOURCE_SPECIFIER, "")
                 .with_module_source_class_name(MODULE_SOURCE_CLASS_NAME));
@@ -91,7 +91,7 @@ impl Test262ModuleLoader {
         specifier: &str,
         module_type: &str,
         bytes: &[u8],
-    ) -> rs_quickjs::Result<String> {
+    ) -> velum::Result<String> {
         if module_type == BYTES_MODULE_TYPE {
             let elements = bytes
                 .iter()
@@ -135,7 +135,7 @@ impl Test262ModuleLoader {
 }
 
 impl ModuleLoader for Test262ModuleLoader {
-    fn load(&mut self, referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load(&mut self, referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         self.load_source(referrer, request)
     }
 
@@ -143,7 +143,7 @@ impl ModuleLoader for Test262ModuleLoader {
         &mut self,
         referrer: &str,
         request: &ModuleRequest,
-    ) -> rs_quickjs::Result<ModuleSource> {
+    ) -> velum::Result<ModuleSource> {
         self.load_typed_source(referrer, request)
     }
 
@@ -151,12 +151,12 @@ impl ModuleLoader for Test262ModuleLoader {
         &mut self,
         referrer: &str,
         request: &DynamicModuleRequest,
-    ) -> rs_quickjs::Result<ModuleSource> {
+    ) -> velum::Result<ModuleSource> {
         self.load_typed_source(referrer, request)
     }
 }
 
-fn normalize_relative_module_path(path: &Path) -> rs_quickjs::Result<PathBuf> {
+fn normalize_relative_module_path(path: &Path) -> velum::Result<PathBuf> {
     let mut normalized = PathBuf::new();
     for component in path.components() {
         match component {
@@ -182,7 +182,7 @@ fn normalize_relative_module_path(path: &Path) -> rs_quickjs::Result<PathBuf> {
     Ok(normalized)
 }
 
-fn relative_module_specifier(path: &Path) -> rs_quickjs::Result<String> {
+fn relative_module_specifier(path: &Path) -> velum::Result<String> {
     let mut parts = Vec::new();
     for component in path.components() {
         let Component::Normal(part) = component else {

@@ -27,31 +27,31 @@ trap 'rm -rf "${tmp_dir}"' EXIT
 
 valid_metadata="${tmp_dir}/valid.env"
 {
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
-  printf 'RSQJS_ARTIFACT_REPORT_MODE=%s\n' "$(encoded correctness)"
-  printf 'RSQJS_ARTIFACT_TASK=%s\n' "$(encoded 'task with spaces')"
+  printf 'VELUM_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
+  printf 'VELUM_ARTIFACT_REPORT_MODE=%s\n' "$(encoded correctness)"
+  printf 'VELUM_ARTIFACT_TASK=%s\n' "$(encoded 'task with spaces')"
 } > "${valid_metadata}"
 read_metadata "${valid_metadata}" || fail_test "rejected valid metadata"
-[[ "${RSQJS_ARTIFACT_TASK}" == "task with spaces" ]] || fail_test "changed decoded value"
+[[ "${VELUM_ARTIFACT_TASK}" == "task with spaces" ]] || fail_test "changed decoded value"
 
 duplicate_metadata="${tmp_dir}/duplicate.env"
 {
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
+  printf 'VELUM_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
+  printf 'VELUM_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
 } > "${duplicate_metadata}"
 expect_rejected "${duplicate_metadata}" "duplicate key"
 
 unknown_metadata="${tmp_dir}/unknown.env"
-printf 'RSQJS_ARTIFACT_UNKNOWN=%s\n' "$(encoded value)" > "${unknown_metadata}"
+printf 'VELUM_ARTIFACT_UNKNOWN=%s\n' "$(encoded value)" > "${unknown_metadata}"
 expect_rejected "${unknown_metadata}" "unknown key"
 
 invalid_base64_metadata="${tmp_dir}/invalid-base64.env"
-printf '%s\n' 'RSQJS_ARTIFACT_SCHEMA=%%%' > "${invalid_base64_metadata}"
+printf '%s\n' 'VELUM_ARTIFACT_SCHEMA=%%%' > "${invalid_base64_metadata}"
 expect_rejected "${invalid_base64_metadata}" "invalid base64"
 
 marker="${tmp_dir}/executed"
 command_metadata="${tmp_dir}/command.env"
-printf 'RSQJS_ARTIFACT_SCHEMA=$(touch %s)\n' "${marker}" > "${command_metadata}"
+printf 'VELUM_ARTIFACT_SCHEMA=$(touch %s)\n' "${marker}" > "${command_metadata}"
 expect_rejected "${command_metadata}" "command substitution"
 [[ ! -e "${marker}" ]] || fail_test "executed artifact metadata"
 
@@ -90,7 +90,7 @@ fi
 
 legacy_baseline="${tmp_dir}/legacy-test262-pass-baseline.txt"
 {
-  printf '%s\n' '# rsqjs-test262-pass-baseline-v1'
+  printf '%s\n' '# velum-test262-pass-baseline-v1'
   sed -n '2p' "${test262_baseline_path}"
   printf '%s\n' 'built-ins/Array/a.js#default'
 } > "${legacy_baseline}"
@@ -195,7 +195,7 @@ download_matching_artifact() {
   printf '%s/artifact-ready\n' "${target_dir}"
 }
 
-retry_result="$(RSQJS_ARTIFACT_WAIT_ATTEMPTS=3 RSQJS_ARTIFACT_WAIT_SECONDS=0 \
+retry_result="$(VELUM_ARTIFACT_WAIT_ATTEMPTS=3 VELUM_ARTIFACT_WAIT_SECONDS=0 \
   download_matching_artifact_with_retry owner/repo delayed-artifact "${tree_sha}" \
   correctness "${tmp_dir}/retry-target")"
 [[ "${retry_result}" == "${tmp_dir}/retry-target/artifact-ready" ]] ||
@@ -206,7 +206,7 @@ retry_result="$(RSQJS_ARTIFACT_WAIT_ATTEMPTS=3 RSQJS_ARTIFACT_WAIT_SECONDS=0 \
 download_matching_artifact() {
   return 1
 }
-if retry_result="$(RSQJS_ARTIFACT_WAIT_ATTEMPTS=2 RSQJS_ARTIFACT_WAIT_SECONDS=0 \
+if retry_result="$(VELUM_ARTIFACT_WAIT_ATTEMPTS=2 VELUM_ARTIFACT_WAIT_SECONDS=0 \
   download_matching_artifact_with_retry owner/repo missing-artifact "${tree_sha}" \
   correctness "${tmp_dir}/missing-target" 2>/dev/null)"; then
   fail_test "artifact retry accepted an artifact that never appeared"
@@ -225,7 +225,7 @@ headline="$(report_commit_headline \
   fail_test "duplicated an existing pull request suffix"
 
 headline="$(report_commit_headline '' '' 20260710T212554Z)"
-[[ "${headline}" == 'Add rsqjs report 20260710T212554Z (CI) [skip ci]' ]] ||
+[[ "${headline}" == 'Add Velum report 20260710T212554Z (CI) [skip ci]' ]] ||
   fail_test "changed the report commit headline fallback"
 
 publisher_remote="${tmp_dir}/publisher-remote.git"

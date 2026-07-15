@@ -26,7 +26,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: rsqjs-jetstream-main
+  group: velum-jetstream-main
   cancel-in-progress: false
 
 jobs:
@@ -41,18 +41,18 @@ jobs:
       - gha-runner-ctrl-test
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
-      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
-      RSQJS_JETSTREAM_FILTER: ${{ inputs.filter || '' }}
-      RSQJS_JETSTREAM_QUICKJS_BASELINE: ${{ inputs.refresh_quickjs && 'refresh' || 'read' }}
-      RSQJS_JETSTREAM_QUICKJS_BASELINE_PATH: tests/corpora/jetstream/quickjs-baseline.tsv
-      RSQJS_REPORT_EVENT_NAME: ${{ github.event_name }}
-      RSQJS_REPORT_RUN_ID: ${{ github.run_id }}
-      RSQJS_REPORT_RUN_ATTEMPT: ${{ github.run_attempt }}
-      RSQJS_REPORT_REPOSITORY: ${{ github.repository }}
-      RSQJS_REPORT_WORKFLOW: ${{ github.workflow }}
-      RSQJS_REPORT_TASK: JetStream shell benchmark lane
-      RSQJS_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
+      VELUM_JETSTREAM_FILTER: ${{ inputs.filter || '' }}
+      VELUM_JETSTREAM_QUICKJS_BASELINE: ${{ inputs.refresh_quickjs && 'refresh' || 'read' }}
+      VELUM_JETSTREAM_QUICKJS_BASELINE_PATH: tests/corpora/jetstream/quickjs-baseline.tsv
+      VELUM_REPORT_EVENT_NAME: ${{ github.event_name }}
+      VELUM_REPORT_RUN_ID: ${{ github.run_id }}
+      VELUM_REPORT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      VELUM_REPORT_REPOSITORY: ${{ github.repository }}
+      VELUM_REPORT_WORKFLOW: ${{ github.workflow }}
+      VELUM_REPORT_TASK: JetStream shell benchmark lane
+      VELUM_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,7 +63,7 @@ jobs:
         run: |
           printf 'RUNNER_NAME=%s\n' "${RUNNER_NAME:-unknown}"
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
-          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
+          printf 'VELUM_HOST_LOCK_PATH=%s\n' "${VELUM_HOST_LOCK_PATH}"
           mkdir -p "${CARGO_TARGET_DIR}"
           rustc --version
           cargo --version
@@ -75,12 +75,12 @@ jobs:
           timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
           commit_sha="$(git rev-parse HEAD)"
           tree_sha="$(git rev-parse 'HEAD^{tree}')"
-          report_path="target/rsqjs-reports/jetstream-runs/rsqjs-jetstream-report-${timestamp}.md"
+          report_path="target/velum-reports/jetstream-runs/velum-jetstream-report-${timestamp}.md"
           report_yaml_path="${report_path%.md}.yaml"
           report_component_yaml_path="${report_path%.md}-component.yaml"
           report_timing_path="${report_path%.md}-timings.tsv"
-          metadata_path="target/rsqjs-reports/rsqjs-jetstream-metadata.env"
-          artifact_name="rsqjs-jetstream-${tree_sha}"
+          metadata_path="target/velum-reports/velum-jetstream-metadata.env"
+          artifact_name="velum-jetstream-${tree_sha}"
           {
             printf 'timestamp=%s\n' "${timestamp}"
             printf 'commit_sha=%s\n' "${commit_sha}"
@@ -93,22 +93,22 @@ jobs:
             printf 'artifact_name=%s\n' "${artifact_name}"
           } >> "${GITHUB_OUTPUT}"
           {
-            printf 'RSQJS_REPORT_TIMESTAMP=%s\n' "${timestamp}"
-            printf 'RSQJS_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
-            printf 'RSQJS_REPORT_TREE_SHA=%s\n' "${tree_sha}"
-            printf 'RSQJS_JETSTREAM_REPORT_PATH=%s\n' "${report_path}"
+            printf 'VELUM_REPORT_TIMESTAMP=%s\n' "${timestamp}"
+            printf 'VELUM_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
+            printf 'VELUM_REPORT_TREE_SHA=%s\n' "${tree_sha}"
+            printf 'VELUM_JETSTREAM_REPORT_PATH=%s\n' "${report_path}"
           } >> "${GITHUB_ENV}"
 
       - name: Run standalone JetStream lane
         env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
         run: |
-          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
-            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
+            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
           export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           ./scripts/run-jetstream.sh
 
@@ -142,6 +142,6 @@ jobs:
           (github.event_name == 'schedule' || inputs.publish == true)
         env:
           GH_TOKEN: ${{ github.token }}
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
-          RSQJS_JETSTREAM_METADATA_PATH: target/rsqjs-reports/rsqjs-jetstream-metadata.env
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
+          VELUM_JETSTREAM_METADATA_PATH: target/velum-reports/velum-jetstream-metadata.env
         run: ./scripts/publish-jetstream-report.sh

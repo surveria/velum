@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use parking_lot::Mutex;
-use rs_quickjs::{Engine, Error, Value, VmRootKind, VmRootSnapshot};
+use velum::{Engine, Error, Value, VmRootKind, VmRootSnapshot};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

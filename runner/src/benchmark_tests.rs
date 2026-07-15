@@ -1,4 +1,4 @@
-use super::{BUDGET_OVER, BUDGET_WITHIN, RsqjsEngine, bench_measure, budget_check};
+use super::{BUDGET_OVER, BUDGET_WITHIN, VelumEngine, bench_measure, budget_check};
 use crate::bench_engines::BenchEngine;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ fn marks_above_budget_as_tracked_exception() -> TestResult {
 #[test]
 fn samples_engine_under_test_in_process() -> TestResult {
     let config = super::MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3);
-    let stats = bench_measure::measure(config, || RsqjsEngine.eval("let value = 40 + 2; value"))?;
+    let stats = bench_measure::measure(config, || VelumEngine.eval("let value = 40 + 2; value"))?;
     ensure_bool(
         stats.median() <= Duration::from_secs(1),
         "in-process eval should finish quickly",
@@ -44,16 +44,16 @@ fn failed_benchmark_preserves_quickjs_measurement() -> TestResult {
     };
     let outcome = super::failed_with_reference(
         &case,
-        "rsqjs eval failed: sample",
+        "Velum eval failed: sample",
         "1.00 ms".to_owned(),
         super::ReferenceMeasurement::Measured(reference),
         "2.00 ms".to_owned(),
     );
     ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
     ensure_text(&outcome.row.case_elapsed, "2.00 ms")?;
-    ensure_text(&outcome.row.rsqjs_measure, "1.00 ms")?;
+    ensure_text(&outcome.row.velum_measure, "1.00 ms")?;
     ensure_text(&outcome.row.quickjs_measure, "1.00 ms")?;
-    ensure_text(&outcome.row.rsqjs_eval, super::NOT_MEASURED)?;
+    ensure_text(&outcome.row.velum_eval, super::NOT_MEASURED)?;
     ensure_bool(
         outcome.row.quickjs_eval != super::NOT_MEASURED,
         "failed row must retain QuickJS timing",

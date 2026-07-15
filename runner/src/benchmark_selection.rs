@@ -6,8 +6,8 @@ use anyhow::bail;
 
 use crate::cases::BenchmarkCase;
 
-pub const ENV_BENCH_SET: &str = "RSQJS_BENCH_SET";
-pub const ENV_BENCH_FILTER: &str = "RSQJS_BENCH_FILTER";
+pub const ENV_BENCH_SET: &str = "VELUM_BENCH_SET";
+pub const ENV_BENCH_FILTER: &str = "VELUM_BENCH_FILTER";
 
 const SET_FULL: &str = "full";
 const SET_SENTINEL: &str = "sentinel";
