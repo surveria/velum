@@ -4,7 +4,7 @@ use crate::{
         Context,
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
-            PropertyKey, PropertyUpdate, PropertyWritable,
+            PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
         },
     },
     value::Value,
@@ -17,6 +17,36 @@ const ARGUMENTS_LENGTH_PROPERTY: &str = "length";
 const ARGUMENTS_CALLEE_PROPERTY: &str = "callee";
 
 impl Context {
+    pub(super) fn legacy_function_arguments_snapshot(
+        &self,
+        function: crate::value::FunctionId,
+        original_args: &[Value],
+        unmapped: bool,
+    ) -> Result<Option<crate::runtime::activation::LegacyFunctionArguments>> {
+        Ok(self.function_has_legacy_semantics(function)?.then(|| {
+            crate::runtime::activation::LegacyFunctionArguments::new(original_args, unmapped)
+        }))
+    }
+
+    pub(super) fn function_has_legacy_semantics(
+        &self,
+        function: crate::value::FunctionId,
+    ) -> Result<bool> {
+        let function = self.function(function)?;
+        Ok(!function.bytecode.strict() && function.constructable)
+    }
+
+    pub(in crate::runtime) fn function_uses_restricted_prototype(
+        &self,
+        function: crate::value::FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        Ok(
+            !self.function_has_legacy_semantics(function)?
+                && Self::is_restricted_property(property),
+        )
+    }
+
     pub(super) fn active_function_has_arguments_binding(&self) -> bool {
         let Some(atom) = self.atom(ARGUMENTS_BINDING_NAME) else {
             return false;
@@ -25,6 +55,101 @@ impl Context {
             .iter()
             .skip(self.current_local_frame_start())
             .any(|scope| scope.contains(atom))
+    }
+
+    pub(super) fn initialize_legacy_function_arguments(
+        &mut self,
+        function: crate::value::FunctionId,
+        binding: Option<super::FunctionArgumentsBinding>,
+        arguments_scope: Option<&crate::runtime::binding::scope::BindingScope>,
+        parameter_scope: &crate::runtime::binding::scope::BindingScope,
+    ) -> Result<()> {
+        let Some(frame_index) = self
+            .activation_frames
+            .iter()
+            .rposition(|frame| frame.function_id() == Some(function))
+        else {
+            return Err(Error::runtime(
+                "legacy arguments activation frame disappeared during setup",
+            ));
+        };
+        let Some(arguments) = self
+            .activation_frames
+            .get(frame_index)
+            .and_then(crate::runtime::activation::ActivationFrame::legacy_arguments)
+        else {
+            return Ok(());
+        };
+        let (original_args, _, unmapped) = arguments.materialization_inputs();
+        let materialized = match (binding, arguments_scope) {
+            (Some(binding), Some(scope)) => {
+                let cell = scope.get(binding.atom()).ok_or_else(|| {
+                    Error::runtime("legacy arguments binding disappeared during setup")
+                })?;
+                Some(cell.value(ARGUMENTS_BINDING_NAME)?)
+            }
+            (None, None) => None,
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(Error::runtime(
+                    "legacy arguments binding scope does not match its metadata",
+                ));
+            }
+        };
+        let parameter_map = if materialized.is_none() && !unmapped {
+            self.arguments_parameter_map(function, original_args.len(), parameter_scope)?
+        } else {
+            Vec::new()
+        };
+        let frame = self
+            .activation_frames
+            .get_mut(frame_index)
+            .ok_or_else(|| Error::runtime("legacy arguments activation frame disappeared"))?;
+        let arguments = frame
+            .legacy_arguments_mut()
+            .ok_or_else(|| Error::runtime("legacy arguments activation state disappeared"))?;
+        if let Some(object) = materialized {
+            arguments.set_object(object);
+        } else {
+            arguments.set_parameter_map(parameter_map);
+        }
+        Ok(())
+    }
+
+    pub(super) fn legacy_function_arguments_value(
+        &mut self,
+        function: crate::value::FunctionId,
+    ) -> Result<Value> {
+        let Some(frame_index) = self
+            .activation_frames
+            .iter()
+            .rposition(|frame| frame.function_id() == Some(function))
+        else {
+            return Ok(Value::Null);
+        };
+        let arguments = self
+            .activation_frames
+            .get(frame_index)
+            .and_then(crate::runtime::activation::ActivationFrame::legacy_arguments)
+            .ok_or_else(|| Error::runtime("active legacy function has no arguments snapshot"))?;
+        if let Some(object) = arguments.object() {
+            return Ok(object.clone());
+        }
+        let (original_args, parameter_map, unmapped) = arguments.materialization_inputs();
+        let object = self.create_arguments_object_with_parameter_map(
+            function,
+            unmapped,
+            &original_args,
+            parameter_map,
+        )?;
+        let frame = self
+            .activation_frames
+            .get_mut(frame_index)
+            .ok_or_else(|| Error::runtime("legacy arguments activation frame disappeared"))?;
+        let arguments = frame
+            .legacy_arguments_mut()
+            .ok_or_else(|| Error::runtime("legacy arguments activation state disappeared"))?;
+        arguments.set_object(object.clone());
+        Ok(object)
     }
 
     /// Creates the arguments value from the original passed arguments.
@@ -36,6 +161,26 @@ impl Context {
         unmapped: bool,
         original_args: &[Value],
         parameter_scope: &crate::runtime::binding::scope::BindingScope,
+    ) -> Result<Value> {
+        let parameter_map = if unmapped {
+            Vec::new()
+        } else {
+            self.arguments_parameter_map(function, original_args.len(), parameter_scope)?
+        };
+        self.create_arguments_object_with_parameter_map(
+            function,
+            unmapped,
+            original_args,
+            parameter_map,
+        )
+    }
+
+    pub(super) fn create_arguments_object_with_parameter_map(
+        &mut self,
+        function: crate::value::FunctionId,
+        unmapped: bool,
+        original_args: &[Value],
+        parameter_map: Vec<Option<crate::runtime::binding::scope::BindingCell>>,
     ) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         let value = self.objects.create_with_prototype(
@@ -49,11 +194,6 @@ impl Context {
                 "arguments object allocation did not return an object",
             ));
         };
-        let parameter_map = if unmapped {
-            Vec::new()
-        } else {
-            self.arguments_parameter_map(function, original_args.len(), parameter_scope)?
-        };
         self.objects.mark_arguments_object(*id, parameter_map)?;
         self.install_arguments_values(*id, original_args)?;
         self.install_arguments_length(*id, original_args.len())?;
@@ -66,7 +206,7 @@ impl Context {
         Ok(value)
     }
 
-    fn arguments_parameter_map(
+    pub(super) fn arguments_parameter_map(
         &self,
         function: crate::value::FunctionId,
         argument_count: usize,

@@ -360,6 +360,9 @@ impl DetachedFunctionExecution {
                     environment.for_each_value(|value| visitor.visit_value(kind, value))?;
                 }
             }
+            if let Some(arguments) = frame.legacy_arguments() {
+                arguments.for_each_value(|value| visitor.visit_value(kind, value))?;
+            }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     if let Some(result) =
@@ -427,6 +430,11 @@ impl DetachedFunctionExecution {
                         visitor.visit(kind, StrongEdgeReference::Value(value))
                     })?;
                 }
+            }
+            if let Some(arguments) = frame.legacy_arguments() {
+                arguments.for_each_value(|value| {
+                    visitor.visit(kind, StrongEdgeReference::Value(value))
+                })?;
             }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {

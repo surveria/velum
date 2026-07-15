@@ -139,7 +139,14 @@ AST remains a compile-time IR only.
 call state. One call activation holds a stable function id independent of its
 temporarily parked continuation, its local-scope base, captured upvalues,
 dynamic object or eval binding environments, `this`, `new.target`, and an
-optional super binding. Temporary class-field `this` and generated-function
+optional super binding. Eligible sloppy ordinary calls also retain an
+accounted original-argument snapshot on that activation. The legacy
+`Function#arguments` extension lazily materializes one mapped or unmapped
+arguments object from the snapshot, caches it on the matching recursive call
+frame, and roots both forms through the same active-execution owner. Strict,
+arrow, method, accessor, class, async, and generator functions instead inherit
+the restricted `caller` and `arguments` accessors. Temporary class-field
+`this` and generated-function
 evaluation boundaries use explicit variants on the same stack, so root
 enumeration, binding visibility, and resource accounting observe one coherent
 owner instead of parallel vectors.
