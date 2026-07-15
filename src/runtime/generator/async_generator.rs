@@ -546,6 +546,7 @@ impl Context {
         function: FunctionId,
         completion: Completion,
     ) -> Result<AsyncGeneratorStep> {
+        let completion = self.normalize_resumed_tail_call(completion)?;
         match completion {
             Completion::Suspend(Suspension::Await(awaited)) => {
                 let execution = self.detach_function_execution(function)?;

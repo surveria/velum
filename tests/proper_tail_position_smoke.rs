@@ -116,3 +116,79 @@ fn shadowed_eval_tail_calls_and_intrinsic_eval_stays_direct() -> TestResult {
         42.0,
     )
 }
+
+#[test]
+fn resumed_async_function_normalizes_a_member_tail_call() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        "use strict";
+        let observed = 0;
+        const holder = {
+            base: 40,
+            finish() { return Promise.resolve(this.base + 2); }
+        };
+        async function task() {
+            await Promise.resolve();
+            return holder.finish();
+        }
+        task().then(function(value) { observed = value; });
+        "#,
+    )?;
+    let actual = context.eval("observed")?;
+    if actual == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected resumed async result 42, got {actual:?}").into())
+}
+
+#[test]
+fn resumed_generators_normalize_member_tail_calls() -> TestResult {
+    ensure_number(
+        r#"
+        "use strict";
+        const holder = {
+            base: 42,
+            finish() { return this.base; }
+        };
+        function* values() {
+            yield 1;
+            return holder.finish();
+        }
+        const iterator = values();
+        iterator.next();
+        iterator.next().value;
+        "#,
+        42.0,
+    )
+}
+
+#[test]
+fn resumed_async_generators_normalize_member_tail_calls() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        "use strict";
+        let observed = 0;
+        const holder = {
+            base: 42,
+            finish() { return this.base; }
+        };
+        async function* values() {
+            yield 1;
+            return holder.finish();
+        }
+        const iterator = values();
+        iterator.next()
+            .then(function() { return iterator.next(); })
+            .then(function(result) { observed = result.value; });
+        "#,
+    )?;
+    let actual = context.eval("observed")?;
+    if actual == Value::Number(42.0) {
+        return Ok(());
+    }
+    Err(format!("expected resumed async generator result 42, got {actual:?}").into())
+}
