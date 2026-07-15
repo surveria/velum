@@ -44,6 +44,11 @@ On the current Ubuntu host, Swift can be installed with:
 sudo apt install swiftlang
 ```
 
+The launcher checks Git, Cargo, rustc, Swift, the nightly toolchain, and the C
+compiler before cloning or building anything. A missing prerequisite stops the
+run before a session directory is created and prints a concrete installation
+command. The launcher never installs system packages itself.
+
 ## Bootstrap and build
 
 ```bash
@@ -62,19 +67,32 @@ AddressSanitizer itself prevents the target from starting.
 ## Run a local campaign
 
 ```bash
-cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml --
+./fuzzing-test/run.sh
 ```
 
-By default the utility builds the prerequisites, starts one Fuzzilli worker, and
-runs until Ctrl-C. Fuzzilli receives the terminal interrupt, finishes its
-current operation, and saves the corpus before exiting. Every session receives
-a new directory below `fuzzing-test/runs/`.
+By default the launcher incrementally rebuilds the Rust driver, pinned Fuzzilli,
+and the sanitizer-instrumented target against the current Velum checkout. Cargo
+recompiles every changed engine dependency, so a run never intentionally reuses
+a target from older source. Use `--skip-build` only as an explicit local
+optimization when the existing binaries are known to match the checkout.
+
+After the build, the utility starts one Fuzzilli worker and runs until Ctrl-C.
+Fuzzilli receives the terminal interrupt, finishes its current operation, and
+saves the corpus before exiting. Every session receives a new directory below
+`fuzzing-test/runs/`.
 
 For a bounded smoke run or a chosen output path:
 
 ```bash
-cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml -- \
+./fuzzing-test/run.sh \
     --iterations 1000 --jobs 1 --output /tmp/velum-fuzz-smoke
+```
+
+Resume the coverage corpus from an earlier session without discarding its crash
+history:
+
+```bash
+./fuzzing-test/run.sh --resume fuzzing-test/runs/session-123
 ```
 
 Unique crash reproducers are saved as `crashes/*.js` together with their FuzzIL
@@ -85,7 +103,7 @@ programs and can use substantial disk space.
 Re-run a saved JavaScript case against the same instrumented target with:
 
 ```bash
-cargo run --release --manifest-path fuzzing-test/driver/Cargo.toml -- \
+./fuzzing-test/run.sh \
     --reproduce fuzzing-test/runs/session-123/crashes/program_0.js
 ```
 

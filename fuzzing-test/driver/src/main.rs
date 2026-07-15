@@ -20,6 +20,7 @@ Options:\n\
   --iterations N   Stop after N Fuzzilli iterations\n\
   --jobs N         Run N Fuzzilli workers (default: 1)\n\
   --output PATH    Store this session at PATH\n\
+  --resume PATH    Resume the corpus from an existing session\n\
   --diagnostics    Also retain invalid programs and timeouts\n\
   --reproduce FILE Run one saved JavaScript reproducer\n\
   --skip-build     Reuse existing Fuzzilli and target binaries\n\
@@ -32,6 +33,7 @@ struct Config {
     iterations: Option<NonZeroUsize>,
     jobs: NonZeroUsize,
     output: Option<PathBuf>,
+    resume: bool,
     diagnostics: bool,
     skip_build: bool,
 }
@@ -65,6 +67,7 @@ fn parse_arguments(mut args: impl Iterator<Item = String>) -> anyhow::Result<Inv
     let mut iterations = None;
     let mut jobs = NonZeroUsize::MIN;
     let mut output = None;
+    let mut resume = false;
     let mut diagnostics = false;
     let mut skip_build = false;
     let mut reproduce = None;
@@ -81,7 +84,17 @@ fn parse_arguments(mut args: impl Iterator<Item = String>) -> anyhow::Result<Inv
                 run_only_option_used = true;
             }
             "--output" => {
+                ensure!(output.is_none(), "output path may only be specified once");
                 output = Some(PathBuf::from(next_value(&mut args, "--output")?));
+                run_only_option_used = true;
+            }
+            "--resume" => {
+                ensure!(
+                    output.is_none(),
+                    "--resume cannot be combined with --output"
+                );
+                output = Some(PathBuf::from(next_value(&mut args, "--resume")?));
+                resume = true;
                 run_only_option_used = true;
             }
             "--diagnostics" => {
@@ -113,6 +126,7 @@ fn parse_arguments(mut args: impl Iterator<Item = String>) -> anyhow::Result<Inv
         iterations,
         jobs,
         output,
+        resume,
         diagnostics,
         skip_build,
     }))
@@ -153,16 +167,25 @@ fn run_campaign(config: &Config) -> anyhow::Result<()> {
         Some(path) => path.clone(),
         None => default_run_directory(&fuzzing_dir)?,
     };
-    ensure!(
-        !run_dir.exists(),
-        "fuzzing output path already exists: {}",
-        run_dir.display()
-    );
-    if let Some(parent) = run_dir.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create output parent '{}'", parent.display()))?;
+    if config.resume {
+        ensure!(
+            run_dir.is_dir(),
+            "fuzzing session to resume is missing: {}",
+            run_dir.display()
+        );
+    } else {
+        ensure!(
+            !run_dir.exists(),
+            "fuzzing output path already exists: {}",
+            run_dir.display()
+        );
+        if let Some(parent) = run_dir.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create output parent '{}'", parent.display())
+            })?;
+        }
     }
 
     ctrlc::set_handler(|| {
@@ -184,6 +207,9 @@ fn run_campaign(config: &Config) -> anyhow::Result<()> {
     }
     if config.diagnostics {
         command.arg("--diagnostics");
+    }
+    if config.resume {
+        command.arg("--resume");
     }
     command.arg(&velum_target).current_dir(&repo_root);
 

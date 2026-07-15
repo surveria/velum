@@ -3,6 +3,7 @@
 !/.gitignore
 !/README.md
 !/FUZZILLI_REVISION
+!/run.sh
 
 !/patches/
 !/patches/*.patch

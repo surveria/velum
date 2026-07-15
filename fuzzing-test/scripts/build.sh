@@ -3,19 +3,40 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fuzzing_dir="$(dirname "${script_dir}")"
+repo_root="$(dirname "${fuzzing_dir}")"
 target_manifest="${fuzzing_dir}/velum-reprl/Cargo.toml"
+
+require_command() {
+    local command_name="$1"
+    local install_hint="$2"
+    if command -v -- "${command_name}" >/dev/null 2>&1; then
+        return
+    fi
+    printf 'Missing required command: %s\n' "${command_name}" >&2
+    printf 'How to install it: %s\n' "${install_hint}" >&2
+    exit 1
+}
+
+require_command git 'sudo apt install git'
+require_command cargo 'install Rust with rustup from https://rustup.rs/'
+require_command rustc 'install Rust with rustup from https://rustup.rs/'
+require_command swift 'sudo apt install swiftlang'
+require_command "${CC:-cc}" 'sudo apt install build-essential'
+
+if ! cargo +nightly --version >/dev/null 2>&1 \
+    || ! rustc +nightly --version >/dev/null 2>&1; then
+    printf '%s\n' 'The Rust nightly toolchain is required for sanitizer coverage.' >&2
+    printf '%s\n' 'Install it with: rustup toolchain install nightly' >&2
+    exit 1
+fi
 
 "${script_dir}/bootstrap-fuzzilli.sh"
 
-if ! command -v swift >/dev/null 2>&1; then
-    printf '%s\n' 'Swift is required to build Fuzzilli.' >&2
-    printf '%s\n' 'On the current Ubuntu host, install it with: sudo apt install swiftlang' >&2
-    exit 1
+source_revision="$(git -C "${repo_root}" rev-parse --short=12 HEAD)"
+if [[ -n "$(git -C "${repo_root}" status --short --untracked-files=normal)" ]]; then
+    source_revision="${source_revision}+dirty"
 fi
-if ! cargo +nightly --version >/dev/null 2>&1; then
-    printf '%s\n' 'The Rust nightly toolchain is required for sanitizer coverage.' >&2
-    exit 1
-fi
+printf 'Building from the current Velum checkout: %s\n' "${source_revision}"
 
 swift build --package-path "${fuzzing_dir}/fuzzilli" \
     --configuration release \

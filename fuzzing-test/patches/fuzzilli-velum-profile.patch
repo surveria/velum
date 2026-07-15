@@ -11,7 +11,7 @@ diff --git a/Sources/Fuzzilli/Profiles/VelumProfile.swift b/Sources/Fuzzilli/Pro
 new file mode 100644
 --- /dev/null
 +++ b/Sources/Fuzzilli/Profiles/VelumProfile.swift
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,57 @@
 +// Copyright 2026 Velum contributors
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,7 +62,6 @@ new file mode 100644
 +
 +    additionalBuiltins: [
 +        "fuzzilli": .function([.string, .jsAnything] => .undefined),
-+        "print": .function([.jsAnything...] => .undefined),
 +    ],
 +
 +    additionalObjectGroups: [],

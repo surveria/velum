@@ -11,10 +11,26 @@ fn help_describes_manual_and_bounded_campaigns() -> TestResult {
         return Err(format!("help command failed with {}", output.status).into());
     }
     let stdout = String::from_utf8(output.stdout)?;
-    if stdout.contains("Ctrl-C") && stdout.contains("--iterations") && stdout.contains("--output") {
+    if stdout.contains("Ctrl-C")
+        && stdout.contains("--iterations")
+        && stdout.contains("--output")
+        && stdout.contains("--resume")
+        && stdout.contains("--reproduce")
+    {
         return Ok(());
     }
     Err(format!("help output is incomplete: {stdout}").into())
+}
+
+#[test]
+fn rejects_conflicting_output_modes() -> TestResult {
+    let output = Command::new(env!("CARGO_BIN_EXE_velum-fuzz"))
+        .args(["--output", "new", "--resume", "old"])
+        .output()?;
+    if !output.status.success() {
+        return Ok(());
+    }
+    Err("conflicting output modes unexpectedly succeeded".into())
 }
 
 #[test]
