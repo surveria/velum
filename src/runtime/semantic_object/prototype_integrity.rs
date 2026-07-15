@@ -124,6 +124,13 @@ impl Context {
                 self.proxy_prevent_extensions(*id)?
             }
             Value::Object(id) => {
+                if self
+                    .objects
+                    .typed_array(*id)?
+                    .is_some_and(|view| !view.can_prevent_extensions())
+                {
+                    return Ok(Some(false));
+                }
                 self.objects.prevent_extensions(*id)?;
                 true
             }
@@ -161,16 +168,8 @@ impl Context {
         match object_ref.value {
             Value::Object(id)
                 if !self.objects.is_proxy(*id)
-                    && self
-                        .objects
-                        .typed_array(*id)?
-                        .is_some_and(|view| view.length() > 0) =>
-            {
-                self.objects.prevent_extensions(*id)?;
-                return Ok(Some(false));
-            }
-            Value::Object(id)
-                if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
+                    && self.objects.typed_array(*id)?.is_none()
+                    && !self.objects.is_module_namespace(*id)? =>
             {
                 match level {
                     SemanticIntegrityLevel::Sealed => self.objects.seal(*id)?,
@@ -241,15 +240,8 @@ impl Context {
         match object_ref.value {
             Value::Object(id)
                 if !self.objects.is_proxy(*id)
-                    && self
-                        .objects
-                        .typed_array(*id)?
-                        .is_some_and(|view| view.length() > 0) =>
-            {
-                return Ok(Some(false));
-            }
-            Value::Object(id)
-                if !self.objects.is_proxy(*id) && !self.objects.is_module_namespace(*id)? =>
+                    && self.objects.typed_array(*id)?.is_none()
+                    && !self.objects.is_module_namespace(*id)? =>
             {
                 return match level {
                     SemanticIntegrityLevel::Sealed => self.objects.is_sealed(*id).map(Some),

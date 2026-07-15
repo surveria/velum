@@ -239,6 +239,12 @@ impl Context {
         if kind == NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) {
             return self.construct_data_view_with_new_target(args, &new_target);
         }
+        if kind == NativeFunctionKind::ArrayBuffer && !same_value(constructor, &new_target) {
+            return self.construct_array_buffer_with_new_target(args, &new_target);
+        }
+        if kind == NativeFunctionKind::SharedArrayBuffer && !same_value(constructor, &new_target) {
+            return self.construct_shared_array_buffer_with_new_target(args, &new_target);
+        }
         self.construct_native_with_new_target(kind, args, constructor, &new_target)
     }
 
@@ -299,8 +305,9 @@ impl Context {
 const fn native_constructor_resolves_prototype_before_arguments(kind: NativeFunctionKind) -> bool {
     matches!(
         kind,
-        NativeFunctionKind::Intl(
-            IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
-        )
+        NativeFunctionKind::TypedArray(_)
+            | NativeFunctionKind::Intl(
+                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
+            )
     )
 }
