@@ -70,13 +70,13 @@ fn var_initializer_resolves_its_with_binding_before_rhs_effects() -> TestResult 
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(
-        r#"
+        r"
         var object = { target: 1 };
         with (object) {
             var target = delete object.target;
         }
         object.target === true && target === undefined ? 42 : 0
-        "#,
+        ",
     )?;
     if value == Value::Number(42.0) {
         return Ok(());

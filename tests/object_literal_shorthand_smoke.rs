@@ -104,7 +104,7 @@ fn computed_proto_object_literal_property_is_data_property() -> TestResult {
 #[test]
 fn only_proto_setter_syntax_changes_the_literal_prototype() -> TestResult {
     let value = eval(
-        r#"
+        r"
         let object = {
             __proto__: null,
             __proto__() { return 42; }
@@ -116,7 +116,7 @@ fn only_proto_setter_syntax_changes_the_literal_prototype() -> TestResult {
         Object.getPrototypeOf(object) === null && object.__proto__() === 42 &&
             Object.getPrototypeOf(accessor) === Function.prototype &&
             accessor.__proto__ === 7 ? 42 : 0
-        "#,
+        ",
     )?;
 
     ensure_value(&value, &Value::Number(42.0))

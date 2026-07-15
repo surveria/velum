@@ -15,7 +15,7 @@ pub(super) enum AwaitIdentifierContext {
 }
 
 impl Parser {
-    pub(super) fn forbid_top_level_await_expression(&mut self) {
+    pub(super) const fn forbid_top_level_await_expression(&mut self) {
         self.await_expression_context = AwaitExpressionContext::Forbidden;
     }
 

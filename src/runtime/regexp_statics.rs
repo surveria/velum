@@ -7,7 +7,7 @@ use crate::{
 
 use super::{VmStorageKind, storage_ledger::VmStorageLedger};
 
-/// Realm-owned state behind the Annex B legacy RegExp constructor accessors.
+/// Realm-owned state behind the Annex B legacy `RegExp` constructor accessors.
 ///
 /// String values remain in the VM string heap and are exposed as direct roots.
 /// Match spans are UTF-16 code-unit ranges into `match_subject`.
@@ -78,15 +78,15 @@ impl RealmRegExpStatics {
         Ok(())
     }
 
-    pub(super) fn input(&self) -> Option<&Value> {
+    pub(super) const fn input(&self) -> Option<&Value> {
         self.input.as_ref()
     }
 
-    pub(super) fn match_subject(&self) -> Option<&Value> {
+    pub(super) const fn match_subject(&self) -> Option<&Value> {
         self.match_subject.as_ref()
     }
 
-    pub(super) fn match_span(&self) -> Option<&Range<usize>> {
+    pub(super) const fn match_span(&self) -> Option<&Range<usize>> {
         self.match_span.as_ref()
     }
 

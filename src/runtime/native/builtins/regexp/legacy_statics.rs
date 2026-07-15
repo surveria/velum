@@ -138,11 +138,9 @@ impl Context {
         let span = match kind {
             LegacyRegExpStaticKind::Input => return Ok(None),
             LegacyRegExpStaticKind::LastMatch => state.match_span().cloned(),
-            LegacyRegExpStaticKind::LastParen => state
-                .captures()
-                .iter()
-                .rev()
-                .find_map(|capture| capture.clone()),
+            LegacyRegExpStaticKind::LastParen => {
+                state.captures().iter().rev().find_map(Clone::clone)
+            }
             LegacyRegExpStaticKind::LeftContext => state.match_span().map(|matched| Range {
                 start: 0,
                 end: matched.start,
@@ -155,7 +153,7 @@ impl Context {
                 .checked_sub(1)
                 .map(usize::from)
                 .and_then(|index| state.captures().get(index))
-                .and_then(|capture| capture.clone()),
+                .and_then(Clone::clone),
         };
         let Some(span) = span else {
             return Ok(Some(Vec::new()));

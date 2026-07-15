@@ -194,6 +194,23 @@ impl Context {
         if let Some(import_meta) = &self.active_import_meta {
             visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
         }
+        self.visit_activation_roots(visitor)?;
+        self.visit_runtime_anchor_roots(visitor)?;
+        for cache in &self.static_name_atom_caches {
+            cache.visit_template_objects(|value| {
+                visitor.visit_value(VmRootKind::BytecodeFrame, value)
+            })?;
+        }
+        self.objects.visit_direct_roots(visitor)?;
+        for job in &self.promise_jobs {
+            job.visit_direct_roots(visitor)?;
+        }
+        self.retained_values.visit(visitor)?;
+        self.transient_roots.visit(visitor)?;
+        Ok(())
+    }
+
+    fn visit_activation_roots<V: DirectRootVisitor>(&self, visitor: &mut V) -> Result<()> {
         for frame in &self.activation_frames {
             if let Some(environments) = frame.dynamic_environments() {
                 for environment in environments {
@@ -235,6 +252,10 @@ impl Context {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn visit_runtime_anchor_roots<V: DirectRootVisitor>(&self, visitor: &mut V) -> Result<()> {
         for realm in self.realm_states() {
             for id in realm.anchor_objects() {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
@@ -274,17 +295,6 @@ impl Context {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::HostFunction(id))?;
             }
         }
-        for cache in &self.static_name_atom_caches {
-            cache.visit_template_objects(|value| {
-                visitor.visit_value(VmRootKind::BytecodeFrame, value)
-            })?;
-        }
-        self.objects.visit_direct_roots(visitor)?;
-        for job in &self.promise_jobs {
-            job.visit_direct_roots(visitor)?;
-        }
-        self.retained_values.visit(visitor)?;
-        self.transient_roots.visit(visitor)?;
         Ok(())
     }
 
