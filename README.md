@@ -1,46 +1,74 @@
-# rs-quickjs
+<h1 align="center">Velum</h1>
 
-An independent, embeddable ECMAScript bytecode engine written in Rust.
+<p align="center">
+  <strong>A from-scratch ECMAScript bytecode engine in Rust.</strong><br>
+  Not a fork. Not a wrapper. Not a binding.
+</p>
 
-`rs-quickjs` is not a binding around a native JavaScript engine. It owns the
-complete path from source text to execution: lexer, parser, scope analysis,
-compiler, bytecode, virtual machine, built-ins, modules, jobs, garbage
-collection, and the Rust embedding API.
+<p align="center">
+  <a href="reports/test-runs/rsqjs-test-report-20260715T084223Z.md"><img alt="Test262: 102,578 of 102,578" src="https://img.shields.io/badge/Test262-102%2C578%20%2F%20102%2C578-2ea44f?style=for-the-badge"></a>
+  <a href="Cargo.toml"><img alt="Rust: unsafe denied" src="https://img.shields.io/badge/Rust-unsafe%20denied-dea584?style=for-the-badge&amp;logo=rust&amp;logoColor=white"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-007ec6?style=for-the-badge"></a>
+</p>
 
-The current engine passes **100% of its pinned Test262 profile**: all
-**102,578 required script variants** across **53,404 source files**, with zero
-failures and zero skips. That is a precise claim about the reproducible corpus
-snapshot tracked by this repository, not a claim that every environment which
-runs JavaScript has been recreated here.
+<p align="center">
+  The entire stack—from source text to bytecode, execution, built-ins, modules,
+  jobs, and garbage collection—was independently implemented for embedding in
+  Rust applications.
+</p>
+
+<p align="center">
+  <strong>53,404 files · 102,578 required variants · 0 failed · 0 skipped</strong>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#why-velum">Why Velum</a> ·
+  <a href="#interesting-internals">Internals</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
 
 ## Built with Codex
 
-This repository is also an experiment in what one developer can build with
-modern agentic software engineering.
-
-The first 1,306 lines were created with GPT-5.5. Development then moved to
-GPT-5.6 SOL in extra-high reasoning mode, with one developer directing two to
-four Codex agents running almost continuously. The result, measured from the
-first commit to this snapshot, is unusually compressed:
-
 | Metric | July 15, 2026 snapshot |
 | --- | ---: |
-| Development time | 10.5 days (July 5–15, 2026) |
-| Commits on `main` | 922 |
-| Merged pull requests | 636 |
-| Project-authored Rust | 214,451 lines |
-| Pinned Test262 result | 102,578 / 102,578 variants |
+| ⏱️ Development time | **10.5 days** (July 5–15, 2026) |
+| 🧱 Commits on `main` | **922** |
+| 🔀 Merged pull requests | **636** |
+| 🦀 Project-authored Rust | **214,451 lines** |
+| ✅ Pinned Test262 result | **102,578 / 102,578 variants** |
 
-This is the real achievement behind the project: a single developer can now
-direct, review, and integrate several capable engineering agents at a scale
-that was not previously practical for an individual. `rs-quickjs` is a
-concrete demonstration that AI-assisted development can move beyond demos and
-produce a large, tested systems project in days rather than months.
+**One developer. Two to four agents. Ten and a half days. A new JavaScript
+engine.**
 
-The numbers above come from Git history and GitHub as of the stated snapshot.
-The Rust line count includes the engine, runner, and tests, and excludes 43,473
-lines in the vendored `RegExp` crate. The first commit contained 1,306 lines of
-project-authored Rust.
+- 👤 **One developer** owned the architecture, direction, review, and
+  integration.
+- 🎙️ **Voice-first with Codex Mobile:** most instructions were dictated through
+  the microphone.
+- 🖥️ **An always-on remote server** kept persistent development agents
+  available continuously.
+- 🤖 **Two to four Codex agents** worked in parallel almost around the clock.
+
+<details>
+<summary><strong>How was it built so quickly?</strong></summary>
+
+The foundation—the first 1,306 lines of project-authored Rust—was created with
+GPT-5.5. Development then moved to GPT-5.6 SOL in extra-high reasoning mode,
+with one developer continuously directing, reviewing, and integrating the work
+of multiple agents.
+
+Velum demonstrates a new scale of individual software development: one
+person can now coordinate several capable engineering agents and produce a
+large, tested systems project in days rather than months. This was not a short
+demo or a generated wrapper; the result is an independent language engine with
+a compiler, bytecode VM, standard library, embedding API, and a reproducible
+conformance gate.
+
+The numbers come from Git history and GitHub as of the stated snapshot. The
+Rust line count includes the engine, runner, and tests, and excludes 43,473
+lines in the vendored `RegExp` crate.
+
+</details>
 
 ## Current status
 
@@ -54,7 +82,14 @@ The project initially used `QuickJS` as a behavioral and performance comparison;
 that historical baseline remains visible in the benchmark graph while the
 engine itself follows its own Rust architecture.
 
-## Why rs-quickjs
+## Why Velum
+
+[Velum](https://www.merriam-webster.com/dictionary/velum) (pronounced
+**VEE-lum**) comes from the Latin *vēlum*: sail, canopy, veil, covering. The
+name carries two complementary ideas. A sail is a lightweight structure that
+draws power from its environment, just as the engine receives capabilities
+from its embedder. A membrane is a deliberate boundary, reflecting the
+controlled interface between Rust and JavaScript.
 
 - **Broad ECMAScript conformance.** The complete pinned Test262 profile is a
   required, exact-tree correctness check rather than an aspirational feature
@@ -102,7 +137,7 @@ exact evidence.
 
 ## What this engine is not
 
-`rs-quickjs` implements ECMAScript, not a browser or server runtime.
+Velum implements ECMAScript, not a browser or server runtime.
 
 - There is no DOM, HTML, CSS, rendering, `fetch`, browser event loop, or other
   Web Platform API.
@@ -240,8 +275,9 @@ vendors the Rust `regress` implementation as a separate local crate and enables
 its checked `prohibit-unsafe` execution paths. The preserved upstream source
 still contains feature-dependent `unsafe` implementations, so the repository
 does not claim that every vendored source line is `unsafe`-free. A native
-`rs-quickjs` `RegExp` compiler and executor is planned to remove this exception
-and bring regular expressions under the same engine-owned safety rules.
+A native Velum `RegExp` compiler and executor is planned to remove this
+exception and bring regular expressions under the same engine-owned safety
+rules.
 
 ## Testing and reproducibility
 
@@ -334,5 +370,7 @@ boundary.
 
 ## License
 
-The engine is MIT-licensed. The vendored `RegExp` crate retains its upstream MIT
-OR Apache-2.0 licensing and provenance files.
+The engine is
+[MIT-licensed](https://github.com/surveria/rs-quickjs/blob/main/LICENSE). The
+vendored `RegExp` crate retains its upstream MIT OR Apache-2.0 licensing and
+provenance files.
