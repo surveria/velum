@@ -155,7 +155,20 @@ capabilities a VM receives.
 
 ## Quick start
 
-Evaluate source directly:
+Build and start the interactive shell:
+
+```sh
+cargo build --release --manifest-path cli/Cargo.toml
+./cli/target/release/velum
+```
+
+The shell keeps one JavaScript context alive across submissions. Enter executes
+the current buffer, while Ctrl-J inserts a newline. Shift-Enter also inserts a
+newline when the terminal reports that modified key distinctly. See the
+[`velum-cli` guide](cli/README.md) for shell commands and non-interactive modes.
+
+The dependency-light root crate also retains a smoke CLI. Evaluate source
+directly with it:
 
 ```sh
 cargo run --release --bin velum -- -e '
@@ -172,8 +185,8 @@ Or run a script file:
 cargo run --release --bin velum -- script.js
 ```
 
-The smoke CLI prints lines produced by `print(...)`, followed by the final
-value when it is not `undefined`.
+Both CLIs print lines produced by `print(...)`, followed by the final value when
+it is not `undefined`.
 
 ## Library embedding
 

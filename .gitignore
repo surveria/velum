@@ -42,6 +42,18 @@
 !/src/regress/VENDORED-SOURCE-SHA256SUMS
 !/src/regress/rustfmt.toml
 
+!/cli/
+!/cli/Cargo.toml
+!/cli/Cargo.lock
+!/cli/README.md
+!/cli/src/
+!/cli/src/**/
+!/cli/src/**/*.rs
+!/cli/tests/
+!/cli/tests/**/
+!/cli/tests/**/*.rs
+!/cli/tests/**/*.js
+
 !/runner/
 !/runner/.gitignore
 !/runner/build.rs

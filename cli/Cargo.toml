@@ -1,0 +1,42 @@
+[workspace]
+
+[package]
+name = "velum-cli"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/surveria/velum"
+description = "Interactive console shell for the Velum ECMAScript engine."
+readme = "README.md"
+publish = false
+
+[[bin]]
+name = "velum"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+rustyline = { version = "18.0.1", default-features = false, features = ["custom-bindings"] }
+velum = { path = ".." }
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+uninlined_format_args = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+redundant_pub_crate = "deny"
+too_many_lines = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
