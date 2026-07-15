@@ -93,6 +93,50 @@ fn preserves_var_only_blocks_and_switch_lexical_scopes() -> TestResult {
 }
 
 #[test]
+fn switch_selectors_capture_the_complete_case_block_scope() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let value = "outside";
+        var expressionProbe;
+        var selectorProbe;
+        var statementProbe;
+        switch (expressionProbe = function () { return value; }, null) {
+            case selectorProbe = function () { return value; }, null:
+                statementProbe = function () { return value; };
+                let value = "inside";
+        }
+        expressionProbe() === "outside" &&
+            selectorProbe() === "inside" &&
+            statementProbe() === "inside"
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn lexical_for_initializers_capture_the_head_environment() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        var outer = "outside";
+        var saved;
+        for (let outer = (saved = function () { return outer; }); ; ) {
+            break;
+        }
+        saved() === saved
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn scopes_try_catch_and_finally_blocks() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -124,6 +168,31 @@ fn scopes_try_catch_and_finally_blocks() -> TestResult {
         context.output(),
         &["boom 40 2 undefined undefined undefined undefined".to_owned()],
     )
+}
+
+#[test]
+fn catch_parameters_conflict_with_direct_body_lexicals() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        var failures = 0;
+        try {
+            eval("try {} catch (value) { let value; }");
+        } catch (error) {
+            if (error instanceof SyntaxError) failures += 1;
+        }
+        try {
+            eval("try {} catch ({ value }) { function value() {} }");
+        } catch (error) {
+            if (error instanceof SyntaxError) failures += 1;
+        }
+        failures === 2
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
 }
 
 #[test]

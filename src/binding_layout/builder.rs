@@ -527,12 +527,12 @@ impl LayoutBuilder {
         self.analyze_expr(discriminant, scope, function)?;
         let switch_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
         for case in cases {
-            if let Some(test) = &case.test {
-                self.analyze_expr(test, switch_scope, function)?;
-            }
             self.collect_scope_declarations(&case.statements, switch_scope, var_scope)?;
         }
         for case in cases {
+            if let Some(test) = &case.test {
+                self.analyze_expr(test, switch_scope, function)?;
+            }
             self.analyze_statements(&case.statements, switch_scope, var_scope, function)?;
         }
         Ok(())

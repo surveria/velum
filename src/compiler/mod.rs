@@ -643,12 +643,7 @@ impl<'a> BytecodeCompiler<'a> {
             return Ok(());
         }
 
-        let before = self.instructions.len();
         self.compile_statements(statements, value)?;
-        if value == StatementValue::Store && before == self.instructions.len() {
-            self.emit(BytecodeInstruction::PushUndefined);
-            self.emit(BytecodeInstruction::StoreLast);
-        }
         Ok(())
     }
 
@@ -699,6 +694,14 @@ fn statements_have_value_completion(statements: &[Statement]) -> bool {
 }
 
 fn statement_needs_lexical_scope(statement: &Statement) -> bool {
+    if matches!(statement.kind(), Stmt::Label { .. })
+        && statement
+            .kind()
+            .function_declaration_through_labels()
+            .is_some()
+    {
+        return true;
+    }
     match statement.kind() {
         Stmt::DeclList(statements) => statements_need_lexical_scope(statements),
         Stmt::VarDecl {

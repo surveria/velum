@@ -1,12 +1,26 @@
 use crate::{
+    bytecode::BytecodeFunction,
     error::Result,
-    runtime::Context,
+    runtime::{Context, activation::DynamicEnvironment},
     value::{FunctionId, Value},
 };
 
 use super::FunctionSelfBinding;
 
 impl Context {
+    pub(super) fn append_direct_eval_environment(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        environments: &mut Vec<DynamicEnvironment>,
+    ) -> Result<()> {
+        if bytecode.contains_direct_eval() && !bytecode.strict() {
+            environments.push(DynamicEnvironment::EvalBindings(
+                self.create_eval_binding_environment()?,
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn initialize_base_fields_at_activation(
         &mut self,
         id: FunctionId,

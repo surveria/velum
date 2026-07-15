@@ -165,6 +165,31 @@ impl Parser {
         Ok(())
     }
 
+    pub(super) fn validate_catch_parameter_lexicals(
+        &self,
+        param: &BindingPattern,
+        body: &[Statement],
+    ) -> Result<()> {
+        let mut parameter_names = BTreeSet::new();
+        param.for_each_binding(&mut |binding| {
+            parameter_names.insert(binding.name().as_str().to_owned());
+            Ok::<(), crate::Error>(())
+        })?;
+        let mut lexical_names = Vec::new();
+        for statement in body {
+            Self::collect_direct_lexical_names(statement, true, &mut lexical_names)?;
+        }
+        if lexical_names
+            .iter()
+            .any(|name| parameter_names.contains(name))
+        {
+            return Err(
+                self.parse_error("catch parameter conflicts with a lexical body declaration")
+            );
+        }
+        Ok(())
+    }
+
     fn validate_lexical_var_declarations(
         &self,
         statements: &[Statement],

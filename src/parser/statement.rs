@@ -577,6 +577,7 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
         self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
         let body = self.block_statements()?;
+        self.validate_catch_parameter_lexicals(&param, &body)?;
         Ok(CatchClause {
             param: Some(param),
             body,

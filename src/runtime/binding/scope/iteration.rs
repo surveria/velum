@@ -28,6 +28,7 @@ impl BindingScope {
             slots,
             index: self.index.clone(),
             compiled_scope: self.compiled_scope,
+            eval_var_conflict: self.eval_var_conflict,
             storage_ledger: None,
             resource_stacks: Vec::new(),
         })

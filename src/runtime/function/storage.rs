@@ -58,7 +58,7 @@ impl Function {
                 .iter()
                 .try_fold(0_usize, |count, environment| {
                     count
-                        .checked_add(environment.storage_binding_count()?)
+                        .checked_add(environment.storage_binding_count())
                         .ok_or_else(function_storage_overflow)
                 })?;
         let binding_count =

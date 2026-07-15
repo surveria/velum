@@ -115,14 +115,11 @@ impl Context {
         let cell = self
             .get_binding_bytecode(binding)?
             .ok_or_else(|| Error::runtime("class name binding disappeared"))?;
-        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        let environment = self.create_eval_binding_environment()?;
         environment.insert(atom, cell, false)?;
         let dynamic = crate::runtime::activation::DynamicEnvironment::CapturedLexical(environment);
-        let additional_bindings = dynamic.storage_binding_count()?;
         let mut environments = self.function(id)?.dynamic_environments.to_vec();
         environments.push(dynamic);
-        self.storage_ledger
-            .grow_count(crate::runtime::VmStorageKind::Binding, additional_bindings)?;
         self.function_mut(id)?.dynamic_environments = environments.into();
         Ok(())
     }

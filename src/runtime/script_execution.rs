@@ -233,12 +233,24 @@ impl Context {
         environment: EvalVariableEnvironment,
     ) -> Result<BytecodeOutcome> {
         self.push_lexical_scope()?;
-        let eval_bindings = if matches!(environment, EvalVariableEnvironment::Local(_)) {
-            Some(crate::runtime::activation::EvalBindingEnvironment::default())
-        } else {
-            None
-        };
-        if let Some(bindings) = &eval_bindings
+        let (eval_bindings, temporary_bindings) =
+            if matches!(environment, EvalVariableEnvironment::Local(_)) {
+                if let Some(bindings) = self.current_active_eval_binding_environment() {
+                    (Some(bindings), false)
+                } else {
+                    match self.create_eval_binding_environment() {
+                        Ok(bindings) => (Some(bindings), true),
+                        Err(error) => {
+                            self.pop_lexical_scope()?;
+                            return Err(error);
+                        }
+                    }
+                }
+            } else {
+                (None, false)
+            };
+        if temporary_bindings
+            && let Some(bindings) = &eval_bindings
             && let Err(error) = self.push_eval_binding_environment(bindings.clone())
         {
             self.pop_lexical_scope()?;
@@ -246,9 +258,13 @@ impl Context {
         }
         let outcome =
             self.eval_compiled_sloppy_eval_in_scope(script, environment, eval_bindings.as_ref());
-        let environment_result = eval_bindings.as_ref().map_or(Ok(()), |bindings| {
-            self.pop_eval_binding_environment(bindings)
-        });
+        let environment_result = if temporary_bindings {
+            eval_bindings.as_ref().map_or(Ok(()), |bindings| {
+                self.pop_eval_binding_environment(bindings)
+            })
+        } else {
+            Ok(())
+        };
         let pop_result = self.pop_lexical_scope();
         environment_result?;
         pop_result?;

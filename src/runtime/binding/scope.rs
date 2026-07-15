@@ -18,6 +18,7 @@ use crate::{
 
 mod alias;
 mod deletion;
+mod eval;
 mod iteration;
 
 /// Immutable atom-to-slot index shared by every call frame of one
@@ -100,6 +101,7 @@ pub struct BindingScope {
     slots: Vec<BindingCell>,
     index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
+    eval_var_conflict: eval::EvalVarConflictPolicy,
     storage_ledger: Option<VmStorageLedger>,
     resource_stacks: Vec<BindingResourceStack>,
 }
@@ -165,6 +167,7 @@ impl BindingScope {
             slots: Vec::new(),
             index: ScopeIndex::new(),
             compiled_scope: None,
+            eval_var_conflict: eval::EvalVarConflictPolicy::Reject,
             storage_ledger: None,
             resource_stacks: Vec::new(),
         }
@@ -175,6 +178,7 @@ impl BindingScope {
             slots: Vec::new(),
             index: ScopeIndex::new(),
             compiled_scope: None,
+            eval_var_conflict: eval::EvalVarConflictPolicy::Reject,
             storage_ledger: Some(storage_ledger),
             resource_stacks: Vec::new(),
         }
@@ -191,6 +195,7 @@ impl BindingScope {
             slots,
             index: ScopeIndex::Shared(template),
             compiled_scope: Some(compiled_scope),
+            eval_var_conflict: eval::EvalVarConflictPolicy::Reject,
             storage_ledger: None,
             resource_stacks: Vec::new(),
         }
@@ -233,6 +238,7 @@ impl BindingScope {
                 bindings: template.bindings.into_vec(),
             },
             compiled_scope: Some(compiled_scope),
+            eval_var_conflict: eval::EvalVarConflictPolicy::Reject,
             storage_ledger: None,
             resource_stacks: Vec::new(),
         })

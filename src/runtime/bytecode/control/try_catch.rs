@@ -1,8 +1,11 @@
 use crate::{
-    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow},
+    bytecode::{
+        BytecodeAddress, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow, BytecodePattern,
+    },
     error::{Error, Result},
     runtime::{
         Context,
+        binding::scope::BindingScope,
         bytecode::{
             control_continuation::{
                 BytecodeControlRecord, BytecodeControlStateSlot, BytecodeTryPhase,
@@ -209,7 +212,12 @@ impl Context {
         let resumes_destructure = state.has_destructure_continuation();
         let resumes_body = state.is_resuming() && !resumes_destructure;
         if !resumes_body && !resumes_destructure {
-            self.push_lexical_scope()?;
+            let scope = if matches!(&**param, BytecodePattern::Binding(_)) {
+                BindingScope::new_simple_catch_parameter()
+            } else {
+                BindingScope::new()
+            };
+            self.push_lexical_scope_with(scope)?;
             let hoist_result = catch.param_bindings.iter().try_for_each(|binding| {
                 self.hoist_bytecode_lexical_binding(binding, DeclKind::Let)
             });

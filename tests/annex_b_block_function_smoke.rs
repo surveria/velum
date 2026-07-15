@@ -104,6 +104,33 @@ fn strict_block_functions_do_not_update_outer_vars() -> TestResult {
 }
 
 #[test]
+fn labelled_block_functions_share_declaration_instantiation() -> TestResult {
+    expect_true(
+        r"
+        var observed;
+        {
+            observed = labelled();
+            declaration: function labelled() { return 42; }
+        }
+        observed === 42 && labelled() === 42
+        ",
+    )
+}
+
+#[test]
+fn nested_block_functions_preserve_annex_b_var_updates() -> TestResult {
+    expect_true(
+        r#"
+        {
+            function selected() { return "inner"; }
+        }
+        function selected() { return "outer"; }
+        selected() === "inner"
+        "#,
+    )
+}
+
+#[test]
 fn catch_binding_patterns_destructure_the_thrown_value() -> TestResult {
     expect_true(
         r"
