@@ -1,7 +1,7 @@
 <h1 align="center">Velum</h1>
 
 <p align="center">
-  <strong>A from-scratch ECMAScript bytecode engine in Rust.</strong><br>
+  <strong>A from-scratch JavaScript (ECMAScript) bytecode engine in Rust.</strong><br>
   Not a fork. Not a wrapper. Not a binding.
 </p>
 
@@ -18,7 +18,8 @@
 </p>
 
 <p align="center">
-  <strong>53,404 files · 102,578 required variants · 0 failed · 0 skipped</strong>
+  <strong><a href="https://github.com/tc39/test262">Test262 conformance corpus</a>:
+  53,404 test files · 102,578 required execution variants · 0 failed · 0 skipped</strong>
 </p>
 
 <p align="center">
@@ -359,18 +360,9 @@ controlled embedding. Evaluate the current API, resource model, and performance
 against the needs of a production deployment before adopting it as a security
 boundary.
 
-## Project documentation
-
-- [Architecture](docs/architecture.md)
-- [Architecture stabilization strategy](docs/architecture-stabilization-plan.md)
-- [Product roadmap](docs/roadmap.md)
-- [Benchmark methodology](docs/benchmarking.md)
-- [Development plan](docs/project-plan.md)
-- [Project rules](AGENTS.md)
-
 ## License
 
 The engine is
-[MIT-licensed](https://github.com/surveria/rs-quickjs/blob/main/LICENSE). The
+[MIT-licensed](https://github.com/surveria/velum/blob/main/LICENSE). The
 vendored `RegExp` crate retains its upstream MIT OR Apache-2.0 licensing and
 provenance files.
