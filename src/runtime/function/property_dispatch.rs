@@ -175,11 +175,11 @@ impl Context {
         if Self::is_restricted_property(property)
             && !self.function_uses_restricted_prototype(id, property)?
         {
-            return Ok(if property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY {
-                self.legacy_function_caller_value(id)?
+            return if property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY {
+                self.legacy_function_caller_value(id)
             } else {
-                Value::Undefined
-            });
+                self.legacy_function_arguments_value(id)
+            };
         }
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent

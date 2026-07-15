@@ -202,6 +202,10 @@ impl Context {
                     })?;
                 }
             }
+            if let Some(arguments) = frame.legacy_arguments() {
+                arguments
+                    .for_each_value(|value| visitor.visit_value(VmRootKind::LocalBinding, value))?;
+            }
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     visit_cell(cell, VmRootKind::CapturedBinding, visitor)?;

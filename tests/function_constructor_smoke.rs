@@ -161,6 +161,36 @@ fn function_constructor_handles_parameter_line_comments() -> TestResult {
 }
 
 #[test]
+fn dynamic_function_sources_end_the_parameter_list_on_a_new_line() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        let GeneratorFunction = function*() {}.constructor;
+        let AsyncGeneratorFunction = async function*() {}.constructor;
+        let cases = [
+            [Function, "function"],
+            [AsyncFunction, "async function"],
+            [GeneratorFunction, "function*"],
+            [AsyncGeneratorFunction, "async function*"],
+        ];
+        let matched = 0;
+        for (let entry of cases) {
+            let source = entry[0]("return 1").toString();
+            if (source === entry[1] + " anonymous(\n) {\nreturn 1\n}") {
+                matched = matched + 1;
+            }
+        }
+        matched === cases.length ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn function_constructor_rejects_invalid_source() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

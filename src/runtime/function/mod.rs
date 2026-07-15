@@ -470,11 +470,14 @@ impl Context {
             dynamic_environments.push(self.create_parameter_eval_var_environment()?);
         }
         self.append_direct_eval_environment(&bytecode, &mut dynamic_environments)?;
+        let legacy_arguments =
+            self.legacy_function_arguments_snapshot(id, raw_args, !bytecode.simple_parameters)?;
         let local_base =
             self.push_call_activation(crate::runtime::activation::FunctionCallActivation {
                 function: id,
                 environment: (upvalues, dynamic_environments),
                 captured_dynamic_environment_count,
+                legacy_arguments,
                 this_value,
                 new_target,
                 super_binding,
@@ -500,11 +503,19 @@ impl Context {
             Ok(arguments_scope) => arguments_scope,
             Err(error) => return self.abort_function_scope_setup(local_base, error),
         };
+        if let Err(error) = self.initialize_legacy_function_arguments(
+            id,
+            arguments_binding,
+            arguments_scope.as_ref(),
+            &scope,
+        ) {
+            return self.abort_function_scope_setup(local_base, error);
+        }
         if let Err(error) = self.push_function_binding_storage(local_base, arguments_scope, scope) {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
-        let mut result = self.eval_function_body::<CAN_SUSPEND>(
+        let result = self.eval_function_body::<CAN_SUSPEND>(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -515,19 +526,14 @@ impl Context {
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result.map(|completion| (completion, TailCallReturnMode::Ordinary));
         }
-        if let Ok(completion) = result {
-            result = self.dispose_active_binding_scope(completion);
-        }
-        let binding_result = self.pop_function_binding_storage(
+        self.finish_function_call(
+            id,
             local_base,
             arguments_binding.is_some(),
             self_binding.is_some(),
-        );
-        let activation_result = self.pop_call_activation(local_base);
-        binding_result?;
-        activation_result?;
-        let return_mode = self.function_return_mode(id, derived_super_binding.as_ref())?;
-        result.map(|completion| (completion, return_mode))
+            derived_super_binding.as_ref(),
+            result,
+        )
     }
 
     fn abort_function_scope_setup<T>(&mut self, local_base: usize, error: Error) -> Result<T> {
@@ -658,19 +664,6 @@ impl Context {
             return Ok(true);
         }
         self.function_uses_restricted_prototype(id, property)
-    }
-
-    pub(in crate::runtime) fn function_uses_restricted_prototype(
-        &self,
-        id: FunctionId,
-        property: PropertyLookup<'_>,
-    ) -> Result<bool> {
-        let function = self.function(id)?;
-        Ok((function.bytecode.strict()
-            || function.kind.is_generator()
-            || function.kind.is_async()
-            || function.lexical_this.is_some())
-            && Self::is_restricted_property(property))
     }
 
     pub(in crate::runtime) fn is_restricted_property(property: PropertyLookup<'_>) -> bool {

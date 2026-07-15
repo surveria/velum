@@ -265,6 +265,7 @@ pub(in crate::runtime) enum ActivationFrame {
         upvalues: FunctionUpvalues,
         dynamic_environments: Vec<DynamicEnvironment>,
         captured_dynamic_environment_count: usize,
+        legacy_arguments: Option<LegacyFunctionArguments>,
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
@@ -306,6 +307,72 @@ impl FunctionEnvironmentPhase {
     }
 }
 
+/// Invocation-owned state for the legacy `Function#arguments` extension.
+///
+/// The original values remain rooted for the lifetime of the call so the
+/// arguments object can be materialized only when JavaScript observes the
+/// extension. Parameter-map cells preserve sloppy simple-parameter aliasing.
+#[derive(Debug)]
+pub(in crate::runtime) struct LegacyFunctionArguments {
+    original_args: Rc<[Value]>,
+    parameter_map: Vec<Option<BindingCell>>,
+    unmapped: bool,
+    object: Option<Value>,
+}
+
+impl LegacyFunctionArguments {
+    pub(in crate::runtime) fn new(original_args: &[Value], unmapped: bool) -> Self {
+        Self {
+            original_args: original_args.to_vec().into(),
+            parameter_map: Vec::new(),
+            unmapped,
+            object: None,
+        }
+    }
+
+    pub(in crate::runtime) fn storage_binding_count(&self) -> usize {
+        self.original_args.len()
+    }
+
+    pub(in crate::runtime) fn set_parameter_map(
+        &mut self,
+        parameter_map: Vec<Option<BindingCell>>,
+    ) {
+        self.parameter_map = parameter_map;
+    }
+
+    pub(in crate::runtime) fn set_object(&mut self, object: Value) {
+        self.object = Some(object);
+    }
+
+    pub(in crate::runtime) const fn object(&self) -> Option<&Value> {
+        self.object.as_ref()
+    }
+
+    pub(in crate::runtime) fn materialization_inputs(
+        &self,
+    ) -> (Rc<[Value]>, Vec<Option<BindingCell>>, bool) {
+        (
+            Rc::clone(&self.original_args),
+            self.parameter_map.clone(),
+            self.unmapped,
+        )
+    }
+
+    pub(in crate::runtime) fn for_each_value(
+        &self,
+        mut visit: impl FnMut(&Value) -> EngineResult<()>,
+    ) -> EngineResult<()> {
+        for value in self.original_args.iter() {
+            visit(value)?;
+        }
+        if let Some(object) = &self.object {
+            visit(object)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::runtime) struct ActivationFrameStorageFootprint {
     binding_count: usize,
@@ -316,6 +383,7 @@ pub(in crate::runtime) struct FunctionCallActivation {
     pub(in crate::runtime) function: FunctionId,
     pub(in crate::runtime) environment: FunctionActivationEnvironment,
     pub(in crate::runtime) captured_dynamic_environment_count: usize,
+    pub(in crate::runtime) legacy_arguments: Option<LegacyFunctionArguments>,
     pub(in crate::runtime) this_value: Value,
     pub(in crate::runtime) new_target: Value,
     pub(in crate::runtime) super_binding: Option<Rc<FunctionSuperBinding>>,
@@ -361,6 +429,12 @@ impl ActivationFrame {
                         .ok_or_else(activation_storage_overflow)
                 })
             })?)
+            .and_then(|count| {
+                count.checked_add(
+                    self.legacy_arguments()
+                        .map_or(0, LegacyFunctionArguments::storage_binding_count),
+                )
+            })
             .ok_or_else(activation_storage_overflow)?;
         let control_count = self
             .continuation()
@@ -379,6 +453,7 @@ impl ActivationFrame {
             function,
             environment,
             captured_dynamic_environment_count,
+            legacy_arguments,
             this_value,
             new_target,
             super_binding,
@@ -392,6 +467,7 @@ impl ActivationFrame {
             upvalues,
             dynamic_environments,
             captured_dynamic_environment_count,
+            legacy_arguments,
             this_value,
             new_target,
             super_binding,
@@ -598,6 +674,26 @@ impl ActivationFrame {
                 captured_dynamic_environment_count,
                 ..
             } => Some(*captured_dynamic_environment_count),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn legacy_arguments(&self) -> Option<&LegacyFunctionArguments> {
+        match self {
+            Self::Call {
+                legacy_arguments, ..
+            } => legacy_arguments.as_ref(),
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn legacy_arguments_mut(
+        &mut self,
+    ) -> Option<&mut LegacyFunctionArguments> {
+        match self {
+            Self::Call {
+                legacy_arguments, ..
+            } => legacy_arguments.as_mut(),
             Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }

@@ -66,3 +66,8 @@ current script evaluation surface for module-tagged files and a minimal host
 harness for `$262`-adjacent behavior, so the file-level row is the closest
 dashboard-style compatibility metric, not a claim that every official Test262
 host capability is implemented.
+
+Full-corpus execution uses a dedicated conformance limit profile sized for
+official large-vector cases, including 32 MiB buffers and arrays with more than
+two million elements. These ceilings do not change the embeddable VM defaults;
+applications continue to select their own `RuntimeLimits` policy.
