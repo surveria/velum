@@ -1,4 +1,4 @@
-use rs_quickjs::{
+use velum::{
     Engine, EngineConfig, Error, RuntimeLimits, Value, Vm, VmConfig, VmStorageKind, VmStorageLimits,
 };
 
@@ -618,7 +618,7 @@ fn ensure_limit(error: &Error, category: &str) -> TestResult {
     Err(format!("expected {category} resource limit, got {error:?}").into())
 }
 
-fn ensure_snapshot(vm: &Vm, expected: &rs_quickjs::VmStorageSnapshot, label: &str) -> TestResult {
+fn ensure_snapshot(vm: &Vm, expected: &velum::VmStorageSnapshot, label: &str) -> TestResult {
     let actual = vm.storage_snapshot()?;
     if &actual == expected {
         return Ok(());
@@ -627,8 +627,8 @@ fn ensure_snapshot(vm: &Vm, expected: &rs_quickjs::VmStorageSnapshot, label: &st
 }
 
 fn ensure_kind_unchanged(
-    actual: &rs_quickjs::VmStorageSnapshot,
-    expected: &rs_quickjs::VmStorageSnapshot,
+    actual: &velum::VmStorageSnapshot,
+    expected: &velum::VmStorageSnapshot,
     kind: VmStorageKind,
     label: &str,
 ) -> TestResult {

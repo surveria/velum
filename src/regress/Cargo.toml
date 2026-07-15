@@ -1,4 +1,4 @@
-# Modified for in-tree use by rs-quickjs. The original published manifest is
+# Modified for in-tree use by Velum. The original published manifest is
 # preserved as Cargo.toml.orig next to this file.
 [package]
 name = "regress"

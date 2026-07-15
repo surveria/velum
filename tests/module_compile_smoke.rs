@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use rs_quickjs::{
+use velum::{
     Error, ImportPhase, ModuleExport, ModuleImportName, ModuleLoader, ModuleSource, Runtime, Value,
     VmRootKind,
 };
@@ -33,13 +33,13 @@ fn compiles_module_requests_imports_and_exports() -> TestResult {
         module
             .imports()
             .first()
-            .map(rs_quickjs::ModuleImport::import_name),
+            .map(velum::ModuleImport::import_name),
         Some(ModuleImportName::Name(name)) if name == "default"
         ),
         "default import metadata is missing",
     )?;
     ensure(
-        matches!(module.imports().get(2).map(rs_quickjs::ModuleImport::import_name), Some(ModuleImportName::Name(name)) if name == "*"),
+        matches!(module.imports().get(2).map(velum::ModuleImport::import_name), Some(ModuleImportName::Name(name)) if name == "*"),
         "string-named star import metadata is missing",
     )?;
     ensure(
@@ -104,7 +104,7 @@ fn records_source_phase_imports_and_re_exports() -> TestResult {
             module
                 .imports()
                 .first()
-                .map(rs_quickjs::ModuleImport::import_name),
+                .map(velum::ModuleImport::import_name),
             Some(ModuleImportName::Source)
         ),
         "source-phase import metadata is missing",
@@ -127,7 +127,7 @@ fn links_source_phase_imports_without_evaluating_the_source_module() -> TestResu
     let mut context = runtime.context();
     context.register_host_operation(
         "hostGetAbstractModuleSource",
-        rs_quickjs::HostOperation::GetAbstractModuleSource,
+        velum::HostOperation::GetAbstractModuleSource,
     )?;
     context.eval("var AbstractModuleSource = hostGetAbstractModuleSource();")?;
     let mut loader = SourcePhaseLoader;
@@ -764,7 +764,7 @@ impl MapLoader {
 }
 
 impl ModuleLoader for MapLoader {
-    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load(&mut self, _referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         let source = self
             .sources
             .get(request)
@@ -777,7 +777,7 @@ impl ModuleLoader for MapLoader {
 struct SourcePhaseLoader;
 
 impl ModuleLoader for SourcePhaseLoader {
-    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load(&mut self, _referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         Ok(
             ModuleSource::new(request, "globalThis.sourceModuleEvaluated = true;")
                 .with_module_source_class_name("Module"),

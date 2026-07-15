@@ -3,16 +3,16 @@ use super::{LATENCY_OVER, LATENCY_WITHIN, budget_check};
 use std::time::Duration;
 
 #[test]
-fn budget_check_treats_faster_rsquickjs_as_within_budget() -> anyhow::Result<()> {
+fn budget_check_treats_faster_velum_as_within_budget() -> anyhow::Result<()> {
     let check = budget_check(90, 100);
-    ensure_bool(!check.over_budget, "faster rsqjs must be within budget")?;
+    ensure_bool(!check.over_budget, "faster Velum must be within budget")?;
     ensure_text(check.label, LATENCY_WITHIN)
 }
 
 #[test]
-fn budget_check_tracks_slower_rsquickjs_as_exception() -> anyhow::Result<()> {
+fn budget_check_tracks_slower_velum_as_exception() -> anyhow::Result<()> {
     let check = budget_check(101, 100);
-    ensure_bool(check.over_budget, "slower rsqjs must be tracked")?;
+    ensure_bool(check.over_budget, "slower Velum must be tracked")?;
     ensure_text(check.label, LATENCY_OVER)
 }
 
@@ -29,7 +29,7 @@ fn benchmark_source_appends_sync_harness() -> anyhow::Result<()> {
     )?;
     ensure_bool(
         !source.contains("var performance"),
-        "rsqjs harness must use the engine performance builtin",
+        "Velum harness must use the engine performance builtin",
     )?;
     let quickjs = quickjs_source_from_workload("");
     ensure_bool(
@@ -51,17 +51,17 @@ fn failed_jetstream_candidate_preserves_quickjs_measurement() -> anyhow::Result<
     };
     let outcome = super::failed_with_reference(
         &case,
-        "rsqjs eval failed: sample",
+        "Velum eval failed: sample",
         "1.00 ms".to_owned(),
         super::ReferenceMeasurement::Measured(reference),
         "2.00 ms".to_owned(),
     );
     ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
     ensure_text(&outcome.row.case_elapsed, "2.00 ms")?;
-    ensure_text(&outcome.row.rsqjs_measure, "1.00 ms")?;
+    ensure_text(&outcome.row.velum_measure, "1.00 ms")?;
     ensure_text(&outcome.row.quickjs_measure, "1.00 ms")?;
     ensure_text(&outcome.row.reference_source, "live refresh")?;
-    ensure_text(&outcome.row.rsqjs_time, super::NOT_MEASURED)?;
+    ensure_text(&outcome.row.velum_time, super::NOT_MEASURED)?;
     ensure_bool(
         outcome.row.quickjs_time != super::NOT_MEASURED,
         "failed row must retain QuickJS timing",

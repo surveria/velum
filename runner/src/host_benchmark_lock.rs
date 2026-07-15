@@ -11,8 +11,8 @@ use std::{
 use anyhow::{Context as _, anyhow, bail};
 use fs2::FileExt as _;
 
-const HOST_LOCK_PATH_ENV: &str = "RSQJS_HOST_LOCK_PATH";
-const DEFAULT_HOST_LOCK_PATH: &str = "/run/lock/rsqjs/host-performance.lock";
+const HOST_LOCK_PATH_ENV: &str = "VELUM_HOST_LOCK_PATH";
+const DEFAULT_HOST_LOCK_PATH: &str = "/run/lock/velum/host-performance.lock";
 
 pub fn with_exclusive<T>(
     label: &str,

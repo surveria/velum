@@ -128,7 +128,7 @@ mod tests {
     fn builds_rollup_record_from_structured_summary() -> TestResult {
         let summary = crate::report_schema_tests::sample_document()?.summary();
         let record = from_summary(
-            "rsqjs-test-report-20260709T000000Z.md".to_owned(),
+            "velum-test-report-20260709T000000Z.md".to_owned(),
             "20260709T000000Z".to_owned(),
             &summary,
         )?;

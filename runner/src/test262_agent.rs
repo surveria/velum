@@ -7,18 +7,18 @@ use std::{
 };
 
 use parking_lot::{Condvar, Mutex};
-use rs_quickjs::{Context, Error, Runtime, SharedArrayBufferHandle, Value};
+use velum::{Context, Error, Runtime, SharedArrayBufferHandle, Value};
 
 use crate::{test262_compat_harness, test262_metadata::test262_limits};
 
-pub const START_HOST_NAME: &str = "__rsqjsTest262AgentStart";
-pub const BROADCAST_HOST_NAME: &str = "__rsqjsTest262AgentBroadcast";
-pub const GET_REPORT_HOST_NAME: &str = "__rsqjsTest262AgentGetReport";
-pub const WAIT_REPORT_HOST_NAME: &str = "__rsqjsTest262AgentWaitReport";
-pub const REPORT_HOST_NAME: &str = "__rsqjsTest262AgentReport";
-pub const SLEEP_HOST_NAME: &str = "__rsqjsTest262AgentSleep";
-pub const MONOTONIC_NOW_HOST_NAME: &str = "__rsqjsTest262AgentMonotonicNow";
-const BROADCAST_BINDING_NAME: &str = "__rsqjsTest262AgentBroadcastValue";
+pub const START_HOST_NAME: &str = "__velumTest262AgentStart";
+pub const BROADCAST_HOST_NAME: &str = "__velumTest262AgentBroadcast";
+pub const GET_REPORT_HOST_NAME: &str = "__velumTest262AgentGetReport";
+pub const WAIT_REPORT_HOST_NAME: &str = "__velumTest262AgentWaitReport";
+pub const REPORT_HOST_NAME: &str = "__velumTest262AgentReport";
+pub const SLEEP_HOST_NAME: &str = "__velumTest262AgentSleep";
+pub const MONOTONIC_NOW_HOST_NAME: &str = "__velumTest262AgentMonotonicNow";
+const BROADCAST_BINDING_NAME: &str = "__velumTest262AgentBroadcastValue";
 const AGENT_FAILURE_PREFIX: &str = "Test262AgentFailure:";
 const RECEIVE_BROADCAST_MARKER: &str = "$262.agent.receiveBroadcast";
 const MILLISECONDS_PER_SECOND: f64 = 1_000.0;
@@ -26,7 +26,7 @@ const REPORT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 const ASYNC_REPORT_SOURCE: &str = r"
 $262.agent.getReportAsync = function getReportAsync() {
-    return Promise.resolve(__rsqjsTest262AgentWaitReport());
+    return Promise.resolve(__velumTest262AgentWaitReport());
 };
 ";
 
@@ -35,14 +35,14 @@ var $262 = {
     global: globalThis,
     agent: {
         receiveBroadcast: function receiveBroadcast(callback) {
-            return callback(__rsqjsTest262AgentBroadcastValue);
+            return callback(__velumTest262AgentBroadcastValue);
         },
         report: function report(value) {
-            return __rsqjsTest262AgentReport(String(value));
+            return __velumTest262AgentReport(String(value));
         },
         leaving: function leaving() {},
-        sleep: __rsqjsTest262AgentSleep,
-        monotonicNow: __rsqjsTest262AgentMonotonicNow
+        sleep: __velumTest262AgentSleep,
+        monotonicNow: __velumTest262AgentMonotonicNow
     }
 };
 ";
@@ -59,7 +59,7 @@ pub struct Test262AgentCoordinator {
 }
 
 impl Test262AgentCoordinator {
-    pub fn install(context: &mut Context) -> rs_quickjs::Result<Arc<Self>> {
+    pub fn install(context: &mut Context) -> velum::Result<Arc<Self>> {
         let coordinator = Arc::new(Self {
             sources: Mutex::new(Vec::new()),
             reports: Mutex::new(VecDeque::new()),
@@ -92,7 +92,7 @@ impl Test262AgentCoordinator {
         anyhow::bail!("{}", failures.join("; "))
     }
 
-    fn start(self: &Arc<Self>, source: String) -> rs_quickjs::Result<()> {
+    fn start(self: &Arc<Self>, source: String) -> velum::Result<()> {
         if source.contains(RECEIVE_BROADCAST_MARKER) {
             self.sources.lock().push(source);
             return Ok(());
@@ -100,7 +100,7 @@ impl Test262AgentCoordinator {
         self.spawn_worker(source, None)
     }
 
-    fn broadcast(self: &Arc<Self>, handle: &SharedArrayBufferHandle) -> rs_quickjs::Result<()> {
+    fn broadcast(self: &Arc<Self>, handle: &SharedArrayBufferHandle) -> velum::Result<()> {
         let sources = mem::take(&mut *self.sources.lock());
         for source in sources {
             self.spawn_worker(source, Some(handle.clone()))?;
@@ -112,11 +112,11 @@ impl Test262AgentCoordinator {
         self: &Arc<Self>,
         source: String,
         handle: Option<SharedArrayBufferHandle>,
-    ) -> rs_quickjs::Result<()> {
+    ) -> velum::Result<()> {
         let index = self.workers.lock().len();
         let worker_coordinator = self.clone();
         let worker = thread::Builder::new()
-            .name(format!("rsqjs-test262-agent-{index}"))
+            .name(format!("velum-test262-agent-{index}"))
             .spawn(move || {
                 let result = run_worker(&source, handle.as_ref(), &worker_coordinator);
                 if let Err(error) = &result {
@@ -152,14 +152,14 @@ impl Test262AgentCoordinator {
     }
 }
 
-pub fn install_async_report(context: &mut Context) -> rs_quickjs::Result<()> {
+pub fn install_async_report(context: &mut Context) -> velum::Result<()> {
     context.eval(ASYNC_REPORT_SOURCE).map(|_value| ())
 }
 
 fn install_start(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function_typed(START_HOST_NAME, move |call| {
         state.start(call.string(0, "source")?.to_owned())
@@ -169,7 +169,7 @@ fn install_start(
 fn install_broadcast(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function_typed(BROADCAST_HOST_NAME, move |call| {
         let handle = call
@@ -182,7 +182,7 @@ fn install_broadcast(
 fn install_get_report(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function(GET_REPORT_HOST_NAME, move |_call| {
         Ok(state.get_report().map_or(Value::Null, Value::from))
@@ -192,7 +192,7 @@ fn install_get_report(
 fn install_wait_report(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function(WAIT_REPORT_HOST_NAME, move |_call| {
         Ok(state.wait_report().map_or(Value::Null, Value::from))
@@ -202,7 +202,7 @@ fn install_wait_report(
 fn install_report(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function_typed(REPORT_HOST_NAME, move |call| {
         state.report(call.string(0, "report")?.to_owned());
@@ -210,7 +210,7 @@ fn install_report(
     })
 }
 
-fn install_sleep(context: &mut Context) -> rs_quickjs::Result<()> {
+fn install_sleep(context: &mut Context) -> velum::Result<()> {
     context.register_host_function_typed(SLEEP_HOST_NAME, |call| {
         if let Some(duration) = sleep_duration(call.number(0, "milliseconds")?) {
             thread::sleep(duration);
@@ -222,7 +222,7 @@ fn install_sleep(context: &mut Context) -> rs_quickjs::Result<()> {
 fn install_monotonic_now(
     context: &mut Context,
     coordinator: &Arc<Test262AgentCoordinator>,
-) -> rs_quickjs::Result<()> {
+) -> velum::Result<()> {
     let state = coordinator.clone();
     context.register_host_function_typed(MONOTONIC_NOW_HOST_NAME, move |_call| {
         Ok(state.monotonic_milliseconds())

@@ -8,12 +8,12 @@ fn main() {
     let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| UNKNOWN_VALUE.to_owned());
     let commit = build_commit_sha();
 
-    println!("cargo:rustc-env=RSQJS_ENGINE_VERSION={version}");
-    println!("cargo:rustc-env=RSQJS_ENGINE_COMMIT_SHA={commit}");
+    println!("cargo:rustc-env=VELUM_ENGINE_VERSION={version}");
+    println!("cargo:rustc-env=VELUM_ENGINE_COMMIT_SHA={commit}");
 }
 
 fn emit_rerun_hints() {
-    println!("cargo:rerun-if-env-changed=RSQJS_BUILD_COMMIT_SHA");
+    println!("cargo:rerun-if-env-changed=VELUM_BUILD_COMMIT_SHA");
     println!("cargo:rerun-if-env-changed=GITHUB_SHA");
     emit_git_path_hint("HEAD");
     if let Some(reference) = git_stdout(&["symbolic-ref", "-q", "HEAD"]) {
@@ -31,7 +31,7 @@ fn emit_git_path_hint(git_path_name: &str) {
 }
 
 fn build_commit_sha() -> String {
-    env_commit("RSQJS_BUILD_COMMIT_SHA")
+    env_commit("VELUM_BUILD_COMMIT_SHA")
         .or_else(|| git_stdout(&["rev-parse", "HEAD"]))
         .or_else(|| env_commit("GITHUB_SHA"))
         .unwrap_or_else(|| UNKNOWN_VALUE.to_owned())
@@ -66,7 +66,7 @@ fn git_path(git_path_name: &str) -> Option<String> {
 }
 
 fn git_work_dir() -> Option<PathBuf> {
-    env_path("RSQJS_BUILD_REPO_ROOT")
+    env_path("VELUM_BUILD_REPO_ROOT")
         .or_else(|| env_path("GITHUB_WORKSPACE"))
         .or_else(manifest_repo_root)
 }

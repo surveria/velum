@@ -9,7 +9,7 @@ pub struct RunnerBuildInfo {
 pub const fn runner_build_info() -> RunnerBuildInfo {
     RunnerBuildInfo {
         package_name: env!("CARGO_PKG_NAME"),
-        version: env!("RSQJS_RUNNER_VERSION"),
-        commit_sha: env!("RSQJS_RUNNER_COMMIT_SHA"),
+        version: env!("VELUM_RUNNER_VERSION"),
+        commit_sha: env!("VELUM_RUNNER_COMMIT_SHA"),
     }
 }

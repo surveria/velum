@@ -1,4 +1,4 @@
-use rs_quickjs::{OptimizationMode, OwnedValue, Vm, VmConfig};
+use velum::{OptimizationMode, OwnedValue, Vm, VmConfig};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -236,7 +236,7 @@ fn disabled_vm() -> Vm {
     Vm::with_config(VmConfig::default().with_optimization_mode(OptimizationMode::Disabled))
 }
 
-fn ensure_disabled_snapshot(snapshot: rs_quickjs::VmOptimizationSnapshot) -> TestResult {
+fn ensure_disabled_snapshot(snapshot: velum::VmOptimizationSnapshot) -> TestResult {
     ensure(
         snapshot.mode() == OptimizationMode::Disabled,
         "wrong optimizer mode",

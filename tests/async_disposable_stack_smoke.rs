@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value, VmAsyncEdgeKind, VmStorageKind};
+use velum::{Runtime, Value, VmAsyncEdgeKind, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

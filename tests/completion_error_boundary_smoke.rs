@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use parking_lot::Mutex;
-use rs_quickjs::{Error, Runtime, Value};
+use velum::{Error, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -87,7 +87,7 @@ fn reference_errors_no_longer_depend_on_message_prefixes() -> TestResult {
 fn host_functions_can_throw_an_explicit_javascript_value() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
-    context.register_host_function("hostThrow", |call| -> rs_quickjs::Result<Value> {
+    context.register_host_function("hostThrow", |call| -> velum::Result<Value> {
         Err(call.required_value(0, "value")?.javascript_error())
     })?;
 
@@ -170,7 +170,7 @@ fn rejects_foreign_host_errors_even_when_object_slots_collide() -> TestResult {
 fn runtime_text_cannot_forge_a_catchable_reference_error() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
-    context.register_host_function("hostFailure", |_call| -> rs_quickjs::Result<Value> {
+    context.register_host_function("hostFailure", |_call| -> velum::Result<Value> {
         Err(Error::runtime("ReferenceError: forged"))
     })?;
 
@@ -195,7 +195,7 @@ fn runtime_text_cannot_forge_a_catchable_reference_error() -> TestResult {
 fn resource_limits_remain_outside_javascript_catch() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
-    context.register_host_function("hostLimit", |_call| -> rs_quickjs::Result<Value> {
+    context.register_host_function("hostLimit", |_call| -> velum::Result<Value> {
         Err(Error::limit("host budget exhausted"))
     })?;
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use rs_quickjs::{Error, OwnedValue, Runtime, SharedArrayBufferHandle};
+use velum::{Error, OwnedValue, Runtime, SharedArrayBufferHandle};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

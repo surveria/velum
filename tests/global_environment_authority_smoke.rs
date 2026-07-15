@@ -1,4 +1,4 @@
-use rs_quickjs::{OptimizationMode, OwnedValue, Vm, VmConfig};
+use velum::{OptimizationMode, OwnedValue, Vm, VmConfig};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

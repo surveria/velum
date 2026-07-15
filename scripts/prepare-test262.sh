@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
 test262_commit="64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1"
-cache_dir="${RSQJS_TEST262_CACHE_DIR:-${repo_root}/target/test262}"
+cache_dir="${VELUM_TEST262_CACHE_DIR:-${repo_root}/target/test262}"
 test262_dir="${cache_dir}/test262-${test262_commit}"
 tmp_dir="${cache_dir}/.test262-${test262_commit}.tmp"
 test262_url="https://github.com/tc39/test262.git"
@@ -48,16 +48,16 @@ apply_test262_patches() {
   done
 }
 
-if [[ -n "${RSQJS_TEST262_DIR:-}" ]]; then
-  if [[ -d "${RSQJS_TEST262_DIR}" ]]; then
-    printf '%s\n' "${RSQJS_TEST262_DIR}"
+if [[ -n "${VELUM_TEST262_DIR:-}" ]]; then
+  if [[ -d "${VELUM_TEST262_DIR}" ]]; then
+    printf '%s\n' "${VELUM_TEST262_DIR}"
     exit 0
   fi
-  log "RSQJS_TEST262_DIR is set but is not a directory: ${RSQJS_TEST262_DIR}"
+  log "VELUM_TEST262_DIR is set but is not a directory: ${VELUM_TEST262_DIR}"
   exit 1
 fi
 
-if [[ "${RSQJS_TEST262_AUTO_SETUP:-1}" == "0" ]]; then
+if [[ "${VELUM_TEST262_AUTO_SETUP:-1}" == "0" ]]; then
   log "Test262 auto setup is disabled; full corpus rows will be skipped."
   exit 0
 fi

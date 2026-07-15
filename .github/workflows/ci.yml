@@ -41,8 +41,8 @@ jobs:
         ${{
           github.event_name == 'pull_request' &&
           github.event.action != 'closed' &&
-          format('rsqjs-ci-pr-{0}', github.event.pull_request.number) ||
-          format('rsqjs-ci-run-{0}', github.run_id)
+          format('velum-ci-pr-{0}', github.event.pull_request.number) ||
+          format('velum-ci-run-{0}', github.run_id)
         }}
       cancel-in-progress: >-
         ${{
@@ -60,14 +60,14 @@ jobs:
       - gha-runner-ctrl-test
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
-      RSQJS_QUICKJS_SOURCE: git
-      RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
-      RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
-      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
-      RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-      RSQJS_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
-      RSQJS_CI_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || '' }}
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      VELUM_QUICKJS_SOURCE: git
+      VELUM_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/quickjs
+      VELUM_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/test262
+      VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
+      VELUM_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      VELUM_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
+      VELUM_CI_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || '' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -89,15 +89,15 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.correctness == 'true'
         env:
-          RSQJS_RECOVERY_SOURCE_COMMIT: ${{ github.event.inputs.source_commit }}
+          VELUM_RECOVERY_SOURCE_COMMIT: ${{ github.event.inputs.source_commit }}
         run: |
-          if [[ ! "${RSQJS_RECOVERY_SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+          if [[ ! "${VELUM_RECOVERY_SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
             echo "source_commit must be a full lowercase commit SHA" >&2
             exit 1
           fi
           actual_commit="$(git rev-parse HEAD)"
-          if [[ "${actual_commit}" != "${RSQJS_RECOVERY_SOURCE_COMMIT}" ]]; then
-            echo "checked out ${actual_commit}, expected ${RSQJS_RECOVERY_SOURCE_COMMIT}" >&2
+          if [[ "${actual_commit}" != "${VELUM_RECOVERY_SOURCE_COMMIT}" ]]; then
+            echo "checked out ${actual_commit}, expected ${VELUM_RECOVERY_SOURCE_COMMIT}" >&2
             exit 1
           fi
 
@@ -106,10 +106,10 @@ jobs:
           printf 'RUNNER_NAME=%s\n' "${RUNNER_NAME:-unknown}"
           printf 'CARGO_HOME=%s\n' "${CARGO_HOME:-${HOME}/.cargo}"
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
-          printf 'RSQJS_QUICKJS_CACHE_DIR=%s\n' "${RSQJS_QUICKJS_CACHE_DIR}"
-          printf 'RSQJS_TEST262_CACHE_DIR=%s\n' "${RSQJS_TEST262_CACHE_DIR}"
-          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
-          mkdir -p "${CARGO_TARGET_DIR}" "${RSQJS_QUICKJS_CACHE_DIR}" "${RSQJS_TEST262_CACHE_DIR}"
+          printf 'VELUM_QUICKJS_CACHE_DIR=%s\n' "${VELUM_QUICKJS_CACHE_DIR}"
+          printf 'VELUM_TEST262_CACHE_DIR=%s\n' "${VELUM_TEST262_CACHE_DIR}"
+          printf 'VELUM_HOST_LOCK_PATH=%s\n' "${VELUM_HOST_LOCK_PATH}"
+          mkdir -p "${CARGO_TARGET_DIR}" "${VELUM_QUICKJS_CACHE_DIR}" "${VELUM_TEST262_CACHE_DIR}"
           rustc --version
           cargo --version
           cargo fmt --version
@@ -120,17 +120,17 @@ jobs:
         run: |
           tree_sha="$(git rev-parse 'HEAD^{tree}')"
           commit_sha="$(git rev-parse HEAD)"
-          artifact_name="rsqjs-correctness-${tree_sha}"
+          artifact_name="velum-correctness-${tree_sha}"
           printf 'tree_sha=%s\n' "${tree_sha}" >> "${GITHUB_OUTPUT}"
           printf 'artifact_name=%s\n' "${artifact_name}" >> "${GITHUB_OUTPUT}"
           {
-            printf 'RSQJS_REPORT_TREE_SHA=%s\n' "${tree_sha}"
-            printf 'RSQJS_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
-            printf 'RSQJS_REPORT_EVENT_NAME=%s\n' "${GITHUB_EVENT_NAME}"
-            printf 'RSQJS_REPORT_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
-            printf 'RSQJS_REPORT_RUN_ATTEMPT=%s\n' "${GITHUB_RUN_ATTEMPT}"
-            printf 'RSQJS_REPORT_REPOSITORY=%s\n' "${GITHUB_REPOSITORY}"
-            printf 'RSQJS_REPORT_WORKFLOW=%s\n' "${GITHUB_WORKFLOW}"
+            printf 'VELUM_REPORT_TREE_SHA=%s\n' "${tree_sha}"
+            printf 'VELUM_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
+            printf 'VELUM_REPORT_EVENT_NAME=%s\n' "${GITHUB_EVENT_NAME}"
+            printf 'VELUM_REPORT_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
+            printf 'VELUM_REPORT_RUN_ATTEMPT=%s\n' "${GITHUB_RUN_ATTEMPT}"
+            printf 'VELUM_REPORT_REPOSITORY=%s\n' "${GITHUB_REPOSITORY}"
+            printf 'VELUM_REPORT_WORKFLOW=%s\n' "${GITHUB_WORKFLOW}"
           } >> "${GITHUB_ENV}"
 
       - name: Check PR commit signatures
@@ -139,19 +139,19 @@ jobs:
 
       - name: CI checks
         env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
         run: |
-          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
-            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
+            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
           # Token rewrites for private git access: chertov hosts Rust
           # dependencies such as human-yaml, and surveria is needed for
           # authenticated base-branch fetches in this private repository.
           export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
+          export GIT_CONFIG_KEY_1="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
           export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
           # Persistent self-hosted workspaces can retain .git/shallow from an
           # older checkout even when checkout requests fetch-depth: 0. The
@@ -164,11 +164,11 @@ jobs:
             '+refs/heads/main:refs/remotes/origin/main'
           # On pull_request and merge_group events, fetch the target base branch
           # and turn on base-relative policy gates.
-          ci_base_ref="${RSQJS_CI_BASE_REF:-}"
+          ci_base_ref="${VELUM_CI_BASE_REF:-}"
           ci_base_ref="${ci_base_ref#refs/heads/}"
           if [[ -n "${ci_base_ref}" ]]; then
             git fetch --no-tags --quiet origin "${ci_base_ref}:refs/remotes/origin/${ci_base_ref}"
-            export RSQJS_BASE_REF="origin/${ci_base_ref}"
+            export VELUM_BASE_REF="origin/${ci_base_ref}"
           fi
           if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" \
             || "${{ github.event.inputs.correctness }}" == "true" ]]; then
@@ -176,7 +176,7 @@ jobs:
           elif [[ "${{ github.event.inputs.full }}" == "true" ]]; then
             ./scripts/test-all.sh
           else
-            RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh
+            VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh
           fi
 
       - name: Upload reports
@@ -184,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.report_metadata.outputs.artifact_name }}
-          path: target/rsqjs-reports
+          path: target/velum-reports
           if-no-files-found: ignore
 
   performance-report:
@@ -193,7 +193,7 @@ jobs:
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true
     concurrency:
-      group: rsqjs-performance-main
+      group: velum-performance-main
       cancel-in-progress: false
     runs-on:
       - self-hosted
@@ -205,13 +205,13 @@ jobs:
       - gha-runner-ctrl-test
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
-      RSQJS_QUICKJS_SOURCE: git
-      RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
-      RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
-      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
-      RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number }}
-      RSQJS_REPORT_TASK: ${{ github.event.pull_request.title }}
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      VELUM_QUICKJS_SOURCE: git
+      VELUM_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/quickjs
+      VELUM_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/test262
+      VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
+      VELUM_REPORT_PR_NUMBER: ${{ github.event.pull_request.number }}
+      VELUM_REPORT_TASK: ${{ github.event.pull_request.title }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -224,10 +224,10 @@ jobs:
         run: |
           printf 'RUNNER_NAME=%s\n' "${RUNNER_NAME:-unknown}"
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
-          printf 'RSQJS_QUICKJS_CACHE_DIR=%s\n' "${RSQJS_QUICKJS_CACHE_DIR}"
-          printf 'RSQJS_TEST262_CACHE_DIR=%s\n' "${RSQJS_TEST262_CACHE_DIR}"
-          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
-          mkdir -p "${CARGO_TARGET_DIR}" "${RSQJS_QUICKJS_CACHE_DIR}" "${RSQJS_TEST262_CACHE_DIR}"
+          printf 'VELUM_QUICKJS_CACHE_DIR=%s\n' "${VELUM_QUICKJS_CACHE_DIR}"
+          printf 'VELUM_TEST262_CACHE_DIR=%s\n' "${VELUM_TEST262_CACHE_DIR}"
+          printf 'VELUM_HOST_LOCK_PATH=%s\n' "${VELUM_HOST_LOCK_PATH}"
+          mkdir -p "${CARGO_TARGET_DIR}" "${VELUM_QUICKJS_CACHE_DIR}" "${VELUM_TEST262_CACHE_DIR}"
           rustc --version
           cargo --version
 
@@ -236,36 +236,36 @@ jobs:
         run: |
           tree_sha="$(git rev-parse 'HEAD^{tree}')"
           commit_sha="$(git rev-parse HEAD)"
-          artifact_name="rsqjs-reports-${tree_sha}"
+          artifact_name="velum-reports-${tree_sha}"
           printf 'tree_sha=%s\n' "${tree_sha}" >> "${GITHUB_OUTPUT}"
           printf 'artifact_name=%s\n' "${artifact_name}" >> "${GITHUB_OUTPUT}"
           {
-            printf 'RSQJS_REPORT_TREE_SHA=%s\n' "${tree_sha}"
-            printf 'RSQJS_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
-            printf 'RSQJS_REPORT_EVENT_NAME=%s\n' "${GITHUB_EVENT_NAME}"
-            printf 'RSQJS_REPORT_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
-            printf 'RSQJS_REPORT_RUN_ATTEMPT=%s\n' "${GITHUB_RUN_ATTEMPT}"
-            printf 'RSQJS_REPORT_REPOSITORY=%s\n' "${GITHUB_REPOSITORY}"
-            printf 'RSQJS_REPORT_WORKFLOW=%s\n' "${GITHUB_WORKFLOW}"
+            printf 'VELUM_REPORT_TREE_SHA=%s\n' "${tree_sha}"
+            printf 'VELUM_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
+            printf 'VELUM_REPORT_EVENT_NAME=%s\n' "${GITHUB_EVENT_NAME}"
+            printf 'VELUM_REPORT_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
+            printf 'VELUM_REPORT_RUN_ATTEMPT=%s\n' "${GITHUB_RUN_ATTEMPT}"
+            printf 'VELUM_REPORT_REPOSITORY=%s\n' "${GITHUB_REPOSITORY}"
+            printf 'VELUM_REPORT_WORKFLOW=%s\n' "${GITHUB_WORKFLOW}"
           } >> "${GITHUB_ENV}"
 
       - name: Collect post-merge project benchmarks
         env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
-          RSQJS_PERFORMANCE_ONLY: "1"
-          RSQJS_JETSTREAM_ENABLED: "0"
-          RSQJS_BENCH_SET: sentinel
-          RSQJS_QUICKJS_BASELINE: require
-          RSQJS_QUICKJS_BASELINE_PATH: tests/corpora/benchmarks/quickjs-baseline.tsv
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
+          VELUM_PERFORMANCE_ONLY: "1"
+          VELUM_JETSTREAM_ENABLED: "0"
+          VELUM_BENCH_SET: sentinel
+          VELUM_QUICKJS_BASELINE: require
+          VELUM_QUICKJS_BASELINE_PATH: tests/corpora/benchmarks/quickjs-baseline.tsv
         run: |
-          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
-            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
+            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
           export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
+          export GIT_CONFIG_KEY_1="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
           export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
           ./scripts/test-all.sh
 
@@ -274,7 +274,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.report_metadata.outputs.artifact_name }}
-          path: target/rsqjs-reports
+          path: target/velum-reports
           if-no-files-found: error
 
   publish-report:
@@ -299,15 +299,15 @@ jobs:
       actions: read
       pull-requests: read
     concurrency:
-      group: rsqjs-report-publish-main
+      group: velum-report-publish-main
       queue: max
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
       GH_TOKEN: ${{ github.token }}
-      RSQJS_MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-      RSQJS_TESTED_SOURCE_ARCHIVE_REF: refs/rsqjs/ci-tested-sources
-      RSQJS_TESTED_SOURCE_ARCHIVE_LEGACY_REF: refs/heads/ci-tested-sources
+      VELUM_MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      VELUM_TESTED_SOURCE_ARCHIVE_REF: refs/velum/ci-tested-sources
+      VELUM_TESTED_SOURCE_ARCHIVE_LEGACY_REF: refs/heads/ci-tested-sources
     steps:
       - uses: actions/checkout@v7
         with:
@@ -316,16 +316,16 @@ jobs:
 
       - name: Configure report publisher
         env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
         run: |
-          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
-            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
+            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           mkdir -p "${CARGO_TARGET_DIR}"
           rustc --version
@@ -334,8 +334,8 @@ jobs:
 
       - name: Publish canonical report
         env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
           GIT_CONFIG_COUNT: "1"
-          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.RSQJS_DEPENDENCY_TOKEN }}@github.com/chertov/.insteadOf
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}@github.com/chertov/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/chertov/
         run: ./scripts/publish-report-artifact.sh

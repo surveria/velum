@@ -9,7 +9,7 @@ pub struct BuildInfo {
 pub const fn engine_build_info() -> BuildInfo {
     BuildInfo {
         package_name: env!("CARGO_PKG_NAME"),
-        version: env!("RSQJS_ENGINE_VERSION"),
-        commit_sha: env!("RSQJS_ENGINE_COMMIT_SHA"),
+        version: env!("VELUM_ENGINE_VERSION"),
+        commit_sha: env!("VELUM_ENGINE_COMMIT_SHA"),
     }
 }

@@ -1,26 +1,26 @@
-var __rsqjsBenchValues = [];
-var __rsqjsBenchLast = 0;
+var __velumBenchValues = [];
+var __velumBenchLast = 0;
 
-function __rsqjsBenchSetup() {
-    __rsqjsBenchValues = [];
+function __velumBenchSetup() {
+    __velumBenchValues = [];
     for (var index = 0; index < 2048; index = index + 1) {
-        __rsqjsBenchValues.push((index * 17) & 255);
+        __velumBenchValues.push((index * 17) & 255);
     }
-    __rsqjsBenchLast = 0;
-    return __rsqjsBenchLast;
+    __velumBenchLast = 0;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchRun() {
+function __velumBenchRun() {
     var total = 0;
     for (var round = 0; round < 128; round = round + 1) {
-        for (var index = 0; index < __rsqjsBenchValues.length; index = index + 1) {
-            total = total + __rsqjsBenchValues[index];
+        for (var index = 0; index < __velumBenchValues.length; index = index + 1) {
+            total = total + __velumBenchValues[index];
         }
     }
-    __rsqjsBenchLast = total;
-    return __rsqjsBenchLast;
+    __velumBenchLast = total;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchVerify() {
+function __velumBenchVerify() {
     return 33423360;
 }

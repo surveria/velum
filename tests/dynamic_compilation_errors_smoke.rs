@@ -1,4 +1,4 @@
-use rs_quickjs::{Error, Runtime, RuntimeLimits, SourceId, Value};
+use velum::{Error, Runtime, RuntimeLimits, SourceId, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, OwnedValue, Runtime, Value};
+use velum::{Engine, OwnedValue, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -185,7 +185,7 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
     Err(format!("expected output {expected:?}, got {actual:?}").into())
 }
 
-fn ensure_eval_error_contains(result: rs_quickjs::Result<Value>, expected: &str) -> TestResult {
+fn ensure_eval_error_contains(result: velum::Result<Value>, expected: &str) -> TestResult {
     let Err(error) = result else {
         return Err(format!("expected evaluation to fail with '{expected}'").into());
     };

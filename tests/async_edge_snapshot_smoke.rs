@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value, VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
+use velum::{Engine, Value, VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

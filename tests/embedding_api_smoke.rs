@@ -1,6 +1,4 @@
-use rs_quickjs::{
-    Engine, EngineConfig, Error, RuntimeLimits, Value, Vm, VmConfig, VmResourceUsage,
-};
+use velum::{Engine, EngineConfig, Error, RuntimeLimits, Value, Vm, VmConfig, VmResourceUsage};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -635,7 +633,7 @@ fn reports_compile_errors_before_evaluation() -> TestResult {
 
 #[test]
 fn rejects_compiled_script_that_exceeds_target_vm_limits() -> TestResult {
-    let runtime = rs_quickjs::Runtime::new();
+    let runtime = velum::Runtime::new();
     let statement_script = runtime.compile("1; 2;")?;
     ensure_compiled_script_rejected_by_limits(
         &statement_script,
@@ -668,7 +666,7 @@ fn rejects_compiled_script_that_exceeds_target_vm_limits() -> TestResult {
 }
 
 fn ensure_compiled_script_rejected_by_limits(
-    script: &rs_quickjs::CompiledScript,
+    script: &velum::CompiledScript,
     limits: RuntimeLimits,
     label: &str,
 ) -> TestResult {

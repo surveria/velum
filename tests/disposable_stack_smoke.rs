@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value, VmStorageKind};
+use velum::{Runtime, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

@@ -14,8 +14,8 @@ use crate::{
     quickjs_baseline::{normalize_field, stable_digest},
 };
 
-pub const ENV_BASELINE_MODE: &str = "RSQJS_JETSTREAM_QUICKJS_BASELINE";
-pub const ENV_BASELINE_PATH: &str = "RSQJS_JETSTREAM_QUICKJS_BASELINE_PATH";
+pub const ENV_BASELINE_MODE: &str = "VELUM_JETSTREAM_QUICKJS_BASELINE";
+pub const ENV_BASELINE_PATH: &str = "VELUM_JETSTREAM_QUICKJS_BASELINE_PATH";
 pub const PROTOCOL_VERSION: &str = "jetstream-shell-v1";
 
 const DEFAULT_BASELINE_PATH: &str = "tests/corpora/jetstream/quickjs-baseline.tsv";

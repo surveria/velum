@@ -1,6 +1,6 @@
 use std::{cell::Cell, rc::Rc, time::Duration};
 
-use rs_quickjs::{Engine, Runtime, Value, Vm, VmConfig};
+use velum::{Engine, Runtime, Value, Vm, VmConfig};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

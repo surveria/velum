@@ -1,4 +1,4 @@
-use rs_quickjs::{
+use velum::{
     Engine, EngineConfig, RuntimeLimits, Value, VmAsyncEdgeKind, VmConfig, VmGcKind, VmStorageKind,
     VmStorageLimits,
 };

@@ -2,7 +2,7 @@ use std::{env, time::Duration};
 
 use anyhow::Context as _;
 
-const ENV_SUITE_MAX_SECONDS: &str = "RSQJS_JETSTREAM_SUITE_MAX_SECONDS";
+const ENV_SUITE_MAX_SECONDS: &str = "VELUM_JETSTREAM_SUITE_MAX_SECONDS";
 const DEFAULT_READ_SUITE_MAX_SECONDS: u64 = 120;
 const DEFAULT_REFRESH_SUITE_MAX_SECONDS: u64 = 900;
 

@@ -18,8 +18,8 @@ use crate::{
     benchmark_protocol::{BenchmarkChecksum, PREPARED_PROTOCOL_VERSION},
 };
 
-pub const ENV_BASELINE_MODE: &str = "RSQJS_QUICKJS_BASELINE";
-pub const ENV_BASELINE_PATH: &str = "RSQJS_QUICKJS_BASELINE_PATH";
+pub const ENV_BASELINE_MODE: &str = "VELUM_QUICKJS_BASELINE";
+pub const ENV_BASELINE_PATH: &str = "VELUM_QUICKJS_BASELINE_PATH";
 
 const DEFAULT_BASELINE_PATH: &str = "tests/corpora/benchmarks/quickjs-baseline.tsv";
 const MODE_OFF: &str = "off";
@@ -382,7 +382,7 @@ pub fn detect_host_profile() -> String {
 
 pub fn harness_descriptor(mode: &str, input: &str) -> String {
     format!(
-        "protocol={PREPARED_PROTOCOL_VERSION}|mode={}|input={}|setup=__rsqjsBenchSetup|run=__rsqjsBenchRun|verify=__rsqjsBenchVerify|timer=rust-instant",
+        "protocol={PREPARED_PROTOCOL_VERSION}|mode={}|input={}|setup=__velumBenchSetup|run=__velumBenchRun|verify=__velumBenchVerify|timer=rust-instant",
         normalize_field(mode),
         normalize_field(input),
     )

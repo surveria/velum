@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Error, Runtime, RuntimeLimits, Value};
+use velum::{Engine, Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -607,7 +607,7 @@ fn bytecode_function_fast_paths_fall_back_for_generic_add() -> TestResult {
             return left + right;
         };
 
-        join("rs", "qjs") === "rsqjs" ? 42 : 0
+        join("ve", "lum") === "velum" ? 42 : 0
         "#,
     )?;
     ensure_at_least(

@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, RuntimeLimits, Value};
+use velum::{Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -301,7 +301,7 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
     Ok(())
 }
 
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
+fn ensure_error_contains(error: &velum::Error, text: &str) -> TestResult {
     let message = error.to_string();
     if message.contains(text) {
         return Ok(());

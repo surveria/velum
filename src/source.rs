@@ -2,7 +2,7 @@ use std::fmt;
 
 const FNV_1A_128_OFFSET_BASIS: u128 = 144_066_263_297_769_815_596_495_629_667_062_367_629;
 const FNV_1A_128_PRIME: u128 = 309_485_009_821_345_068_724_781_371;
-const SOURCE_ID_DOMAIN: &[u8] = b"rs-quickjs-source-id-v1";
+const SOURCE_ID_DOMAIN: &[u8] = b"velum-source-id-v1";
 const ANONYMOUS_SOURCE_TAG: u8 = 0;
 const NAMED_SOURCE_TAG: u8 = 1;
 const SOURCE_TEXT_TAG: u8 = 2;

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use rs_quickjs::{Error, ModuleLoader, ModuleSource, Runtime, Value};
+use velum::{Error, ModuleLoader, ModuleSource, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -43,7 +43,7 @@ impl MapLoader {
 }
 
 impl ModuleLoader for MapLoader {
-    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load(&mut self, _referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         let source = self
             .sources
             .get(request)
