@@ -103,6 +103,19 @@ pub enum Stmt {
     Expr(Expression),
 }
 
+impl Stmt {
+    pub(crate) fn function_declaration_through_labels(&self) -> Option<&Self> {
+        let mut statement = self;
+        loop {
+            match statement {
+                Self::Label { body, .. } => statement = body.kind(),
+                Self::FunctionDecl { .. } => return Some(statement),
+                _ => return None,
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForInTarget {
     Binding {

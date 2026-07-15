@@ -15,6 +15,12 @@ impl LayoutBuilder {
         scope: ScopeId,
         var_scope: ScopeId,
     ) -> Result<()> {
+        if let Some(Stmt::FunctionDecl {
+            name, block_scoped, ..
+        }) = statement.kind().function_declaration_through_labels()
+        {
+            return self.declare(if *block_scoped { scope } else { var_scope }, name);
+        }
         match statement.kind() {
             Stmt::DeclList(statements) => {
                 for declaration in statements {
@@ -37,10 +43,8 @@ impl LayoutBuilder {
             Stmt::ImportBinding { name } | Stmt::ClassDecl { name, .. } => {
                 self.declare(scope, name)
             }
-            Stmt::FunctionDecl {
-                name, block_scoped, ..
-            } => self.declare(if *block_scoped { scope } else { var_scope }, name),
-            Stmt::Empty
+            Stmt::FunctionDecl { .. }
+            | Stmt::Empty
             | Stmt::Debugger
             | Stmt::Block(_)
             | Stmt::If { .. }
@@ -79,8 +83,45 @@ impl LayoutBuilder {
         for statement in statements {
             Self::collect_direct_lexical_names(statement, &mut blocked)?;
         }
+        let mut nested_blocked = blocked.clone();
         for statement in statements {
-            self.collect_annex_b_statement(statement, var_scope, &blocked)?;
+            if let Some(Stmt::FunctionDecl {
+                name,
+                block_scoped: true,
+                ..
+            }) = statement.kind().function_declaration_through_labels()
+            {
+                nested_blocked.insert(name.name().as_str().to_owned());
+            }
+        }
+        for statement in statements {
+            if let Some(function @ Stmt::FunctionDecl { .. }) =
+                statement.kind().function_declaration_through_labels()
+            {
+                self.collect_annex_b_function(function, var_scope, &blocked)?;
+            } else {
+                self.collect_annex_b_statement(statement, var_scope, &nested_blocked)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn collect_annex_b_function(
+        &mut self,
+        function: &Stmt,
+        var_scope: ScopeId,
+        blocked: &BTreeSet<String>,
+    ) -> Result<()> {
+        let Stmt::FunctionDecl {
+            name,
+            annex_b_var_binding: Some(variable),
+            ..
+        } = function
+        else {
+            return Ok(());
+        };
+        if !blocked.contains(name.name().as_str()) {
+            self.declare(var_scope, variable)?;
         }
         Ok(())
     }
@@ -149,18 +190,10 @@ impl LayoutBuilder {
                 }
                 Ok(())
             }
-            Stmt::FunctionDecl {
-                name,
-                annex_b_var_binding: Some(variable),
-                ..
-            } => {
-                if !blocked.contains(name.name().as_str()) {
-                    self.declare(var_scope, variable)?;
-                }
-                Ok(())
+            function @ Stmt::FunctionDecl { .. } => {
+                self.collect_annex_b_function(function, var_scope, blocked)
             }
-            Stmt::FunctionDecl { .. }
-            | Stmt::Empty
+            Stmt::Empty
             | Stmt::Debugger
             | Stmt::Break(_)
             | Stmt::Continue(_)

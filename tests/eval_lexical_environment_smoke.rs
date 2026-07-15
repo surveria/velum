@@ -202,13 +202,70 @@ fn catch_var_redeclarations_use_the_current_catch_binding() -> TestResult {
 }
 
 #[test]
+fn catch_parameters_shadow_redeclared_eval_vars_during_eval() -> TestResult {
+    expect_true(
+        r#"
+        var value = "global";
+        var log = "";
+        function update() {
+            try {
+                throw 8;
+            } catch (value) {
+                eval("var value = 42;");
+                log += value;
+            }
+            value = "function";
+            log += value;
+        }
+        update();
+        value === "global" && log === "42function"
+        "#,
+    )
+}
+
+#[test]
+fn nested_functions_observe_eval_vars_added_after_capture() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let value = vm.eval(
+        r#"
+        var calls = 0;
+        var readLateBinding;
+        (function () {
+            function recurse(remaining) {
+                "use strict";
+                if (remaining === 0) {
+                    calls += 1;
+                    return;
+                }
+                return eval(remaining - 1);
+            }
+            readLateBinding = function () {
+                "use strict";
+                return lateBinding;
+            };
+            eval("var eval = recurse; var lateBinding = 42;");
+            recurse(32);
+        }());
+        calls === 1 && readLateBinding() === 42
+        "#,
+    )?;
+    if value != Value::Bool(true) {
+        return Err(format!("expected late eval binding capture, got {value:?}").into());
+    }
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
 fn declarations_preserve_the_previous_completion_value() -> TestResult {
     expect_true(
         r#"
         eval("1; var first") === 1 &&
         eval("2; let second = 0") === 2 &&
         eval("3; const third = 0") === 3 &&
-        eval("4; class Fourth {}") === 4
+        eval("4; class Fourth {}") === 4 &&
+        eval("5; {}") === 5
         "#,
     )
 }

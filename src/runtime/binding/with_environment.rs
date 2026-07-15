@@ -224,6 +224,30 @@ impl Context {
             .ok_or_else(|| Error::runtime("dynamic environment activation is unavailable"))
     }
 
+    pub(in crate::runtime) fn create_eval_binding_environment(
+        &mut self,
+    ) -> Result<EvalBindingEnvironment> {
+        self.eval_binding_environments
+            .retain(crate::runtime::activation::WeakEvalBindingEnvironment::is_live);
+        let environment = EvalBindingEnvironment::new(self.storage_ledger.clone())?;
+        self.eval_binding_environments.push(environment.downgrade());
+        Ok(environment)
+    }
+
+    pub(in crate::runtime) fn current_active_eval_binding_environment(
+        &self,
+    ) -> Option<EvalBindingEnvironment> {
+        self.current_dynamic_environments()
+            .iter()
+            .skip(self.current_captured_dynamic_environment_count())
+            .find_map(|environment| match environment {
+                DynamicEnvironment::EvalBindings(environment) => Some(environment.clone()),
+                DynamicEnvironment::With(_)
+                | DynamicEnvironment::EvalVar(_)
+                | DynamicEnvironment::CapturedLexical(_) => None,
+            })
+    }
+
     pub(in crate::runtime) fn push_with_environment(&mut self, object: Value) -> Result<()> {
         let index = self.current_dynamic_environment_index()?;
         self.storage_ledger
@@ -247,15 +271,11 @@ impl Context {
     ) -> Result<()> {
         let index = self.current_dynamic_environment_index()?;
         let captured_count = self.current_captured_dynamic_environment_count();
-        self.storage_ledger
-            .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
         let Some(environments) = self
             .activation_frames
             .get_mut(index)
             .and_then(ActivationFrame::dynamic_environments_mut)
         else {
-            self.storage_ledger
-                .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
             return Err(Error::runtime("eval binding activation disappeared"));
         };
         let active_start = captured_count.min(environments.len());
@@ -269,28 +289,6 @@ impl Context {
             .unwrap_or(environments.len());
         environments.insert(position, DynamicEnvironment::EvalBindings(environment));
         Ok(())
-    }
-
-    pub(in crate::runtime) fn register_eval_binding(
-        &self,
-        environment: &EvalBindingEnvironment,
-        atom: AtomId,
-        cell: crate::runtime::binding::scope::BindingCell,
-        deletable: bool,
-    ) -> Result<()> {
-        self.storage_ledger
-            .grow_count(crate::runtime::VmStorageKind::Binding, 1)?;
-        match environment.insert(atom, cell, deletable) {
-            Ok(true) => Ok(()),
-            Ok(false) => self
-                .storage_ledger
-                .release_count(crate::runtime::VmStorageKind::Binding, 1),
-            Err(error) => {
-                self.storage_ledger
-                    .release_count(crate::runtime::VmStorageKind::Binding, 1)?;
-                Err(error)
-            }
-        }
     }
 
     pub(in crate::runtime) fn assign_eval_annex_b_var(
@@ -326,23 +324,7 @@ impl Context {
                 matches!(environment, DynamicEnvironment::EvalBindings(active) if active.same_environment(expected))
             })
             .ok_or_else(|| Error::runtime("eval binding environment disappeared"))?;
-        let binding_count = environments
-            .get(position)
-            .ok_or_else(|| Error::runtime("eval binding environment disappeared"))?
-            .storage_binding_count()?;
-        let environment = environments.remove(position);
-        if let Err(error) = self
-            .storage_ledger
-            .release_count(crate::runtime::VmStorageKind::Binding, binding_count)
-        {
-            let environments = self
-                .activation_frames
-                .get_mut(index)
-                .and_then(ActivationFrame::dynamic_environments_mut)
-                .ok_or_else(|| Error::runtime("eval binding activation disappeared"))?;
-            environments.insert(position, environment);
-            return Err(error);
-        }
+        drop(environments.remove(position));
         Ok(())
     }
 

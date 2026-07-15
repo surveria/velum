@@ -469,6 +469,7 @@ impl Context {
         if bytecode.requires_parameter_initialization() && !bytecode.strict() {
             dynamic_environments.push(self.create_parameter_eval_var_environment()?);
         }
+        self.append_direct_eval_environment(&bytecode, &mut dynamic_environments)?;
         let local_base =
             self.push_call_activation(crate::runtime::activation::FunctionCallActivation {
                 function: id,

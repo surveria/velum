@@ -404,6 +404,11 @@ impl Context {
                 frame.storage_footprint()?.binding_count(),
             )?;
         }
+        for environment in &self.eval_binding_environments {
+            if let Some(binding_count) = environment.binding_count()? {
+                counter.record(VmStorageKind::Binding, binding_count)?;
+            }
+        }
         Ok(())
     }
 
@@ -540,6 +545,13 @@ impl Context {
         for layout in &self.static_binding_layouts {
             counter.record(VmStorageKind::CacheEntry, layout.storage_entry_count()?)?;
         }
+        counter.record(
+            VmStorageKind::CacheEntry,
+            self.eval_binding_environments
+                .iter()
+                .filter(|environment| environment.is_live())
+                .count(),
+        )?;
         Ok(())
     }
 

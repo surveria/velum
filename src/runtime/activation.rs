@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 use crate::{
     error::{Error, Result as EngineResult},
@@ -8,8 +11,9 @@ use crate::{
 };
 
 use super::{
-    FunctionActivationEnvironment, FunctionUpvalues, bytecode::BytecodeContinuationFrame,
-    function::FunctionSuperBinding, private::PrivateEnvironment,
+    FunctionActivationEnvironment, FunctionUpvalues, VmStorageKind,
+    bytecode::BytecodeContinuationFrame, function::FunctionSuperBinding,
+    private::PrivateEnvironment, storage_ledger::VmStorageLedger,
 };
 
 #[derive(Clone, Debug)]
@@ -21,13 +25,10 @@ pub(in crate::runtime) enum DynamicEnvironment {
 }
 
 impl DynamicEnvironment {
-    pub(in crate::runtime) fn storage_binding_count(&self) -> EngineResult<usize> {
+    pub(in crate::runtime) const fn storage_binding_count(&self) -> usize {
         match self {
-            Self::With(_) | Self::EvalVar(_) => Ok(1),
-            Self::EvalBindings(environment) | Self::CapturedLexical(environment) => environment
-                .len()?
-                .checked_add(1)
-                .ok_or_else(|| Error::limit("eval environment binding count overflowed")),
+            Self::With(_) | Self::EvalVar(_) => 1,
+            Self::EvalBindings(_) | Self::CapturedLexical(_) => 0,
         }
     }
 
@@ -44,8 +45,27 @@ impl DynamicEnvironment {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub(in crate::runtime) struct EvalBindingEnvironment(Rc<RefCell<Vec<EvalBindingEntry>>>);
+#[derive(Debug)]
+struct EvalBindingEnvironmentData {
+    entries: RefCell<Vec<EvalBindingEntry>>,
+    storage_ledger: VmStorageLedger,
+}
+
+impl Drop for EvalBindingEnvironmentData {
+    fn drop(&mut self) {
+        let binding_count = self.entries.get_mut().len().saturating_add(1);
+        self.storage_ledger
+            .release_count_on_drop(VmStorageKind::Binding, binding_count);
+        self.storage_ledger
+            .release_count_on_drop(VmStorageKind::CacheEntry, 1);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::runtime) struct EvalBindingEnvironment(Rc<EvalBindingEnvironmentData>);
+
+#[derive(Clone, Debug)]
+pub(in crate::runtime) struct WeakEvalBindingEnvironment(Weak<EvalBindingEnvironmentData>);
 
 #[derive(Clone, Debug)]
 struct EvalBindingEntry {
@@ -56,6 +76,22 @@ struct EvalBindingEntry {
 }
 
 impl EvalBindingEnvironment {
+    pub(in crate::runtime) fn new(storage_ledger: VmStorageLedger) -> EngineResult<Self> {
+        storage_ledger.grow_count(VmStorageKind::Binding, 1)?;
+        if let Err(error) = storage_ledger.grow_count(VmStorageKind::CacheEntry, 1) {
+            storage_ledger.release_count(VmStorageKind::Binding, 1)?;
+            return Err(error);
+        }
+        Ok(Self(Rc::new(EvalBindingEnvironmentData {
+            entries: RefCell::new(Vec::new()),
+            storage_ledger,
+        })))
+    }
+
+    pub(in crate::runtime) fn downgrade(&self) -> WeakEvalBindingEnvironment {
+        WeakEvalBindingEnvironment(Rc::downgrade(&self.0))
+    }
+
     pub(in crate::runtime) fn contains(&self, atom: AtomId) -> EngineResult<bool> {
         self.binding(atom).map(|binding| binding.is_some())
     }
@@ -68,6 +104,7 @@ impl EvalBindingEnvironment {
     ) -> EngineResult<bool> {
         let mut entries = self
             .0
+            .entries
             .try_borrow_mut()
             .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
         match entries.binary_search_by_key(&atom, |entry| entry.atom) {
@@ -80,24 +117,29 @@ impl EvalBindingEnvironment {
                 }
                 return Ok(false);
             }
-            Err(position) => entries.insert(
-                position,
-                EvalBindingEntry {
-                    atom,
-                    cell,
-                    deletable,
-                    active: true,
-                },
-            ),
+            Err(position) => {
+                self.0
+                    .storage_ledger
+                    .grow_count(VmStorageKind::Binding, 1)?;
+                entries.insert(
+                    position,
+                    EvalBindingEntry {
+                        atom,
+                        cell,
+                        deletable,
+                        active: true,
+                    },
+                );
+            }
         }
         Ok(true)
     }
 
     pub(in crate::runtime) fn binding(&self, atom: AtomId) -> EngineResult<Option<BindingCell>> {
-        let entries = self
-            .0
-            .try_borrow()
-            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))?;
+        let entries =
+            self.0.entries.try_borrow().map_err(|_| {
+                Error::runtime("eval binding environment is already mutably borrowed")
+            })?;
         let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
             return Ok(None);
         };
@@ -110,6 +152,7 @@ impl EvalBindingEnvironment {
     pub(in crate::runtime) fn delete(&self, atom: AtomId) -> EngineResult<bool> {
         let mut entries = self
             .0
+            .entries
             .try_borrow_mut()
             .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
         let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
@@ -137,6 +180,7 @@ impl EvalBindingEnvironment {
     ) -> EngineResult<bool> {
         let mut entries = self
             .0
+            .entries
             .try_borrow_mut()
             .map_err(|_| Error::runtime("eval binding environment is already borrowed"))?;
         let Ok(position) = entries.binary_search_by_key(&atom, |entry| entry.atom) else {
@@ -160,6 +204,7 @@ impl EvalBindingEnvironment {
 
     pub(in crate::runtime) fn len(&self) -> EngineResult<usize> {
         self.0
+            .entries
             .try_borrow()
             .map(|entries| entries.len())
             .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))
@@ -169,10 +214,10 @@ impl EvalBindingEnvironment {
         &self,
         mut visit: impl FnMut(&Value) -> EngineResult<()>,
     ) -> EngineResult<()> {
-        let entries = self
-            .0
-            .try_borrow()
-            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))?;
+        let entries =
+            self.0.entries.try_borrow().map_err(|_| {
+                Error::runtime("eval binding environment is already mutably borrowed")
+            })?;
         for entry in entries.iter() {
             if !entry.active {
                 continue;
@@ -182,6 +227,26 @@ impl EvalBindingEnvironment {
             }
         }
         Ok(())
+    }
+}
+
+impl WeakEvalBindingEnvironment {
+    pub(in crate::runtime) fn is_live(&self) -> bool {
+        self.0.strong_count() > 0
+    }
+
+    pub(in crate::runtime) fn binding_count(&self) -> EngineResult<Option<usize>> {
+        let Some(environment) = self.0.upgrade() else {
+            return Ok(None);
+        };
+        let binding_count = environment
+            .entries
+            .try_borrow()
+            .map_err(|_| Error::runtime("eval binding environment is already mutably borrowed"))?
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("eval environment binding count overflowed"))?;
+        Ok(Some(binding_count))
     }
 }
 
@@ -292,7 +357,7 @@ impl ActivationFrame {
             .checked_add(self.dynamic_environments().map_or(Ok(0), |environments| {
                 environments.iter().try_fold(0_usize, |count, environment| {
                     count
-                        .checked_add(environment.storage_binding_count()?)
+                        .checked_add(environment.storage_binding_count())
                         .ok_or_else(activation_storage_overflow)
                 })
             })?)

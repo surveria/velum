@@ -79,7 +79,7 @@ impl Context {
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
-        let environment = crate::runtime::activation::EvalBindingEnvironment::default();
+        let environment = self.create_eval_binding_environment()?;
         for scope in self
             .locals
             .iter()

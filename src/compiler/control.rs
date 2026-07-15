@@ -179,11 +179,23 @@ impl BytecodeCompiler<'_> {
         update: Option<&Expression>,
         body: &Statement,
     ) -> Result<()> {
+        let scoped = crate::binding_layout::for_init_needs_lexical_scope(init);
+        let per_iteration = crate::binding_layout::for_init_needs_per_iteration_scope(init);
+        let init = init
+            .map(|init| {
+                if scoped {
+                    return BytecodeBlock::compile_lexical_statements(
+                        std::slice::from_ref(init),
+                        StatementValue::Discard,
+                        self.layout,
+                    );
+                }
+                self.compile_statement_block(init, StatementValue::Discard)
+            })
+            .transpose()?;
         self.emit(BytecodeInstruction::For {
             labels,
-            init: init
-                .map(|init| self.compile_statement_block(init, StatementValue::Discard))
-                .transpose()?,
+            init,
             condition: condition
                 .map(|condition| BytecodeBlock::compile_expression(condition, self.layout))
                 .transpose()?,
@@ -191,8 +203,8 @@ impl BytecodeCompiler<'_> {
                 .map(|update| BytecodeBlock::compile_expression(update, self.layout))
                 .transpose()?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
-            scoped: crate::binding_layout::for_init_needs_lexical_scope(init),
-            per_iteration: crate::binding_layout::for_init_needs_per_iteration_scope(init),
+            scoped,
+            per_iteration,
         });
         Ok(())
     }
