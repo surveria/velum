@@ -339,9 +339,7 @@ fn timestamped_report_key(
     kind: &str,
 ) -> Option<String> {
     let stem = file_name.strip_suffix(suffix)?;
-    let Some((brand, timestamp)) = stem.rsplit_once(marker) else {
-        return None;
-    };
+    let (brand, timestamp) = stem.rsplit_once(marker)?;
     if brand.is_empty() || !valid_report_timestamp(timestamp) {
         return None;
     }
