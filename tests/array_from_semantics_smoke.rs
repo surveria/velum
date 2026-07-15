@@ -111,6 +111,27 @@ fn array_from_redefines_configurable_result_slots_as_data_properties() -> TestRe
     )
 }
 
+#[test]
+fn array_from_redefines_existing_slots_on_non_extensible_results() -> TestResult {
+    ensure_eval(
+        r"
+        function Result() {
+            this[0] = this[1] = 0;
+            Object.preventExtensions(this);
+        }
+        let result = new Result();
+        let caught = false;
+        try {
+            Array.from.call(function() { return result; }, [10, 20]);
+        } catch (error) {
+            caught = error instanceof TypeError;
+        }
+        caught && result[0] === 10 && result[1] === 20 ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

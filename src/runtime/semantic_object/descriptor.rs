@@ -89,6 +89,7 @@ impl Context {
         {
             return self.define_array_length_update(*id, property, update);
         }
+        let key = self.intern_dynamic_property_key(property)?;
         let current = self.semantic_own_property_descriptor(target, property)?;
         let extensible = self.semantic_is_extensible(target)?.unwrap_or(false);
         if !is_compatible_property_update(extensible, &update, current.as_ref()) {
@@ -104,7 +105,6 @@ impl Context {
             let _materialized_descriptor =
                 self.global_object_property_descriptor(*id, property.lookup())?;
         }
-        let key = self.intern_dynamic_property_key(property)?;
         match object_ref.value {
             Value::Object(id) => {
                 return self.semantic_define_ordinary_object_property(*id, property, key, update);
