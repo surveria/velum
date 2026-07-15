@@ -11,6 +11,7 @@ mod duration_units;
 mod formatting;
 mod list_format;
 mod locale;
+mod locale_list;
 mod number_digits;
 mod number_format;
 mod number_formatting;

@@ -176,7 +176,7 @@ impl Context {
             },
             TypedArrayFunctionKind::ToLocaleString => match self.typed_array_receiver(this_value) {
                 Ok((_, view)) => {
-                    self.eval_array_to_locale_string_with_length(this_value, view.length())
+                    self.eval_array_to_locale_string_with_length(args, this_value, view.length())
                 }
                 Err(error) => Err(error),
             },

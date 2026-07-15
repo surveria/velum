@@ -366,42 +366,12 @@ impl Context {
     }
 
     fn number_format_locale(&mut self, value: Option<&Value>) -> Result<String> {
-        let Some(value) = value.filter(|value| !matches!(value, Value::Undefined)) else {
-            return Ok("en-US".to_owned());
-        };
-        if matches!(value, Value::Null) {
-            return Err(Error::type_error("Intl locale list cannot be null"));
-        }
-        if let Some(text) = value.string_text() {
-            return resolve_number_format_locale(text);
-        }
-        let Value::Object(_) = value else {
-            return Ok("en-US".to_owned());
-        };
-        let length_value = self.get_named(value, "length")?;
-        let length = Self::length_to_usize(
-            self.to_length(&length_value)?,
-            "Intl locale list length exceeded supported range",
-        )?;
-        let mut first = None;
-        for index in 0..length {
-            self.step()?;
-            let name = index.to_string();
-            let lookup = self.property_lookup(&name);
-            if !self.has_property_value_with_lookup(value, lookup)? {
-                continue;
-            }
-            let item = self.get_named(value, &name)?;
-            if item.string_text().is_none() && !matches!(item, Value::Object(_)) {
-                return Err(Error::type_error("Intl locale entry is invalid"));
-            }
-            let locale = self.to_string(&item)?;
-            let locale = resolve_number_format_locale(&locale)?;
-            if first.is_none() {
-                first = Some(locale);
-            }
-        }
-        Ok(first.unwrap_or_else(|| "en-US".to_owned()))
+        let requested = value.cloned().unwrap_or(Value::Undefined);
+        let locales = self.intl_locale_list(&requested)?;
+        locales.first().map_or_else(
+            || Ok("en-US".to_owned()),
+            |locale| resolve_number_format_locale(locale),
+        )
     }
 
     fn number_optional_string(&mut self, options: &Value, name: &str) -> Result<Option<String>> {

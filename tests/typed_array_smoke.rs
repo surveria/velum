@@ -317,16 +317,18 @@ fn typed_array_to_locale_string_dispatches_each_element() -> TestResult {
     ensure_eval(
         r#"
         let calls = [];
-        Number.prototype.toLocaleString = function () {
-            calls.push(Number(this));
+        let options = { marker: 1 };
+        Number.prototype.toLocaleString = function (locales, receivedOptions) {
+            calls.push(Number(this) + ":" + locales + ":" +
+                (receivedOptions === options) + ":" + arguments.length);
             return "value-" + this;
         };
         let sample = new Uint8Array([3, 1, 2]);
         Object.defineProperty(sample, "length", {
             get: function () { throw new Error("length property must not be read"); }
         });
-        sample.toLocaleString() === "value-3,value-1,value-2" &&
-            calls.join("|") === "3|1|2" ? 42 : 0
+        sample.toLocaleString("en", options) === "value-3,value-1,value-2" &&
+            calls.join("|") === "3:en:true:2|1:en:true:2|2:en:true:2" ? 42 : 0
         "#,
         &Value::Number(42.0),
     )

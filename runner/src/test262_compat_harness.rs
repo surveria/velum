@@ -33,7 +33,10 @@ var $262 = {
             createRealm: $262.createRealm,
             evalScript: realmGlobal.eval
         };
-        return { global: realmGlobal };
+        return {
+            global: realmGlobal,
+            evalScript: realmGlobal.eval
+        };
     },
     evalScript: __rsqjsTest262EvalScript
 };
@@ -187,7 +190,7 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{STA_SOURCE, source};
+    use super::{HOST_SOURCE, STA_SOURCE, source};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -200,5 +203,13 @@ mod tests {
             return Ok(());
         }
         Err("canonical Test262 assertion helpers must come from the pinned corpus".into())
+    }
+
+    #[test]
+    fn realm_handle_exposes_eval_script() -> TestResult {
+        if HOST_SOURCE.contains("evalScript: realmGlobal.eval") {
+            return Ok(());
+        }
+        Err("Test262 realm handles must expose the target-realm evalScript function".into())
     }
 }

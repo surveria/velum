@@ -293,39 +293,7 @@ impl Context {
     }
 
     fn number_format_locale_list(&mut self, value: &Value) -> Result<Vec<String>> {
-        if matches!(value, Value::Undefined) {
-            return Ok(Vec::new());
-        }
-        if value.string_text().is_some() {
-            return Ok(vec![self.to_string(value)?]);
-        }
-        let Value::Object(_) = value else {
-            return Err(Error::type_error("Intl locale list is invalid"));
-        };
-        let length_value = self.get_named(value, "length")?;
-        let length = Self::length_to_usize(
-            self.to_length(&length_value)?,
-            "Intl locale list length exceeded supported range",
-        )?;
-        let mut locales = Vec::new();
-        for index in 0..length {
-            self.step()?;
-            let name = index.to_string();
-            let lookup = self.property_lookup(&name);
-            if !self.has_property_value_with_lookup(value, lookup)? {
-                continue;
-            }
-            let item = self.get_named(value, &name)?;
-            if item.string_text().is_none() && !matches!(item, Value::Object(_)) {
-                return Err(Error::type_error("Intl locale entry is invalid"));
-            }
-            let locale = self.to_string(&item)?;
-            let locale = canonical_locale(&locale)?;
-            if !locales.contains(&locale) {
-                locales.push(locale);
-            }
-        }
-        Ok(locales)
+        self.intl_locale_list(value)
     }
 
     fn number_format_prototype_id(&self, constructor: NativeFunctionId) -> Result<ObjectId> {
@@ -381,39 +349,5 @@ impl Context {
 }
 
 pub(super) fn canonical_locale(locale: &str) -> Result<String> {
-    if locale.is_empty()
-        || locale
-            .split('-')
-            .any(|part| part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_alphanumeric()))
-    {
-        return Err(Error::exception(
-            ErrorName::RangeError,
-            "Intl locale is invalid",
-        ));
-    }
-    let mut parts = locale.split('-');
-    let Some(language) = parts.next() else {
-        return Err(Error::exception(
-            ErrorName::RangeError,
-            "Intl locale is invalid",
-        ));
-    };
-    if !(2..=8).contains(&language.len())
-        || !language.bytes().all(|byte| byte.is_ascii_alphabetic())
-    {
-        return Err(Error::exception(
-            ErrorName::RangeError,
-            "Intl locale is invalid",
-        ));
-    }
-    let mut result = language.to_ascii_lowercase();
-    for part in parts {
-        result.push('-');
-        if part.len() == 2 && part.bytes().all(|byte| byte.is_ascii_alphabetic()) {
-            result.push_str(&part.to_ascii_uppercase());
-        } else {
-            result.push_str(&part.to_ascii_lowercase());
-        }
-    }
-    Ok(result)
+    super::locale::canonicalize_locale_tag(locale)
 }

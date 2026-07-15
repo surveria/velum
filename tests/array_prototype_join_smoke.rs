@@ -94,21 +94,23 @@ fn supports_array_to_locale_string_element_dispatch() -> TestResult {
         r#"
         let calls = [];
         let first = {
-            toLocaleString: function () {
-                calls.push(this === first && arguments.length === 0 ? "first" : "bad");
+            toLocaleString: function (locales, options) {
+                calls.push(this === first && locales === "en" && options.marker === 1 &&
+                    arguments.length === 2 ? "first" : "bad");
                 return "one";
             }
         };
         let inherited = {
-            toLocaleString: function () {
-                calls.push(this === inherited && arguments.length === 0 ? "inherited" : "bad");
+            toLocaleString: function (locales, options) {
+                calls.push(this === inherited && locales === "en" && options.marker === 1 &&
+                    arguments.length === 2 ? "inherited" : "bad");
                 return "three";
             }
         };
         Array.prototype[3] = inherited;
         let values = [first, undefined, null];
         values.length = 4;
-        let localized = values.toLocaleString("ignored", { ignored: true });
+        let localized = values.toLocaleString("en", { marker: 1 });
         delete Array.prototype[3];
 
         localized === "one,,,three" &&
