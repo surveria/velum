@@ -4,7 +4,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::numeric::{number_exponentiate, number_to_uint32},
+    runtime::numeric::{number_exponentiate, number_to_uint32, round_to_binary16},
     runtime::object::{
         DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
         PropertyWritable,
@@ -41,12 +41,6 @@ const RANDOM_XOR_SHIFT_A: u32 = 13;
 const RANDOM_XOR_SHIFT_B: u32 = 7;
 const RANDOM_XOR_SHIFT_C: u32 = 17;
 const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
-const F16_MIN_NORMAL: f64 = 0.000_061_035_156_25;
-const F16_MIN_SUBNORMAL: f64 = 0.000_000_059_604_644_775_390_63;
-const F16_HALF_MIN_SUBNORMAL: f64 = 0.000_000_029_802_322_387_695_313;
-const F16_MAX_FINITE: f64 = 65_504.0;
-const F16_OVERFLOW_CUTOFF: f64 = 65_520.0;
-const F16_SIGNIFICAND_BITS: i32 = 10;
 const ROUND_INTEGER_CUTOFF: f64 = 4_503_599_627_370_496.0;
 
 use super::math_sum_precise::PreciseFiniteSum;
@@ -630,26 +624,7 @@ impl Context {
     }
 
     fn f16round_to_number(value: f64) -> f64 {
-        if value.is_nan() || value.is_infinite() || value == 0.0 {
-            return value;
-        }
-
-        let sign = value.is_sign_negative();
-        let abs = value.abs();
-        let rounded = if abs >= F16_OVERFLOW_CUTOFF {
-            f64::INFINITY
-        } else if abs > F16_MAX_FINITE {
-            F16_MAX_FINITE
-        } else if abs <= F16_HALF_MIN_SUBNORMAL {
-            0.0
-        } else if abs < F16_MIN_NORMAL {
-            let units = Self::round_ties_to_even(abs / F16_MIN_SUBNORMAL);
-            units * F16_MIN_SUBNORMAL
-        } else {
-            Self::round_normal_binary16(abs)
-        };
-
-        if sign { -rounded } else { rounded }
+        round_to_binary16(value)
     }
 
     fn next_math_random(&mut self) -> Result<f64> {
@@ -691,34 +666,6 @@ impl Context {
             return -0.0;
         }
         rounded
-    }
-
-    fn round_normal_binary16(value: f64) -> f64 {
-        let exponent = value.log2().floor();
-        let quantum = (exponent - f64::from(F16_SIGNIFICAND_BITS)).exp2();
-        let rounded_units = Self::round_ties_to_even(value / quantum);
-        let rounded = rounded_units * quantum;
-        if rounded >= F16_OVERFLOW_CUTOFF {
-            f64::INFINITY
-        } else {
-            rounded
-        }
-    }
-
-    fn round_ties_to_even(value: f64) -> f64 {
-        let lower = value.floor();
-        let fraction = value - lower;
-        if fraction < 0.5 {
-            return lower;
-        }
-        if fraction > 0.5 || !Self::is_even_integer(lower) {
-            return lower + 1.0;
-        }
-        lower
-    }
-
-    fn is_even_integer(value: f64) -> bool {
-        (value / 2.0).fract() == 0.0
     }
 
     fn should_replace_max_zero(current: f64, candidate: f64) -> bool {

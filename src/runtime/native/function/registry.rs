@@ -303,7 +303,8 @@ const STRING_PROTOTYPE_NORMALIZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::
 const PROMISE_TRY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(631);
 const PROMISE_WITH_RESOLVERS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(632);
 const ANNEX_B_GLOBAL_SLOT_BASE: usize = 647;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 656;
+const FLOAT16_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(656);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 657;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -546,6 +547,7 @@ const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint16) => Some(UINT16_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Int32) => Some(INT32_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint32) => Some(UINT32_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Float16) => Some(FLOAT16_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float32) => Some(FLOAT32_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float64) => Some(FLOAT64_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::BigInt64) => {

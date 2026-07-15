@@ -410,6 +410,7 @@ impl Context {
                 return self.bigint_value(JsBigInt::from_u64(raw));
             }
             TypedArrayElementKind::Uint8Clamped
+            | TypedArrayElementKind::Float16
             | TypedArrayElementKind::Float32
             | TypedArrayElementKind::Float64 => return Err(Error::type_error(RECEIVER_ERROR)),
         };
@@ -495,6 +496,7 @@ fn atomic_mask(kind: TypedArrayElementKind) -> u64 {
         TypedArrayElementKind::Int32 | TypedArrayElementKind::Uint32 => u64::from(u32::MAX),
         TypedArrayElementKind::BigInt64 | TypedArrayElementKind::BigUint64 => u64::MAX,
         TypedArrayElementKind::Uint8Clamped
+        | TypedArrayElementKind::Float16
         | TypedArrayElementKind::Float32
         | TypedArrayElementKind::Float64 => 0,
     }

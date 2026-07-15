@@ -25,6 +25,7 @@ pub(in crate::runtime) const DEFAULT_GLOBAL_BINDING_NAMES: &[&str] = &[
     "Date",
     "Error",
     "EvalError",
+    "Float16Array",
     "Float32Array",
     "Float64Array",
     "FinalizationRegistry",
