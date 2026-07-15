@@ -39,7 +39,19 @@ impl Context {
                         value,
                         accessor: None,
                         method: matches!(property, BytecodeObjectProperty::StaticMethod(_)),
-                        ordinary_data: matches!(property, BytecodeObjectProperty::StaticData(_)),
+                        prototype_setter: false,
+                    });
+                }
+                BytecodeObjectProperty::StaticPrototypeSetter(name) => {
+                    let value = next_object_literal_stack_value(&mut values)?;
+                    let key = self.intern_static_property_key(name)?;
+                    entries.push(RuntimeObjectLiteralEntry {
+                        key,
+                        name: RuntimeObjectLiteralName::Static(name.as_str()),
+                        value,
+                        accessor: None,
+                        method: false,
+                        prototype_setter: true,
                     });
                 }
                 BytecodeObjectProperty::StaticAccessor { key: name, kind } => {
@@ -52,7 +64,7 @@ impl Context {
                         value,
                         accessor: Some(*kind),
                         method: true,
-                        ordinary_data: false,
+                        prototype_setter: false,
                     });
                 }
                 BytecodeObjectProperty::Spread => {
@@ -93,7 +105,7 @@ impl Context {
                         value,
                         accessor,
                         method,
-                        ordinary_data: false,
+                        prototype_setter: false,
                     });
                 }
             }
@@ -117,7 +129,6 @@ impl Context {
             if entry.method {
                 methods.push(entry.value.clone());
             }
-            let is_dynamic = entry.name.is_dynamic();
             let name = match entry.name {
                 RuntimeObjectLiteralName::Static(name) => name,
                 RuntimeObjectLiteralName::Dynamic(index) => dynamic_names
@@ -127,10 +138,10 @@ impl Context {
             };
             let init = if let Some(kind) = entry.accessor {
                 ObjectPropertyInit::new_accessor(entry.key, name, entry.value, kind)
-            } else if is_dynamic || entry.ordinary_data {
-                ObjectPropertyInit::new_data(entry.key, name, entry.value, PropertyEnumerable::Yes)
-            } else {
+            } else if entry.prototype_setter {
                 ObjectPropertyInit::new(entry.key, name, entry.value, PropertyEnumerable::Yes)
+            } else {
+                ObjectPropertyInit::new_data(entry.key, name, entry.value, PropertyEnumerable::Yes)
             };
             inits.push(init);
         }
@@ -190,7 +201,7 @@ impl Context {
                 value,
                 accessor: None,
                 method: false,
-                ordinary_data: true,
+                prototype_setter: false,
             });
         }
         Ok(())
@@ -203,12 +214,6 @@ enum RuntimeObjectLiteralName<'a> {
     Dynamic(usize),
 }
 
-impl RuntimeObjectLiteralName<'_> {
-    const fn is_dynamic(self) -> bool {
-        matches!(self, Self::Dynamic(_))
-    }
-}
-
 #[derive(Debug)]
 struct RuntimeObjectLiteralEntry<'a> {
     key: PropertyKey,
@@ -216,7 +221,7 @@ struct RuntimeObjectLiteralEntry<'a> {
     value: Value,
     accessor: Option<AccessorKind>,
     method: bool,
-    ordinary_data: bool,
+    prototype_setter: bool,
 }
 
 fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {

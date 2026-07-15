@@ -54,14 +54,16 @@ impl Context {
 
         let value = self.checked_value(value)?;
         let global_object = self.global_object_id()?;
-        self.define_global_object_data_property(
-            global_object,
-            binding.name().name(),
+        let object = Value::Object(global_object);
+        let lookup = self.property_lookup(binding.name().name());
+        self.set(
+            &object,
+            lookup,
             value,
-            PropertyWritable::Yes,
-            PropertyEnumerable::Yes,
-            PropertyConfigurable::Yes,
-        )
+            &object,
+            crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse,
+        )?;
+        Ok(())
     }
 
     pub(crate) fn assign_annex_b_var(

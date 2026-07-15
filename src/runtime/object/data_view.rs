@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::abstract_operations::{to_bigint_primitive, to_number_primitive},
-    runtime::numeric::number_to_uint32,
+    runtime::numeric::{binary16_to_f64, f64_to_binary16, number_to_uint32},
     value::{ErrorName, JsBigInt, ObjectId, Value},
 };
 
@@ -12,7 +12,6 @@ use super::{
 
 const DATA_VIEW_RANGE_ERROR: &str = "DataView byte offset is outside the view";
 const DATA_VIEW_OFFSET_LIMIT_ERROR: &str = "DataView byte offset exceeded supported range";
-const DATA_VIEW_FLOAT16_CONVERSION_ERROR: &str = "DataView Float16 conversion overflowed";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum DataViewElementKind {
@@ -290,7 +289,7 @@ impl DataViewElementKind {
                 )
             }
             Self::Float16 => {
-                let value = f64_to_binary16(number)?;
+                let value = f64_to_binary16(number);
                 write_endian(
                     buffer,
                     offset,
@@ -448,86 +447,4 @@ fn write_endian<const N: usize>(
     big: [u8; N],
 ) -> Result<()> {
     buffer.write(offset, if little_endian { &little } else { &big })
-}
-
-fn binary16_to_f64(bits: u16) -> f64 {
-    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
-    let exponent = u32::from((bits >> 10) & 0x1f);
-    let fraction = u32::from(bits & 0x03ff);
-    match exponent {
-        0 if fraction == 0 => sign * 0.0,
-        0 => sign * f64::from(fraction) * 2.0_f64.powi(-24),
-        31 if fraction == 0 => sign * f64::INFINITY,
-        31 => f64::NAN,
-        _ => {
-            let significand = 1.0 + f64::from(fraction) / 1024.0;
-            let Ok(exponent) = i32::try_from(exponent) else {
-                return f64::NAN;
-            };
-            let exponent = exponent - 15;
-            sign * significand * 2.0_f64.powi(exponent)
-        }
-    }
-}
-
-fn f64_to_binary16(value: f64) -> Result<u16> {
-    let bits = value.to_bits();
-    let sign = if bits >> 63 == 0 { 0_u16 } else { 0x8000_u16 };
-    let exponent_bits = (bits >> 52) & 0x07ff;
-    let fraction = bits & 0x000f_ffff_ffff_ffff;
-    if exponent_bits == 0x07ff {
-        return Ok(if fraction == 0 {
-            sign | 0x7c00
-        } else {
-            sign | 0x7e00
-        });
-    }
-    if exponent_bits == 0 {
-        return Ok(sign);
-    }
-    let exponent = i32::try_from(exponent_bits)
-        .map_err(|_| Error::runtime(DATA_VIEW_FLOAT16_CONVERSION_ERROR))?
-        - 1023;
-    let significand = (1_u64 << 52) | fraction;
-    let encoded = if exponent >= -14 {
-        let rounded = round_right_ties_even(significand, 42);
-        let mut half_exponent = exponent + 15;
-        let mut half_significand = rounded;
-        if half_significand == 2048 {
-            half_exponent = half_exponent.saturating_add(1);
-            half_significand = 1024;
-        }
-        if half_exponent >= 31 {
-            0x7c00_u64
-        } else {
-            let exponent_field = u64::try_from(half_exponent)
-                .map_err(|_| Error::runtime(DATA_VIEW_FLOAT16_CONVERSION_ERROR))?;
-            (exponent_field << 10) | half_significand.saturating_sub(1024)
-        }
-    } else {
-        let shift = u32::try_from(28_i32.saturating_sub(exponent))
-            .map_err(|_| Error::runtime(DATA_VIEW_FLOAT16_CONVERSION_ERROR))?;
-        round_right_ties_even(significand, shift)
-    };
-    let encoded =
-        u16::try_from(encoded).map_err(|_| Error::runtime(DATA_VIEW_FLOAT16_CONVERSION_ERROR))?;
-    Ok(sign | encoded)
-}
-
-const fn round_right_ties_even(value: u64, shift: u32) -> u64 {
-    if shift == 0 {
-        return value;
-    }
-    if shift >= u64::BITS {
-        return 0;
-    }
-    let retained = value >> shift;
-    let mask = (1_u64 << shift).saturating_sub(1);
-    let discarded = value & mask;
-    let halfway = 1_u64 << shift.saturating_sub(1);
-    if discarded > halfway || (discarded == halfway && retained % 2 == 1) {
-        retained.saturating_add(1)
-    } else {
-        retained
-    }
 }

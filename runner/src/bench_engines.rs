@@ -21,6 +21,7 @@ const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
     max_source_len: 262_144,
     max_statements: 65_536,
     max_expression_depth: 512,
+    max_call_depth: 512,
     max_runtime_steps: 2_000_000_000,
     max_string_len: 1_048_576,
     max_bigint_bits: 8_388_608,

@@ -13,10 +13,115 @@ const F64_EXPONENT_BIAS: i32 = 1023;
 const F64_SIGNIFICAND_BITS: i32 = 52;
 const F64_MANTISSA_MASK: u64 = (1_u64 << F64_EXPONENT_SHIFT) - 1;
 const F64_IMPLICIT_BIT: u64 = 1_u64 << F64_EXPONENT_SHIFT;
+const BINARY16_SIGN_MASK: u16 = 0x8000;
+const BINARY16_EXPONENT_MASK: u16 = 0x7c00;
+const BINARY16_FRACTION_MASK: u16 = 0x03ff;
+const BINARY16_QUIET_NAN: u16 = 0x7e00;
+const BINARY16_INFINITY: u16 = 0x7c00;
+const BINARY16_EXPONENT_BIAS: i32 = 15;
+const BINARY16_FRACTION_BITS: u32 = 10;
+const BINARY16_NORMAL_ROUND_SHIFT: u32 = 42;
 const MIXED_NUMERIC_TYPES_ERROR: &str = "Cannot mix BigInt and other types";
 const BIGINT_DIVISION_BY_ZERO_ERROR: &str = "BigInt division by zero";
 const BIGINT_NEGATIVE_EXPONENT_ERROR: &str = "BigInt exponent must be non-negative";
 const BIGINT_UNSIGNED_SHIFT_ERROR: &str = "BigInt does not support unsigned right shift";
+
+pub(in crate::runtime) fn binary16_to_f64(bits: u16) -> f64 {
+    let sign = if bits & BINARY16_SIGN_MASK == 0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let exponent = (bits & BINARY16_EXPONENT_MASK) >> BINARY16_FRACTION_BITS;
+    let fraction = bits & BINARY16_FRACTION_MASK;
+    match exponent {
+        0 if fraction == 0 => sign * 0.0,
+        0 => sign * f64::from(fraction) * 2.0_f64.powi(-24),
+        31 if fraction == 0 => sign * f64::INFINITY,
+        31 => f64::NAN,
+        _ => {
+            let significand = 1.0 + f64::from(fraction) / 1024.0;
+            sign * significand * 2.0_f64.powi(i32::from(exponent) - BINARY16_EXPONENT_BIAS)
+        }
+    }
+}
+
+pub(in crate::runtime) fn f64_to_binary16(value: f64) -> u16 {
+    let bits = value.to_bits();
+    let sign = if bits >> 63 == 0 {
+        0
+    } else {
+        BINARY16_SIGN_MASK
+    };
+    let exponent_bits = (bits >> F64_EXPONENT_SHIFT) & F64_EXPONENT_MASK;
+    let fraction = bits & F64_MANTISSA_MASK;
+    if exponent_bits == F64_EXPONENT_MASK {
+        return if fraction == 0 {
+            sign | BINARY16_INFINITY
+        } else {
+            sign | BINARY16_QUIET_NAN
+        };
+    }
+    if exponent_bits == 0 {
+        return sign;
+    }
+    let Ok(exponent_bits) = i32::try_from(exponent_bits) else {
+        return sign | BINARY16_QUIET_NAN;
+    };
+    let exponent = exponent_bits - F64_EXPONENT_BIAS;
+    let significand = F64_IMPLICIT_BIT | fraction;
+    let encoded = if exponent >= -14 {
+        encode_normal_binary16(significand, exponent)
+    } else {
+        let Ok(shift) = u32::try_from(28_i32.saturating_sub(exponent)) else {
+            return sign;
+        };
+        round_right_ties_even(significand, shift)
+    };
+    let Ok(encoded) = u16::try_from(encoded) else {
+        return sign | BINARY16_INFINITY;
+    };
+    sign | encoded
+}
+
+pub(in crate::runtime) fn round_to_binary16(value: f64) -> f64 {
+    binary16_to_f64(f64_to_binary16(value))
+}
+
+fn encode_normal_binary16(significand: u64, exponent: i32) -> u64 {
+    let rounded = round_right_ties_even(significand, BINARY16_NORMAL_ROUND_SHIFT);
+    let mut half_exponent = exponent + BINARY16_EXPONENT_BIAS;
+    let mut half_significand = rounded;
+    if half_significand == 2048 {
+        half_exponent = half_exponent.saturating_add(1);
+        half_significand = 1024;
+    }
+    if half_exponent >= 31 {
+        return u64::from(BINARY16_INFINITY);
+    }
+    let Ok(exponent_field) = u64::try_from(half_exponent) else {
+        return 0;
+    };
+    (exponent_field << BINARY16_FRACTION_BITS) | half_significand.saturating_sub(1024)
+}
+
+const fn round_right_ties_even(value: u64, shift: u32) -> u64 {
+    if shift == 0 {
+        return value;
+    }
+    if shift >= u64::BITS {
+        return 0;
+    }
+    let retained = value >> shift;
+    let mask = (1_u64 << shift).saturating_sub(1);
+    let discarded = value & mask;
+    let halfway = 1_u64 << shift.saturating_sub(1);
+    if discarded > halfway || (discarded == halfway && retained % 2 == 1) {
+        retained.saturating_add(1)
+    } else {
+        retained
+    }
+}
 
 pub fn numeric_binary(
     context: &mut Context,

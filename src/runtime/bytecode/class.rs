@@ -8,13 +8,13 @@ use crate::{
         BytecodeNewTargetMode,
     },
     error::{Error, Result},
-    runtime::Context,
     runtime::control::Completion,
     runtime::function::{BytecodeFunctionInit, FunctionSuperBinding, ResolvedClassField},
     runtime::object::{
         DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyUpdate, PropertyWritable,
     },
+    runtime::{Context, VmRootKind},
     value::{FunctionId, ObjectId, Value},
 };
 
@@ -40,6 +40,12 @@ impl Context {
             heritage,
             decorators: class_decorators,
         } = self.take_class_creation_inputs(state, class)?;
+        let _heritage_roots = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            heritage.iter().flat_map(|heritage| {
+                std::iter::once(&heritage.constructor).chain(heritage.prototype.iter())
+            }),
+        )?;
         let constructor = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: class.constructor_id,
             name: class.name.as_ref(),
@@ -149,9 +155,10 @@ impl Context {
         prototype_id: ObjectId,
         heritage: Option<&ClassHeritage>,
     ) -> Result<()> {
-        if heritage.is_some_and(|heritage| matches!(heritage.constructor, Value::Undefined)) {
+        if let Some(heritage) = heritage {
+            let prototype_parent = heritage.prototype.clone().unwrap_or(Value::Null);
             self.objects
-                .set_prototype_value(prototype_id, &Value::Null)?;
+                .set_prototype_value(prototype_id, &prototype_parent)?;
         }
         if let Some(heritage) = heritage
             && !matches!(heritage.constructor, Value::Undefined)
@@ -676,7 +683,7 @@ impl Context {
         if matches!(value, Value::Null) {
             return Ok(ClassHeritage {
                 constructor: Value::Undefined,
-                prototype_id: None,
+                prototype: None,
             });
         }
         if !self.semantic_is_constructor(&value)? {
@@ -685,9 +692,9 @@ impl Context {
             )));
         }
         let prototype = self.get_named(&value, CLASS_PROTOTYPE_PROPERTY)?;
-        let prototype_id = match prototype {
-            Value::Object(id) => Some(id),
+        let prototype = match prototype {
             Value::Null => None,
+            prototype if self.semantic_object_ref(&prototype)?.is_some() => Some(prototype),
             other => {
                 return Err(Error::type_error(format!(
                     "class heritage prototype '{other}' is not an object or null"
@@ -696,7 +703,7 @@ impl Context {
         };
         Ok(ClassHeritage {
             constructor: value,
-            prototype_id,
+            prototype,
         })
     }
 }
@@ -752,11 +759,14 @@ struct ClassCreationInputs {
 /// prototype object used as the parent of the class prototype.
 struct ClassHeritage {
     constructor: Value,
-    prototype_id: Option<crate::value::ObjectId>,
+    prototype: Option<Value>,
 }
 
 impl ClassHeritage {
     const fn prototype_parent(&self) -> Option<crate::value::ObjectId> {
-        self.prototype_id
+        match &self.prototype {
+            Some(Value::Object(id)) => Some(*id),
+            _ => None,
+        }
     }
 }

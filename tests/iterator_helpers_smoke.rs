@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{HostOperation, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -73,6 +73,37 @@ fn builtin_collection_iterators_inherit_iterator_helpers() -> TestResult {
         "#,
         "6,7:2,4,6:a",
     )
+}
+
+#[test]
+fn iterator_helper_prototype_methods_accept_helpers_from_another_realm() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation("__createRealm", HostOperation::CreateRealm)?;
+    let value = context.eval(
+        r#"
+        const other = __createRealm();
+        const methods = [
+            ["map", value => value],
+            ["filter", value => true],
+            ["take", Infinity],
+            ["drop", 0],
+            ["flatMap", value => [value]]
+        ];
+        let passed = 0;
+        for (const [method, argument] of methods) {
+            const otherPrototype = Object.getPrototypeOf(
+                new other.Array().values()[method](argument)
+            );
+            const helper = [42].values()[method](argument);
+            const result = otherPrototype.next.call(helper);
+            const value = Array.isArray(result.value) ? result.value[1] : result.value;
+            passed += !result.done && value === 42;
+        }
+        passed
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(5.0))
 }
 
 #[test]

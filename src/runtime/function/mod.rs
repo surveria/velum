@@ -228,6 +228,7 @@ impl Context {
         let lexical_this =
             self.capture_function_lexical_this(init.new_target_mode, super_binding.as_deref())?;
         let script_or_module_name = self.active_script_or_module_name();
+        let script_or_module_import_meta = self.active_script_or_module_import_meta();
         let new_target = FunctionNewTarget::from_mode(
             init.new_target_mode,
             self.current_new_target()?,
@@ -237,6 +238,7 @@ impl Context {
         let mut function_record = super::Function {
             realm: self.active_realm_index(),
             script_or_module_name,
+            script_or_module_import_meta,
             self_binding,
             arguments_binding,
             param_binding_ids,
@@ -272,17 +274,25 @@ impl Context {
     }
 
     pub(in crate::runtime) fn active_script_or_module_name(&self) -> Option<String> {
-        self.active_module_name.clone().or_else(|| {
-            self.activation_frames
-                .iter()
-                .rev()
-                .filter_map(crate::runtime::activation::ActivationFrame::function_id)
-                .find_map(|id| {
-                    self.function(id)
-                        .ok()
-                        .and_then(|function| function.script_or_module_name.clone())
-                })
-        })
+        self.active_script_or_module_function()
+            .and_then(|function| function.script_or_module_name.clone())
+            .or_else(|| self.active_module_name.clone())
+    }
+
+    pub(in crate::runtime) fn active_script_or_module_import_meta(&self) -> Option<Value> {
+        if let Some(function) = self.active_script_or_module_function() {
+            return function.script_or_module_import_meta.clone();
+        }
+        self.active_import_meta.clone()
+    }
+
+    fn active_script_or_module_function(&self) -> Option<&super::Function> {
+        self.activation_frames
+            .iter()
+            .rev()
+            .filter_map(crate::runtime::activation::ActivationFrame::function_id)
+            .filter_map(|id| self.function(id).ok())
+            .find(|function| function.script_or_module_name.is_some())
     }
 
     fn compile_optional_function_fast_path(

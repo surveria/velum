@@ -306,7 +306,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = self.global_string_argument(args.first())?;
+        let text = self.global_utf16_string_argument(args.first())?;
         self.decode_uri_value(&text, UriDecodeMode::PreserveReserved)
     }
 
@@ -321,7 +321,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = self.global_string_argument(args.first())?;
+        let text = self.global_utf16_string_argument(args.first())?;
         self.decode_uri_value(&text, UriDecodeMode::DecodeReserved)
     }
 
@@ -550,20 +550,14 @@ impl Context {
         self.heap_string_value(&encoded)
     }
 
-    fn decode_uri_value(&mut self, input: &str, mode: UriDecodeMode) -> Result<Value> {
-        let mut decoded = String::new();
+    fn decode_uri_value(&mut self, input: &[u16], mode: UriDecodeMode) -> Result<Value> {
+        let mut decoded = Vec::new();
         let mut index = 0;
-        while index < input.len() {
-            let Some(tail) = input.get(index..) else {
-                return Err(Self::uri_error(URI_MALFORMED_ESCAPE_ERROR));
-            };
-            let Some(ch) = tail.chars().next() else {
-                break;
-            };
-            if ch != '%' {
-                decoded.push(ch);
+        while let Some(unit) = input.get(index).copied() {
+            if unit != u16::from(b'%') {
+                decoded.push(unit);
                 index = index
-                    .checked_add(ch.len_utf8())
+                    .checked_add(1)
                     .ok_or_else(|| Error::runtime("URI decode index overflowed"))?;
                 continue;
             }
@@ -573,18 +567,17 @@ impl Context {
                 let Some(original) = input.get(sequence_start..next_index) else {
                     return Err(Self::uri_error(URI_MALFORMED_ESCAPE_ERROR));
                 };
-                decoded.push_str(original);
+                decoded.extend_from_slice(original);
             } else {
-                decoded.push_str(&text);
+                decoded.extend(text.encode_utf16());
             }
             index = next_index;
         }
-        self.check_string_len(&decoded)?;
-        self.heap_string_value(&decoded)
+        self.heap_utf16_string_value(&decoded)
     }
 
     fn decode_uri_escape(
-        input: &str,
+        input: &[u16],
         index: usize,
         mode: UriDecodeMode,
     ) -> Result<(String, usize)> {
@@ -595,10 +588,10 @@ impl Context {
         bytes.push(first);
         let mut next_index = Self::next_percent_index(index)?;
         for _ in 1..width {
-            let Some(byte) = input.as_bytes().get(next_index).copied() else {
+            let Some(unit) = input.get(next_index).copied() else {
                 return Err(Self::uri_error(URI_MALFORMED_ESCAPE_ERROR));
             };
-            if byte != b'%' {
+            if unit != u16::from(b'%') {
                 return Err(Self::uri_error(URI_MALFORMED_ESCAPE_ERROR));
             }
             bytes.push(Self::percent_byte(input, next_index)?);
@@ -612,9 +605,8 @@ impl Context {
         Ok((text, next_index))
     }
 
-    fn percent_byte(input: &str, index: usize) -> Result<u8> {
-        let bytes = input.as_bytes();
-        if bytes.get(index).copied() != Some(b'%') {
+    fn percent_byte(input: &[u16], index: usize) -> Result<u8> {
+        if input.get(index).copied() != Some(u16::from(b'%')) {
             return Err(Self::uri_error(URI_MALFORMED_ESCAPE_ERROR));
         }
         let high_index = index
@@ -623,14 +615,16 @@ impl Context {
         let low_index = index
             .checked_add(2)
             .ok_or_else(|| Error::runtime("URI escape index overflowed"))?;
-        let high = bytes
+        let high = input
             .get(high_index)
             .copied()
+            .and_then(|unit| u8::try_from(unit).ok())
             .and_then(Self::hex_value)
             .ok_or_else(|| Self::uri_error(URI_MALFORMED_ESCAPE_ERROR))?;
-        let low = bytes
+        let low = input
             .get(low_index)
             .copied()
+            .and_then(|unit| u8::try_from(unit).ok())
             .and_then(Self::hex_value)
             .ok_or_else(|| Self::uri_error(URI_MALFORMED_ESCAPE_ERROR))?;
         high.checked_mul(16)

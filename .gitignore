@@ -54,6 +54,7 @@
 !/tests/
 !/tests/**/
 !/tests/**/*.md
+!/tests/**/*.patch
 !/tests/**/*.rs
 !/tests/**/*.js
 !/tests/**/*.txt

@@ -164,8 +164,8 @@ impl Parser {
         let mut current = expr;
         loop {
             match current.kind() {
-                Expr::Parenthesized(inner) => current = inner,
-                Expr::PrivateMember { .. } => {
+                Expr::Parenthesized(inner) | Expr::OptionalChain(inner) => current = inner,
+                Expr::PrivateMember { .. } | Expr::OptionalPrivateMember { .. } => {
                     return Err(Error::parse_at(
                         "private members cannot be deleted",
                         current.span(),

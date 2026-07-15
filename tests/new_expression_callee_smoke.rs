@@ -85,7 +85,6 @@ fn rejects_import_call_constructor_forms() -> TestResult {
     for source in [
         "new import('./empty_FIXTURE.js');",
         "new import.defer('./empty_FIXTURE.js');",
-        "new import.meta;",
     ] {
         let Err(error) = eval(source) else {
             return Err(format!("expected import constructor form to fail: {source}").into());
@@ -94,6 +93,15 @@ fn rejects_import_call_constructor_forms() -> TestResult {
         if !message.contains("import call cannot be used as a constructor") {
             return Err(format!("expected import constructor parse error, got {message}").into());
         }
+    }
+    let Err(error) = eval("new import.meta;") else {
+        return Err("expected import.meta outside a module to fail".into());
+    };
+    if !error
+        .to_string()
+        .contains("import.meta is only valid in modules")
+    {
+        return Err(format!("unexpected import.meta parse error: {error}").into());
     }
     Ok(())
 }

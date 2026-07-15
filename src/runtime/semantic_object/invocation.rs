@@ -222,6 +222,33 @@ impl Context {
         if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
             return self.construct_iterator_object(constructor, &new_target);
         }
+        if matches!(kind, NativeFunctionKind::Map | NativeFunctionKind::Set) {
+            let collection_kind = if kind == NativeFunctionKind::Map {
+                crate::runtime::collections::CollectionKind::Map
+            } else {
+                crate::runtime::collections::CollectionKind::Set
+            };
+            return self.construct_collection_object_with_new_target(
+                collection_kind,
+                args,
+                &new_target,
+            );
+        }
+        if matches!(
+            kind,
+            NativeFunctionKind::WeakMap | NativeFunctionKind::WeakSet
+        ) {
+            let collection_kind = if kind == NativeFunctionKind::WeakMap {
+                crate::runtime::collections::CollectionKind::WeakMap
+            } else {
+                crate::runtime::collections::CollectionKind::WeakSet
+            };
+            return self.construct_weak_collection_object_with_new_target(
+                collection_kind,
+                args,
+                &new_target,
+            );
+        }
         if kind
             == NativeFunctionKind::DisposableStack(
                 crate::runtime::native::DisposableStackFunctionKind::Constructor,

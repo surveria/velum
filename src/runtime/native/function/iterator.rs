@@ -66,8 +66,13 @@ impl Context {
             | IteratorFunctionKind::PrototypeToStringTagSetter => {
                 self.eval_iterator_prototype_setter(kind, args, this_value)
             }
+            IteratorFunctionKind::HelperPrototypeNext => {
+                self.eval_iterator_helper_next_method(this_value)
+            }
+            IteratorFunctionKind::HelperPrototypeReturn => {
+                self.eval_iterator_helper_return_method(this_value)
+            }
             IteratorFunctionKind::HelperNext(id) => self.eval_iterator_helper_next(id),
-            IteratorFunctionKind::HelperReturn(id) => self.eval_iterator_helper_return(id),
             IteratorFunctionKind::StaticNext(id) => self.eval_iterator_static_next(id),
             IteratorFunctionKind::StaticReturn(id) => self.eval_iterator_static_return(id),
             IteratorFunctionKind::WrapNext(id) => self.eval_wrapped_iterator_next(id, this_value),

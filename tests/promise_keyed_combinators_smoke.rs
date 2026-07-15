@@ -50,6 +50,41 @@ fn promise_all_settled_keyed_materializes_standard_entries() -> TestResult {
 }
 
 #[test]
+fn promise_all_settled_keyed_uses_standard_data_descriptors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let observed = "pending";
+        Promise.allSettledKeyed({
+            fulfilled: Promise.resolve(1),
+            rejected: Promise.reject(2)
+        }).then(function(result) {
+            const fulfilled = Object.getOwnPropertyDescriptor(result, "fulfilled");
+            const rejected = Object.getOwnPropertyDescriptor(result, "rejected");
+            const status = Object.getOwnPropertyDescriptor(result.fulfilled, "status");
+            const value = Object.getOwnPropertyDescriptor(result.fulfilled, "value");
+            const reason = Object.getOwnPropertyDescriptor(result.rejected, "reason");
+            observed = [
+                Object.getPrototypeOf(result) === null,
+                Object.getPrototypeOf(result.fulfilled) === Object.prototype,
+                Object.getPrototypeOf(result.rejected) === Object.prototype,
+                fulfilled.writable && fulfilled.enumerable && fulfilled.configurable,
+                rejected.writable && rejected.enumerable && rejected.configurable,
+                status.writable && status.enumerable && status.configurable,
+                value.writable && value.enumerable && value.configurable,
+                reason.writable && reason.enumerable && reason.configurable
+            ].join("|");
+        });
+        "#,
+    )?;
+    ensure_value(
+        &context.eval("observed")?,
+        &Value::from("true|true|true|true|true|true|true|true"),
+    )
+}
+
+#[test]
 fn keyed_combinators_filter_descriptors_and_preserve_symbols() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -44,7 +44,7 @@ const TEST262_MAX_OBJECTS: usize = 1_000_000;
 // corpus budget includes their dispatch while still bounding runaway cases.
 const TEST262_MAX_RUNTIME_STEPS: usize = 250_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 33_554_432;
-const TEST262_MAX_STATEMENTS: usize = 65_536;
+const TEST262_MAX_STATEMENTS: usize = 4_194_304;
 const TEST262_MAX_STRING_LEN: usize = 33_554_432;
 #[cfg(test)]
 const COMPAT_STA_SOURCE: &str = test262_compat_harness::STA_SOURCE;
@@ -696,9 +696,9 @@ negative:
     fn conformance_limits_cover_large_official_vectors() -> TestResult {
         let limits = test262_limits();
         ensure_bool(limits.max_byte_buffer_len == 33_554_432)?;
-        ensure_bool(limits.max_object_properties == 4_194_304)
+        ensure_bool(limits.max_object_properties == 4_194_304)?;
+        ensure_bool(limits.max_statements == 4_194_304)
     }
-
     #[test]
     fn accepts_single_async_completion_signal() -> TestResult {
         ensure_unit(ensure_async_completion(

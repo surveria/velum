@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, numeric::number_to_uint32},
+    runtime::{
+        Context,
+        numeric::{binary16_to_f64, f64_to_binary16, number_to_uint32},
+    },
     value::{ObjectId, Value, format_ecmascript_number},
 };
 
@@ -256,6 +259,7 @@ pub(in crate::runtime) enum TypedArrayElementKind {
     Uint16,
     Int32,
     Uint32,
+    Float16,
     Float32,
     Float64,
     BigInt64,
@@ -275,7 +279,7 @@ pub(in crate::runtime) enum TypedArrayPropertyIndex {
 }
 
 impl TypedArrayElementKind {
-    pub(in crate::runtime) const ALL: [Self; 11] = [
+    pub(in crate::runtime) const ALL: [Self; 12] = [
         Self::Int8,
         Self::Uint8,
         Self::Uint8Clamped,
@@ -283,6 +287,7 @@ impl TypedArrayElementKind {
         Self::Uint16,
         Self::Int32,
         Self::Uint32,
+        Self::Float16,
         Self::Float32,
         Self::Float64,
         Self::BigInt64,
@@ -298,6 +303,7 @@ impl TypedArrayElementKind {
             Self::Uint16 => "Uint16Array",
             Self::Int32 => "Int32Array",
             Self::Uint32 => "Uint32Array",
+            Self::Float16 => "Float16Array",
             Self::Float32 => "Float32Array",
             Self::Float64 => "Float64Array",
             Self::BigInt64 => "BigInt64Array",
@@ -308,7 +314,7 @@ impl TypedArrayElementKind {
     pub(in crate::runtime) const fn bytes_per_element(self) -> usize {
         match self {
             Self::Int8 | Self::Uint8 | Self::Uint8Clamped => 1,
-            Self::Int16 | Self::Uint16 => 2,
+            Self::Int16 | Self::Uint16 | Self::Float16 => 2,
             Self::Int32 | Self::Uint32 | Self::Float32 => 4,
             Self::Float64 | Self::BigInt64 | Self::BigUint64 => 8,
         }
@@ -324,6 +330,7 @@ impl TypedArrayElementKind {
             | Self::Uint16
             | Self::Int32
             | Self::Uint32
+            | Self::Float16
             | Self::Float32
             | Self::Float64 => TypedArrayContentType::Number,
         }

@@ -365,6 +365,12 @@ impl Function {
                 )
             })?;
         }
+        if let Some(import_meta) = &self.script_or_module_import_meta {
+            visitor.visit(
+                VmCallableEdgeKind::JavaScriptFunctionInternal,
+                StrongEdgeReference::Value(import_meta),
+            )?;
+        }
         self.properties
             .visit_strong_edges(VmCallableEdgeKind::JavaScriptFunctionProperty, visitor)?;
         self.visit_super_binding_edges(visitor)?;

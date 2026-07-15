@@ -409,10 +409,8 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         Self::discard_string_args(args.as_slice());
-        let text = self.string_receiver_value(this_value)?;
-        let output = text.to_lowercase();
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
+        let text = self.string_receiver_utf16(this_value)?;
+        self.string_case_map_utf16(&text, &icu_locale::langid!("und"), false)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_to_upper_case(
@@ -421,10 +419,8 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         Self::discard_string_args(args.as_slice());
-        let text = self.string_receiver_value(this_value)?;
-        let output = text.to_uppercase();
-        self.check_string_len(&output)?;
-        self.heap_string_value(&output)
+        let text = self.string_receiver_utf16(this_value)?;
+        self.string_case_map_utf16(&text, &icu_locale::langid!("und"), true)
     }
 
     pub(in crate::runtime) fn string_prototype_property_value(

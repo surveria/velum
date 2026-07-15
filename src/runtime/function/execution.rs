@@ -8,7 +8,7 @@ use crate::{
         function::FunctionSuperBinding,
         roots::VmRootKind,
     },
-    value::{FunctionId, Value},
+    value::{ErrorName, FunctionId, Value},
 };
 
 impl Context {
@@ -104,12 +104,15 @@ impl Context {
             .call_depth
             .checked_add(1)
             .ok_or_else(|| Error::limit("call stack depth overflowed"))?;
-        if self.call_depth > self.limits.max_expression_depth {
+        if self.call_depth > self.limits.max_call_depth {
             self.call_depth = self.call_depth.saturating_sub(1);
-            return Err(Error::limit(format!(
-                "call stack depth exceeded {}",
-                self.limits.max_expression_depth
-            )));
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                format!(
+                    "maximum call stack depth exceeded {}",
+                    self.limits.max_call_depth
+                ),
+            ));
         }
         let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
             id,

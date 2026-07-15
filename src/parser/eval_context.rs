@@ -66,6 +66,7 @@ pub fn parse_eval_with_usage_in_context(
     context: EvalParseContext<'_>,
 ) -> Result<ParsedProgram> {
     let mut parser = Parser::new(tokens, limits, context.strict_mode);
+    parser.forbid_top_level_await_expression();
     parser.super_context = SuperContext::new(
         context.super_context.allows_property(),
         context.super_context.allows_call(),

@@ -24,6 +24,19 @@ impl BytecodeCompiler<'_> {
         exits: Vec<OptionalChainExit>,
         undefined_count: usize,
     ) -> Result<()> {
+        self.finish_optional_chain_exits_with(
+            exits,
+            undefined_count,
+            OptionalChainFallback::Undefined,
+        )
+    }
+
+    fn finish_optional_chain_exits_with(
+        &mut self,
+        exits: Vec<OptionalChainExit>,
+        value_count: usize,
+        fallback: OptionalChainFallback,
+    ) -> Result<()> {
         let normal_end = self.emit_jump();
         let mut branch_ends = Vec::with_capacity(exits.len());
         for exit in exits {
@@ -32,8 +45,13 @@ impl BytecodeCompiler<'_> {
             for _ in 0..exit.pop_count {
                 self.emit(BytecodeInstruction::Pop);
             }
-            for _ in 0..undefined_count {
-                self.emit(BytecodeInstruction::PushUndefined);
+            for _ in 0..value_count {
+                self.emit(match fallback {
+                    OptionalChainFallback::Undefined => BytecodeInstruction::PushUndefined,
+                    OptionalChainFallback::True => {
+                        BytecodeInstruction::PushLiteral(crate::value::Value::Bool(true))
+                    }
+                });
             }
             branch_ends.push(self.emit_jump());
         }
@@ -43,6 +61,69 @@ impl BytecodeCompiler<'_> {
             self.patch_jump(branch_end, end_address)?;
         }
         Ok(())
+    }
+
+    pub(super) fn compile_delete_optional_chain(
+        &mut self,
+        expression: &Expression,
+        strict: bool,
+    ) -> Result<()> {
+        let mut exits = Vec::new();
+        match expression.kind() {
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_optional_chain_part(object, &mut exits)?;
+                self.emit(BytecodeInstruction::DeleteStaticProperty {
+                    property: Self::compile_property(property, *access),
+                    strict,
+                });
+            }
+            Expr::OptionalMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_optional_chain_part(object, &mut exits)?;
+                self.record_optional_chain_exit(&mut exits, 1);
+                self.emit(BytecodeInstruction::DeleteStaticProperty {
+                    property: Self::compile_property(property, *access),
+                    strict,
+                });
+            }
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_optional_chain_part(object, &mut exits)?;
+                self.compile_expr(property)?;
+                self.emit(BytecodeInstruction::DeleteComputedProperty {
+                    property: Self::compile_dynamic_property(*access),
+                    strict,
+                });
+            }
+            Expr::OptionalComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_optional_chain_part(object, &mut exits)?;
+                self.record_optional_chain_exit(&mut exits, 1);
+                self.compile_expr(property)?;
+                self.emit(BytecodeInstruction::DeleteComputedProperty {
+                    property: Self::compile_dynamic_property(*access),
+                    strict,
+                });
+            }
+            _ => {
+                self.compile_optional_chain_part(expression, &mut exits)?;
+                self.emit(BytecodeInstruction::DeleteValue);
+            }
+        }
+        self.finish_optional_chain_exits_with(exits, 1, OptionalChainFallback::True)
     }
 
     pub(super) fn compile_parenthesized_optional_chain_call(
@@ -305,4 +386,10 @@ impl BytecodeCompiler<'_> {
             pop_count,
         });
     }
+}
+
+#[derive(Clone, Copy)]
+enum OptionalChainFallback {
+    Undefined,
+    True,
 }

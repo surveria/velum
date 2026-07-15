@@ -25,8 +25,8 @@ use super::{
 pub(in crate::runtime) const ITERATOR_GLOBAL_NAME: &str = "Iterator";
 const ITERATOR_TAG: &str = "Iterator";
 const ITERATOR_HELPER_TAG: &str = "Iterator Helper";
-const ITERATOR_NEXT_NAME: &str = "next";
-const ITERATOR_RETURN_NAME: &str = "return";
+pub(super) const ITERATOR_NEXT_NAME: &str = "next";
+pub(super) const ITERATOR_RETURN_NAME: &str = "return";
 const PROTOTYPE_PROPERTY_NAME: &str = "prototype";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
@@ -396,6 +396,7 @@ impl Context {
         let Value::Object(helper_prototype) = helper else {
             return Err(Error::runtime("iterator helper prototype creation failed"));
         };
+        self.install_iterator_helper_prototype_methods(helper_prototype)?;
         self.install_iterator_to_string_tag(helper_prototype, ITERATOR_HELPER_TAG)?;
         let wrapped = self.objects.create_with_prototype(
             Some(parent),
@@ -523,12 +524,8 @@ impl Context {
     fn create_iterator_helper_object(&mut self, state: IteratorHelperState) -> Result<Value> {
         let prototype = self.iterator_helper_prototype_id()?;
         let id = self.create_iterator_helper(state)?;
-        let next = self.create_native_function(
+        let state_token = self.create_ephemeral_native_function(
             NativeFunctionKind::Iterator(IteratorFunctionKind::HelperNext(id)),
-            Value::Undefined,
-        )?;
-        let return_fn = self.create_native_function(
-            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperReturn(id)),
             Value::Undefined,
         )?;
         let constructor_key = self.object_constructor_property_key()?;
@@ -541,8 +538,7 @@ impl Context {
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("iterator helper object creation failed"));
         };
-        self.define_non_enumerable_object_property(*object_id, ITERATOR_NEXT_NAME, next)?;
-        self.define_non_enumerable_object_property(*object_id, ITERATOR_RETURN_NAME, return_fn)?;
+        self.define_collection_iterator_state(*object_id, state_token)?;
         Ok(object)
     }
 

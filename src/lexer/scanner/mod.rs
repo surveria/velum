@@ -9,11 +9,11 @@ use crate::{
     lexer::classification::EscapeContext,
     lexer::support::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
-        HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
-        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_DECIMAL, RADIX_OCTAL,
-        UNICODE_ESCAPE_DIGITS, append_utf16_value, checked_hex_accumulate, digit_value,
-        digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
-        is_line_terminator, numeric_prefix, push_utf16_char, unicode_char,
+        HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR,
+        PARAGRAPH_SEPARATOR, RADIX_DECIMAL, RADIX_OCTAL, UNICODE_ESCAPE_DIGITS, append_utf16_value,
+        checked_hex_accumulate, digit_value, digits_to_number, is_exponent_marker,
+        is_identifier_part, is_identifier_start, is_line_terminator, numeric_prefix,
+        push_utf16_char, unicode_char,
     },
     regexp_syntax::validate_regexp_literal_utf16,
     source::{SourceId, SourceSpan},
@@ -22,6 +22,8 @@ use crate::{
 mod names;
 mod operators;
 mod template;
+
+const ZERO_WIDTH_NO_BREAK_SPACE: char = '\u{FEFF}';
 
 #[derive(Clone)]
 pub(super) struct LexerCheckpoint {
@@ -98,7 +100,7 @@ impl Lexer {
                 });
             };
             match ch {
-                ch if ch.is_whitespace() => {
+                ch if ch.is_whitespace() || ch == ZERO_WIDTH_NO_BREAK_SPACE => {
                     if is_line_terminator(ch) {
                         self.line_terminator_before = true;
                         self.line_start = true;
@@ -619,12 +621,6 @@ impl Lexer {
             };
             if ch == '}' {
                 return self.finish_braced_unicode_escape_value(escape_offset, value, digits);
-            }
-            if digits >= MAX_BRACED_UNICODE_ESCAPE_DIGITS {
-                return Err(Error::lex(
-                    "braced unicode escape has too many digits",
-                    digit_offset,
-                ));
             }
             let Some(digit) = ch.to_digit(16) else {
                 return Err(Error::lex(

@@ -6,8 +6,8 @@ use crate::{
 
 use super::{
     ByteBuffer, DETACHED_BUFFER_ERROR, TYPED_ARRAY_INDEX_ERROR, TYPED_ARRAY_RANGE_ERROR,
-    TypedArrayContentType, TypedArrayElementKind, TypedArrayView, number_to_uint32, to_float32,
-    to_int8, to_int16, to_int32, to_uint8, to_uint8_clamp, to_uint16,
+    TypedArrayContentType, TypedArrayElementKind, TypedArrayView, binary16_to_f64, f64_to_binary16,
+    number_to_uint32, to_float32, to_int8, to_int16, to_int32, to_uint8, to_uint8_clamp, to_uint16,
 };
 
 const MAX_ELEMENT_BYTES: usize = 8;
@@ -130,6 +130,9 @@ impl TypedArrayElementKind {
             Self::Uint32 => {
                 Value::Number(f64::from(u32::from_ne_bytes(read_array(bytes, offset)?)))
             }
+            Self::Float16 => Value::Number(binary16_to_f64(u16::from_ne_bytes(read_array(
+                bytes, offset,
+            )?))),
             Self::Float32 => {
                 Value::Number(f64::from(f32::from_ne_bytes(read_array(bytes, offset)?)))
             }
@@ -167,6 +170,7 @@ impl TypedArrayElementKind {
                 | Self::Uint16
                 | Self::Int32
                 | Self::Uint32
+                | Self::Float16
                 | Self::Float32
                 | Self::Float64 => Err(Error::runtime(
                     "BigInt typed array content type did not match its element kind",
@@ -186,6 +190,9 @@ impl TypedArrayElementKind {
             Self::Uint32 => TypedArrayElementBytes::from_slice(
                 &number_to_uint32(number, self.name())?.to_ne_bytes(),
             ),
+            Self::Float16 => {
+                TypedArrayElementBytes::from_slice(&f64_to_binary16(number).to_ne_bytes())
+            }
             Self::Float32 => TypedArrayElementBytes::from_slice(&to_float32(number).to_ne_bytes()),
             Self::Float64 => TypedArrayElementBytes::from_slice(&number.to_ne_bytes()),
             Self::BigInt64 | Self::BigUint64 => Err(Error::runtime(

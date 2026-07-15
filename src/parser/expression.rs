@@ -13,6 +13,8 @@ use crate::{
 
 use super::{ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, SUPER_IDENTIFIER_NAME};
 
+mod new_expression;
+
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_DEFER_PROPERTY_NAME: &str = "defer";
 const IMPORT_META_PROPERTY_NAME: &str = "meta";
@@ -23,13 +25,11 @@ enum ArrowParameters {
     Single,
     Parenthesized,
 }
-
 #[derive(Debug, Clone, Copy)]
 struct ArrowSignature {
     is_async: bool,
     parameters: ArrowParameters,
 }
-
 impl Parser {
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
@@ -224,45 +224,6 @@ impl Parser {
             return self.update_expr(UpdateOp::Decrement, false, expr, self.previous_span());
         }
         Ok(expr)
-    }
-
-    fn new_expr(&mut self) -> Result<Expression> {
-        let new_span = self.previous_span();
-        if self.match_kind(&TokenKind::Dot) {
-            let expr = self.new_target_expr(new_span)?;
-            return self.call_suffix(expr);
-        }
-        if self.match_kind(&TokenKind::Import) {
-            return Err(Error::parse_at(
-                "import call cannot be used as a constructor",
-                new_span,
-            ));
-        }
-        let constructor = if self.match_kind(&TokenKind::New) {
-            self.new_expr()?
-        } else {
-            let constructor = self.primary()?;
-            self.member_suffix(constructor)?
-        };
-        let args = if self.match_kind(&TokenKind::LParen) {
-            let args = if self.check(&TokenKind::RParen) {
-                Vec::new()
-            } else {
-                self.with_in_operator_allowed(true, Self::arguments)?
-            };
-            self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
-            args
-        } else {
-            Vec::new()
-        };
-        let expr = self.expression_node(
-            new_span,
-            Expr::New {
-                constructor: Box::new(constructor),
-                args,
-            },
-        );
-        self.call_suffix(expr)
     }
 
     fn member_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
@@ -724,7 +685,7 @@ impl Parser {
         inherited_strict: bool,
         is_async: bool,
     ) -> Result<super::ParsedFunctionBody> {
-        self.with_await_context(is_async, is_async, |parser| {
+        self.with_function_await_context(is_async, is_async, |parser| {
             parser.with_yield_expression(false, |parser| {
                 if parser.match_kind(&TokenKind::LBrace) {
                     return parser.function_body(inherited_strict);

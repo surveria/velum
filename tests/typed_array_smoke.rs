@@ -74,6 +74,7 @@ fn supports_numeric_element_kinds_and_array_like_sources() -> TestResult {
         let u16 = new Uint16Array([-1, 65537]);
         let i32 = new Int32Array([2147483648, -2147483649]);
         let u32 = new Uint32Array([-1, 4294967297]);
+        let f16 = new Float16Array([-0, 0, 1.337, 65520, NaN]);
         let f32 = new Float32Array([1.337, Infinity, NaN]);
         let f64 = new Float64Array([Math.PI, -0]);
 
@@ -89,6 +90,9 @@ fn supports_numeric_element_kinds_and_array_like_sources() -> TestResult {
             u16[0] === 65535 && u16[1] === 1 &&
             i32[0] === -2147483648 && i32[1] === 2147483647 &&
             u32[0] === 4294967295 && u32[1] === 1 &&
+            1 / f16[0] === -Infinity && 1 / f16[1] === Infinity &&
+            f16[2] === Math.f16round(1.337) && f16[3] === Infinity &&
+            Number.isNaN(f16[4]) &&
             f32[0] === Math.fround(1.337) && f32[1] === Infinity &&
             Number.isNaN(f32[2]) && f64[0] === Math.PI &&
             1 / f64[1] === -Infinity ? 42 : 0
@@ -126,13 +130,15 @@ fn supports_shared_array_buffer_views_and_constructor_metadata() -> TestResult {
         let names = [
             Int8Array, Uint8Array, Uint8ClampedArray,
             Int16Array, Uint16Array, Int32Array,
-            Uint32Array, Float32Array, Float64Array
+            Uint32Array, Float16Array, Float32Array, Float64Array
         ];
         let metadata = names[0].name === "Int8Array" &&
-            names[8].name === "Float64Array" &&
-            names[0].length === 3 && names[8].length === 3 &&
+            names[9].name === "Float64Array" &&
+            names[0].length === 3 && names[9].length === 3 &&
             Int16Array.BYTES_PER_ELEMENT === 2 &&
+            Float16Array.BYTES_PER_ELEMENT === 2 &&
             Float64Array.BYTES_PER_ELEMENT === 8 &&
+            Float16Array.prototype.BYTES_PER_ELEMENT === 2 &&
             Int16Array.prototype.BYTES_PER_ELEMENT === 2 &&
             typeof ArrayBuffer.prototype.resize === "function";
 

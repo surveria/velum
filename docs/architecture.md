@@ -84,6 +84,33 @@ parser AST modules directly. If execution needs a new construct, the construct
 must first be represented as bytecode-owned metadata and then executed through
 the VM.
 
+Contextual `await` grammar is owned by the parser boundary that introduces the
+context. Host script compilation may retain the explicit top-level-await
+extension for a future asynchronous evaluation API, while direct and indirect
+eval parse ECMAScript Script code and therefore reject a top-level await
+expression. Module code keeps `await` reserved across every nested ordinary
+function. Function parameters and bodies select their own async context, and
+class-field initializers neither inherit an enclosing async function's await
+expressions nor lose the Module reservation. These contexts are restored at
+every nested parse boundary instead of being inferred from emitted bytecode.
+
+Frontend tokens preserve ECMAScript distinctions instead of encoding grammar
+forms as ordinary strings. U+FEFF is accepted as source whitespace, braced
+Unicode escapes are bounded by the decoded code point rather than their digit
+count, and template-continuation tokens delimit an empty `yield` operand.
+Likewise, namespace imports use a typed import-name variant, so the ordinary
+string export name `"*"` remains importable. `new import.meta()` is parsed as a
+constructor expression in Module code and reaches the ordinary runtime
+constructability check; only dynamic-import constructor forms are syntax
+errors.
+
+Each source-text module creates its `import.meta` object before declaration
+instantiation. Functions hoisted or evaluated by that module retain the same
+module provenance and a traced edge to that object. Calling the function from
+another module therefore changes neither `import.meta` identity nor the
+referrer used by a nested dynamic import; ambient caller evaluation state is
+not a substitute for the function's defining Script-or-Module owner.
+
 Runtime and public API terminology should call guard misses `slow paths` or
 `generic semantic paths`. A guarded bytecode, inline-cache, direct-native, slot,
 shape, or dense-array specialization may take that slow path when its guard
@@ -126,6 +153,14 @@ native global binding and therefore follows normal lookup, call, shadowing,
 metadata, and error rules. `assert.throws` is installed by the JavaScript test
 harness. The compiler and bytecode model contain no source-name recognizers or
 harness-only instructions for either function.
+
+The virtual global-binding layer synthesizes only own-property facts. Global
+prototype traversal belongs to the shared semantic `[[HasProperty]]`,
+receiver-aware `[[Get]]`, and `[[Set]]` owners, so Proxy prototypes observe the
+global object as receiver. Sloppy creation of an absent global also delegates
+to `Set(..., Throw = false)`, preserving non-extensibility without turning a
+false result into an engine error. Variable initializers resolve their binding
+reference before evaluating the right-hand side, including inside `with`.
 
 Removing the parser AST itself is a separate front-end redesign, not fallback
 cleanup. It requires a direct parser-to-frontend-IR or parser-to-bytecode
@@ -235,6 +270,13 @@ operands and quickening can evolve without exposing internal VM details.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
+Mutable intrinsic state that ECMAScript exposes per realm also belongs to
+`RealmState`, not to a process-wide builtin singleton. This includes the Annex B
+legacy `RegExp` constructor accessors: each realm retains its own last successful
+match, exact UTF-16 subject, captures, contexts, and writable input value. The
+retained strings remain traced VM heap values, and their span associations use
+the ordinary storage ledger and limits.
+
 Each `Vm` also owns the origin and last observed value for its monotonic
 `performance.now()` clock. The default source is `std::time::Instant`, while
 the embedding API accepts a duration reader for deterministic execution. A
@@ -308,12 +350,13 @@ Current limits cover:
 - source length
 - statement count
 - expression nesting depth
+- ECMAScript function-call depth, reported to JavaScript as `RangeError`
 - runtime evaluation steps
 - string length
 - number of global bindings
 - number of interned atoms as a reported usage metric
 
-Future limits should cover heap budgets, atom table budgets, stack budgets, module loading, and host callback quotas.
+Future limits should cover heap budgets, atom table budgets, module loading, and host callback quotas.
 
 Every new VM-facing feature should define how it participates in limits before it is considered complete. This includes parser work, runtime steps, heap growth, host callback calls, queued jobs, module loads, and output buffering.
 

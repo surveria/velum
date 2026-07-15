@@ -97,6 +97,9 @@ fn uri_utility_builtins_encode_decode_and_report_uri_errors() -> TestResult {
         let invalidPercent = false;
         let invalidUtf8 = false;
         let invalidSurrogates = 0;
+        let loneHigh = String.fromCharCode(0xD800);
+        let loneLow = String.fromCharCode(0xDC00);
+        let mixedSurrogates = "a" + loneHigh + loneLow + "z";
         try {
             decodeURIComponent("%");
         } catch (error) {
@@ -129,6 +132,10 @@ fn uri_utility_builtins_encode_decode_and_report_uri_errors() -> TestResult {
             encodedComponent === "front%20camera%3Fx%3D1%26name%3D%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D0%B0" &&
             decodedUri === "front camera%3Fx=1%26name=камера" &&
             decodedComponent === "front camera?x=1&name=камера" &&
+            decodeURI(loneHigh).charCodeAt(0) === 0xD800 &&
+            decodeURIComponent(loneLow).charCodeAt(0) === 0xDC00 &&
+            decodeURI(mixedSurrogates) === mixedSurrogates &&
+            decodeURIComponent(mixedSurrogates) === mixedSurrogates &&
             invalidPercent &&
             invalidUtf8 &&
             invalidSurrogates === 2 ? 42 : 0

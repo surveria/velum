@@ -386,12 +386,23 @@ impl Context {
 
     fn instantiate_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
         for pending in graph {
-            pending.scope = Some(self.instantiate_module_scope(&pending.module)?);
+            let import_meta = self.create_import_meta()?;
+            pending.scope = Some(self.instantiate_module_scope(
+                &pending.name,
+                import_meta.clone(),
+                &pending.module,
+            )?);
+            pending.import_meta = Some(import_meta);
         }
         Ok(())
     }
 
-    fn instantiate_module_scope(&mut self, module: &CompiledModule) -> Result<BindingScope> {
+    fn instantiate_module_scope(
+        &mut self,
+        name: &str,
+        import_meta: Value,
+        module: &CompiledModule,
+    ) -> Result<BindingScope> {
         let script = module.script();
         let atom_cache = StaticNameAtomCacheHandle::new(
             script.usage().static_name_count(),
@@ -400,12 +411,16 @@ impl Context {
         );
         let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
         self.push_lexical_scope()?;
+        let previous_module = self.active_module_name.replace(name.to_owned());
+        let previous_import_meta = self.active_import_meta.replace(import_meta);
         let result = self.with_static_name_caches(
             atom_cache,
             binding_cache,
             script.binding_layout().clone(),
             |context| context.hoist_bytecode_declarations(script.bytecode().hoist_plan()),
         );
+        self.active_import_meta = previous_import_meta;
+        self.active_module_name = previous_module;
         let scope = self
             .pop_lexical_scope()?
             .ok_or_else(|| Error::runtime("module scope disappeared during instantiation"))?;

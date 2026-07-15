@@ -11,11 +11,13 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::NativeFunctionKind;
+use super::{
+    NativeFunctionKind,
+    iterator::{ITERATOR_NEXT_NAME, ITERATOR_RETURN_NAME},
+};
 
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
-const ITERATOR_RETURN_NAME: &str = "return";
 const ITERATOR_STEP_CHARGE: usize = 1;
 const FLAT_MAP_PRIMITIVE_ERROR: &str = "Iterator.prototype.flatMap result must be an object";
 
@@ -29,6 +31,22 @@ enum HelperPlan {
 }
 
 impl Context {
+    pub(super) fn install_iterator_helper_prototype_methods(
+        &mut self,
+        prototype: ObjectId,
+    ) -> Result<()> {
+        let next = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeNext),
+            Value::Undefined,
+        )?;
+        let return_fn = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperPrototypeReturn),
+            Value::Undefined,
+        )?;
+        self.define_non_enumerable_object_property(prototype, ITERATOR_NEXT_NAME, next)?;
+        self.define_non_enumerable_object_property(prototype, ITERATOR_RETURN_NAME, return_fn)
+    }
+
     pub(super) fn iterator_inherits_prototype(
         &mut self,
         iterator: &Value,
@@ -160,6 +178,14 @@ impl Context {
             state.executing = false;
         }
         result
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_helper_next_method(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let state_id = self.iterator_helper_receiver_state(this_value)?;
+        self.eval_iterator_helper_next(state_id)
     }
 
     fn eval_iterator_helper_next_active(
@@ -427,6 +453,31 @@ impl Context {
                 .into_result()?;
         }
         self.create_iterator_result_object(Value::Undefined, true)
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_helper_return_method(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let state_id = self.iterator_helper_receiver_state(this_value)?;
+        self.eval_iterator_helper_return(state_id)
+    }
+
+    fn iterator_helper_receiver_state(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<CollectionIteratorId> {
+        let Some(kind) = self.iterator_receiver_state_function_kind(this_value)? else {
+            return Err(Error::type_error(
+                "Iterator helper method requires a helper receiver",
+            ));
+        };
+        let NativeFunctionKind::Iterator(IteratorFunctionKind::HelperNext(state_id)) = kind else {
+            return Err(Error::type_error(
+                "Iterator helper method requires a helper receiver",
+            ));
+        };
+        Ok(state_id)
     }
 
     pub(in crate::runtime::native) fn eval_wrapped_iterator_next(

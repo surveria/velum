@@ -4,7 +4,7 @@ use crate::{
     ast::{FunctionKind, FunctionParam, Statement, Stmt},
     error::Result,
     lexer::TokenKind,
-    syntax::StaticNameId,
+    syntax::{StaticBinding, StaticNameId},
 };
 
 use super::super::Parser;
@@ -24,21 +24,24 @@ impl Parser {
             self.with_function_arguments_context(|parser| {
                 parser.with_new_target_scope(|parser| {
                     parser.with_super_context(false, false, |parser| {
-                        let parameters =
-                            parser.with_await_context(false, kind.is_async(), |parser| {
+                        let parameters = parser.with_function_await_context(
+                            false,
+                            kind.is_async(),
+                            |parser| {
                                 parser.with_yield_expression(false, |parser| {
                                     parser.with_yield_identifier_reserved(
                                         kind.is_generator(),
                                         Self::function_parameters,
                                     )
                                 })
-                            })?;
+                            },
+                        )?;
                         parser.consume(
                             &TokenKind::RParen,
                             "expected ')' after function parameters",
                         )?;
                         parser.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-                        let body = parser.with_await_context(
+                        let body = parser.with_function_await_context(
                             kind.is_async(),
                             kind.is_async(),
                             |parser| {
@@ -72,6 +75,7 @@ impl Parser {
         Self::suppress_parameter_conflicting_annex_b_bindings(
             &mut statements,
             &parameters.params,
+            arguments_binding.as_ref(),
             strict,
         )?;
         let params = parameters.into_params();
@@ -99,12 +103,16 @@ impl Parser {
     pub(in crate::parser) fn suppress_parameter_conflicting_annex_b_bindings(
         statements: &mut [Statement],
         params: &[FunctionParam],
+        arguments_binding: Option<&StaticBinding>,
         strict: bool,
     ) -> Result<()> {
         if strict {
             return Ok(());
         }
         let mut excluded_names = BTreeSet::new();
+        if let Some(arguments) = arguments_binding {
+            excluded_names.insert(arguments.name().id());
+        }
         for param in params {
             param.target.for_each_binding(&mut |binding| {
                 excluded_names.insert(binding.name().id());

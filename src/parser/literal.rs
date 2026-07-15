@@ -154,15 +154,18 @@ impl Parser {
             self.with_function_arguments_context(|parser| {
                 parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, false, |parser| {
-                        let parameters =
-                            parser.with_await_context(false, false, Self::function_parameters)?;
+                        let parameters = parser.with_function_await_context(
+                            false,
+                            false,
+                            Self::function_parameters,
+                        )?;
                         parser.consume(
                             &TokenKind::RParen,
                             "expected ')' after accessor parameters",
                         )?;
                         Self::validate_object_accessor_parameters(kind, &parameters, start)?;
                         parser.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
-                        parser.with_await_context(false, false, |parser| {
+                        parser.with_function_await_context(false, false, |parser| {
                             let body = parser.function_body(inherited_strict)?;
                             Ok((parameters, body))
                         })
@@ -187,6 +190,7 @@ impl Parser {
         Self::suppress_parameter_conflicting_annex_b_bindings(
             &mut statements,
             &parameters.params,
+            arguments_binding.as_ref(),
             strict,
         )?;
         let params = parameters.into_params();
@@ -269,26 +273,33 @@ impl Parser {
             self.with_function_arguments_context(|parser| {
                 parser.with_new_target_scope(|parser| {
                     parser.with_super_context(true, false, |parser| {
-                        let parameters =
-                            parser.with_await_context(false, kind.is_async(), |parser| {
+                        let parameters = parser.with_function_await_context(
+                            false,
+                            kind.is_async(),
+                            |parser| {
                                 parser.with_yield_expression(false, |parser| {
                                     parser.with_yield_identifier_reserved(
                                         kind.is_generator(),
                                         Self::function_parameters,
                                     )
                                 })
-                            })?;
+                            },
+                        )?;
                         parser.reject_duplicate_parameters(&parameters.bound_names)?;
                         parser
                             .consume(&TokenKind::RParen, "expected ')' after method parameters")?;
                         parser.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-                        parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
-                            let body = parser
-                                .with_yield_expression(kind.is_generator(), |parser| {
-                                    parser.function_body(inherited_strict)
-                                })?;
-                            Ok((parameters, body))
-                        })
+                        parser.with_function_await_context(
+                            kind.is_async(),
+                            kind.is_async(),
+                            |parser| {
+                                let body = parser
+                                    .with_yield_expression(kind.is_generator(), |parser| {
+                                        parser.function_body(inherited_strict)
+                                    })?;
+                                Ok((parameters, body))
+                            },
+                        )
                     })
                 })
             })?;
@@ -310,6 +321,7 @@ impl Parser {
         Self::suppress_parameter_conflicting_annex_b_bindings(
             &mut statements,
             &parameters.params,
+            arguments_binding.as_ref(),
             strict,
         )?;
         let params = parameters.into_params();
