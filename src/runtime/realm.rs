@@ -8,6 +8,7 @@ use crate::{
         abstract_operations::SetFailureBehavior,
         binding::scope::{BindingScope, BindingScopeStorageFootprint},
         native::{IntlFunctionKind, NativeFunctionKind, NativeFunctionRegistry},
+        regexp_statics::RealmRegExpStatics,
         storage_ledger::VmStorageLedger,
     },
     storage::atom::AtomId,
@@ -51,6 +52,7 @@ pub(in crate::runtime) struct RealmState {
     pub(super) globals: BindingScope,
     pub(super) builtin_globals: BindingScope,
     pub(super) object_global_names: BTreeSet<AtomId>,
+    pub(super) regexp_statics: RealmRegExpStatics,
     pub(super) native_function_registry: NativeFunctionRegistry,
     pub(super) throw_type_error: Option<NativeFunctionId>,
     pub(super) shadow_realm_constructor: Option<NativeFunctionId>,
@@ -72,8 +74,9 @@ impl RealmState {
     pub(super) fn new(storage_ledger: VmStorageLedger) -> Self {
         Self {
             globals: BindingScope::new_active(storage_ledger.clone()),
-            builtin_globals: BindingScope::new_active(storage_ledger),
+            builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             object_global_names: BTreeSet::new(),
+            regexp_statics: RealmRegExpStatics::new(storage_ledger),
             native_function_registry: NativeFunctionRegistry::new(),
             throw_type_error: None,
             shadow_realm_constructor: None,
@@ -132,6 +135,7 @@ impl RealmState {
         .saturating_add(usize::from(
             self.abstract_module_source_constructor.is_some(),
         ))
+        .saturating_add(self.regexp_statics.association_count())
     }
 
     pub(super) fn anchor_objects(&self) -> impl Iterator<Item = ObjectId> {
@@ -157,6 +161,10 @@ impl RealmState {
             .ids()
             .chain(self.throw_type_error)
             .chain(self.shadow_realm_constructor)
+    }
+
+    pub(super) fn anchor_values(&self) -> impl Iterator<Item = &Value> {
+        self.regexp_statics.anchor_values()
     }
 
     pub(super) fn host_function_ids(&self) -> impl Iterator<Item = HostFunctionId> + '_ {

@@ -239,6 +239,9 @@ impl Context {
             for id in realm.anchor_objects() {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
             }
+            for value in realm.anchor_values() {
+                visitor.visit_value(VmRootKind::RuntimeAnchor, value)?;
+            }
         }
         if let Some(symbol) = self.iterator_symbol {
             visitor.visit_property_key(VmRootKind::RuntimeAnchor, PropertyKey::symbol(symbol))?;

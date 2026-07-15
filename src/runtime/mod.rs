@@ -51,6 +51,7 @@ mod private;
 pub mod promise;
 pub mod property;
 mod realm;
+mod regexp_statics;
 mod resource_scope;
 pub mod retained_values;
 mod roots;

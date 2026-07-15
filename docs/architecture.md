@@ -270,6 +270,13 @@ operands and quickening can evolve without exposing internal VM details.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
+Mutable intrinsic state that ECMAScript exposes per realm also belongs to
+`RealmState`, not to a process-wide builtin singleton. This includes the Annex B
+legacy `RegExp` constructor accessors: each realm retains its own last successful
+match, exact UTF-16 subject, captures, contexts, and writable input value. The
+retained strings remain traced VM heap values, and their span associations use
+the ordinary storage ledger and limits.
+
 Each `Vm` also owns the origin and last observed value for its monotonic
 `performance.now()` clock. The default source is `std::time::Instant`, while
 the embedding API accepts a duration reader for deterministic execution. A
