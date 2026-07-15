@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260715T210831Z.md`
-- Task: PR #652: engine: add an interactive multiline Velum shell
-- Performance: 6.82x (4/5 >1.00x) (from `velum-test-report-20260715T210831Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260715T210831Z.md`)
+- `velum-test-report-20260715T213450Z.md`
+- Task: PR #653: runner: make Ctrl-C exit the interactive Velum shell
+- Performance: 6.80x (4/5 >1.00x) (from `velum-test-report-20260715T213450Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260715T213450Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260715T210831Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260715T213450Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -582,3 +582,4 @@ Latest report:
 | `20260715T113302Z` `852d3da` PR #646: docs: redesign the README marketing hero | 7.01x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260715T143823Z` `d94392c` PR #651: Refresh Velum benchmark baseline and recover chart publication | 6.87x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260715T210831Z` `b53e64f` PR #652: engine: add an interactive multiline Velum shell | 6.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260715T213450Z` `fcf8df5` PR #653: runner: make Ctrl-C exit the interactive Velum shell | 6.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
