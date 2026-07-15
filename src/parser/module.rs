@@ -12,6 +12,7 @@ use super::{Parser, property_name::keyword_property_name};
 const AS_KEYWORD: &str = "as";
 const DEFER_KEYWORD: &str = "defer";
 const FROM_KEYWORD: &str = "from";
+const SOURCE_KEYWORD: &str = "source";
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct ModuleSyntax {
@@ -38,6 +39,7 @@ pub struct ModuleRequestEntry {
 pub enum ModuleImportName {
     Name(String),
     Namespace,
+    Source,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -94,7 +96,11 @@ impl Parser {
             return Ok(());
         }
 
-        let phase = if self
+        let source_phase = self.source_phase_import_start();
+        let phase = if source_phase {
+            let _source_keyword = self.advance_token("expected contextual 'source' keyword")?;
+            ImportPhase::Source
+        } else if self
             .peek()
             .is_some_and(|token| token.is_unescaped_identifier_named(DEFER_KEYWORD))
             && matches!(self.peek_kind(1), Some(TokenKind::Star))
@@ -105,7 +111,10 @@ impl Parser {
             ImportPhase::Evaluation
         };
         let mut pending = Vec::new();
-        if !self.check(&TokenKind::Star) && !self.check(&TokenKind::LBrace) {
+        if source_phase {
+            let binding = self.consume_binding_identifier("expected source import binding")?;
+            pending.push((SOURCE_KEYWORD.to_owned(), binding));
+        } else if !self.check(&TokenKind::Star) && !self.check(&TokenKind::LBrace) {
             let binding = self.consume_binding_identifier("expected default import binding")?;
             pending.push(("default".to_owned(), binding));
             if self.match_kind(&TokenKind::Comma) {
@@ -122,7 +131,9 @@ impl Parser {
             let local_name = binding.name().as_str().to_owned();
             module.imports.push(ModuleImportEntry {
                 request: request.clone(),
-                import_name: if import_name == "*" {
+                import_name: if phase == ImportPhase::Source {
+                    ModuleImportName::Source
+                } else if import_name == "*" {
                     ModuleImportName::Namespace
                 } else {
                     ModuleImportName::Name(import_name)
@@ -134,6 +145,20 @@ impl Parser {
             );
         }
         self.consume_statement_terminator("expected terminator after import declaration")
+    }
+
+    fn source_phase_import_start(&mut self) -> bool {
+        self.peek_token(0)
+            .is_some_and(|token| token.is_unescaped_identifier_named(SOURCE_KEYWORD))
+            && self.peek_token(1).is_some_and(|token| {
+                matches!(
+                    &token.kind,
+                    TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Await
+                )
+            })
+            && self
+                .peek_token(2)
+                .is_some_and(|token| token.is_unescaped_identifier_named(FROM_KEYWORD))
     }
 
     fn module_import_tail(
@@ -238,13 +263,18 @@ impl Parser {
         let (local_name, default_expression) = match expression.into_kind() {
             Expr::Function {
                 id,
-                name: Some(name),
+                name,
                 arguments_binding,
                 params,
                 body,
                 kind,
                 strict,
             } if declaration_like => {
+                let name = if let Some(name) = name {
+                    name
+                } else {
+                    self.static_binding_name("default".to_owned())?
+                };
                 let local_name = name.name().as_str().to_owned();
                 statements.push(self.statement_node(
                     start,

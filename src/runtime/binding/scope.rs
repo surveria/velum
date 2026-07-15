@@ -16,6 +16,7 @@ use crate::{
     value::Value,
 };
 
+mod alias;
 mod deletion;
 mod iteration;
 

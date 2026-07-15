@@ -263,6 +263,9 @@ impl Context {
             for id in realm.native_function_ids() {
                 visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
             }
+            for id in realm.host_function_ids() {
+                visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::HostFunction(id))?;
+            }
         }
         for cache in &self.static_name_atom_caches {
             cache.visit_template_objects(|value| {
@@ -285,11 +288,23 @@ impl Context {
             }
             visitor.visit_value(VmRootKind::ModuleBinding, module.namespace())?;
             visitor.visit_value(VmRootKind::ModuleBinding, module.deferred_namespace())?;
+            if let Some(source) = module.module_source() {
+                visitor.visit_value(VmRootKind::ModuleBinding, source)?;
+            }
             if let Some(import_meta) = module.import_meta() {
                 visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
             }
             if let Some(error) = module.evaluation_error_value() {
                 visitor.visit_value(VmRootKind::ModuleBinding, error)?;
+            }
+            if let Some(value) = module.evaluation_value() {
+                visitor.visit_value(VmRootKind::ModuleBinding, value)?;
+            }
+            if let Some(promise) = module.evaluation_promise() {
+                visitor.visit_promise(VmRootKind::ModuleBinding, promise)?;
+            }
+            if let Some(execution) = module.execution() {
+                execution.visit_direct_roots(visitor)?;
             }
         }
         Ok(())

@@ -81,6 +81,21 @@ impl Context {
             referrer,
             request,
         } = job;
+        if request.phase() == ImportPhase::Evaluation {
+            let result = self.begin_dynamic_module_namespace(&referrer, &request);
+            return match result {
+                Ok((evaluation, namespace)) => self.add_promise_reaction(
+                    evaluation,
+                    crate::runtime::promise::PromiseReaction::dynamic_import_module(
+                        promise, namespace,
+                    ),
+                ),
+                Err(error) => {
+                    let reason = self.dynamic_import_error_value(&error)?;
+                    self.reject_promise(promise, reason)
+                }
+            };
+        }
         let result = self.load_dynamic_module_namespace(&referrer, &request);
         match result {
             Ok(namespace) => self.resolve_promise(promise, namespace),

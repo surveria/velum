@@ -44,6 +44,7 @@ use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 pub use eval_context::{
     EvalClassFieldContext, EvalParseContext, EvalSuperContext, parse_eval_with_usage_in_context,
 };
+pub use module::ModuleImportEntry;
 pub use module::{ModuleExportEntry, ModuleImportName, ModuleSyntax};
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";

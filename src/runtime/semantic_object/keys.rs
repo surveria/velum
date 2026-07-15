@@ -1,11 +1,27 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
+    runtime::{Context, property::enumerable_property_keys},
     storage::symbol::JsSymbol,
     value::Value,
 };
 
 impl Context {
+    pub(crate) fn enumerable_keys(&mut self, object: &Value) -> Result<Vec<String>> {
+        let exotic_object = if let Value::Object(id) = object {
+            self.objects.is_proxy(*id) || self.objects.is_module_namespace(*id)?
+        } else {
+            false
+        };
+        if matches!(
+            object,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
+        ) || exotic_object
+        {
+            return self.semantic_enumerable_property_keys(object);
+        }
+        enumerable_property_keys(&self.objects, &self.atoms, object)
+    }
+
     /// Spec-shaped `EnumerateObjectProperties` key snapshot. Each prototype is
     /// queried through semantic internal methods so Proxy traps and exotic
     /// property descriptors remain observable.

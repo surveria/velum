@@ -24,6 +24,10 @@ impl ModuleRecord {
         &self.deferred_namespace
     }
 
+    pub(in crate::runtime) const fn module_source(&self) -> Option<&Value> {
+        self.module_source.as_ref()
+    }
+
     pub(in crate::runtime) const fn import_meta(&self) -> Option<&Value> {
         self.import_meta.as_ref()
     }
@@ -49,7 +53,7 @@ impl Context {
         self.persist_module_graph(graph)?;
         match phase {
             ImportPhase::Evaluation => {
-                self.with_module_evaluation(|context| context.evaluate_persisted_module(root))?;
+                self.evaluate_persisted_module(root)?;
             }
             ImportPhase::Defer => {
                 let mut asynchronous = Vec::new();
@@ -59,9 +63,7 @@ impl Context {
                     &mut asynchronous,
                 )?;
                 for module in asynchronous {
-                    self.with_module_evaluation(|context| {
-                        context.evaluate_persisted_module(module)
-                    })?;
+                    self.evaluate_persisted_module(module)?;
                 }
             }
             ImportPhase::Source => {
@@ -125,136 +127,7 @@ impl Context {
             Some(EvaluationState::Errored) => {}
             Some(EvaluationState::Evaluated) | None => return Ok(()),
         }
-        self.with_module_evaluation(|context| context.evaluate_persisted_module(module_index))?;
-        Ok(())
-    }
-
-    pub(super) fn evaluate_persisted_module(&mut self, module_index: usize) -> Result<Value> {
-        let state = self
-            .modules
-            .get(module_index)
-            .map(|module| module.state)
-            .ok_or_else(|| Error::runtime("persisted module index is missing"))?;
-        match state {
-            EvaluationState::Evaluated | EvaluationState::Evaluating => {
-                return Ok(Value::Undefined);
-            }
-            EvaluationState::Pending => {}
-            EvaluationState::Errored => {
-                return Err(self
-                    .modules
-                    .get(module_index)
-                    .and_then(|module| module.evaluation_error.clone())
-                    .ok_or_else(|| {
-                        Error::runtime("persisted module evaluation error is missing")
-                    })?);
-            }
-        }
-        if let Some(error) = self.cached_module_evaluation_error(module_index)? {
-            self.cache_module_evaluation_error(module_index, &error)?;
-            return Err(error);
-        }
-        self.modules
-            .get_mut(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .state = EvaluationState::Evaluating;
-        if let Err(error) = self.evaluate_persisted_module_dependencies(module_index) {
-            self.cache_module_evaluation_error(module_index, &error)?;
-            return Err(error);
-        }
-        let import_meta = if let Some(import_meta) = self
-            .modules
-            .get(module_index)
-            .and_then(|module| module.import_meta.clone())
-        {
-            import_meta
-        } else {
-            let import_meta = self.create_import_meta()?;
-            self.modules
-                .get_mut(module_index)
-                .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-                .import_meta = Some(import_meta.clone());
-            import_meta
-        };
-        let (name, script, mut scope) = {
-            let module = self
-                .modules
-                .get_mut(module_index)
-                .ok_or_else(|| Error::runtime("persisted module index disappeared"))?;
-            let scope = module
-                .scope
-                .take()
-                .ok_or_else(|| Error::runtime("persisted module scope is unavailable"))?;
-            (module.name.clone(), module.script.clone(), scope)
-        };
-        scope.deactivate_storage()?;
-        if let Err(error) = self.push_lexical_scope_with(scope) {
-            self.restore_pending_module_state(module_index);
-            return Err(error);
-        }
-        let previous_module = self.active_module_name.replace(name);
-        let previous_import_meta = self.active_import_meta.replace(import_meta);
-        let outcome = self.evaluate_module_script(&script);
-        self.active_import_meta = previous_import_meta;
-        self.active_module_name = previous_module;
-        let scope = self.pop_lexical_scope()?;
-        let Some(mut scope) = scope else {
-            self.restore_pending_module_state(module_index);
-            return Err(Error::runtime(
-                "persisted module scope disappeared after evaluation",
-            ));
-        };
-        scope.activate_storage(self.storage_ledger.clone())?;
-        self.modules
-            .get_mut(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .scope = Some(scope);
-        let value = match outcome.and_then(|outcome| self.module_outcome_value(outcome)) {
-            Ok(value) => value,
-            Err(error) => {
-                self.cache_module_evaluation_error(module_index, &error)?;
-                return Err(error);
-            }
-        };
-        self.modules
-            .get_mut(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .state = EvaluationState::Evaluated;
-        Ok(value)
-    }
-
-    fn evaluate_persisted_module_dependencies(&mut self, module_index: usize) -> Result<()> {
-        let dependencies = self
-            .modules
-            .get(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?
-            .dependencies
-            .to_vec();
-        for dependency in dependencies {
-            let result = match dependency.phase {
-                ImportPhase::Evaluation => self.evaluate_persisted_module(dependency.index),
-                ImportPhase::Defer => {
-                    let mut asynchronous = Vec::new();
-                    self.gather_persisted_async_transitive_dependencies(
-                        dependency.index,
-                        &mut BTreeSet::new(),
-                        &mut asynchronous,
-                    )?;
-                    let mut result = Ok(Value::Undefined);
-                    for asynchronous_dependency in asynchronous {
-                        result = self.evaluate_persisted_module(asynchronous_dependency);
-                        if result.is_err() {
-                            break;
-                        }
-                    }
-                    result
-                }
-                ImportPhase::Source => Err(Error::runtime(
-                    "source-phase static module evaluation is unavailable",
-                )),
-            };
-            result?;
-        }
+        self.evaluate_persisted_module(module_index)?;
         Ok(())
     }
 
@@ -286,35 +159,7 @@ impl Context {
         Ok(true)
     }
 
-    fn cache_module_evaluation_error(&mut self, module_index: usize, error: &Error) -> Result<()> {
-        let module = self
-            .modules
-            .get_mut(module_index)
-            .ok_or_else(|| Error::runtime("persisted module index disappeared"))?;
-        module.state = EvaluationState::Errored;
-        module.evaluation_error = Some(error.clone());
-        Ok(())
-    }
-
-    fn cached_module_evaluation_error(&self, module_index: usize) -> Result<Option<Error>> {
-        let name = self
-            .modules
-            .get(module_index)
-            .map(|module| module.name.as_str())
-            .ok_or_else(|| Error::runtime("persisted module index is missing"))?;
-        Ok(self
-            .modules
-            .iter()
-            .enumerate()
-            .find(|(index, module)| {
-                *index != module_index
-                    && module.name == name
-                    && module.state == EvaluationState::Errored
-            })
-            .and_then(|(_, module)| module.evaluation_error.clone()))
-    }
-
-    fn gather_persisted_async_transitive_dependencies(
+    pub(super) fn gather_persisted_async_transitive_dependencies(
         &self,
         module_index: usize,
         seen: &mut BTreeSet<usize>,
@@ -340,12 +185,6 @@ impl Context {
         Ok(())
     }
 
-    fn restore_pending_module_state(&mut self, module_index: usize) {
-        if let Some(module) = self.modules.get_mut(module_index) {
-            module.state = EvaluationState::Pending;
-        }
-    }
-
     pub(super) fn persist_module_graph(&mut self, graph: Vec<PendingModule>) -> Result<()> {
         let reservation = self
             .storage_ledger
@@ -353,6 +192,7 @@ impl Context {
         let base = self.modules.len();
         let mut records = Vec::with_capacity(graph.len());
         for mut pending in graph {
+            let canonical_module = pending.canonical_module;
             let Some(mut scope) = pending.scope.take() else {
                 Self::deactivate_module_records(&mut records)?;
                 return Err(Error::runtime("persisted module scope is missing"));
@@ -391,9 +231,18 @@ impl Context {
                 scope: Some(scope),
                 namespace,
                 deferred_namespace,
+                module_source: pending.module_source,
                 import_meta: pending.import_meta,
                 state: EvaluationState::Pending,
                 evaluation_error: None,
+                evaluation_promise: None,
+                evaluation_value: None,
+                pending_async_dependencies: 0,
+                execution: None,
+                canonical_module,
+                cycle_root: base
+                    .checked_add(records.len())
+                    .ok_or_else(|| Error::limit("module cycle root index overflowed"))?,
             });
         }
         if let Err(error) = reservation.commit() {
@@ -401,6 +250,49 @@ impl Context {
             return Err(error);
         }
         self.modules.extend(records);
+        Ok(())
+    }
+
+    pub(super) fn alias_canonical_module_graph_bindings(
+        &mut self,
+        graph: &mut [PendingModule],
+    ) -> Result<()> {
+        for pending in graph {
+            let canonical = self
+                .modules
+                .iter()
+                .position(|module| module.name == pending.name);
+            pending.canonical_module = canonical;
+            if let Some(canonical) = canonical {
+                self.alias_canonical_module_bindings(pending, canonical)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn alias_canonical_module_bindings(
+        &mut self,
+        pending: &PendingModule,
+        canonical: usize,
+    ) -> Result<()> {
+        for export in pending.module.exports() {
+            let crate::ModuleExport::Local { local_name, .. } = export else {
+                continue;
+            };
+            let atom = self.intern_atom(local_name)?;
+            let canonical_cell = self
+                .modules
+                .get(canonical)
+                .and_then(|module| module.scope.as_ref())
+                .and_then(|scope| scope.get(atom))
+                .ok_or_else(|| Error::runtime("canonical module export binding is missing"))?;
+            let pending_cell = pending
+                .scope
+                .as_ref()
+                .and_then(|scope| scope.get(atom))
+                .ok_or_else(|| Error::runtime("duplicate module export binding is missing"))?;
+            pending_cell.redirect_to_terminal(canonical_cell)?;
+        }
         Ok(())
     }
 

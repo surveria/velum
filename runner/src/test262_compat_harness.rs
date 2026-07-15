@@ -5,6 +5,7 @@ const COLLECT_GARBAGE_HOST_NAME: &str = "__rsqjsTest262CollectGarbage";
 const CREATE_REALM_HOST_NAME: &str = "__rsqjsTest262CreateRealm";
 const CREATE_IS_HTML_DDA_HOST_NAME: &str = "__rsqjsTest262CreateIsHTMLDDA";
 const EVAL_SCRIPT_HOST_NAME: &str = "__rsqjsTest262EvalScript";
+const GET_ABSTRACT_MODULE_SOURCE_HOST_NAME: &str = "__rsqjsTest262GetAbstractModuleSource";
 
 const HOST_SOURCE: &str = r"
 var $262 = {
@@ -12,6 +13,7 @@ var $262 = {
     gc: __rsqjsTest262CollectGarbage,
     detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
     IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
+    AbstractModuleSource: __rsqjsTest262GetAbstractModuleSource(),
     agent: {
         start: __rsqjsTest262AgentStart,
         broadcast: __rsqjsTest262AgentBroadcast,
@@ -26,6 +28,7 @@ var $262 = {
             gc: $262.gc,
             detachArrayBuffer: $262.detachArrayBuffer,
             IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
+            AbstractModuleSource: __rsqjsTest262GetAbstractModuleSource(realmGlobal),
             agent: $262.agent,
             createRealm: $262.createRealm,
             evalScript: realmGlobal.eval
@@ -223,6 +226,10 @@ pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
     )?;
     context.register_host_operation(CREATE_REALM_HOST_NAME, HostOperation::CreateRealm)?;
     context.register_host_operation(EVAL_SCRIPT_HOST_NAME, HostOperation::EvalScript)?;
+    context.register_host_operation(
+        GET_ABSTRACT_MODULE_SOURCE_HOST_NAME,
+        HostOperation::GetAbstractModuleSource,
+    )?;
     context
         .register_host_operation(CREATE_IS_HTML_DDA_HOST_NAME, HostOperation::CreateIsHtmlDda)?;
     context.eval(HOST_SOURCE).map(|_| ())

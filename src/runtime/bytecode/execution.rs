@@ -71,45 +71,15 @@ impl Context {
         Ok(outcome)
     }
 
-    pub(in crate::runtime) fn eval_bytecode_program_with_jobs(
+    pub(in crate::runtime) fn eval_bytecode_program_suspending(
         &mut self,
         bytecode: &BytecodeProgram,
     ) -> Result<BytecodeOutcome> {
-        let local_base = self.locals.len();
-        let activation_base = self.activation_frames.len();
         let mut state = BytecodeState::with_private_environment(self.current_private_environment());
-        let mut outcome =
-            self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)?;
-        loop {
-            let BytecodeOutcome::Suspended {
-                suspension: Suspension::Await(awaited),
-                ..
-            } = outcome
-            else {
-                return Ok(outcome);
-            };
-            let resume = loop {
-                if let Some(completion) = self.promise_settlement_completion(awaited)? {
-                    break completion;
-                }
-                if self.run_jobs()? == 0 {
-                    self.discard_execution_suffix(local_base, activation_base)?;
-                    return Err(Error::runtime(
-                        "top-level await remained pending after the module job queue drained",
-                    ));
-                }
-            };
-            outcome = match self.resume_top_level_bytecode(activation_base, resume) {
-                Ok(outcome) => outcome,
-                Err(error) => {
-                    self.discard_execution_suffix(local_base, activation_base)?;
-                    return Err(error);
-                }
-            };
-        }
+        self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)
     }
 
-    fn resume_top_level_bytecode(
+    pub(in crate::runtime) fn resume_top_level_bytecode(
         &mut self,
         activation_base: usize,
         resume: Completion,

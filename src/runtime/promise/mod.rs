@@ -402,6 +402,9 @@ impl Context {
                 PromiseContinuationCancellation::AsyncGenerator(generator) => {
                     self.cancel_async_generator_await(generator)?;
                 }
+                PromiseContinuationCancellation::ModuleEvaluation(module) => {
+                    self.cancel_module_evaluation(module)?;
+                }
             }
         }
         reaction_count
@@ -618,6 +621,20 @@ impl Context {
                 PromiseReaction::Await { continuation } => {
                     self.resume_async_function(*continuation, state)
                 }
+                PromiseReaction::ModuleAwait { module } => self.resume_module_await(module, state),
+                PromiseReaction::ModuleDependency { module, dependency } => {
+                    self.resume_module_dependency(module, dependency, &state)
+                }
+                PromiseReaction::ModuleAlias { module, canonical } => {
+                    self.resume_module_alias(module, canonical, &state)
+                }
+                PromiseReaction::DynamicImportModule { result, namespace } => {
+                    if let Some(reason) = state.rejection_value() {
+                        self.reject_promise(result, reason.clone())
+                    } else {
+                        self.resolve_promise(result, namespace)
+                    }
+                }
                 PromiseReaction::AsyncGeneratorAwait { generator } => {
                     let resume = match state.status {
                         PromiseStatus::Fulfilled => Completion::Normal(state.value),
@@ -755,17 +772,6 @@ impl Context {
             .get(id.index())
             .map(|promise| &promise.state)
             .ok_or_else(|| Error::runtime("Promise id is not defined"))
-    }
-
-    pub(in crate::runtime) fn promise_settlement_completion(
-        &self,
-        id: PromiseId,
-    ) -> Result<Option<Completion>> {
-        match self.promise_state(id)? {
-            PromiseState::Pending { .. } => Ok(None),
-            PromiseState::Fulfilled(value) => Ok(Some(Completion::Normal(value.clone()))),
-            PromiseState::Rejected(reason) => Ok(Some(Completion::Throw(reason.clone()))),
-        }
     }
 
     fn promise(&self, id: PromiseId) -> Result<&Promise> {

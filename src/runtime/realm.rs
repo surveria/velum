@@ -11,7 +11,7 @@ use crate::{
         storage_ledger::VmStorageLedger,
     },
     storage::atom::AtomId,
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{HostFunctionId, NativeFunctionId, ObjectId, Value},
 };
 
 /// Opaque handle for one realm owned by a JavaScript VM.
@@ -54,6 +54,7 @@ pub(in crate::runtime) struct RealmState {
     pub(super) native_function_registry: NativeFunctionRegistry,
     pub(super) throw_type_error: Option<NativeFunctionId>,
     pub(super) shadow_realm_constructor: Option<NativeFunctionId>,
+    pub(super) abstract_module_source_constructor: Option<HostFunctionId>,
     pub(super) global_object: Option<ObjectId>,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
@@ -64,6 +65,7 @@ pub(in crate::runtime) struct RealmState {
     pub(super) async_generator_function_prototype: Option<ObjectId>,
     pub(super) promise_prototype: Option<ObjectId>,
     pub(super) shadow_realm_prototype: Option<ObjectId>,
+    pub(super) abstract_module_source_prototype: Option<ObjectId>,
 }
 
 impl RealmState {
@@ -75,6 +77,7 @@ impl RealmState {
             native_function_registry: NativeFunctionRegistry::new(),
             throw_type_error: None,
             shadow_realm_constructor: None,
+            abstract_module_source_constructor: None,
             global_object: None,
             object_prototype: None,
             array_prototype: None,
@@ -85,6 +88,7 @@ impl RealmState {
             async_generator_function_prototype: None,
             promise_prototype: None,
             shadow_realm_prototype: None,
+            abstract_module_source_prototype: None,
         }
     }
 
@@ -113,6 +117,7 @@ impl RealmState {
             self.array_prototype,
             self.promise_prototype,
             self.shadow_realm_prototype,
+            self.abstract_module_source_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
             self.async_iterator_prototype,
@@ -124,6 +129,9 @@ impl RealmState {
         .count()
         .saturating_add(usize::from(self.throw_type_error.is_some()))
         .saturating_add(usize::from(self.shadow_realm_constructor.is_some()))
+        .saturating_add(usize::from(
+            self.abstract_module_source_constructor.is_some(),
+        ))
     }
 
     pub(super) fn anchor_objects(&self) -> impl Iterator<Item = ObjectId> {
@@ -133,6 +141,7 @@ impl RealmState {
             self.array_prototype,
             self.promise_prototype,
             self.shadow_realm_prototype,
+            self.abstract_module_source_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
             self.async_iterator_prototype,
@@ -148,6 +157,10 @@ impl RealmState {
             .ids()
             .chain(self.throw_type_error)
             .chain(self.shadow_realm_constructor)
+    }
+
+    pub(super) fn host_function_ids(&self) -> impl Iterator<Item = HostFunctionId> + '_ {
+        self.abstract_module_source_constructor.into_iter()
     }
 }
 
@@ -254,6 +267,17 @@ impl Context {
                     .is_some_and(|realm| realm.global_object == Some(id))
                     .then_some(RealmIndex::new(index))
             })
+    }
+
+    pub(crate) fn with_global_object_realm<T>(
+        &mut self,
+        global: ObjectId,
+        operation: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let realm = self
+            .global_object_realm(global)
+            .ok_or_else(|| Error::type_error("object is not a realm global"))?;
+        self.with_realm(realm, operation)
     }
 
     pub(in crate::runtime) fn constructor_instance_prototype_with_default(

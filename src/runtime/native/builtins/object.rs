@@ -467,10 +467,7 @@ impl Context {
         let Some(function) = self.optional_descriptor_value(descriptor, property)? else {
             return Ok(None);
         };
-        if !matches!(
-            function,
-            Value::Undefined | Value::Function(_) | Value::NativeFunction(_)
-        ) {
+        if function != Value::Undefined && !self.semantic_is_callable(&function)? {
             return Err(Error::type_error(format!(
                 "property descriptor field '{property}' must be callable or undefined"
             )));
@@ -737,9 +734,12 @@ impl Context {
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
         match target {
-            Value::Object(id) if self.objects.is_proxy(*id) => self
-                .semantic_own_property_descriptor(target, property)
-                .map(|descriptor| descriptor.is_some()),
+            Value::Object(id)
+                if self.objects.is_proxy(*id) || self.objects.is_module_namespace(*id)? =>
+            {
+                self.semantic_own_property_descriptor(target, property)
+                    .map(|descriptor| descriptor.is_some())
+            }
             Value::Object(id) => self.objects.has_own(*id, property.lookup()),
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {

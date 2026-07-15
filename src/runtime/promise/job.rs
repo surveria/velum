@@ -35,6 +35,21 @@ pub(in crate::runtime) enum PromiseReaction {
     Await {
         continuation: Box<SuspendedAsyncFunction>,
     },
+    ModuleAwait {
+        module: usize,
+    },
+    ModuleDependency {
+        module: usize,
+        dependency: usize,
+    },
+    ModuleAlias {
+        module: usize,
+        canonical: usize,
+    },
+    DynamicImportModule {
+        result: PromiseId,
+        namespace: Value,
+    },
     AsyncGeneratorAwait {
         generator: GeneratorId,
     },
@@ -86,6 +101,25 @@ impl PromiseReaction {
         Self::Await {
             continuation: Box::new(continuation),
         }
+    }
+
+    pub(in crate::runtime) const fn module_await(module: usize) -> Self {
+        Self::ModuleAwait { module }
+    }
+
+    pub(in crate::runtime) const fn module_dependency(module: usize, dependency: usize) -> Self {
+        Self::ModuleDependency { module, dependency }
+    }
+
+    pub(in crate::runtime) const fn module_alias(module: usize, canonical: usize) -> Self {
+        Self::ModuleAlias { module, canonical }
+    }
+
+    pub(in crate::runtime) const fn dynamic_import_module(
+        result: PromiseId,
+        namespace: Value,
+    ) -> Self {
+        Self::DynamicImportModule { result, namespace }
     }
 
     pub(in crate::runtime) const fn awaiting_async_generator(generator: GeneratorId) -> Self {
@@ -164,7 +198,20 @@ impl PromiseReaction {
                 }
             }
             Self::Await { continuation } => continuation.visit_strong_edges(visitor)?,
-            Self::AsyncGeneratorAwait { .. } => {}
+            Self::DynamicImportModule { result, namespace } => {
+                visitor.visit(
+                    VmAsyncEdgeKind::PromiseReaction,
+                    StrongEdgeReference::Promise(*result),
+                )?;
+                visitor.visit(
+                    VmAsyncEdgeKind::PromiseReaction,
+                    StrongEdgeReference::Value(namespace),
+                )?;
+            }
+            Self::ModuleAwait { .. }
+            | Self::ModuleDependency { .. }
+            | Self::ModuleAlias { .. }
+            | Self::AsyncGeneratorAwait { .. } => {}
             Self::AsyncFromSync { result, iterator } => {
                 visitor.visit(
                     VmAsyncEdgeKind::PromiseReaction,
@@ -198,6 +245,10 @@ impl PromiseReaction {
         match self {
             Self::Await { continuation } => continuation.storage_footprint(),
             Self::Then { .. }
+            | Self::ModuleAwait { .. }
+            | Self::ModuleDependency { .. }
+            | Self::ModuleAlias { .. }
+            | Self::DynamicImportModule { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::AsyncFromSync { .. }
             | Self::AsyncIteratorDispose { .. }
@@ -232,6 +283,13 @@ impl PromiseReaction {
                 Ok(())
             }
             Self::Await { continuation } => continuation.visit_direct_roots(visitor),
+            Self::DynamicImportModule { result, namespace } => {
+                visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
+                visitor.visit_value(VmRootKind::QueuedJob, namespace)
+            }
+            Self::ModuleAwait { .. } | Self::ModuleDependency { .. } | Self::ModuleAlias { .. } => {
+                Ok(())
+            }
             Self::AsyncGeneratorAwait { .. } => Ok(()),
             Self::AsyncFromSync { result, iterator } => {
                 visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
@@ -254,7 +312,13 @@ impl PromiseReaction {
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
+            Self::ModuleAwait { module }
+            | Self::ModuleDependency { module, .. }
+            | Self::ModuleAlias { module, .. } => {
+                Some(PromiseContinuationCancellation::ModuleEvaluation(module))
+            }
             Self::Then { .. }
+            | Self::DynamicImportModule { .. }
             | Self::AsyncFromSync { .. }
             | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
@@ -267,6 +331,10 @@ impl PromiseReaction {
         match self {
             Self::Await { continuation } => Some(*continuation),
             Self::Then { .. }
+            | Self::ModuleAwait { .. }
+            | Self::ModuleDependency { .. }
+            | Self::ModuleAlias { .. }
+            | Self::DynamicImportModule { .. }
             | Self::AsyncGeneratorAwait { .. }
             | Self::AsyncFromSync { .. }
             | Self::AsyncIteratorDispose { .. }
@@ -281,6 +349,7 @@ impl PromiseReaction {
 pub(in crate::runtime) enum PromiseContinuationCancellation {
     AsyncFunction(SuspendedAsyncFunction),
     AsyncGenerator(GeneratorId),
+    ModuleEvaluation(usize),
 }
 
 #[derive(Debug)]
@@ -367,6 +436,20 @@ impl PromiseSettledState {
         Self {
             status: PromiseStatus::Rejected,
             value,
+        }
+    }
+
+    pub(in crate::runtime) fn into_completion(self) -> crate::runtime::control::Completion {
+        match self.status {
+            PromiseStatus::Fulfilled => crate::runtime::control::Completion::Normal(self.value),
+            PromiseStatus::Rejected => crate::runtime::control::Completion::Throw(self.value),
+        }
+    }
+
+    pub(in crate::runtime) const fn rejection_value(&self) -> Option<&Value> {
+        match self.status {
+            PromiseStatus::Fulfilled => None,
+            PromiseStatus::Rejected => Some(&self.value),
         }
     }
 }

@@ -79,6 +79,66 @@ fn records_static_import_phases_and_attributes() -> TestResult {
 }
 
 #[test]
+fn records_source_phase_imports_and_re_exports() -> TestResult {
+    let runtime = Runtime::new();
+    let module = runtime.compile_module_named(
+        "app/main.js",
+        "import source dependency from '<module source>'; export { dependency };",
+    )?;
+    let request = module
+        .module_requests()
+        .first()
+        .ok_or("source-phase module request metadata is missing")?;
+
+    ensure(
+        request.phase() == ImportPhase::Source,
+        "source-phase request metadata mismatch",
+    )?;
+    ensure(
+        matches!(
+            module
+                .imports()
+                .first()
+                .map(rs_quickjs::ModuleImport::import_name),
+            Some(ModuleImportName::Source)
+        ),
+        "source-phase import metadata is missing",
+    )?;
+    ensure(
+        matches!(
+            module.exports().first(),
+            Some(ModuleExport::Source {
+                export_name,
+                request,
+            }) if export_name == "dependency" && request == "<module source>"
+        ),
+        "source-phase re-export metadata is missing",
+    )
+}
+
+#[test]
+fn links_source_phase_imports_without_evaluating_the_source_module() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.register_host_operation(
+        "hostGetAbstractModuleSource",
+        rs_quickjs::HostOperation::GetAbstractModuleSource,
+    )?;
+    context.eval("var AbstractModuleSource = hostGetAbstractModuleSource();")?;
+    let mut loader = SourcePhaseLoader;
+    let value = context.eval_module_named(
+        "main.js",
+        "import source dependency from '<module source>'; dependency instanceof AbstractModuleSource;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Bool(true),
+        "source-phase import did not expose an AbstractModuleSource instance",
+    )
+}
+
+#[test]
 fn enforces_module_specific_early_errors() -> TestResult {
     let runtime = Runtime::new();
     let duplicate = runtime.compile_module_named(
@@ -211,6 +271,85 @@ fn namespace_import_properties_read_live_export_cells() -> TestResult {
 }
 
 #[test]
+fn hoists_anonymous_default_functions_before_cyclic_module_evaluation() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        (
+            "function.js",
+            r#"
+                import value from "function.js";
+                export const answer = value() + (value.name === "default" ? 1 : 0);
+                export default function() { return 20; }
+            "#
+            .to_owned(),
+        ),
+        (
+            "generator.js",
+            r#"
+                import value from "generator.js";
+                export const answer = value().next().value + (value.name === "default" ? 1 : 0);
+                export default function*() { return 20; }
+            "#
+            .to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        r#"
+            import { answer as functionAnswer } from "function.js";
+            import { answer as generatorAnswer } from "generator.js";
+            functionAnswer + generatorAnswer;
+        "#,
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(42.0),
+        "anonymous default functions were not initialized during module instantiation",
+    )
+}
+
+#[test]
+fn module_namespace_descriptor_queries_observe_uninitialized_bindings() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([(
+        "dependency.js",
+        r#"
+            import * as self from "dependency.js";
+            let observed = 0;
+            try { Object.prototype.hasOwnProperty.call(self, "default"); }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            try { Object.getOwnPropertyDescriptor(self, "default"); }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            try { for (const key in self) { key; } }
+            catch (error) { if (error instanceof ReferenceError) observed += 1; }
+            export const result = observed;
+            export default 0;
+        "#
+        .to_owned(),
+    )]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import { result } from 'dependency.js'; result;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::Number(3.0),
+        "module namespace descriptor paths did not preserve export TDZ",
+    )
+}
+
+#[test]
+fn accepts_top_level_await_using_in_module_goal() -> TestResult {
+    let runtime = Runtime::new();
+    runtime.compile_module_named("resource.js", "await using resource = null;")?;
+    Ok(())
+}
+
+#[test]
 fn defers_static_namespace_evaluation_until_a_string_property_is_read() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -234,6 +373,32 @@ fn defers_static_namespace_evaluation_until_a_string_property_is_read() -> TestR
     ensure(
         value == Value::Number(52.0),
         "static deferred namespace evaluated at the wrong time",
+    )
+}
+
+#[test]
+fn waits_for_async_dependencies_discovered_through_deferred_imports() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("setup.js", "globalThis.moduleTrace = '';".to_owned()),
+        (
+            "async.js",
+            "globalThis.moduleTrace += 'a'; await Promise.resolve(); \
+             globalThis.moduleTrace += 'b'; export const value = 1;"
+                .to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import 'setup.js'; import defer * as namespace from 'async.js'; \
+         globalThis.moduleTrace;",
+        &mut loader,
+    )?;
+
+    ensure(
+        value == Value::String("ab".to_owned().into()),
+        "deferred async dependency did not settle before its importer",
     )
 }
 
@@ -520,7 +685,7 @@ fn settles_top_level_await_through_module_jobs() -> TestResult {
     let mut loader = MapLoader::new([]);
     let value = context.eval_module_named(
         "main.js",
-        "let value = 0; for await (const item of [await Promise.resolve(40)]) { value = item; await 0; } for (const key in await Promise.resolve({ delta: 2 })) { value += 2; } value;",
+        "let value = 0; for await (const item of [await Promise.resolve(40)]) { value = item; await 0; } for (const key in await Promise.resolve({ delta: 2 })) { value += 2; } const read = () => value; read();",
         &mut loader,
     )?;
 
@@ -532,6 +697,37 @@ fn settles_top_level_await_through_module_jobs() -> TestResult {
         context.pending_job_count() == 0,
         "module evaluation left settled jobs queued",
     )
+}
+
+#[test]
+fn waits_for_the_async_cycle_root_before_running_external_importers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let mut loader = MapLoader::new([
+        ("setup.js", "globalThis.logs = [];".to_owned()),
+        (
+            "root.js",
+            "import 'leaf.js'; logs.push('root start'); await 1; logs.push('root end');".to_owned(),
+        ),
+        (
+            "leaf.js",
+            "import 'root.js'; logs.push('leaf start'); await 1; logs.push('leaf end');".to_owned(),
+        ),
+        (
+            "importer.js",
+            "import 'leaf.js'; logs.push('importer');".to_owned(),
+        ),
+    ]);
+    let value = context.eval_module_named(
+        "main.js",
+        "import 'setup.js'; import 'root.js'; import 'importer.js'; logs.join(',');",
+        &mut loader,
+    )?;
+
+    if value == Value::from("leaf start,leaf end,root start,root end,importer") {
+        return Ok(());
+    }
+    Err(format!("external cycle importer order mismatch: {value:?}").into())
 }
 
 #[test]
@@ -570,6 +766,17 @@ impl ModuleLoader for MapLoader {
             .cloned()
             .ok_or_else(|| Error::runtime(format!("missing test module '{request}'")))?;
         Ok(ModuleSource::new(request, source))
+    }
+}
+
+struct SourcePhaseLoader;
+
+impl ModuleLoader for SourcePhaseLoader {
+    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+        Ok(
+            ModuleSource::new(request, "globalThis.sourceModuleEvaluated = true;")
+                .with_module_source_class_name("Module"),
+        )
     }
 }
 

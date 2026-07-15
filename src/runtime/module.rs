@@ -1,16 +1,11 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    rc::Rc,
-};
+use std::{collections::BTreeMap, fmt, rc::Rc};
 
 use parking_lot::Mutex;
 
 use crate::{
     binding_metadata::BindingLayout,
     compiled_module::{
-        CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImportName, ModuleLoader,
-        ModuleRequest,
+        CompiledModule, DynamicModuleRequest, ModuleImportName, ModuleLoader, ModuleRequest,
     },
     error::{Error, Result},
     runtime::{
@@ -21,17 +16,16 @@ use crate::{
         },
         bytecode::BytecodeOutcome,
         control::{Completion, Suspension},
-        object::{
-            AccessorPropertyUpdate, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
-            PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
-            PropertyWritable,
-        },
+        promise::PromiseId,
         property::static_names::StaticNameAtomCacheHandle,
     },
     value::Value,
 };
 
 mod deferred;
+mod evaluation;
+mod namespace;
+mod source;
 
 #[derive(Clone)]
 pub(super) struct DynamicModuleLoader {
@@ -88,9 +82,16 @@ pub(super) struct ModuleRecord {
     scope: Option<BindingScope>,
     namespace: Value,
     deferred_namespace: Value,
+    module_source: Option<Value>,
     import_meta: Option<Value>,
     state: EvaluationState,
     evaluation_error: Option<Error>,
+    evaluation_promise: Option<PromiseId>,
+    evaluation_value: Option<Value>,
+    pending_async_dependencies: usize,
+    execution: Option<evaluation::DetachedModuleExecution>,
+    canonical_module: Option<usize>,
+    cycle_root: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -99,13 +100,6 @@ enum EvaluationState {
     Evaluating,
     Evaluated,
     Errored,
-}
-
-#[derive(Debug)]
-enum ExportResolution {
-    Found(BindingCell),
-    NotFound,
-    Ambiguous,
 }
 
 #[derive(Debug)]
@@ -118,11 +112,19 @@ struct PendingModule {
     namespace_binding: Option<BindingCell>,
     deferred_namespace: Option<Value>,
     deferred_namespace_binding: Option<BindingCell>,
+    module_source_class_name: Option<String>,
+    module_source: Option<Value>,
+    module_source_binding: Option<BindingCell>,
     import_meta: Option<Value>,
+    canonical_module: Option<usize>,
 }
 
 impl PendingModule {
-    const fn new(name: String, module: CompiledModule) -> Self {
+    const fn new(
+        name: String,
+        module: CompiledModule,
+        module_source_class_name: Option<String>,
+    ) -> Self {
         Self {
             name,
             module,
@@ -132,7 +134,11 @@ impl PendingModule {
             namespace_binding: None,
             deferred_namespace: None,
             deferred_namespace_binding: None,
+            module_source_class_name,
+            module_source: None,
+            module_source_binding: None,
             import_meta: None,
+            canonical_module: None,
         }
     }
 
@@ -179,14 +185,14 @@ impl Context {
         loader: &mut L,
     ) -> Result<Value> {
         let root = CompiledModule::compile_named(source_name, source, self.limits.clone())?;
-        let mut graph = vec![PendingModule::new(source_name.to_owned(), root)];
+        let mut graph = vec![PendingModule::new(source_name.to_owned(), root, None)];
         let mut indices = BTreeMap::from([(source_name.to_owned(), 0_usize)]);
         self.load_module_dependencies(0, &mut graph, &mut indices, loader)?;
         self.instantiate_module_graph(&mut graph)?;
         self.link_static_module_graph(&mut graph)?;
         let root = self.modules.len();
         self.persist_module_graph(graph)?;
-        self.with_module_evaluation(|context| context.evaluate_persisted_module(root))
+        self.evaluate_persisted_module(root)
     }
 
     pub(in crate::runtime) fn load_dynamic_module_export(
@@ -237,9 +243,7 @@ impl Context {
             .position(|module| module.name == specifier)
         {
             if request.phase() == crate::syntax::ImportPhase::Evaluation {
-                self.with_module_evaluation(|context| {
-                    context.evaluate_persisted_module(module_index)
-                })?;
+                self.evaluate_persisted_module(module_index)?;
             }
             let module = self
                 .modules
@@ -252,12 +256,60 @@ impl Context {
             });
         }
         let root = CompiledModule::compile_named(&specifier, source.source(), self.limits.clone())?;
-        let mut graph = vec![PendingModule::new(specifier.clone(), root)];
+        let mut graph = vec![PendingModule::new(specifier.clone(), root, None)];
         let mut indices = BTreeMap::from([(specifier, 0_usize)]);
         self.load_module_dependencies(0, &mut graph, &mut indices, &mut loader)?;
         self.instantiate_module_graph(&mut graph)?;
         self.link_module_graph(&mut graph)?;
         self.evaluate_dynamic_module_graph(0, graph, request.phase())
+    }
+
+    pub(in crate::runtime) fn begin_dynamic_module_namespace(
+        &mut self,
+        referrer: &str,
+        request: &DynamicModuleRequest,
+    ) -> Result<(PromiseId, Value)> {
+        if request.phase() != crate::syntax::ImportPhase::Evaluation {
+            return Err(Error::runtime(
+                "asynchronous module preparation requires evaluation phase",
+            ));
+        }
+        let mut loader = self
+            .dynamic_module_loader
+            .clone()
+            .ok_or_else(|| Error::runtime("dynamic module loader is not installed"))?;
+        let source = loader.load_dynamic(referrer, request)?;
+        let specifier = source.specifier().to_owned();
+        if let Some(module_index) = self
+            .modules
+            .iter()
+            .position(|module| module.name == specifier)
+        {
+            let promise = self.begin_persisted_module_evaluation(module_index)?;
+            let namespace = self
+                .modules
+                .get(module_index)
+                .ok_or_else(|| Error::runtime("cached dynamic module disappeared"))?
+                .namespace
+                .clone();
+            return Ok((promise, namespace));
+        }
+        let root = CompiledModule::compile_named(&specifier, source.source(), self.limits.clone())?;
+        let mut graph = vec![PendingModule::new(specifier.clone(), root, None)];
+        let mut indices = BTreeMap::from([(specifier, 0_usize)]);
+        self.load_module_dependencies(0, &mut graph, &mut indices, &mut loader)?;
+        self.instantiate_module_graph(&mut graph)?;
+        self.link_module_graph(&mut graph)?;
+        let root = self.modules.len();
+        self.persist_module_graph(graph)?;
+        let promise = self.begin_persisted_module_evaluation(root)?;
+        let namespace = self
+            .modules
+            .get(root)
+            .ok_or_else(|| Error::runtime("dynamic module namespace owner is missing"))?
+            .namespace
+            .clone();
+        Ok((promise, namespace))
     }
 
     fn with_module_evaluation<T>(
@@ -291,7 +343,22 @@ impl Context {
         for request in requests {
             let source_record = loader.load_static(&referrer, &request)?;
             let canonical = source_record.specifier().to_owned();
+            let module_source_class_name =
+                source_record.module_source_class_name().map(str::to_owned);
+            if request.phase() == crate::syntax::ImportPhase::Source
+                && module_source_class_name.is_none()
+            {
+                return Err(Self::module_source_unavailable(&canonical));
+            }
             let dependency = if let Some(existing) = indices.get(&canonical).copied() {
+                if let Some(class_name) = module_source_class_name {
+                    let pending = graph
+                        .get_mut(existing)
+                        .ok_or_else(|| Error::runtime("existing module graph entry disappeared"))?;
+                    if pending.module_source_class_name.is_none() {
+                        pending.module_source_class_name = Some(class_name);
+                    }
+                }
                 existing
             } else {
                 let compiled = CompiledModule::compile_named(
@@ -301,7 +368,11 @@ impl Context {
                 )?;
                 let dependency = graph.len();
                 indices.insert(canonical.clone(), dependency);
-                graph.push(PendingModule::new(canonical, compiled));
+                graph.push(PendingModule::new(
+                    canonical,
+                    compiled,
+                    module_source_class_name,
+                ));
                 self.load_module_dependencies(dependency, graph, indices, loader)?;
                 dependency
             };
@@ -343,7 +414,9 @@ impl Context {
     }
 
     fn link_module_graph(&mut self, graph: &mut [PendingModule]) -> Result<()> {
+        self.initialize_module_source_objects(graph)?;
         self.initialize_module_namespaces(graph)?;
+        self.alias_canonical_module_graph_bindings(graph)?;
         self.validate_indirect_exports(graph)?;
         self.populate_module_namespaces(graph)?;
         for module_index in 0..graph.len() {
@@ -377,6 +450,9 @@ impl Context {
                             })?
                         }
                     }
+                    ModuleImportName::Source => {
+                        Self::required_module_source_binding(graph, dependency)?
+                    }
                 };
                 linked.push((import.local_name().to_owned(), cell));
             }
@@ -408,324 +484,7 @@ impl Context {
         Ok(())
     }
 
-    fn validate_indirect_exports(&mut self, graph: &[PendingModule]) -> Result<()> {
-        for module_index in 0..graph.len() {
-            let exports = graph
-                .get(module_index)
-                .ok_or_else(|| Error::runtime("module export owner is missing"))?
-                .module
-                .exports()
-                .to_vec();
-            for export in exports {
-                let ModuleExport::Indirect { export_name, .. } = export else {
-                    continue;
-                };
-                self.required_export_cell(graph, module_index, &export_name)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn initialize_module_namespaces(&mut self, graph: &mut [PendingModule]) -> Result<()> {
-        let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
-        for pending in graph {
-            let (namespace, binding) = self.create_module_namespace_shell(constructor_key)?;
-            let (deferred_namespace, deferred_binding) =
-                self.create_module_namespace_shell(constructor_key)?;
-            pending.namespace = Some(namespace);
-            pending.namespace_binding = Some(binding);
-            pending.deferred_namespace = Some(deferred_namespace);
-            pending.deferred_namespace_binding = Some(deferred_binding);
-        }
-        Ok(())
-    }
-
-    fn create_module_namespace_shell(
-        &mut self,
-        constructor_key: PropertyKey,
-    ) -> Result<(Value, BindingCell)> {
-        let namespace = self.objects.create(
-            Vec::new(),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
-        let Value::Object(namespace_id) = namespace else {
-            return Err(Error::runtime("module namespace is not an object"));
-        };
-        self.objects
-            .set_prototype_value(namespace_id, &Value::Null)?;
-        self.objects.mark_module_namespace(namespace_id)?;
-        let namespace = Value::Object(namespace_id);
-        let binding = BindingCell::new(namespace.clone(), false, crate::syntax::DeclKind::Const);
-        Ok((namespace, binding))
-    }
-
-    fn populate_module_namespaces(&mut self, graph: &[PendingModule]) -> Result<()> {
-        for module_index in 0..graph.len() {
-            let names = Self::module_export_names(graph, module_index, &mut BTreeSet::new())?;
-            let module = graph
-                .get(module_index)
-                .ok_or_else(|| Error::runtime("module namespace owner is missing"))?;
-            let namespaces = [
-                (
-                    module
-                        .namespace
-                        .clone()
-                        .ok_or_else(|| Error::runtime("module namespace object is missing"))?,
-                    "Module",
-                ),
-                (
-                    module.deferred_namespace.clone().ok_or_else(|| {
-                        Error::runtime("deferred module namespace object is missing")
-                    })?,
-                    "Deferred Module",
-                ),
-            ];
-            for (namespace, tag) in namespaces {
-                let Value::Object(namespace_id) = namespace else {
-                    return Err(Error::runtime("module namespace value is not an object"));
-                };
-                self.populate_module_namespace(graph, module_index, namespace_id, &names, tag)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn populate_module_namespace(
-        &mut self,
-        graph: &[PendingModule],
-        module_index: usize,
-        namespace_id: crate::value::ObjectId,
-        names: &BTreeSet<String>,
-        tag: &str,
-    ) -> Result<()> {
-        for name in names {
-            let cell = match self.resolve_export(graph, module_index, name, &mut BTreeSet::new())? {
-                ExportResolution::Found(cell) => cell,
-                ExportResolution::Ambiguous => continue,
-                ExportResolution::NotFound => {
-                    return Err(Error::runtime(format!(
-                        "module namespace export '{name}' could not be resolved"
-                    )));
-                }
-            };
-            let getter_name = format!("%module-namespace:{module_index}:{tag}:{name}%");
-            let binding_name = name.clone();
-            let getter = self.create_internal_host_function(getter_name, move |_call| {
-                cell.value(&binding_name)
-            })?;
-            let key = self.intern_property_key(name)?;
-            self.objects.define_property(
-                namespace_id,
-                key,
-                name,
-                PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
-                    Some(getter),
-                    None,
-                    Some(PropertyEnumerable::Yes),
-                    Some(PropertyConfigurable::No),
-                )),
-                self.limits.max_object_properties,
-            )?;
-        }
-        self.define_module_namespace_to_string_tag(namespace_id, tag)?;
-        self.objects.prevent_extensions(namespace_id)
-    }
-
-    fn define_module_namespace_to_string_tag(
-        &mut self,
-        namespace: crate::value::ObjectId,
-        tag_name: &str,
-    ) -> Result<()> {
-        let symbol = self.symbol_constructor_value()?;
-        let Value::Symbol(tag) = self.get_named(&symbol, "toStringTag")? else {
-            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
-        };
-        let value = self.heap_string_value(tag_name)?;
-        self.objects.define_property(
-            namespace,
-            PropertyKey::symbol(tag.id()),
-            "[Symbol.toStringTag]",
-            PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(value),
-                Some(PropertyWritable::No),
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::No),
-            )),
-            self.limits.max_object_properties,
-        )
-    }
-
-    fn module_export_names(
-        graph: &[PendingModule],
-        module_index: usize,
-        visiting: &mut BTreeSet<usize>,
-    ) -> Result<BTreeSet<String>> {
-        if !visiting.insert(module_index) {
-            return Ok(BTreeSet::new());
-        }
-        let module = graph
-            .get(module_index)
-            .ok_or_else(|| Error::runtime("module namespace owner is missing"))?;
-        let mut names = BTreeSet::new();
-        for export in module.module.exports() {
-            match export {
-                ModuleExport::Local { export_name, .. }
-                | ModuleExport::Indirect { export_name, .. }
-                | ModuleExport::Namespace { export_name, .. }
-                | ModuleExport::DeferredNamespace { export_name, .. } => {
-                    names.insert(export_name.clone());
-                }
-                ModuleExport::Star { request } => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("star namespace dependency is missing"))?;
-                    let dependency_names = Self::module_export_names(graph, dependency, visiting)?;
-                    names.extend(
-                        dependency_names
-                            .into_iter()
-                            .filter(|name| name != "default"),
-                    );
-                }
-            }
-        }
-        visiting.remove(&module_index);
-        Ok(names)
-    }
-
-    fn required_export_cell(
-        &mut self,
-        graph: &[PendingModule],
-        module_index: usize,
-        export_name: &str,
-    ) -> Result<BindingCell> {
-        match self.resolve_export(graph, module_index, export_name, &mut BTreeSet::new())? {
-            ExportResolution::Found(cell) => Ok(cell),
-            ExportResolution::NotFound => {
-                let module_name = graph
-                    .get(module_index)
-                    .map_or("<missing>", |module| module.name.as_str());
-                Err(Error::exception(
-                    crate::value::ErrorName::SyntaxError,
-                    format!("module '{module_name}' does not export '{export_name}'"),
-                ))
-            }
-            ExportResolution::Ambiguous => Err(Error::exception(
-                crate::value::ErrorName::SyntaxError,
-                format!("module export '{export_name}' is ambiguous"),
-            )),
-        }
-    }
-
-    fn resolve_export(
-        &mut self,
-        graph: &[PendingModule],
-        module_index: usize,
-        export_name: &str,
-        resolving: &mut BTreeSet<(usize, String)>,
-    ) -> Result<ExportResolution> {
-        let key = (module_index, export_name.to_owned());
-        if !resolving.insert(key.clone()) {
-            return Ok(ExportResolution::NotFound);
-        }
-        let module = graph
-            .get(module_index)
-            .ok_or_else(|| Error::runtime("module export owner is missing"))?;
-        let mut star_result = None;
-        for export in module.module.exports() {
-            match export {
-                ModuleExport::Local {
-                    export_name: candidate,
-                    local_name,
-                } if candidate == export_name => {
-                    let atom = self.intern_atom(local_name)?;
-                    let result = module
-                        .scope
-                        .as_ref()
-                        .and_then(|scope| scope.get(atom))
-                        .ok_or_else(|| Error::runtime("local module export is not declared"));
-                    resolving.remove(&key);
-                    return result.map(ExportResolution::Found);
-                }
-                ModuleExport::Indirect {
-                    export_name: candidate,
-                    import_name,
-                    request,
-                } if candidate == export_name => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("indirect export dependency is missing"))?;
-                    let result = self.resolve_export(graph, dependency, import_name, resolving);
-                    resolving.remove(&key);
-                    return result;
-                }
-                ModuleExport::Namespace {
-                    export_name: candidate,
-                    request,
-                } if candidate == export_name => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("namespace export dependency is missing"))?;
-                    let namespace = graph
-                        .get(dependency)
-                        .and_then(|pending| pending.namespace_binding.clone())
-                        .ok_or_else(|| {
-                            Error::runtime("exported module namespace binding is missing")
-                        })?;
-                    resolving.remove(&key);
-                    return Ok(ExportResolution::Found(namespace));
-                }
-                ModuleExport::DeferredNamespace {
-                    export_name: candidate,
-                    request,
-                } if candidate == export_name => {
-                    let dependency = module.dependency_for_specifier(request).ok_or_else(|| {
-                        Error::runtime("deferred namespace export dependency is missing")
-                    })?;
-                    let namespace = graph
-                        .get(dependency)
-                        .and_then(|pending| pending.deferred_namespace_binding.clone())
-                        .ok_or_else(|| {
-                            Error::runtime("exported deferred namespace binding is missing")
-                        })?;
-                    resolving.remove(&key);
-                    return Ok(ExportResolution::Found(namespace));
-                }
-                ModuleExport::Star { request } if export_name != "default" => {
-                    let dependency = module
-                        .dependency_for_specifier(request)
-                        .ok_or_else(|| Error::runtime("star export dependency is missing"))?;
-                    match self.resolve_export(graph, dependency, export_name, resolving)? {
-                        ExportResolution::Found(cell) => {
-                            if star_result
-                                .as_ref()
-                                .is_some_and(|existing: &BindingCell| !existing.same_cell(&cell))
-                            {
-                                resolving.remove(&key);
-                                return Ok(ExportResolution::Ambiguous);
-                            }
-                            star_result = Some(cell);
-                        }
-                        ExportResolution::Ambiguous => {
-                            resolving.remove(&key);
-                            return Ok(ExportResolution::Ambiguous);
-                        }
-                        ExportResolution::NotFound => {}
-                    }
-                }
-                ModuleExport::Local { .. }
-                | ModuleExport::Indirect { .. }
-                | ModuleExport::Namespace { .. }
-                | ModuleExport::DeferredNamespace { .. }
-                | ModuleExport::Star { .. } => {}
-            }
-        }
-        resolving.remove(&key);
-        Ok(star_result.map_or(ExportResolution::NotFound, ExportResolution::Found))
-    }
-
-    fn evaluate_module_script(
+    fn evaluate_module_script_suspending(
         &mut self,
         script: &crate::CompiledScript,
     ) -> Result<BytecodeOutcome> {
@@ -739,7 +498,27 @@ impl Context {
             atom_cache,
             binding_cache,
             BindingLayout::clone(script.binding_layout()),
-            |context| context.eval_bytecode_program_with_jobs(script.bytecode()),
+            |context| context.eval_bytecode_program_suspending(script.bytecode()),
+        )
+    }
+
+    fn resume_module_script(
+        &mut self,
+        script: &crate::CompiledScript,
+        activation_base: usize,
+        resume: Completion,
+    ) -> Result<BytecodeOutcome> {
+        let atom_cache = StaticNameAtomCacheHandle::new(
+            script.usage().static_name_count(),
+            script.usage().static_property_access_count(),
+            script.usage().static_call_site_count(),
+        );
+        let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
+        self.with_static_name_caches(
+            atom_cache,
+            binding_cache,
+            BindingLayout::clone(script.binding_layout()),
+            |context| context.resume_top_level_bytecode(activation_base, resume),
         )
     }
 
