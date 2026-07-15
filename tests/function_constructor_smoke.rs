@@ -1,4 +1,4 @@
-use rs_quickjs::{OptimizationMode, Runtime, Value, Vm, VmConfig};
+use velum::{OptimizationMode, Runtime, Value, Vm, VmConfig};
 
 mod support;
 

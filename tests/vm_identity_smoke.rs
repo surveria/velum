@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime};
+use velum::{Engine, Runtime};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

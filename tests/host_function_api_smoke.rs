@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Error, HostCall, Value, VmStorageKind};
+use velum::{Engine, Error, HostCall, Value, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -208,12 +208,12 @@ fn supports_host_value_conversion_helpers() -> TestResult {
 fn interns_host_returned_strings_in_vm_heap() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
-    vm.context().register_host_function_typed(
-        HOST_LABEL_NAME,
-        |_call| -> rs_quickjs::Result<&'static str> { Ok(CAMERA_LABEL) },
-    )?;
     vm.context()
-        .register_host_function_typed(HOST_OWNED_NAME, |_call| -> rs_quickjs::Result<String> {
+        .register_host_function_typed(HOST_LABEL_NAME, |_call| -> velum::Result<&'static str> {
+            Ok(CAMERA_LABEL)
+        })?;
+    vm.context()
+        .register_host_function_typed(HOST_OWNED_NAME, |_call| -> velum::Result<String> {
             Ok(CAMERA_LABEL.to_owned())
         })?;
     vm.context()
@@ -442,18 +442,18 @@ fn rejects_foreign_symbols_even_when_slots_collide() -> TestResult {
     )
 }
 
-fn host_add(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
+fn host_add(call: HostCall<'_>) -> velum::Result<Value> {
     let left = call.number(0, "left")?;
     let right = call.number(1, "right")?;
     Ok(Value::Number(left + right))
 }
 
-fn host_echo(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
+fn host_echo(call: HostCall<'_>) -> velum::Result<Value> {
     let value = call.string(0, "value")?;
     Ok(Value::from(value))
 }
 
-fn host_format(call: HostCall<'_>) -> rs_quickjs::Result<String> {
+fn host_format(call: HostCall<'_>) -> velum::Result<String> {
     let enabled: bool = call.argument(0, "enabled")?;
     let label: &str = call.argument(1, "label")?;
     let count: f64 = call.argument(2, "count")?;

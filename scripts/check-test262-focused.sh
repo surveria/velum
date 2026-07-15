@@ -16,22 +16,22 @@ if [[ -z "${path_filter//[[:space:]]/}" ]]; then
   exit 2
 fi
 
-timestamp="${RSQJS_TEST_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
-report_path="${2:-target/rsqjs-reports/focused/test262-${timestamp}.md}"
+timestamp="${VELUM_TEST_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+report_path="${2:-target/velum-reports/focused/test262-${timestamp}.md}"
 quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
 test262_path="$("${script_dir}/prepare-test262.sh")"
 
-export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
-export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
-export RSQJS_QUICKJS="${quickjs_path}"
-export RSQJS_TEST262_DIR="${test262_path}"
-export RSQJS_TEST262_RUN_ALL=1
-export RSQJS_TEST262_PATH_FILTER="${path_filter}"
-export RSQJS_TEST_JOBS="${RSQJS_TEST_JOBS:-30}"
-export RSQJS_REPORT_TIMESTAMP="${RSQJS_REPORT_TIMESTAMP:-${timestamp}}"
-export RSQJS_REPORT_COMMIT_SHA="${RSQJS_REPORT_COMMIT_SHA:-$(git rev-parse HEAD)}"
-export RSQJS_REPORT_TREE_SHA="${RSQJS_REPORT_TREE_SHA:-$(git rev-parse 'HEAD^{tree}')}"
-unset RSQJS_TEST262_UPDATE_PASS_BASELINE RSQJS_TEST262_PASS_CANDIDATE_PATH
+export VELUM_BUILD_REPO_ROOT="${VELUM_BUILD_REPO_ROOT:-${repo_root}}"
+export VELUM_BUILD_COMMIT_SHA="${VELUM_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
+export VELUM_QUICKJS="${quickjs_path}"
+export VELUM_TEST262_DIR="${test262_path}"
+export VELUM_TEST262_RUN_ALL=1
+export VELUM_TEST262_PATH_FILTER="${path_filter}"
+export VELUM_TEST_JOBS="${VELUM_TEST_JOBS:-30}"
+export VELUM_REPORT_TIMESTAMP="${VELUM_REPORT_TIMESTAMP:-${timestamp}}"
+export VELUM_REPORT_COMMIT_SHA="${VELUM_REPORT_COMMIT_SHA:-$(git rev-parse HEAD)}"
+export VELUM_REPORT_TREE_SHA="${VELUM_REPORT_TREE_SHA:-$(git rev-parse 'HEAD^{tree}')}"
+unset VELUM_TEST262_UPDATE_PASS_BASELINE VELUM_TEST262_PASS_CANDIDATE_PATH
 
 cargo run --release --manifest-path runner/Cargo.toml -- --correctness "${report_path}"
 printf 'focused Test262 report: %s\n' "${report_path}"

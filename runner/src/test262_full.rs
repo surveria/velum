@@ -22,9 +22,9 @@ use super::{
 const FILE_CORPUS_NAME: &str = "Test262 file conformance";
 const VARIANT_CORPUS_NAME: &str = "Test262 full corpus";
 const TEST262_TEST_ROOT: &str = "test";
-const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
-const TEST262_PATH_FILTER_ENV: &str = "RSQJS_TEST262_PATH_FILTER";
-const TEST262_FLAG_FILTER_ENV: &str = "RSQJS_TEST262_FLAG_FILTER";
+const TEST262_RUN_ALL_ENV: &str = "VELUM_TEST262_RUN_ALL";
+const TEST262_PATH_FILTER_ENV: &str = "VELUM_TEST262_PATH_FILTER";
+const TEST262_FLAG_FILTER_ENV: &str = "VELUM_TEST262_FLAG_FILTER";
 const MODULE_FIXTURE_MARKER: &str = "_FIXTURE";
 const UNKNOWN_AREA: &str = "unknown";
 

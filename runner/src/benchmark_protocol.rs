@@ -7,12 +7,12 @@
 use std::{fmt, time::Duration};
 
 use anyhow::{Context as _, bail};
-use rs_quickjs::Value;
+use velum::Value;
 
 pub const PREPARED_PROTOCOL_VERSION: &str = "prepared-v1";
-pub const SETUP_FUNCTION: &str = "__rsqjsBenchSetup";
-pub const RUN_FUNCTION: &str = "__rsqjsBenchRun";
-pub const VERIFY_FUNCTION: &str = "__rsqjsBenchVerify";
+pub const SETUP_FUNCTION: &str = "__velumBenchSetup";
+pub const RUN_FUNCTION: &str = "__velumBenchRun";
+pub const VERIFY_FUNCTION: &str = "__velumBenchVerify";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BenchmarkMode {
@@ -185,7 +185,7 @@ pub enum BenchmarkChecksum {
 }
 
 impl BenchmarkChecksum {
-    pub fn from_rsqjs(value: Value) -> anyhow::Result<Self> {
+    pub fn from_velum(value: Value) -> anyhow::Result<Self> {
         match value {
             Value::Undefined => Ok(Self::Undefined),
             Value::Null => Ok(Self::Null),

@@ -131,7 +131,7 @@ The reproducible profile uses Test262 commit
 [`64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`](https://github.com/tc39/test262/commit/64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1),
 plus two tracked corpus corrections documented in
 [`tests/corpora/test262/README.md`](tests/corpora/test262/README.md). See the
-latest [full correctness report](reports/test-runs/rsqjs-test-report-20260715T084223Z.md)
+latest [full correctness report](reports/test-runs/velum-test-report-20260715T084223Z.md)
 and the machine-readable
 [`full-pass-baseline.txt`](tests/corpora/test262/full-pass-baseline.txt) for the
 exact evidence.
@@ -158,7 +158,7 @@ capabilities a VM receives.
 Evaluate source directly:
 
 ```sh
-cargo run --release --bin rsqjs -- -e '
+cargo run --release --bin velum -- -e '
 const values = [1, 2, 3, 4];
 const total = values.map(value => value * value).reduce((a, b) => a + b, 0);
 print("sum of squares", total);
@@ -169,7 +169,7 @@ total
 Or run a script file:
 
 ```sh
-cargo run --release --bin rsqjs -- script.js
+cargo run --release --bin velum -- script.js
 ```
 
 The smoke CLI prints lines produced by `print(...)`, followed by the final
@@ -180,9 +180,9 @@ value when it is not `undefined`.
 The Rust API separates reusable engine configuration from isolated VM state:
 
 ```rust
-use rs_quickjs::Engine;
+use velum::Engine;
 
-fn main() -> rs_quickjs::Result<()> {
+fn main() -> velum::Result<()> {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
 

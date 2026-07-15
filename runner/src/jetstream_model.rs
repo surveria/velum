@@ -56,9 +56,9 @@ var performance = {
 };
 ";
 pub const SYNC_HARNESS: &str = r#"
-var __rsqjsJetStreamBenchmark = new Benchmark();
-var __rsqjsJetStreamResult = __rsqjsJetStreamBenchmark.runIteration();
-if (__rsqjsJetStreamResult && typeof __rsqjsJetStreamResult.then === "function") {
+var __velumJetStreamBenchmark = new Benchmark();
+var __velumJetStreamResult = __velumJetStreamBenchmark.runIteration();
+if (__velumJetStreamResult && typeof __velumJetStreamResult.then === "function") {
     throw new Error("async JetStream workloads are not supported by the synchronous harness");
 }
 "#;
@@ -97,14 +97,14 @@ pub struct JetStreamRow {
     pub(crate) status: String,
     pub(crate) source: String,
     pub(crate) case_elapsed: String,
-    pub(crate) rsqjs_measure: String,
+    pub(crate) velum_measure: String,
     pub(crate) quickjs_measure: String,
     pub(crate) reference_source: String,
-    pub(crate) rsqjs_time: String,
+    pub(crate) velum_time: String,
     pub(crate) quickjs_time: String,
     pub(crate) latency_ratio: String,
     pub(crate) latency_budget: String,
-    pub(crate) rsqjs_cv: String,
+    pub(crate) velum_cv: String,
     pub(crate) quickjs_cv: String,
     pub(crate) quality: String,
     pub(crate) detail: String,

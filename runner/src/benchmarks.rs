@@ -7,14 +7,14 @@
 //! startup-subtraction machinery it replaces has been removed.
 //!
 //! Peak-memory comparison used to piggyback on a CLI process; a byte-level
-//! in-process memory parity needs per-VM heap accounting that rs-quickjs does
+//! in-process memory parity needs per-VM heap accounting that Velum does
 //! not expose yet, so the `memory_ratio` column is reserved (`-`) for now.
 
 use std::fs;
 
 use tabled::Tabled;
 
-use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
+use super::bench_engines::{BenchEngine, VelumEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::benchmark_protocol::{
     BenchmarkContributionFlag, BenchmarkCountContribution, BenchmarkInput, BenchmarkMethodology,
@@ -94,14 +94,14 @@ pub struct BenchmarkRow {
     pub(crate) source: String,
     pub(crate) iterations: usize,
     pub(crate) case_elapsed: String,
-    pub(crate) rsqjs_measure: String,
+    pub(crate) velum_measure: String,
     pub(crate) quickjs_measure: String,
-    pub(crate) rsqjs_eval: String,
+    pub(crate) velum_eval: String,
     pub(crate) quickjs_eval: String,
     pub(crate) latency_ratio: String,
     pub(crate) latency_budget: String,
     pub(crate) memory_ratio: String,
-    pub(crate) rsqjs_cv: String,
+    pub(crate) velum_cv: String,
     pub(crate) quickjs_cv: String,
     pub(crate) quality: String,
     pub(crate) detail: String,
@@ -261,7 +261,7 @@ fn run_benchmark_case(
         };
     }
     let ours = timing::timed(|| {
-        bench_measure::measure(config, || eval_benchmark(&RsqjsEngine, case, &source))
+        bench_measure::measure(config, || eval_benchmark(&VelumEngine, case, &source))
     });
     let reference = measure_reference(config, reference, case, &source);
     let reference_source = match &reference {
@@ -356,7 +356,7 @@ fn measured_with_reference_result(
 fn failed_with_reference(
     case: &BenchmarkCase,
     detail: &str,
-    rsqjs_measure: String,
+    velum_measure: String,
     reference: ReferenceMeasurement,
     case_elapsed: String,
 ) -> BenchmarkOutcome {
@@ -365,7 +365,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns::failed_with_reference(
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 reference.elapsed,
             ),
             timing::ReferenceColumns::measured(
@@ -379,7 +379,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns::failed_with_reference(
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 note.elapsed,
             ),
             timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
@@ -390,7 +390,7 @@ fn failed_with_reference(
             case,
             timing::MeasurementColumns {
                 case_elapsed,
-                rsqjs_measure,
+                velum_measure,
                 quickjs_measure: NOT_MEASURED.to_owned(),
             },
             timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
@@ -473,9 +473,9 @@ fn measured_with_reference(
             source: case.path.to_owned(),
             iterations: report_iterations(ours.value),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: timing::format_duration(reference.elapsed),
-            rsqjs_eval: format_duration(ours.value.median()),
+            velum_eval: format_duration(ours.value.median()),
             quickjs_eval: format_duration(reference.value.median()),
             latency_ratio: ratio_values(
                 ours.value.median().as_nanos(),
@@ -483,7 +483,7 @@ fn measured_with_reference(
             ),
             latency_budget: budget.label.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(&detail_text(over)),
@@ -527,14 +527,14 @@ fn measured_without_reference(
             source: case.path.to_owned(),
             iterations: report_iterations(ours.value),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: NOT_MEASURED.to_owned(),
-            rsqjs_eval: format_duration(ours.value.median()),
+            velum_eval: format_duration(ours.value.median()),
             quickjs_eval: REFERENCE_NOT_CONFIGURED.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_NOT_CONFIGURED.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(DETAIL_COMPLETED),
@@ -582,14 +582,14 @@ fn reference_unavailable(
             source: case.path.to_owned(),
             iterations: report_iterations(ours.value),
             case_elapsed,
-            rsqjs_measure: timing::format_duration(ours.elapsed),
+            velum_measure: timing::format_duration(ours.elapsed),
             quickjs_measure: timing::format_duration(note.elapsed),
-            rsqjs_eval: format_duration(ours.value.median()),
+            velum_eval: format_duration(ours.value.median()),
             quickjs_eval: REFERENCE_NOT_AVAILABLE.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_NOT_AVAILABLE.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(&format!(
@@ -627,14 +627,14 @@ fn invalid_measurement_outcome(
             source: case.path.to_owned(),
             iterations: report_iterations(ours.value),
             case_elapsed: measurements.case_elapsed,
-            rsqjs_measure: measurements.rsqjs_measure,
+            velum_measure: measurements.velum_measure,
             quickjs_measure: measurements.quickjs_measure,
-            rsqjs_eval: format_duration(ours.value.median()),
+            velum_eval: format_duration(ours.value.median()),
             quickjs_eval: quickjs.eval,
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_INVALID.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.value.cv_percent_text(),
+            velum_cv: ours.value.cv_percent_text(),
             quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
             detail: benchmark_detail(detail),
@@ -676,7 +676,7 @@ fn failed_outcome(case: &BenchmarkCase, case_elapsed: String, detail: &str) -> B
 fn failed_row(
     case: &BenchmarkCase,
     measurements: timing::MeasurementColumns,
-    rsqjs_eval: String,
+    velum_eval: String,
     quickjs: timing::ReferenceColumns,
     quality: String,
     detail: &str,
@@ -687,14 +687,14 @@ fn failed_row(
         source: case.path.to_owned(),
         iterations: 0,
         case_elapsed: measurements.case_elapsed,
-        rsqjs_measure: measurements.rsqjs_measure,
+        velum_measure: measurements.velum_measure,
         quickjs_measure: measurements.quickjs_measure,
-        rsqjs_eval,
+        velum_eval,
         quickjs_eval: quickjs.eval,
         latency_ratio: NOT_MEASURED.to_owned(),
         latency_budget: NOT_MEASURED.to_owned(),
         memory_ratio: NOT_MEASURED.to_owned(),
-        rsqjs_cv: NOT_MEASURED.to_owned(),
+        velum_cv: NOT_MEASURED.to_owned(),
         quickjs_cv: quickjs.cv,
         quality,
         detail: benchmark_detail(detail),
@@ -717,7 +717,7 @@ fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -
         return None;
     }
     let mut reasons = Vec::new();
-    collect_quality_reasons(&mut reasons, "rsqjs", ours);
+    collect_quality_reasons(&mut reasons, "velum", ours);
     if let Some(reference) = reference {
         collect_quality_reasons(&mut reasons, "quickjs", reference);
     }

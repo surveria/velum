@@ -20,8 +20,8 @@ fi
 repository="${GITHUB_REPOSITORY:-}"
 [[ -n "${repository}" ]] || fail "GITHUB_REPOSITORY is required"
 
-pr_number="${RSQJS_REPORT_PR_NUMBER:-}"
-[[ -n "${pr_number}" ]] || fail "RSQJS_REPORT_PR_NUMBER is required"
+pr_number="${VELUM_REPORT_PR_NUMBER:-}"
+[[ -n "${pr_number}" ]] || fail "VELUM_REPORT_PR_NUMBER is required"
 
 commit_lines="$(gh api --paginate "/repos/${repository}/pulls/${pr_number}/commits" \
   --jq '.[] | [.sha, .commit.verification.verified, .commit.verification.reason, (.commit.verification.signature != null), .commit.author.email, .commit.committer.email] | @tsv')"

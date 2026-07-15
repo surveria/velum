@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Error, JsBigInt, OwnedValue, Value};
+use velum::{Engine, Error, JsBigInt, OwnedValue, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 

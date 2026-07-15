@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use parking_lot::Mutex;
-use rs_quickjs::{Engine, Error, OwnedValue, RetainedValue, VmRootKind};
+use velum::{Engine, Error, OwnedValue, RetainedValue, VmRootKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -133,14 +133,14 @@ fn explicit_release_reports_owner_teardown() -> TestResult {
     ensure_runtime_error(&error, "retained value owner has been torn down")
 }
 
-fn ensure_same_identity(vm: &rs_quickjs::Vm, handle: &RetainedValue) -> TestResult {
+fn ensure_same_identity(vm: &velum::Vm, handle: &RetainedValue) -> TestResult {
     if vm.identity() == handle.identity() {
         return Ok(());
     }
     Err("retained handle did not preserve its VM identity".into())
 }
 
-fn ensure_retained_roots(vm: &rs_quickjs::Vm, expected: usize) -> TestResult {
+fn ensure_retained_roots(vm: &velum::Vm, expected: usize) -> TestResult {
     let actual = vm.root_snapshot()?.count(VmRootKind::RetainedHandle);
     if actual == expected {
         return Ok(());

@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value, Vm, VmAsyncEdgeKind, VmStorageKind};
+use velum::{Runtime, Value, Vm, VmAsyncEdgeKind, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -590,7 +590,7 @@ fn async_function_rejects_promise_constructor_type_errors() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
-fn eval(source: &str) -> rs_quickjs::Result<Value> {
+fn eval(source: &str) -> velum::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)

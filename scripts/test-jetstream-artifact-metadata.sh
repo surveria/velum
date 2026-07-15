@@ -20,16 +20,16 @@ write_envelope() {
   local event="$2"
   local include_workflow="$3"
   : > "${path}"
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_SCHEMA 3
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_FILTER ''
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_BASELINE_MODE read
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_REPOSITORY test/repository
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_SCHEMA 3
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_FILTER ''
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_BASELINE_MODE read
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_REPOSITORY test/repository
   if [[ "${include_workflow}" == 1 ]]; then
-    write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_WORKFLOW JetStream
+    write_value "${path}" VELUM_JETSTREAM_ARTIFACT_WORKFLOW JetStream
   fi
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_RUN_ID 42
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_RUN_ATTEMPT 1
-  write_value "${path}" RSQJS_JETSTREAM_ARTIFACT_EVENT_NAME "${event}"
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_RUN_ID 42
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_RUN_ATTEMPT 1
+  write_value "${path}" VELUM_JETSTREAM_ARTIFACT_EVENT_NAME "${event}"
 }
 
 expect_rejected() {
@@ -45,9 +45,9 @@ expect_rejected() {
       GITHUB_EVENT_NAME=schedule \
       GITHUB_REF="${github_ref}" \
       GITHUB_SHA="${current_head}" \
-      RSQJS_DEFAULT_BRANCH=main \
-      RSQJS_JETSTREAM_METADATA_PATH="${metadata_path}" \
-      RSQJS_JETSTREAM_ARTIFACT_WORKFLOW=JetStream \
+      VELUM_DEFAULT_BRANCH=main \
+      VELUM_JETSTREAM_METADATA_PATH="${metadata_path}" \
+      VELUM_JETSTREAM_ARTIFACT_WORKFLOW=JetStream \
       "${script_dir}/publish-jetstream-report.sh" 2>&1
   )"; then
     printf 'metadata fixture unexpectedly passed: %s\n' "${metadata_path}" >&2
@@ -78,7 +78,7 @@ stale_commit_path="${tmp_dir}/stale-commit.env"
 write_envelope "${stale_commit_path}" schedule 1
 write_value \
   "${stale_commit_path}" \
-  RSQJS_JETSTREAM_ARTIFACT_COMMIT_SHA \
+  VELUM_JETSTREAM_ARTIFACT_COMMIT_SHA \
   0000000000000000000000000000000000000000
 expect_rejected \
   "${stale_commit_path}" \
@@ -90,15 +90,15 @@ mkdir -p "${auth_bin}"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'if [[ "$1" == "rev-parse" && "$2" == "--is-shallow-repository" ]]; then' \
-  '  printf '\''%s\n'\'' "${RSQJS_TEST_SHALLOW:-false}"' \
+  '  printf '\''%s\n'\'' "${VELUM_TEST_SHALLOW:-false}"' \
   '  exit 0' \
   'fi' \
-  'printf '\''%s\n'\'' "$@" > "${RSQJS_GIT_ARGS_LOG}"' \
+  'printf '\''%s\n'\'' "$@" > "${VELUM_GIT_ARGS_LOG}"' \
   > "${auth_bin}/git"
 chmod +x "${auth_bin}/git"
 PATH="${auth_bin}:${PATH}" \
   GH_TOKEN='must-not-appear-in-git-arguments' \
-  RSQJS_GIT_ARGS_LOG="${auth_log}" \
+  VELUM_GIT_ARGS_LOG="${auth_log}" \
   bash -c 'source "$1"; fetch_origin_main' bash \
   "${script_dir}/publish-jetstream-report.sh"
 expected_auth_args="${tmp_dir}/expected-git-args.log"
@@ -122,8 +122,8 @@ if grep -q 'must-not-appear' "${auth_log}"; then
 fi
 PATH="${auth_bin}:${PATH}" \
   GH_TOKEN='must-not-appear-in-git-arguments' \
-  RSQJS_GIT_ARGS_LOG="${auth_log}" \
-  RSQJS_TEST_SHALLOW=true \
+  VELUM_GIT_ARGS_LOG="${auth_log}" \
+  VELUM_TEST_SHALLOW=true \
   bash -c 'source "$1"; fetch_origin_main' bash \
   "${script_dir}/publish-jetstream-report.sh"
 printf '%s\n' \
@@ -143,7 +143,7 @@ cmp -s "${expected_auth_args}" "${auth_log}" || {
 }
 missing_token_output="$(
   PATH="${auth_bin}:${PATH}" \
-    RSQJS_GIT_ARGS_LOG="${auth_log}" \
+    VELUM_GIT_ARGS_LOG="${auth_log}" \
     bash -c 'source "$1"; unset GH_TOKEN; fetch_origin_main' bash \
     "${script_dir}/publish-jetstream-report.sh" 2>&1 || true
 )"

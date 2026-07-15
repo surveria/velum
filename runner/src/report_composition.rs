@@ -109,7 +109,7 @@ pub fn validate_output_path(report: &ReportDocument, report_path: &Path) -> anyh
     if report.metadata.timestamp.is_empty() {
         bail!("composed report metadata timestamp must not be empty");
     }
-    let expected = format!("rsqjs-test-report-{}.md", report.metadata.timestamp);
+    let expected = format!("velum-test-report-{}.md", report.metadata.timestamp);
     let actual = report_path
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
@@ -372,11 +372,11 @@ mod tests {
         let report = compose(correctness, performance, "tree-1")?;
         validate_output_path(
             &report,
-            std::path::Path::new("rsqjs-test-report-20260710T010100Z.md"),
+            std::path::Path::new("velum-test-report-20260710T010100Z.md"),
         )?;
         if validate_output_path(
             &report,
-            std::path::Path::new("rsqjs-test-report-20260710T010200Z.md"),
+            std::path::Path::new("velum-test-report-20260710T010200Z.md"),
         )
         .is_err()
         {

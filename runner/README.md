@@ -1,17 +1,17 @@
-# rsqjs-test-runner
+# velum-test-runner
 
-Test and benchmark runner for the [`rs-quickjs`](https://github.com/surveria/rs-quickjs)
+Test and benchmark runner for the [`velum`](https://github.com/surveria/velum)
 JavaScript engine.
 
 This crate lives in `runner/` as a nested workspace inside the engine repository.
 The engine crate stays dependency-light because the runner's reporting,
 benchmarking, and reference-engine dependencies belong only to this workspace.
-The runner depends on the engine through the public API with `rs-quickjs = {
+The runner depends on the engine through the public API with `velum = {
 path = ".." }`.
 
 ## Layout
 
-- `src/main.rs` — the `rsqjs-test-runner` binary (report and benchmark modes).
+- `src/main.rs` — the `velum-test-runner` binary (report and benchmark modes).
 - `src/*.rs` — engine/Test262/QuickJS-differential corpora drivers, the
   in-process benchmark sampler, and report/rollup rendering.
 
@@ -36,9 +36,9 @@ project benchmark work:
 ```
 
 The script owns the exclusive host lock and uses the committed content-addressed
-QuickJS baseline in read mode. `RSQJS_JETSTREAM_FILTER` accepts exact ids and
+QuickJS baseline in read mode. `VELUM_JETSTREAM_FILTER` accepts exact ids and
 explicit trailing-star prefixes. Live QuickJS execution occurs only when
-`RSQJS_JETSTREAM_QUICKJS_BASELINE=refresh` is set explicitly; refresh output is
+`VELUM_JETSTREAM_QUICKJS_BASELINE=refresh` is set explicitly; refresh output is
 reviewed and committed as a separate baseline change.
 
 Each run writes derived Markdown, compact schema-v1 YAML, bounded component

@@ -1,4 +1,4 @@
-use rs_quickjs::engine_build_info;
+use velum::engine_build_info;
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -6,7 +6,7 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 fn exposes_engine_build_info() -> TestResult {
     let info = engine_build_info();
 
-    ensure_text(info.package_name, "rs-quickjs")?;
+    ensure_text(info.package_name, "velum")?;
     ensure_text(info.version, env!("CARGO_PKG_VERSION"))?;
     ensure_non_empty(info.commit_sha, "commit sha")
 }

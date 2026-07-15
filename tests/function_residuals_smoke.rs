@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime, Value};
+use velum::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -276,7 +276,7 @@ fn rejects_parameter_and_body_lexical_name_conflicts_during_parsing() -> TestRes
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let result = vm.eval("async function evaluate(value = 1) { let value; }");
-    if matches!(result, Err(rs_quickjs::Error::Parse { .. })) {
+    if matches!(result, Err(velum::Error::Parse { .. })) {
         return Ok(());
     }
     Err(format!("expected parse error, got {result:?}").into())

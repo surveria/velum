@@ -14,13 +14,13 @@ struct JetStreamTableRow {
     status: String,
     source: String,
     case_elapsed: String,
-    rsqjs_measure: String,
+    velum_measure: String,
     quickjs_measure: String,
-    rsqjs_time: String,
+    velum_time: String,
     quickjs_time: String,
     latency_ratio: String,
     latency_budget: String,
-    rsqjs_cv: String,
+    velum_cv: String,
     quickjs_cv: String,
     quality: String,
     reference_source: String,
@@ -54,7 +54,7 @@ pub(super) fn append_timing_rows(body: &mut String, suite: &JetStreamSuite) {
     for row in &suite.rows {
         let detail = suite.details.iter().find(|detail| detail.id == row.id);
         let case_elapsed = optional_duration_text(detail.and_then(|value| value.case_duration_ns));
-        let rsqjs_measure =
+        let velum_measure =
             optional_duration_text(detail.and_then(|value| value.engine_wall_duration_ns));
         let quickjs_measure =
             optional_duration_text(detail.and_then(|value| value.reference_wall_duration_ns));
@@ -72,7 +72,7 @@ pub(super) fn append_timing_rows(body: &mut String, suite: &JetStreamSuite) {
                 source,
                 "",
                 &case_elapsed,
-                &rsqjs_measure,
+                &velum_measure,
                 &quickjs_measure,
                 &row.detail,
                 "",
@@ -101,20 +101,20 @@ fn table_row(row: &JetStreamRecord, detail: Option<&JetStreamDetailRecord>) -> J
         status: row.status.label().to_owned(),
         source: row.source.clone().unwrap_or_else(|| "-".to_owned()),
         case_elapsed: optional_duration_text(detail.and_then(|value| value.case_duration_ns)),
-        rsqjs_measure: optional_duration_text(
+        velum_measure: optional_duration_text(
             detail.and_then(|value| value.engine_wall_duration_ns),
         ),
         quickjs_measure: optional_duration_text(
             detail.and_then(|value| value.reference_wall_duration_ns),
         ),
-        rsqjs_time: optional_duration_text(row.engine_median_duration_ns),
+        velum_time: optional_duration_text(row.engine_median_duration_ns),
         quickjs_time: optional_duration_text(row.reference_median_duration_ns),
         latency_ratio: ratio_text(row.latency_ratio_centi_units),
         latency_budget: detail.map_or_else(
             || "-".to_owned(),
             |value| value.latency_budget.label().to_owned(),
         ),
-        rsqjs_cv: row
+        velum_cv: row
             .engine_cv_permille
             .map_or_else(|| "-".to_owned(), cv_text),
         quickjs_cv: row

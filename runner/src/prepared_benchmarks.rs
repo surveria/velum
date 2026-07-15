@@ -70,7 +70,7 @@ pub fn run(
     host_profile: &str,
 ) -> anyhow::Result<PreparedCaseRun> {
     let case_timer = timing::RunTimer::start();
-    let ours = measure_prepared(&crate::bench_engines::RsqjsEngine, case, source, config).map(
+    let ours = measure_prepared(&crate::bench_engines::VelumEngine, case, source, config).map(
         |mut measurement| {
             measurement.lifecycle.load = load_elapsed;
             measurement
@@ -230,7 +230,7 @@ fn parity_error(
         return None;
     }
     Some(format!(
-        "checksum mismatch: rsqjs {}, QuickJS {}",
+        "checksum mismatch: Velum {}, QuickJS {}",
         ours.checksum, reference.checksum
     ))
 }

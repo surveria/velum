@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use velum::{Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -8,7 +8,7 @@ fn hashbang_comment_runs_only_at_source_start() -> TestResult {
     let mut context = runtime.context();
 
     let value = context.eval(
-        r"#!/usr/bin/env rsqjs
+        r"#!/usr/bin/env velum
 40 + 2
         ",
     )?;
@@ -164,7 +164,7 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     Err(format!("expected {expected:?}, got {actual:?}").into())
 }
 
-fn ensure_error_contains(error: &rs_quickjs::Error, expected: &str) -> TestResult {
+fn ensure_error_contains(error: &velum::Error, expected: &str) -> TestResult {
     let actual = error.to_string();
     if actual.contains(expected) {
         return Ok(());

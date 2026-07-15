@@ -6,7 +6,7 @@ use anyhow::bail;
 
 use super::JetStreamCase;
 
-pub const ENV_JETSTREAM_FILTER: &str = "RSQJS_JETSTREAM_FILTER";
+pub const ENV_JETSTREAM_FILTER: &str = "VELUM_JETSTREAM_FILTER";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum Selector {

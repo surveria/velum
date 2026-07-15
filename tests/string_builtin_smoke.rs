@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use velum::{Runtime, Value};
 
 mod support;
 

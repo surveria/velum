@@ -1,8 +1,6 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
-use rs_quickjs::{
-    DynamicModuleRequest, Error, ImportPhase, ModuleLoader, ModuleSource, Runtime, Value,
-};
+use velum::{DynamicModuleRequest, Error, ImportPhase, ModuleLoader, ModuleSource, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -363,7 +361,7 @@ impl RecordingLoader {
         )
     }
 
-    fn source(&self, specifier: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn source(&self, specifier: &str) -> velum::Result<ModuleSource> {
         let source = self
             .sources
             .get(specifier)
@@ -374,7 +372,7 @@ impl RecordingLoader {
 }
 
 impl ModuleLoader for RecordingLoader {
-    fn load(&mut self, _referrer: &str, request: &str) -> rs_quickjs::Result<ModuleSource> {
+    fn load(&mut self, _referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         self.source(request.trim_start_matches("./"))
     }
 
@@ -382,7 +380,7 @@ impl ModuleLoader for RecordingLoader {
         &mut self,
         referrer: &str,
         request: &DynamicModuleRequest,
-    ) -> rs_quickjs::Result<ModuleSource> {
+    ) -> velum::Result<ModuleSource> {
         let requested = request.specifier().trim_start_matches("./");
         let specifier = referrer.rsplit_once('/').map_or_else(
             || requested.to_owned(),

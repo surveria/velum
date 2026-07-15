@@ -15,33 +15,33 @@ need_cmd() {
 }
 
 valid_report_file() {
-  [[ "$1" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
+  [[ "$1" =~ ^velum-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
 }
 
 valid_report_yaml_file() {
-  [[ "$1" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.yaml$ ]]
+  [[ "$1" =~ ^velum-jetstream-report-[0-9]{8}T[0-9]{6}Z\.yaml$ ]]
 }
 
 valid_component_yaml_file() {
-  [[ "$1" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
+  [[ "$1" =~ ^velum-jetstream-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
 }
 
 valid_timing_file() {
-  [[ "$1" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z-timings\.tsv$ ]]
+  [[ "$1" =~ ^velum-jetstream-report-[0-9]{8}T[0-9]{6}Z-timings\.tsv$ ]]
 }
 
 valid_metadata_key() {
   case "$1" in
-    RSQJS_JETSTREAM_ARTIFACT_SCHEMA | \
-      RSQJS_JETSTREAM_ARTIFACT_REPORT_FILE | RSQJS_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH | \
-      RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_FILE | RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
-      RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE | RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH | \
-      RSQJS_JETSTREAM_ARTIFACT_TIMING_FILE | RSQJS_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH | \
-      RSQJS_JETSTREAM_ARTIFACT_TIMESTAMP | RSQJS_JETSTREAM_ARTIFACT_COMMIT_SHA | \
-      RSQJS_JETSTREAM_ARTIFACT_TREE_SHA | RSQJS_JETSTREAM_ARTIFACT_EVENT_NAME | \
-      RSQJS_JETSTREAM_ARTIFACT_RUN_ID | RSQJS_JETSTREAM_ARTIFACT_RUN_ATTEMPT | \
-      RSQJS_JETSTREAM_ARTIFACT_REPOSITORY | RSQJS_JETSTREAM_ARTIFACT_WORKFLOW | \
-      RSQJS_JETSTREAM_ARTIFACT_FILTER | RSQJS_JETSTREAM_ARTIFACT_BASELINE_MODE)
+    VELUM_JETSTREAM_ARTIFACT_SCHEMA | \
+      VELUM_JETSTREAM_ARTIFACT_REPORT_FILE | VELUM_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH | \
+      VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_FILE | VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
+      VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE | VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH | \
+      VELUM_JETSTREAM_ARTIFACT_TIMING_FILE | VELUM_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH | \
+      VELUM_JETSTREAM_ARTIFACT_TIMESTAMP | VELUM_JETSTREAM_ARTIFACT_COMMIT_SHA | \
+      VELUM_JETSTREAM_ARTIFACT_TREE_SHA | VELUM_JETSTREAM_ARTIFACT_EVENT_NAME | \
+      VELUM_JETSTREAM_ARTIFACT_RUN_ID | VELUM_JETSTREAM_ARTIFACT_RUN_ATTEMPT | \
+      VELUM_JETSTREAM_ARTIFACT_REPOSITORY | VELUM_JETSTREAM_ARTIFACT_WORKFLOW | \
+      VELUM_JETSTREAM_ARTIFACT_FILTER | VELUM_JETSTREAM_ARTIFACT_BASELINE_MODE)
       return 0
       ;;
     *)
@@ -51,16 +51,16 @@ valid_metadata_key() {
 }
 
 clear_metadata() {
-  unset RSQJS_JETSTREAM_ARTIFACT_SCHEMA
-  unset RSQJS_JETSTREAM_ARTIFACT_REPORT_FILE RSQJS_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH
-  unset RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_FILE RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH
-  unset RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH
-  unset RSQJS_JETSTREAM_ARTIFACT_TIMING_FILE RSQJS_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH
-  unset RSQJS_JETSTREAM_ARTIFACT_TIMESTAMP RSQJS_JETSTREAM_ARTIFACT_COMMIT_SHA
-  unset RSQJS_JETSTREAM_ARTIFACT_TREE_SHA RSQJS_JETSTREAM_ARTIFACT_EVENT_NAME
-  unset RSQJS_JETSTREAM_ARTIFACT_RUN_ID RSQJS_JETSTREAM_ARTIFACT_RUN_ATTEMPT
-  unset RSQJS_JETSTREAM_ARTIFACT_REPOSITORY RSQJS_JETSTREAM_ARTIFACT_WORKFLOW
-  unset RSQJS_JETSTREAM_ARTIFACT_FILTER RSQJS_JETSTREAM_ARTIFACT_BASELINE_MODE
+  unset VELUM_JETSTREAM_ARTIFACT_SCHEMA
+  unset VELUM_JETSTREAM_ARTIFACT_REPORT_FILE VELUM_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH
+  unset VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_FILE VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH
+  unset VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH
+  unset VELUM_JETSTREAM_ARTIFACT_TIMING_FILE VELUM_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH
+  unset VELUM_JETSTREAM_ARTIFACT_TIMESTAMP VELUM_JETSTREAM_ARTIFACT_COMMIT_SHA
+  unset VELUM_JETSTREAM_ARTIFACT_TREE_SHA VELUM_JETSTREAM_ARTIFACT_EVENT_NAME
+  unset VELUM_JETSTREAM_ARTIFACT_RUN_ID VELUM_JETSTREAM_ARTIFACT_RUN_ATTEMPT
+  unset VELUM_JETSTREAM_ARTIFACT_REPOSITORY VELUM_JETSTREAM_ARTIFACT_WORKFLOW
+  unset VELUM_JETSTREAM_ARTIFACT_FILTER VELUM_JETSTREAM_ARTIFACT_BASELINE_MODE
 }
 
 read_metadata() {
@@ -229,38 +229,38 @@ need_cmd python3
 
 repository="${GITHUB_REPOSITORY:-}"
 [[ -n "${repository}" ]] || fail "GITHUB_REPOSITORY is required"
-metadata_path="${RSQJS_JETSTREAM_METADATA_PATH:-target/rsqjs-reports/rsqjs-jetstream-metadata.env}"
+metadata_path="${VELUM_JETSTREAM_METADATA_PATH:-target/velum-reports/velum-jetstream-metadata.env}"
 [[ -f "${metadata_path}" ]] || fail "missing JetStream metadata: ${metadata_path}"
 
 read_metadata "${metadata_path}" || fail "invalid JetStream metadata"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_SCHEMA:-}" == "3" ]] || fail "unsupported artifact schema"
-report_file="${RSQJS_JETSTREAM_ARTIFACT_REPORT_FILE:-}"
-report_relative_path="${RSQJS_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH:-}"
-report_yaml_file="${RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_FILE:-}"
-report_yaml_relative_path="${RSQJS_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH:-}"
-component_yaml_file="${RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE:-}"
-component_yaml_relative_path="${RSQJS_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH:-}"
-timing_file="${RSQJS_JETSTREAM_ARTIFACT_TIMING_FILE:-}"
-timing_relative_path="${RSQJS_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH:-}"
-expected_commit="${RSQJS_JETSTREAM_ARTIFACT_COMMIT_SHA:-}"
-expected_tree="${RSQJS_JETSTREAM_ARTIFACT_TREE_SHA:-}"
-source_run="${RSQJS_JETSTREAM_ARTIFACT_RUN_ID:-unknown}"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_FILTER:-}" == "" ]] || fail "filtered reports are not canonical"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_BASELINE_MODE:-}" == "read" ]] || fail "only read-only baseline runs are canonical"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_REPOSITORY:-}" == "${GITHUB_REPOSITORY:-}" ]] || fail "artifact repository mismatch"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_WORKFLOW:-}" == "${GITHUB_WORKFLOW:-}" ]] || fail "artifact workflow mismatch"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_RUN_ID:-}" == "${GITHUB_RUN_ID:-}" ]] || fail "artifact run id mismatch"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_RUN_ATTEMPT:-}" == "${GITHUB_RUN_ATTEMPT:-}" ]] || fail "artifact run attempt mismatch"
-[[ "${RSQJS_JETSTREAM_ARTIFACT_EVENT_NAME:-}" == "${GITHUB_EVENT_NAME:-}" ]] || fail "artifact event mismatch"
-case "${RSQJS_JETSTREAM_ARTIFACT_EVENT_NAME:-}" in
+[[ "${VELUM_JETSTREAM_ARTIFACT_SCHEMA:-}" == "3" ]] || fail "unsupported artifact schema"
+report_file="${VELUM_JETSTREAM_ARTIFACT_REPORT_FILE:-}"
+report_relative_path="${VELUM_JETSTREAM_ARTIFACT_REPORT_RELATIVE_PATH:-}"
+report_yaml_file="${VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_FILE:-}"
+report_yaml_relative_path="${VELUM_JETSTREAM_ARTIFACT_REPORT_YAML_RELATIVE_PATH:-}"
+component_yaml_file="${VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_FILE:-}"
+component_yaml_relative_path="${VELUM_JETSTREAM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH:-}"
+timing_file="${VELUM_JETSTREAM_ARTIFACT_TIMING_FILE:-}"
+timing_relative_path="${VELUM_JETSTREAM_ARTIFACT_TIMING_RELATIVE_PATH:-}"
+expected_commit="${VELUM_JETSTREAM_ARTIFACT_COMMIT_SHA:-}"
+expected_tree="${VELUM_JETSTREAM_ARTIFACT_TREE_SHA:-}"
+source_run="${VELUM_JETSTREAM_ARTIFACT_RUN_ID:-unknown}"
+[[ "${VELUM_JETSTREAM_ARTIFACT_FILTER:-}" == "" ]] || fail "filtered reports are not canonical"
+[[ "${VELUM_JETSTREAM_ARTIFACT_BASELINE_MODE:-}" == "read" ]] || fail "only read-only baseline runs are canonical"
+[[ "${VELUM_JETSTREAM_ARTIFACT_REPOSITORY:-}" == "${GITHUB_REPOSITORY:-}" ]] || fail "artifact repository mismatch"
+[[ "${VELUM_JETSTREAM_ARTIFACT_WORKFLOW:-}" == "${GITHUB_WORKFLOW:-}" ]] || fail "artifact workflow mismatch"
+[[ "${VELUM_JETSTREAM_ARTIFACT_RUN_ID:-}" == "${GITHUB_RUN_ID:-}" ]] || fail "artifact run id mismatch"
+[[ "${VELUM_JETSTREAM_ARTIFACT_RUN_ATTEMPT:-}" == "${GITHUB_RUN_ATTEMPT:-}" ]] || fail "artifact run attempt mismatch"
+[[ "${VELUM_JETSTREAM_ARTIFACT_EVENT_NAME:-}" == "${GITHUB_EVENT_NAME:-}" ]] || fail "artifact event mismatch"
+case "${VELUM_JETSTREAM_ARTIFACT_EVENT_NAME:-}" in
   schedule|workflow_dispatch)
     ;;
   *)
     fail "unsupported JetStream publish event"
     ;;
 esac
-[[ -n "${RSQJS_DEFAULT_BRANCH:-}" ]] || fail "default branch is required"
-[[ "${GITHUB_REF:-}" == "refs/heads/${RSQJS_DEFAULT_BRANCH}" ]] || fail "canonical publish requires the default branch ref"
+[[ -n "${VELUM_DEFAULT_BRANCH:-}" ]] || fail "default branch is required"
+[[ "${GITHUB_REF:-}" == "refs/heads/${VELUM_DEFAULT_BRANCH}" ]] || fail "canonical publish requires the default branch ref"
 [[ "${expected_commit}" == "${GITHUB_SHA:-}" ]] || fail "artifact commit does not match the workflow commit"
 current_head="$(git rev-parse HEAD)"
 [[ "${current_head}" == "${expected_commit}" ]] || fail "artifact commit does not match the checked-out HEAD"
@@ -271,7 +271,7 @@ valid_timing_file "${timing_file}" || fail "invalid JetStream timing file name: 
 [[ "${report_yaml_file}" == "${report_file%.md}.yaml" ]] || fail "JetStream YAML name does not match Markdown"
 [[ "${component_yaml_file}" == "${report_file%.md}-component.yaml" ]] || fail "JetStream component name does not match Markdown"
 [[ "${timing_file}" == "${report_file%.md}-timings.tsv" ]] || fail "JetStream timing name does not match Markdown"
-[[ "${report_file}" == "rsqjs-jetstream-report-${RSQJS_JETSTREAM_ARTIFACT_TIMESTAMP:-}.md" ]] || fail "JetStream report timestamp mismatch"
+[[ "${report_file}" == "velum-jetstream-report-${VELUM_JETSTREAM_ARTIFACT_TIMESTAMP:-}.md" ]] || fail "JetStream report timestamp mismatch"
 [[ "${report_relative_path}" == "jetstream-runs/${report_file}" ]] || fail "invalid JetStream report relative path"
 [[ "${report_yaml_relative_path}" == "jetstream-runs/${report_yaml_file}" ]] || fail "invalid JetStream YAML relative path"
 [[ "${component_yaml_relative_path}" == "jetstream-runs/${component_yaml_file}" ]] || fail "invalid JetStream component relative path"
@@ -298,15 +298,15 @@ source_yaml_copy="${tmp_dir}/${report_yaml_file}"
 cp "${source_report}" "${source_copy}"
 cp "${source_yaml}" "${source_yaml_copy}"
 
-if [[ -n "${RSQJS_DEPENDENCY_TOKEN:-}" ]]; then
+if [[ -n "${VELUM_DEPENDENCY_TOKEN:-}" ]]; then
   export GIT_CONFIG_COUNT=1
-  export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+  export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
   export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
 fi
 
 checkout_latest_main
 stage_outputs "${source_copy}" "${source_yaml_copy}" "${report_file}" "${report_yaml_file}"
-timestamp="${report_file#rsqjs-jetstream-report-}"
+timestamp="${report_file#velum-jetstream-report-}"
 timestamp="${timestamp%.md}"
 headline="Add JetStream report ${timestamp} [skip ci]"
 body="$(printf 'Source commit: %s\n\nSource tree: %s\n\nSource workflow run: %s\n' \

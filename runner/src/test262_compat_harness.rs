@@ -1,34 +1,34 @@
-use rs_quickjs::{Context, HostOperation};
+use velum::{Context, HostOperation};
 
-const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__rsqjsTest262DetachArrayBuffer";
-const COLLECT_GARBAGE_HOST_NAME: &str = "__rsqjsTest262CollectGarbage";
-const CREATE_REALM_HOST_NAME: &str = "__rsqjsTest262CreateRealm";
-const CREATE_IS_HTML_DDA_HOST_NAME: &str = "__rsqjsTest262CreateIsHTMLDDA";
-const EVAL_SCRIPT_HOST_NAME: &str = "__rsqjsTest262EvalScript";
-const GET_ABSTRACT_MODULE_SOURCE_HOST_NAME: &str = "__rsqjsTest262GetAbstractModuleSource";
+const DETACH_ARRAY_BUFFER_HOST_NAME: &str = "__velumTest262DetachArrayBuffer";
+const COLLECT_GARBAGE_HOST_NAME: &str = "__velumTest262CollectGarbage";
+const CREATE_REALM_HOST_NAME: &str = "__velumTest262CreateRealm";
+const CREATE_IS_HTML_DDA_HOST_NAME: &str = "__velumTest262CreateIsHTMLDDA";
+const EVAL_SCRIPT_HOST_NAME: &str = "__velumTest262EvalScript";
+const GET_ABSTRACT_MODULE_SOURCE_HOST_NAME: &str = "__velumTest262GetAbstractModuleSource";
 
 const HOST_SOURCE: &str = r"
 var $262 = {
     global: globalThis,
-    gc: __rsqjsTest262CollectGarbage,
-    detachArrayBuffer: __rsqjsTest262DetachArrayBuffer,
-    IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
-    AbstractModuleSource: __rsqjsTest262GetAbstractModuleSource(),
+    gc: __velumTest262CollectGarbage,
+    detachArrayBuffer: __velumTest262DetachArrayBuffer,
+    IsHTMLDDA: __velumTest262CreateIsHTMLDDA(),
+    AbstractModuleSource: __velumTest262GetAbstractModuleSource(),
     agent: {
-        start: __rsqjsTest262AgentStart,
-        broadcast: __rsqjsTest262AgentBroadcast,
-        getReport: __rsqjsTest262AgentGetReport,
-        sleep: __rsqjsTest262AgentSleep,
-        monotonicNow: __rsqjsTest262AgentMonotonicNow
+        start: __velumTest262AgentStart,
+        broadcast: __velumTest262AgentBroadcast,
+        getReport: __velumTest262AgentGetReport,
+        sleep: __velumTest262AgentSleep,
+        monotonicNow: __velumTest262AgentMonotonicNow
     },
     createRealm: function createRealm() {
-        var realmGlobal = __rsqjsTest262CreateRealm();
+        var realmGlobal = __velumTest262CreateRealm();
         realmGlobal.$262 = {
             global: realmGlobal,
             gc: $262.gc,
             detachArrayBuffer: $262.detachArrayBuffer,
-            IsHTMLDDA: __rsqjsTest262CreateIsHTMLDDA(),
-            AbstractModuleSource: __rsqjsTest262GetAbstractModuleSource(realmGlobal),
+            IsHTMLDDA: __velumTest262CreateIsHTMLDDA(),
+            AbstractModuleSource: __velumTest262GetAbstractModuleSource(realmGlobal),
             agent: $262.agent,
             createRealm: $262.createRealm,
             evalScript: realmGlobal.eval
@@ -38,7 +38,7 @@ var $262 = {
             evalScript: realmGlobal.eval
         };
     },
-    evalScript: __rsqjsTest262EvalScript
+    evalScript: __velumTest262EvalScript
 };
 ";
 
@@ -47,7 +47,7 @@ let Test262Error = function Test262Error(message) {
     if (!(this instanceof Test262Error)) {
         return new Test262Error(message);
     }
-    Test262Error.__rsqjsLastInstance = this;
+    Test262Error.__velumLastInstance = this;
     this.message = message || "";
 };
 Test262Error.prototype.toString = function () {
@@ -171,7 +171,7 @@ pub fn source(name: &str) -> Option<&'static str> {
     }
 }
 
-pub fn install_host(context: &mut Context) -> rs_quickjs::Result<()> {
+pub fn install_host(context: &mut Context) -> velum::Result<()> {
     context.register_host_operation(COLLECT_GARBAGE_HOST_NAME, HostOperation::CollectGarbage)?;
     context.register_host_operation(
         DETACH_ARRAY_BUFFER_HOST_NAME,

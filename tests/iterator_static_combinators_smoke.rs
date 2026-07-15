@@ -1,8 +1,8 @@
-use rs_quickjs::{Runtime, Value};
+use velum::{Runtime, Value};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-fn eval(source: &str) -> rs_quickjs::Result<Value> {
+fn eval(source: &str) -> velum::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)

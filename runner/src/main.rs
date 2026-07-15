@@ -8,8 +8,8 @@ use std::{
 };
 
 use anyhow::{Context as _, bail};
-use rs_quickjs::{Runtime, Value};
 use tabled::Tabled;
+use velum::{Runtime, Value};
 
 mod bench_engines;
 mod bench_measure;
@@ -65,15 +65,15 @@ use runner_cli::{Config, print_rollup_outputs};
 const STATUS_PASSED: &str = "✅ passed";
 const STATUS_FAILED: &str = "❌ failed";
 const STATUS_SKIPPED: &str = "🟡 skipped";
-const REPORT_TITLE: &str = "# rs-quickjs Test Report";
-const RUNNER_NAME: &str = "`rsqjs-test-runner`";
-const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
-const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
-const JETSTREAM_REPORT_ENV: &str = "RSQJS_JETSTREAM_REPORT_PATH";
-const JETSTREAM_ENABLED_ENV: &str = "RSQJS_JETSTREAM_ENABLED";
+const REPORT_TITLE: &str = "# Velum Test Report";
+const RUNNER_NAME: &str = "`velum-test-runner`";
+const QUICKJS_ENV: &str = "VELUM_QUICKJS";
+const TEST262_ENV: &str = "VELUM_TEST262_DIR";
+const JETSTREAM_REPORT_ENV: &str = "VELUM_JETSTREAM_REPORT_PATH";
+const JETSTREAM_ENABLED_ENV: &str = "VELUM_JETSTREAM_ENABLED";
 
 const REASON_MATCHED: &str = "matched expected behavior";
-const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
+const REASON_QUICKJS_ENV_MISSING: &str = "set VELUM_QUICKJS=/path/to/qjs to enable";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum ReportKind {
@@ -499,7 +499,7 @@ fn run_differential_case(case: &DifferentialCase, quickjs: Option<&Path>) -> Cas
             case: case.id.to_owned(),
             status: STATUS_PASSED.to_owned(),
             source: case.path.to_owned(),
-            detail: "rs-quickjs stdout matched QuickJS stdout".to_owned(),
+            detail: "Velum stdout matched QuickJS stdout".to_owned(),
             elapsed: result.elapsed,
         },
         Err(error) => CaseRow {
@@ -530,7 +530,7 @@ fn execute_differential_case(case: &DifferentialCase, quickjs: &Path) -> anyhow:
     let quickjs_stdout = String::from_utf8_lossy(&quickjs_output.stdout);
     if ours != quickjs_stdout {
         bail!(
-            "stdout mismatch: rs-quickjs {}, QuickJS {}",
+            "stdout mismatch: Velum {}, QuickJS {}",
             DisplayText(&ours),
             DisplayText(&quickjs_stdout)
         );
@@ -543,7 +543,7 @@ fn run_source_with_output(source: &str) -> anyhow::Result<String> {
     let mut context = runtime.context();
     let value = context
         .eval(source)
-        .map_err(|error| anyhow::anyhow!("rs-quickjs evaluation failed: {error}"))?;
+        .map_err(|error| anyhow::anyhow!("Velum evaluation failed: {error}"))?;
     let mut output = context.take_output().join("\n");
     if !output.is_empty() {
         output.push('\n');
@@ -644,7 +644,7 @@ fn timing_artifact_path(report_path: &Path) -> PathBuf {
     let file_stem = report_path
         .file_stem()
         .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or("rsqjs-test-report");
+        .unwrap_or("velum-test-report");
     report_path.with_file_name(format!("{file_stem}-timings.tsv"))
 }
 
@@ -652,7 +652,7 @@ fn exhaustive_timing_artifact_path(report_path: &Path) -> PathBuf {
     let file_stem = report_path
         .file_stem()
         .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or("rsqjs-test-report");
+        .unwrap_or("velum-test-report");
     report_path.with_file_name(format!("{file_stem}-exhaustive-timings.tsv"))
 }
 

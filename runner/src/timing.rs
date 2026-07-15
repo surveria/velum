@@ -16,7 +16,7 @@ pub struct RunTimer {
 #[derive(Debug, Clone)]
 pub struct MeasurementColumns {
     pub case_elapsed: String,
-    pub rsqjs_measure: String,
+    pub velum_measure: String,
     pub quickjs_measure: String,
 }
 
@@ -54,32 +54,32 @@ pub fn format_duration(duration: Duration) -> String {
 impl MeasurementColumns {
     pub fn measured(
         case_elapsed: String,
-        rsqjs_elapsed: Duration,
+        velum_elapsed: Duration,
         quickjs_elapsed: Duration,
     ) -> Self {
         Self {
             case_elapsed,
-            rsqjs_measure: format_duration(rsqjs_elapsed),
+            velum_measure: format_duration(velum_elapsed),
             quickjs_measure: format_duration(quickjs_elapsed),
         }
     }
 
-    pub fn without_reference(case_elapsed: String, rsqjs_elapsed: Duration) -> Self {
+    pub fn without_reference(case_elapsed: String, velum_elapsed: Duration) -> Self {
         Self {
             case_elapsed,
-            rsqjs_measure: format_duration(rsqjs_elapsed),
+            velum_measure: format_duration(velum_elapsed),
             quickjs_measure: "-".to_owned(),
         }
     }
 
     pub fn failed_with_reference(
         case_elapsed: String,
-        rsqjs_measure: String,
+        velum_measure: String,
         quickjs_elapsed: Duration,
     ) -> Self {
         Self {
             case_elapsed,
-            rsqjs_measure,
+            velum_measure,
             quickjs_measure: format_duration(quickjs_elapsed),
         }
     }
@@ -87,7 +87,7 @@ impl MeasurementColumns {
     pub fn not_measured(case_elapsed: String) -> Self {
         Self {
             case_elapsed,
-            rsqjs_measure: "-".to_owned(),
+            velum_measure: "-".to_owned(),
             quickjs_measure: "-".to_owned(),
         }
     }

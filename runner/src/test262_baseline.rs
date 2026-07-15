@@ -14,12 +14,12 @@ use crate::{
 
 const BASELINE_CORPUS_NAME: &str = "Test262 expected-pass baseline";
 const BASELINE_PATH: &str = "tests/corpora/test262/full-pass-baseline.txt";
-const BASELINE_SCHEMA: &str = "# rsqjs-test262-pass-baseline-v2";
+const BASELINE_SCHEMA: &str = "# velum-test262-pass-baseline-v2";
 const PINNED_TEST262_COMMIT: &str = "64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1";
 const PINNED_TEST262_PATCHES: &str =
     "f2d1435644797268dca1f7988cad5a4e89ccd8d2,staging-annex-b-arguments-object";
-const UPDATE_BASELINE_ENV: &str = "RSQJS_TEST262_UPDATE_PASS_BASELINE";
-const PASS_CANDIDATE_PATH_ENV: &str = "RSQJS_TEST262_PASS_CANDIDATE_PATH";
+const UPDATE_BASELINE_ENV: &str = "VELUM_TEST262_UPDATE_PASS_BASELINE";
+const PASS_CANDIDATE_PATH_ENV: &str = "VELUM_TEST262_PASS_CANDIDATE_PATH";
 
 pub fn verify_or_update(rows: &[CaseRow]) -> anyhow::Result<CorpusReport> {
     let current = passing_case_ids(rows);

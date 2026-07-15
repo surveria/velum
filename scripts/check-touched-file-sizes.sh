@@ -10,14 +10,14 @@ fail() {
   exit 1
 }
 
-base_ref="${1:-${RSQJS_BASE_REF:-origin/main}}"
-max_lines="${RSQJS_MAX_RUST_FILE_LINES:-800}"
+base_ref="${1:-${VELUM_BASE_REF:-origin/main}}"
+max_lines="${VELUM_MAX_RUST_FILE_LINES:-800}"
 
 if ! [[ "${max_lines}" =~ ^[0-9]+$ ]]; then
-  fail "RSQJS_MAX_RUST_FILE_LINES must be a positive integer"
+  fail "VELUM_MAX_RUST_FILE_LINES must be a positive integer"
 fi
 if [[ "${max_lines}" -eq 0 ]]; then
-  fail "RSQJS_MAX_RUST_FILE_LINES must be greater than zero"
+  fail "VELUM_MAX_RUST_FILE_LINES must be greater than zero"
 fi
 
 if ! git rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then

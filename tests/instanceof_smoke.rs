@@ -1,4 +1,4 @@
-use rs_quickjs::{Error, Runtime, Value};
+use velum::{Error, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -120,7 +120,7 @@ fn rejects_non_callable_right_operand() -> TestResult {
     ensure_error_kind(&error, "javascript")
 }
 
-fn eval(source: &str) -> rs_quickjs::Result<Value> {
+fn eval(source: &str) -> velum::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)

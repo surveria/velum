@@ -58,7 +58,7 @@ fn yaml_artifact_paths(report_path: &Path) -> YamlArtifactPaths {
     let stem = report_path
         .file_stem()
         .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or("rsqjs-test-report");
+        .unwrap_or("velum-test-report");
     YamlArtifactPaths {
         summary: report_path.with_extension("yaml"),
         component: report_path.with_file_name(format!("{stem}-component.yaml")),
@@ -68,7 +68,7 @@ fn yaml_artifact_paths(report_path: &Path) -> YamlArtifactPaths {
 }
 
 pub fn exhaustive_enabled() -> bool {
-    std::env::var("RSQJS_REPORT_EXHAUSTIVE").is_ok_and(|value| value.trim() == "1")
+    std::env::var("VELUM_REPORT_EXHAUSTIVE").is_ok_and(|value| value.trim() == "1")
 }
 
 fn write_bounded_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {

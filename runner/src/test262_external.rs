@@ -1,11 +1,11 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context as _, bail};
-use rs_quickjs::{Error, Runtime};
+use velum::{Error, Runtime};
 
 const MANIFEST_PATH: &str = "tests/corpora/test262/manifest.tsv";
 pub const REASON_TEST262_DIR_MISSING: &str =
-    "set RSQJS_TEST262_DIR or enable scripts/prepare-test262.sh";
+    "set VELUM_TEST262_DIR or enable scripts/prepare-test262.sh";
 pub const MODE_RUN: &str = "run";
 pub const MODE_SKIP: &str = "skip";
 pub const MODE_NEGATIVE_PARSE: &str = "negative-parse";
@@ -96,7 +96,7 @@ pub fn execute_negative_parse_case(test262_dir: &Path, case: &ManifestCase) -> a
     ensure_negative_parse_failure(case, eval_source(&source))
 }
 
-fn eval_source(source: &str) -> rs_quickjs::Result<()> {
+fn eval_source(source: &str) -> velum::Result<()> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source).map(|_| ())
@@ -104,7 +104,7 @@ fn eval_source(source: &str) -> rs_quickjs::Result<()> {
 
 fn ensure_negative_parse_failure(
     case: &ManifestCase,
-    result: rs_quickjs::Result<()>,
+    result: velum::Result<()>,
 ) -> anyhow::Result<()> {
     match result {
         Ok(()) => bail!(
@@ -125,7 +125,7 @@ pub fn source_label(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use rs_quickjs::{Error, SourceId, SourceSpan};
+    use velum::{Error, SourceId, SourceSpan};
 
     use super::{ManifestCase, ensure_negative_parse_failure};
 

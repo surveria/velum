@@ -8,7 +8,7 @@ use crate::{
     timing,
 };
 
-const TEST_JOBS_ENV: &str = "RSQJS_TEST_JOBS";
+const TEST_JOBS_ENV: &str = "VELUM_TEST_JOBS";
 const DEFAULT_TEST_JOBS: usize = 4;
 const MAX_TEST_JOBS: usize = 32;
 // Test262 intentionally contains deep recursion probes. Keep the worker stack
@@ -30,7 +30,7 @@ pub fn execute_paths(
     let pool = ThreadPoolBuilder::new()
         .num_threads(jobs)
         .stack_size(TEST_WORKER_STACK_SIZE)
-        .thread_name(|index| format!("rsqjs-test262-{index}"))
+        .thread_name(|index| format!("velum-test262-{index}"))
         .build()
         .context("failed to build the Test262 worker pool")?;
     let wall_timer = timing::RunTimer::start();

@@ -1,23 +1,23 @@
-var __rsqjsBenchLast = 0;
+var __velumBenchLast = 0;
 
-function __rsqjsBenchStep(value) {
+function __velumBenchStep(value) {
     return ((value * 5) + 11) & 65535;
 }
 
-function __rsqjsBenchSetup() {
-    __rsqjsBenchLast = 0;
-    return __rsqjsBenchLast;
+function __velumBenchSetup() {
+    __velumBenchLast = 0;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchRun() {
+function __velumBenchRun() {
     var value = 1;
     for (var index = 0; index < 262144; index = index + 1) {
-        value = __rsqjsBenchStep(value);
+        value = __velumBenchStep(value);
     }
-    __rsqjsBenchLast = value;
-    return __rsqjsBenchLast;
+    __velumBenchLast = value;
+    return __velumBenchLast;
 }
 
-function __rsqjsBenchVerify() {
+function __velumBenchVerify() {
     return 1;
 }

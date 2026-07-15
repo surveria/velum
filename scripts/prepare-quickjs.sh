@@ -11,9 +11,9 @@ quickjs_sha256="b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a
 quickjs_git_url="https://github.com/bellard/quickjs.git"
 quickjs_git_commit="04be246001599f5995fa2f2d8c91a0f198d3f34c"
 
-cache_dir="${RSQJS_QUICKJS_CACHE_DIR:-${repo_root}/target/quickjs}"
+cache_dir="${VELUM_QUICKJS_CACHE_DIR:-${repo_root}/target/quickjs}"
 archive_path="${cache_dir}/${quickjs_archive}"
-source_mode="${RSQJS_QUICKJS_SOURCE:-archive}"
+source_mode="${VELUM_QUICKJS_SOURCE:-archive}"
 case "${source_mode}" in
   archive)
     source_dir="${cache_dir}/quickjs-${quickjs_version}"
@@ -46,12 +46,12 @@ build_quickjs() {
   make -C "${source_dir}" qjs CONFIG_LTO= >/dev/null
 }
 
-if [[ -n "${RSQJS_QUICKJS:-}" ]]; then
-  if [[ -x "${RSQJS_QUICKJS}" ]]; then
-    printf '%s\n' "${RSQJS_QUICKJS}"
+if [[ -n "${VELUM_QUICKJS:-}" ]]; then
+  if [[ -x "${VELUM_QUICKJS}" ]]; then
+    printf '%s\n' "${VELUM_QUICKJS}"
     exit 0
   fi
-  log "RSQJS_QUICKJS is set but is not executable: ${RSQJS_QUICKJS}"
+  log "VELUM_QUICKJS is set but is not executable: ${VELUM_QUICKJS}"
   exit 1
 fi
 
@@ -60,7 +60,7 @@ if command -v qjs >/dev/null 2>&1; then
   exit 0
 fi
 
-if [[ "${RSQJS_QUICKJS_AUTO_SETUP:-1}" == "0" ]]; then
+if [[ "${VELUM_QUICKJS_AUTO_SETUP:-1}" == "0" ]]; then
   log "QuickJS auto setup is disabled; reference checks will be skipped."
   exit 0
 fi

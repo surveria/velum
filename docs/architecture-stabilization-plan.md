@@ -24,7 +24,7 @@ version policy, and uses the validation lane appropriate to the change.
 - Adoption task: PR #396
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
-  `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
+  `reports/test-runs/velum-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-05 and AS-06a are complete through
   PR #442. PR #445 adds suspended outcomes, same-owner async resume, and
   embedder-controlled job lifecycle APIs
@@ -508,13 +508,13 @@ Evidence:
 
 - PR: #396
 - Merge: `f79056b`
-- Tests: the fast gate passed with `RSQJS_BASE_REF=origin/main` and
-  `RSQJS_FAST_RUNNER=1`; required CI run `29052367465` passed in 46 seconds
+- Tests: the fast gate passed with `VELUM_BASE_REF=origin/main` and
+  `VELUM_FAST_RUNNER=1`; required CI run `29052367465` passed in 46 seconds
 - Test262/QuickJS: compatibility stayed at 34,002 of 102,578 full Test262
   variants and the existing differential baseline remained green
 - Performance/memory: post-merge performance and publisher run `29052445325`
   passed; canonical report
-  `reports/test-runs/rsqjs-test-report-20260709T214557Z.md` was published by
+  `reports/test-runs/velum-test-report-20260709T214557Z.md` was published by
   report-only commit `5f23559`
 - Remaining: start AS-01a, the semantic entrypoint and ownership inventory
 
@@ -549,7 +549,7 @@ AS-01a evidence:
 - Test262/QuickJS: no runtime behavior or corpus baseline changed
 - Performance/memory: post-merge performance and publisher run `29053927852`
   passed; canonical report
-  `reports/test-runs/rsqjs-test-report-20260709T221425Z.md` was published by
+  `reports/test-runs/velum-test-report-20260709T221425Z.md` was published by
   report-only commit `7fac57e`
 - Remaining for AS-01: AS-01b in draft PR #399 must merge the deterministic
   no-growth guards
@@ -567,7 +567,7 @@ AS-01b evidence:
 - Test262/QuickJS: no runtime behavior or corpus baseline changed
 - Performance/memory: post-merge performance and publisher run `29054773356`
   passed; canonical report
-  `reports/test-runs/rsqjs-test-report-20260709T223143Z.md` was published by
+  `reports/test-runs/velum-test-report-20260709T223143Z.md` was published by
   report-only commit `5e81d2e`
 - Remaining for AS-01: none; AS-02 now owns the next architecture boundary
 
@@ -617,7 +617,7 @@ AS-02a evidence:
   VM-bound identity and generations remain AS-05a
 - Performance/memory: post-merge performance and publisher run `29055601549`
   passed in 49 and 17 seconds; canonical report
-  `reports/test-runs/rsqjs-test-report-20260709T224900Z.md` was published by
+  `reports/test-runs/velum-test-report-20260709T224900Z.md` was published by
   report-only commit `a5b3909`
 - Remaining for AS-02a: none
 
@@ -646,7 +646,7 @@ AS-02b1 evidence:
 - Validation/publication: required CI run `29057007323` passed in 59 seconds on
   tree `58678b69`; post-merge performance and publisher run `29057098105`
   passed, and report-only commit `1471b29` published matching Markdown and YAML
-  reports at `reports/test-runs/rsqjs-test-report-20260709T232030Z.*`
+  reports at `reports/test-runs/velum-test-report-20260709T232030Z.*`
 - Remaining for AS-02b1: none
 
 AS-02b2 evidence:
@@ -679,7 +679,7 @@ AS-02b2 evidence:
   tested tree `73df8768`; trusted historical correctness recovery run
   `29072795054` reproduced that exact tree after `main` moved; rerun attempt 2
   of post-merge workflow `29071824973` then published the canonical report
-  `reports/test-runs/rsqjs-test-report-20260710T060416Z.*` in report-only
+  `reports/test-runs/velum-test-report-20260710T060416Z.*` in report-only
   commit `66dad44`
 - Workflow hardening: PRs #405 through #407 made performance artifacts trust
   the current post-merge run and added trusted exact-tree correctness recovery
@@ -714,7 +714,7 @@ AS-02c evidence:
 - Validation/publication: required correctness run `29074703586` certified
   tree `eed7d1ab` at 34,273/34,273 expected Test262 variants and 95/95 QuickJS;
   post-merge run `29074810069` measured the five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T064817Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T064817Z.*` in
   report-only commit `ed25948`
 - Remaining for AS-02c: none
 
@@ -757,7 +757,7 @@ AS-03a1 completion evidence:
   with no pass-set change at 34,273/34,273 expected Test262 variants, 34,273
   of 102,578 full variants, and 95/95 QuickJS differential cases
 - Publication: post-merge run `29075883784` measured all five project sentinels
-  and published `reports/test-runs/rsqjs-test-report-20260710T071037Z.*` in
+  and published `reports/test-runs/velum-test-report-20260710T071037Z.*` in
   report-only commit `b5e6147`
 - Remaining for AS-03a1: none
 
@@ -801,7 +801,7 @@ AS-03a2a completion evidence:
   certified exact tree `3c8ea146` at 35,603/35,603 expected Test262 variants
   and 95/95 QuickJS differential cases;
 - post-merge run `29078940370` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T081035Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T081035Z.*` in
   report-only commit `28e293d`.
 
 AS-03a2b local validation evidence:
@@ -829,7 +829,7 @@ AS-03a2b completion evidence:
   certified exact tree `4d3e64bb` at 35,987/35,987 expected Test262 variants
   and 95/95 QuickJS differential cases;
 - post-merge run `29081261765` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T085419Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T085419Z.*` in
   report-only commit `04cef12`.
 
 The remaining AS-03b work is split into narrow semantic ownership boundaries:
@@ -865,7 +865,7 @@ AS-03b1a completion evidence:
   36,083/36,083 expected Test262 variants and 95/95 QuickJS differential
   cases;
 - post-merge run `29082667976` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T091940Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T091940Z.*` in
   report-only commit `75499a1`.
 
 AS-03b1b local validation evidence:
@@ -901,7 +901,7 @@ AS-03b1b completion evidence:
   36,185/36,185 expected Test262 variants and 95/95 QuickJS differential
   cases;
 - post-merge run `29085347387` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T100811Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T100811Z.*` in
   report-only commit `86f8f4b`.
 
 AS-03b2 local validation evidence:
@@ -937,7 +937,7 @@ AS-03b2 completion evidence:
   36,209/36,209 expected Test262 variants and 95/95 QuickJS differential
   cases;
 - post-merge run `29086606187` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T103147Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T103147Z.*` in
   report-only commit `bf4a298`.
 
 AS-03b3 local validation evidence:
@@ -968,7 +968,7 @@ AS-03b3 local validation evidence:
   adds 12 reviewed Object.fromEntries/for-of/staging passes, bringing the
   expected-pass baseline and full pass set to 36,221 of 102,578 with QuickJS
   differential unchanged at 95 of 95. The local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T105146Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260710T105146Z.*`.
 
 AS-03b3 completion evidence:
 
@@ -977,7 +977,7 @@ AS-03b3 completion evidence:
   36,221/36,221 expected Test262 variants and 95/95 QuickJS differential
   cases;
 - post-merge run `29088089959` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T110040Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T110040Z.*` in
   report-only commit `d58e48f`;
 - Remaining for AS-03: none.
 
@@ -1031,7 +1031,7 @@ AS-04a local implementation evidence:
   and adds 332 reviewed negative/error variants. The expected-pass baseline
   and full pass set are now 36,553 of 102,578, with QuickJS differential
   unchanged at 95 of 95. The local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T113234Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260710T113234Z.*`.
 
 AS-04a completion evidence:
 
@@ -1039,7 +1039,7 @@ AS-04a completion evidence:
   certified exact tree `f2513f994b95f221abad7cbb4b4e0beb884d95c2` at
   36,553/36,553 expected Test262 variants and 95/95 QuickJS cases;
 - post-merge run `29090177028` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T114057Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T114057Z.*` in
   report-only commit `9cf86ef`.
 
 AS-04b1 local implementation evidence:
@@ -1066,7 +1066,7 @@ AS-04b1 local implementation evidence:
   and guard self-tests pass. The complete corpus preserves all 36,553 prior
   variants and adds 106 reviewed passes, bringing the baseline to 36,659 of
   102,578 with QuickJS unchanged at 95 of 95. Local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T120828Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260710T120828Z.*`.
 
 AS-04b1 completion evidence:
 
@@ -1074,7 +1074,7 @@ AS-04b1 completion evidence:
   certified exact tree `83908367ca8b17732931ff97d11a5e45257f2ec0` at
   36,659/36,659 expected Test262 variants and 95/95 QuickJS cases;
 - post-merge run `29092104706` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T121755Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T121755Z.*` in
   report-only commit `8f20df9`.
 
 AS-04b2a local implementation evidence:
@@ -1101,7 +1101,7 @@ AS-04b2a local implementation evidence:
 - the complete local correctness gate preserves all 36,659 expected Test262
   variants and the exact 36,659 of 102,578 full pass set, with QuickJS
   differential unchanged at 95 of 95. Local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T123222Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260710T123222Z.*`.
 
 AS-04b2a completion evidence:
 
@@ -1110,7 +1110,7 @@ AS-04b2a completion evidence:
   36,659/36,659 expected Test262 variants, the exact 36,659 of 102,578 full
   pass set, and 95/95 QuickJS cases;
 - post-merge run `29093382601` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T124126Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T124126Z.*` in
   report-only commit `9ba7953`.
 
 AS-04b2b1 local implementation evidence:
@@ -1137,7 +1137,7 @@ AS-04b2b1 local implementation evidence:
 - the complete local correctness gate preserves all 36,659 expected Test262
   variants and the exact 36,659 of 102,578 full pass set, with QuickJS
   differential unchanged at 95 of 95. Local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T131658Z.*` for
+  `target/velum-reports/test-runs/velum-test-report-20260710T131658Z.*` for
   tested tree `564c29b62f27f1feefd07b2474c74cd709ba9f28`.
 
 AS-04b2b1 completion evidence:
@@ -1147,7 +1147,7 @@ AS-04b2b1 completion evidence:
   36,659/36,659 expected Test262 variants, the exact 36,659 of 102,578 full
   pass set, and 95/95 QuickJS cases;
 - post-merge run `29096015664` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T132547Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T132547Z.*` in
   report-only commit `e380c19`.
 
 AS-04b2b2 local implementation evidence:
@@ -1183,7 +1183,7 @@ AS-04b2b2 local implementation evidence:
 - the complete local correctness gate preserves all 36,659 expected Test262
   variants and the exact 36,659 of 102,578 full pass set, with QuickJS
   differential unchanged at 95 of 95. Local evidence is
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T134839Z.*` for
+  `target/velum-reports/test-runs/velum-test-report-20260710T134839Z.*` for
   tested tree `cbf27db19721ea28dfaf073c11819792ab389647`.
 
 AS-04b2b2 completion evidence:
@@ -1194,7 +1194,7 @@ AS-04b2b2 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29097960654` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T135712Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T135712Z.*` in
   report-only commit `88a2f52`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
@@ -1263,7 +1263,7 @@ AS-05a1 local implementation evidence:
 - the architecture guard fixes the new Context owner field and capability /
   generation representation, and rejects reintroducing `Clone` on either
   public VM owner;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1275,7 +1275,7 @@ AS-05b2a completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29110845591` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T172423Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T172423Z.*` in
   report-only commit `0132afa`.
 
 AS-05b2b local implementation evidence:
@@ -1309,7 +1309,7 @@ AS-05b2b local implementation evidence:
 - the architecture guard fixes both compact arrays, both checked totals, and
   every current payload source. Its mutation suite rejects removal of buffer
   byte accounting or the checked atom-byte accumulator;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1321,7 +1321,7 @@ AS-05b2b completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29116932748` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T190739Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T190739Z.*` in
   report-only commit `7ee0441`.
 
 AS-05b2c1 local implementation evidence:
@@ -1353,7 +1353,7 @@ AS-05b2c1 local implementation evidence:
   object insertion boundary, and every AS-05b2c1 owner check. Three new
   mutations prove that atom payload, byte-buffer insertion, and output-release
   accounting cannot disappear unnoticed;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1365,7 +1365,7 @@ AS-05b2c1 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29118808176` measured five of five valid sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T194046Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T194046Z.*` in
   report-only commit `213f350`.
 
 AS-05b2c2 local implementation evidence:
@@ -1396,7 +1396,7 @@ AS-05b2c2 local implementation evidence:
   binding/callable activation, property release, and shape/static cache seams.
   Four new mutations prove that reconciliation, scope release, property
   release, and shape-cache charging cannot disappear unnoticed;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1408,7 +1408,7 @@ AS-05b2c2 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29121083477` measured five of five valid sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T202058Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T202058Z.*` in
   report-only commit `e3f47ef`. The function-call median moved from 145.41 ms
   to 155.18 ms and remains an explicit trend check for the next canonical run.
 
@@ -1442,7 +1442,7 @@ AS-05b2c3 local implementation evidence:
   all mutation self-tests cover full-policy reconciliation, collection
   release, Promise job growth, transient Drop release, execution frames, and
   association anchors;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1454,7 +1454,7 @@ AS-05b2c3 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29122207039` measured five of five valid sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T204151Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T204151Z.*` in
   report-only commit `e8f11fe`. Function-call latency improved from the prior
   155.18 ms to 151.76 ms; all other sentinel changes stayed within 1.7%.
 
@@ -1482,7 +1482,7 @@ AS-06a1 local implementation evidence:
 - AS-06a2 still owns bytecode program counters, operand stacks, and structured
   loop/try/finally continuation records. AS-06a1 deliberately does not claim
   that the current recursive bytecode executor can suspend yet;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1497,7 +1497,7 @@ AS-06a1 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29123493389` measured five of five valid sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T210337Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T210337Z.*` in
   report-only commit `b51cb6d`. Relative to the immediately preceding report,
   changes ranged from -2.8% to +2.7%; the 155.01 ms function-call median
   remains a trend check rather than a one-run rollback trigger.
@@ -1529,7 +1529,7 @@ AS-06a2a local implementation evidence:
 - focused generic, quickened, structured-control, root, transient-root, and
   storage tests pass. Guard mutations protect continuation state,
   unwind-on-outcome, program ownership, and parked operand roots;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 119 runner tests.
 
@@ -1541,7 +1541,7 @@ AS-06a2a completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29124671670` measured five of five valid sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T212554Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T212554Z.*` in
   verified report-only commit `90b06a4`;
 - arithmetic, array-index, and property-read improved by 2.5% to 5.2%, while
   string-scan changed by +0.6%. Function-call moved from 155.01 ms to
@@ -1568,7 +1568,7 @@ AS-06a2a1 local implementation evidence:
   and within 1.7% of the 152.77 ms pre-AS-06a2a control;
 - focused function/default-parameter, bytecode, quickening, root, and
   execution-limit tests plus the full architecture mutation suite pass;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 119 runner tests.
 
@@ -1580,7 +1580,7 @@ AS-06a2a1 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29126229568` published
-  `reports/test-runs/rsqjs-test-report-20260710T215609Z.*` in verified
+  `reports/test-runs/velum-test-report-20260710T215609Z.*` in verified
   report-only commit `8934889`;
 - canonical function-call latency returned from 162.77 ms to 155.36 ms
   (-4.6%). The other sentinel deltas were mixed across independent paths and
@@ -1618,7 +1618,7 @@ AS-05a1 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29098932099` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T141238Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T141238Z.*` in
   report-only commit `064c12b`.
 
 AS-05a2a local implementation evidence:
@@ -1645,7 +1645,7 @@ AS-05a2a local implementation evidence:
   string and Symbol suites, and strict Clippy pass;
 - the architecture guard fixes all four primitive owner fields, both central
   checks, and a mutation test that removes a primitive identity;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1660,7 +1660,7 @@ AS-05a2a completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29100213566` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T143244Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T143244Z.*` in
   report-only commit `49f8405`.
 
 AS-05a2b local implementation evidence:
@@ -1686,7 +1686,7 @@ AS-05a2b local implementation evidence:
 - the architecture guard fixes the LocalValue and HostCall identity fields,
   the boxed error payload, the conversion/validation calls, and a mutation
   test that removes the local owner or makes the exception identity forgeable;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1698,7 +1698,7 @@ AS-05a2b completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29101277015` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T144925Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T144925Z.*` in
   report-only commit `eabb1b5`.
 
 AS-05a2c local implementation evidence:
@@ -1721,7 +1721,7 @@ AS-05a2c local implementation evidence:
 - the architecture guard fixes the five-variant portable enum and requires
   local-copy, evaluation, and typed-host conversion entrypoints. Its mutation
   test rejects adding a VM-local Symbol variant;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1733,7 +1733,7 @@ AS-05a2c completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29102069741` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T150132Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T150132Z.*` in
   report-only commit `dd71e28`.
 
 AS-05b1a local implementation evidence:
@@ -1762,7 +1762,7 @@ AS-05b1a local implementation evidence:
   function, Promise, collection, or iterator arenas as direct roots. AS-05b1b
   owns those strong trace edges; AS-05b1c and AS-06 own transient operand,
   native-call-argument, retained-handle, and durable activation roots;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1774,7 +1774,7 @@ AS-05b1a completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29103302187` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T152044Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T152044Z.*` in
   report-only commit `07f4cd1`.
 
 AS-05b1b1 local implementation evidence:
@@ -1804,7 +1804,7 @@ AS-05b1b1 local implementation evidence:
 - architecture mutation tests reject removal of a bound argument edge or the
   native-registry direct root. AS-05b1b2 and AS-05b1b3 subsequently completed
   object and asynchronous arena traversal;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1816,7 +1816,7 @@ AS-05b1b1 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29104449632` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T153859Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T153859Z.*` in
   report-only commit `b88e9d9`.
 
 AS-05b1b2 local implementation evidence:
@@ -1842,7 +1842,7 @@ AS-05b1b2 local implementation evidence:
 - architecture mutation tests reject removal of a typed-array internal edge
   or shape-key root. Promise, collection, iterator, and weak-edge associations
   were deliberately deferred to AS-05b1b3;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1854,7 +1854,7 @@ AS-05b1b2 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29105524565` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T155616Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T155616Z.*` in
   report-only commit `cae131d`.
 
 AS-05b1b3 local implementation evidence:
@@ -1880,7 +1880,7 @@ AS-05b1b3 local implementation evidence:
 - architecture mutation tests reject removal of a Promise reaction result or
   a WeakMap ephemeron source. AS-05b1c remains responsible for transient
   allocation-point and embedder roots;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1892,7 +1892,7 @@ AS-05b1b3 completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29106620598` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T161351Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T161351Z.*` in
   report-only commit `73334c7`.
 
 AS-05b1c local implementation evidence:
@@ -1926,7 +1926,7 @@ AS-05b1c local implementation evidence:
 - at the AS-05b1c boundary, opaque Rust callback captures and raw Values
   retained after an embedding call could not be inspected safely. AS-05a2d
   follows with identity-stamped retained handles and explicit release;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1938,7 +1938,7 @@ AS-05b1c completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29108015179` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T163712Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T163712Z.*` in
   report-only commit `602e65e`.
 
 AS-05a2d local implementation evidence:
@@ -1975,7 +1975,7 @@ AS-05a2d local implementation evidence:
   source-proven constructors, owner validation, retained root source, and
   thirteen-category root map. Mutation tests reject removal of the slot
   generation or retained-root visit;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -1987,7 +1987,7 @@ AS-05a2d completion evidence:
   exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
   cases;
 - post-merge run `29109349272` measured all five project sentinels and
-  published `reports/test-runs/rsqjs-test-report-20260710T165910Z.*` in
+  published `reports/test-runs/velum-test-report-20260710T165910Z.*` in
   report-only commit `c7f3ba8`.
 
 AS-05b2a local implementation evidence:
@@ -2022,7 +2022,7 @@ AS-05b2a local implementation evidence:
   snapshot representation, every Context owner source, and the consuming
   teardown boundary. Mutation tests reject removal of a nested iterator owner
   or teardown snapshot;
-- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+- `VELUM_BASE_REF=origin/main VELUM_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
@@ -2140,7 +2140,7 @@ AS-07a completion evidence (PR #446, merged as `62e2725`):
   fixtures, 36,514/36,514 expected Test262 variants, 36,514/102,578 full
   variants, and 95/95 QuickJS differential cases;
 - post-merge run `29134943008` attempt 3 published the canonical report
-  `reports/test-runs/rsqjs-test-report-20260711T013950Z.*` in report-only
+  `reports/test-runs/velum-test-report-20260711T013950Z.*` in report-only
   commit `8925145`.
 
 ### AS-08: Optimization Isolation
@@ -2194,7 +2194,7 @@ AS-08a completion evidence from PR #447:
 - PR #447 squash-merged as `bc52a723`; recovery correctness run `29137393392`
   certified exact tree `7ee066e2`, post-merge run `29137348540` attempt 3
   passed performance and publication, and report-only commit `5e68fa5`
-  published `reports/test-runs/rsqjs-test-report-20260711T030752Z.*`.
+  published `reports/test-runs/velum-test-report-20260711T030752Z.*`.
 
 AS-08b completion evidence from PR #449:
 
@@ -2240,7 +2240,7 @@ AS-08b completion evidence from PR #449:
 - PR #449 squash-merged as `7802932e`; required run `29138371964` certified
   exact tree `96eff3d1`, post-merge run `29138475834` passed performance and
   publication, and report-only commit `c0bdf07` published
-  `reports/test-runs/rsqjs-test-report-20260711T034409Z.*` with 37,721 expected
+  `reports/test-runs/velum-test-report-20260711T034409Z.*` with 37,721 expected
   Test262 variants and all five valid sentinels.
 
 ### AS-09: Profile-Based Compatibility Expansion
@@ -2268,7 +2268,7 @@ AS-09a completion evidence from PR #450:
 - the focused upstream `language/expressions/bitwise-not` profile passes 28 of
   32 variants. The four remaining variants are the two BigInt cases in default
   and strict modes, which belong to the separate unsupported BigInt model;
-- the pre-change `unary_operators` benchmark is valid at 66.86 ms for rs-quickjs
+- the pre-change `unary_operators` benchmark is valid at 66.86 ms for Velum
   versus 7.78 ms for QuickJS, an 8.59x tracked ratio with 0.2% local variation;
 - focused Number boundary, coercion, Symbol-error, bytecode fallback, active
   Test262, and QuickJS differential coverage is part of the tranche;
@@ -2279,13 +2279,13 @@ AS-09a completion evidence from PR #450:
   37,753/102,578 full variants, 68/68 engine fixtures, 117/117 active Test262,
   and 95/95 QuickJS differential cases;
 - the adjacent main/branch `unary_operators` pair is valid at 69.13/68.64 ms
-  for rs-quickjs (-0.7%) and 8.01/7.98 ms for QuickJS. The normalized ratio is
+  for Velum (-0.7%) and 8.01/7.98 ms for QuickJS. The normalized ratio is
   8.62x/8.59x, branch variation is 0.1%, and no performance regression is
   indicated;
 - PR #450 squash-merged as `672d57a2`; required run `29139000366` certified
   exact tree `2468a696`, post-merge run `29139109325` passed performance and
   publication, and report-only commit `884cc41` published
-  `reports/test-runs/rsqjs-test-report-20260711T040754Z.*` with all five
+  `reports/test-runs/velum-test-report-20260711T040754Z.*` with all five
   sentinels valid.
 
 AS-09b completion evidence from PR #451:
@@ -2317,7 +2317,7 @@ AS-09b completion evidence from PR #451:
 - PR #451 squash-merged as `b11ce20f`; required run `29139688796` certified
   exact tree `c2abb4b4`, post-merge run `29139793837` passed performance and
   publication, and report-only commit `dfabb40` published
-  `reports/test-runs/rsqjs-test-report-20260711T043324Z.*` with all five
+  `reports/test-runs/velum-test-report-20260711T043324Z.*` with all five
   sentinels valid.
 
 AS-09c completion evidence from PR #452:
@@ -2355,7 +2355,7 @@ AS-09c completion evidence from PR #452:
 - PR #452 squash-merged as `6f185e75`; required run `29141583947` certified
   exact tree `38ef6d2d`, post-merge run `29141677509` passed performance and
   publication, and report-only commit `5fd7ffc` published
-  `reports/test-runs/rsqjs-test-report-20260711T054406Z.*` with all five
+  `reports/test-runs/velum-test-report-20260711T054406Z.*` with all five
   sentinels valid.
 
 AS-09d profile evidence in draft PR #453:
@@ -2410,7 +2410,7 @@ AS-09d profile evidence in draft PR #453:
 - PR #453 squash-merged as `1fc9867`; required run `29142804842` certified
   exact tree `a23bd644`, post-merge run `29142896882` passed performance and
   publication, and report-only commit `f2d2113` published
-  `reports/test-runs/rsqjs-test-report-20260711T062919Z.*` with all five
+  `reports/test-runs/velum-test-report-20260711T062919Z.*` with all five
   sentinels valid.
 
 AS-09e profile evidence in draft PR #454:
@@ -2451,7 +2451,7 @@ AS-09e profile evidence in draft PR #454:
   workers now use an explicit 16 MiB stack; the full four-worker corpus
   completes normally without changing engine call-depth policy;
 - the clean local correctness gate published
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T071640Z.*` and
+  `target/velum-reports/test-runs/velum-test-report-20260711T071640Z.*` and
   passed strict clippy/docs, all engine tests, 119/119 runner tests, the complete
   reviewed baseline, and all permanent registries;
 - the first adjacent main/branch sentinel medians are arithmetic
@@ -2465,7 +2465,7 @@ AS-09e profile evidence in draft PR #454:
 - PR #454 squash-merged as \`6e71c38\`; required run \`29144428112\` certified
   exact tree \`3b280888\`, post-merge run \`29144572464\` passed performance and
   publication, and report-only commit \`90ca1cb\` published
-  \`reports/test-runs/rsqjs-test-report-20260711T072934Z.*\` with all five
+  \`reports/test-runs/velum-test-report-20260711T072934Z.*\` with all five
   sentinels valid.
 
 AS-09f canonical evidence from PR #455:
@@ -2505,7 +2505,7 @@ AS-09f canonical evidence from PR #455:
   38,985/102,578 full variants; the permanent suites remain green at 69/69
   engine fixtures, 118/118 active Test262 cases, and 96/96 QuickJS
   differential cases in
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T080344Z.*`;
+  `target/velum-reports/test-runs/velum-test-report-20260711T080344Z.*`;
 - an adjacent canonical-main/branch performance pair keeps all five sentinels
   valid. Branch medians versus main are arithmetic 81.17/85.01 ms, array
   2.29/2.25 ms, property 228.87/233.28 ms, function 158.78/156.63 ms, and
@@ -2514,7 +2514,7 @@ AS-09f canonical evidence from PR #455:
 - PR #455 squash-merged as `6c71713`; required run `29145629944` certified
   exact tree `4b42cadb`, post-merge run `29145743199` passed performance and
   publication, and report-only commit `ae507a1` published
-  `reports/test-runs/rsqjs-test-report-20260711T081229Z.*` with all five
+  `reports/test-runs/velum-test-report-20260711T081229Z.*` with all five
   sentinels valid.
 
 AS-09g profile evidence in draft PR #456:
@@ -2556,7 +2556,7 @@ AS-09g profile evidence in draft PR #456:
   Test262 cases, and 96/96 QuickJS differential cases in
   `target/as09g-full-baseline-final.*`; the complete local correctness gate
   reproduces those totals in
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T085840Z.*`;
+  `target/velum-reports/test-runs/velum-test-report-20260711T085840Z.*`;
 - adjacent main/branch and reverse-control performance pairs keep every
   sentinel valid. The primary branch/main medians are arithmetic 88.97/92.61
   ms, array 2.35/2.44 ms, property 242.45/294.04 ms, function 163.20/162.96
@@ -2626,7 +2626,7 @@ AS-09l profile evidence in draft PR #466:
   complete correctness gate is green at 69/69 engine fixtures, 120/120 active
   Test262 cases, 98/98 QuickJS differential cases, 26,491/53,404 conforming
   files, and 51,351/102,578 full variants in
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T165404Z.*`;
+  `target/velum-reports/test-runs/velum-test-report-20260711T165404Z.*`;
 - four residual variants expose the separately owned block-scoped function
   declaration instantiation gap, and two Annex B variants require the
   `$262.createRealm` harness. Neither residual is specific to async iteration.
@@ -2653,7 +2653,7 @@ AS-09n profile evidence in draft PR #470:
   differential cases, 26,505/53,404 conforming files, and 51,379/102,578 full
   variants. The reviewed baseline adds 28 variants with no removals; local
   artifact:
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T172227Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260711T172227Z.*`.
   Required run `29161654819` certified the source tree, PR #470 merged as
   `125658bb`, and post-merge run `29161765533` published canonical report
   `20260711T173134Z` in report-only commit `d424bc0`; AS-09n is complete.
@@ -2686,7 +2686,7 @@ AS-09o profile evidence in draft PR #472:
   differential cases, 27,071/53,404 conforming files, and 52,511/102,578 full
   variants. The reviewed baseline adds 134 variants / 67 files with no
   removals; local artifact:
-  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T174959Z.*`.
+  `target/velum-reports/test-runs/velum-test-report-20260711T174959Z.*`.
   Exact-tree CI and canonical publication evidence remain required before
   AS-09o can close.
 

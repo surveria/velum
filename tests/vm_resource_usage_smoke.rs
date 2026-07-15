@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value, VmResourceUsage};
+use velum::{Engine, Value, VmResourceUsage};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
