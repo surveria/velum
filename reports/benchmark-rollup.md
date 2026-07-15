@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260715T004314Z.md`
-- Task: PR #636: architecture: repair module evaluation lifecycle
-- Performance: 6.69x (4/5 >1.00x) (from `rsqjs-test-report-20260715T004314Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T004314Z.md`)
+- `rsqjs-test-report-20260715T012904Z.md`
+- Task: PR #637: bytecode: complete proper tail-position expression lowering
+- Performance: 6.73x (4/5 >1.00x) (from `rsqjs-test-report-20260715T012904Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T012904Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102420 passed / 158 failed (99.85%) (from `rsqjs-test-report-20260715T004314Z.md`)
+- Full Test262: 102431 passed / 147 failed (99.86%) (from `rsqjs-test-report-20260715T012904Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -571,3 +571,4 @@ Latest report:
 | `20260714T203954Z` `077b304` PR #633: architecture: unify class decorator and super semantics | 5.92x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102335 passed / 243 failed (99.76%) |
 | `20260714T222851Z` `9adf95b` PR #635: runtime: restore direct eval local precedence | 6.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102386 passed / 192 failed (99.81%) |
 | `20260715T004314Z` `a1dad63` PR #636: architecture: repair module evaluation lifecycle | 6.69x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102420 passed / 158 failed (99.85%) |
+| `20260715T012904Z` `14aaaf5` PR #637: bytecode: complete proper tail-position expression lowering | 6.73x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102431 passed / 147 failed (99.86%) |
