@@ -77,8 +77,7 @@ fi
 
 valid_baseline="${tmp_dir}/test262-pass-baseline.txt"
 {
-  printf '%s\n' '# rsqjs-test262-pass-baseline-v1'
-  printf '%s\n' '# test262_commit=64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1'
+  sed -n '1,3p' "${test262_baseline_path}"
   printf '%s\n' 'built-ins/Array/a.js#default'
   printf '%s\n' 'built-ins/RegExp/r.js#strict'
 } > "${valid_baseline}"
@@ -87,6 +86,32 @@ valid_test262_baseline_candidate "${valid_baseline}" ||
 printf '%s\n' 'built-ins/Array/a.js#default' >> "${valid_baseline}"
 if valid_test262_baseline_candidate "${valid_baseline}"; then
   fail_test "accepted unsorted or duplicate Test262 pass baseline candidate"
+fi
+
+legacy_baseline="${tmp_dir}/legacy-test262-pass-baseline.txt"
+{
+  printf '%s\n' '# rsqjs-test262-pass-baseline-v1'
+  sed -n '2p' "${test262_baseline_path}"
+  printf '%s\n' 'built-ins/Array/a.js#default'
+} > "${legacy_baseline}"
+if valid_test262_baseline_candidate "${legacy_baseline}"; then
+  fail_test "accepted legacy Test262 pass baseline schema"
+fi
+
+wrong_patch_baseline="${tmp_dir}/wrong-patch-test262-pass-baseline.txt"
+{
+  sed -n '1,2p' "${test262_baseline_path}"
+  printf '%s\n' '# test262_patches=untrusted-corpus-patch'
+  printf '%s\n' 'built-ins/Array/a.js#default'
+} > "${wrong_patch_baseline}"
+if valid_test262_baseline_candidate "${wrong_patch_baseline}"; then
+  fail_test "accepted Test262 pass baseline with different patch provenance"
+fi
+
+empty_baseline="${tmp_dir}/empty-test262-pass-baseline.txt"
+sed -n '1,3p' "${test262_baseline_path}" > "${empty_baseline}"
+if valid_test262_baseline_candidate "${empty_baseline}"; then
+  fail_test "accepted Test262 pass baseline without case rows"
 fi
 
 tree_sha="0123456789abcdef0123456789abcdef01234567"

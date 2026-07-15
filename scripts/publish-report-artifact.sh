@@ -11,6 +11,8 @@ tested_source_archive_local_branch="rsqjs-tested-source-archive"
 null_workflow_conclusion="__RSQJS_NULL_CONCLUSION__"
 default_artifact_wait_attempts=37
 default_artifact_wait_seconds=10
+test262_baseline_path="${repo_root}/tests/corpora/test262/full-pass-baseline.txt"
+test262_baseline_schema='# rsqjs-test262-pass-baseline-v2'
 
 fail() {
   printf 'publish-report-artifact: %s\n' "$*" >&2
@@ -95,10 +97,13 @@ valid_test262_baseline_candidate() {
   local path="$1"
   [[ -f "${path}" && ! -L "${path}" ]] || return 1
   [[ "$(stat -c '%s' "${path}")" -le 33554432 ]] || return 1
-  [[ "$(sed -n '1p' "${path}")" == '# rsqjs-test262-pass-baseline-v1' ]] || return 1
-  [[ "$(sed -n '2p' "${path}")" == '# test262_commit=64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1' ]] || return 1
-  [[ -n "$(sed -n '3p' "${path}")" ]] || return 1
-  tail -n +3 "${path}" | LC_ALL=C sort -c -u >/dev/null 2>&1
+  [[ -f "${test262_baseline_path}" && ! -L "${test262_baseline_path}" ]] || return 1
+  [[ "$(sed -n '1p' "${path}")" == "${test262_baseline_schema}" ]] || return 1
+  [[ "$(sed -n '1p' "${test262_baseline_path}")" == "${test262_baseline_schema}" ]] || return 1
+  [[ "$(sed -n '2p' "${path}")" == "$(sed -n '2p' "${test262_baseline_path}")" ]] || return 1
+  [[ "$(sed -n '3p' "${path}")" == "$(sed -n '3p' "${test262_baseline_path}")" ]] || return 1
+  [[ -n "$(sed -n '4p' "${path}")" ]] || return 1
+  tail -n +4 "${path}" | LC_ALL=C sort -c -u >/dev/null 2>&1
 }
 
 valid_jetstream_report_file() {
