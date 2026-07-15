@@ -90,12 +90,12 @@ fn render_chart<DB: DrawingBackend>(
     root.fill(&palette.background)
         .map_err(|error| anyhow!("failed to fill chart background: {error:?}"))?;
     let mut areas = root.split_evenly((3, 1)).into_iter();
+    let test_area = areas.next().context("missing test coverage chart area")?;
     let ratio_area = areas.next().context("missing ratio chart area")?;
     let jetstream_area = areas.next().context("missing JetStream chart area")?;
-    let test_area = areas.next().context("missing test coverage chart area")?;
+    draw_test_panel(&test_area, records, timeline, palette)?;
     draw_ratio_panel(&ratio_area, records, timeline, palette)?;
-    draw_jetstream_panel(&jetstream_area, records, timeline, palette)?;
-    draw_test_panel(&test_area, records, timeline, palette)
+    draw_jetstream_panel(&jetstream_area, records, timeline, palette)
 }
 
 fn draw_jetstream_panel<DB: DrawingBackend>(
@@ -521,14 +521,45 @@ fn chart_bounds(values: impl Iterator<Item = f64>, anchor: f64) -> anyhow::Resul
 #[cfg(test)]
 mod tests {
     use super::{
-        JetStreamPoint, RatioPoint, TestPoint, grouped_count, jetstream_panel_title,
-        jetstream_points, ratio_panel_title, ratio_points, test_panel_title, test_points,
+        CHART_HEIGHT, CHART_WIDTH, JETSTREAM_PANEL_TITLE, JetStreamPoint, LIGHT_PALETTE,
+        RATIO_PANEL_TITLE, RatioPoint, TEST262_PANEL_TITLE, TestPoint, grouped_count,
+        jetstream_panel_title, jetstream_points, ratio_panel_title, ratio_points, render_chart,
+        test_panel_title, test_points,
     };
     use crate::report_rollup::{
         ReportContext, ReportRecord, TestCounts, report_rollup_timeline::CommitTimeline,
     };
+    use plotters::prelude::{IntoDrawingArea as _, SVGBackend};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn chart_panels_render_in_requested_vertical_order() -> TestResult {
+        let timeline = CommitTimeline::for_test(1, &[]);
+        let mut svg = String::new();
+        {
+            let root =
+                SVGBackend::with_string(&mut svg, (CHART_WIDTH, CHART_HEIGHT)).into_drawing_area();
+            render_chart(&root, &[], &timeline, &LIGHT_PALETTE)?;
+            root.present().map_err(|error| {
+                std::io::Error::other(format!("failed to finalize SVG: {error:?}"))
+            })?;
+        }
+
+        let Some(test_y) = title_y(&svg, TEST262_PANEL_TITLE) else {
+            return Err("Test262 chart title was missing from the SVG".into());
+        };
+        let Some(ratio_y) = title_y(&svg, RATIO_PANEL_TITLE) else {
+            return Err("QuickJS ratio chart title was missing from the SVG".into());
+        };
+        let Some(jetstream_y) = title_y(&svg, JETSTREAM_PANEL_TITLE) else {
+            return Err("JetStream chart title was missing from the SVG".into());
+        };
+        if test_y < ratio_y && ratio_y < jetstream_y {
+            return Ok(());
+        }
+        Err("chart panels were not ordered as Test262, QuickJS ratio, JetStream".into())
+    }
 
     #[test]
     fn all_series_use_shared_commit_positions_and_collapse_duplicate_commits() -> TestResult {
@@ -619,6 +650,18 @@ mod tests {
             return Ok(());
         }
         Err("chart panel titles did not expose the intended latest values".into())
+    }
+
+    fn title_y(svg: &str, title: &str) -> Option<i32> {
+        let title_position = svg.find(title)?;
+        let before_title = svg.get(..title_position)?;
+        let text_start = before_title.rfind("<text ")?;
+        let text_tag = before_title.get(text_start..)?;
+        let y_marker = text_tag.rfind(" y=\"")?;
+        let value_start = y_marker.checked_add(4)?;
+        let value_and_suffix = text_tag.get(value_start..)?;
+        let value_end = value_and_suffix.find('"')?;
+        value_and_suffix.get(..value_end)?.parse().ok()
     }
 
     fn record(
