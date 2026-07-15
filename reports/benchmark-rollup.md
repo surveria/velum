@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260714T222851Z.md`
-- Task: PR #635: runtime: restore direct eval local precedence
-- Performance: 6.98x (4/5 >1.00x) (from `rsqjs-test-report-20260714T222851Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260714T222851Z.md`)
+- `rsqjs-test-report-20260715T004314Z.md`
+- Task: PR #636: architecture: repair module evaluation lifecycle
+- Performance: 6.69x (4/5 >1.00x) (from `rsqjs-test-report-20260715T004314Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T004314Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102386 passed / 192 failed (99.81%) (from `rsqjs-test-report-20260714T222851Z.md`)
+- Full Test262: 102420 passed / 158 failed (99.85%) (from `rsqjs-test-report-20260715T004314Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -570,3 +570,4 @@ Latest report:
 | `20260714T190930Z` `3b9e636` PR #632: architecture: unify dynamic global realm semantics | 5.83x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102279 passed / 299 failed (99.71%) |
 | `20260714T203954Z` `077b304` PR #633: architecture: unify class decorator and super semantics | 5.92x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102335 passed / 243 failed (99.76%) |
 | `20260714T222851Z` `9adf95b` PR #635: runtime: restore direct eval local precedence | 6.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102386 passed / 192 failed (99.81%) |
+| `20260715T004314Z` `a1dad63` PR #636: architecture: repair module evaluation lifecycle | 6.69x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102420 passed / 158 failed (99.85%) |
