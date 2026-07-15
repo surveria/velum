@@ -45,6 +45,41 @@ fn map_constructor_seeds_from_iterable_pairs() -> TestResult {
 }
 
 #[test]
+fn collection_subclasses_use_their_adder_before_closing_failed_iterators() -> TestResult {
+    ensure_string(
+        r#"
+        const marker = {};
+        function verify(Constructor, value) {
+            let closed = 0;
+            const iterable = {
+                [Symbol.iterator]() {
+                    return {
+                        next() { return { value, done: false }; },
+                        return() { closed += 1; throw new Error("ignored close error"); }
+                    };
+                }
+            };
+            let caught = false;
+            try { new Constructor(iterable); }
+            catch (error) { caught = error === marker; }
+            return caught && closed === 1;
+        }
+        class MyMap extends Map { set() { throw marker; } }
+        class MySet extends Set { add() { throw marker; } }
+        class MyWeakMap extends WeakMap { set() { throw marker; } }
+        class MyWeakSet extends WeakSet { add() { throw marker; } }
+        [
+            verify(MyMap, [{}, {}]),
+            verify(MySet, {}),
+            verify(MyWeakMap, [{}, {}]),
+            verify(MyWeakSet, {})
+        ].join("|")
+        "#,
+        "true|true|true|true",
+    )
+}
+
+#[test]
 fn map_keys_use_same_value_zero() -> TestResult {
     ensure_string(
         r#"

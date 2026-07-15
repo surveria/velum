@@ -207,30 +207,55 @@ impl Context {
         kind: CollectionKind,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.construct_weak_collection_object_with_prototype(kind, args.as_slice(), None)
+    }
+
+    pub(in crate::runtime) fn construct_weak_collection_object_with_new_target(
+        &mut self,
+        kind: CollectionKind,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        let constructor_kind = match kind {
+            CollectionKind::WeakMap => NativeFunctionKind::WeakMap,
+            CollectionKind::WeakSet => NativeFunctionKind::WeakSet,
+            _ => {
+                return Err(Error::runtime(
+                    "strong collection routed to weak constructor",
+                ));
+            }
+        };
+        let prototype = self
+            .constructor_instance_semantic_prototype_with_default(new_target, constructor_kind)?;
+        self.construct_weak_collection_object_with_prototype(kind, args, Some(prototype))
+    }
+
+    fn construct_weak_collection_object_with_prototype(
+        &mut self,
+        kind: CollectionKind,
+        args: &[Value],
+        prototype: Option<Value>,
+    ) -> Result<Value> {
         let constructor = self.weak_collection_constructor_value(kind)?;
         let Value::NativeFunction(constructor_id) = &constructor else {
             return Err(Error::runtime("weak collection constructor disappeared"));
         };
-        let prototype = self
-            .native_function(*constructor_id)?
-            .properties()
-            .prototype();
-        let Value::Object(prototype_id) = prototype else {
-            return Err(Error::runtime("weak collection prototype is not an object"));
+        let prototype = if let Some(prototype) = prototype {
+            prototype
+        } else {
+            self.native_function(*constructor_id)?
+                .properties()
+                .prototype()
         };
-        let constructor_key = self.object_constructor_property_key()?;
-        let object = self.objects.create_with_prototype(
-            Some(prototype_id),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
+        let object = self
+            .objects
+            .create_with_semantic_prototype(Some(prototype), self.limits.max_objects)?;
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("weak collection object creation failed"));
         };
         let collection = self.create_collection(kind)?;
         self.bind_collection_object(*object_id, kind, collection)?;
-        let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let iterable = args.first().cloned().unwrap_or(Value::Undefined);
         if !matches!(iterable, Value::Undefined | Value::Null) {
             self.seed_weak_collection_from_iterable(kind, &object, &iterable)?;
         }
