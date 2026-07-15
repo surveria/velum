@@ -287,6 +287,7 @@ impl Context {
 
     fn eval_typed_array_set(&mut self, args: &[Value], this_value: &Value) -> Result<Value> {
         let (target_id, target) = self.typed_array_branded_receiver(this_value)?;
+        target.ensure_mutable()?;
         let target_length = target.length();
         let source = args.first().cloned().unwrap_or(Value::Undefined);
         let offset_value = args.get(1).unwrap_or(&Value::Undefined);
@@ -299,7 +300,6 @@ impl Context {
         }
         let offset =
             Self::finite_nonnegative_integer_to_usize(offset_number, TYPED_ARRAY_LENGTH_ERROR)?;
-        target.ensure_mutable()?;
         if target.is_out_of_bounds() {
             return Err(Error::type_error(TYPED_ARRAY_RECEIVER_ERROR));
         }

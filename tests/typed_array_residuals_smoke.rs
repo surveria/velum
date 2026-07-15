@@ -127,6 +127,64 @@ fn observes_coercion_before_detached_backing_store_checks() -> TestResult {
     Err(format!("expected detached backing-store ordering, got {actual:?}").into())
 }
 
+#[test]
+fn validates_typed_array_arguments_before_allocation_prototype_access() -> TestResult {
+    ensure_eval(
+        r#"
+        let prototypeReads = [];
+        let marker = {};
+        let newTarget = function () {}.bind(null);
+        Object.defineProperty(newTarget, "prototype", {
+            get() {
+                prototypeReads.push("prototype");
+                throw marker;
+            }
+        });
+
+        let primitiveValidatedFirst = false;
+        try {
+            Reflect.construct(Int32Array, [Symbol()], newTarget);
+        } catch (error) {
+            primitiveValidatedFirst = error instanceof TypeError && prototypeReads.length === 0;
+        }
+
+        let buffer = new ArrayBuffer(0);
+        let bufferAllocatedFirst = false;
+        try {
+            Reflect.construct(Int32Array, [buffer, Symbol(), 0], newTarget);
+        } catch (error) {
+            bufferAllocatedFirst = error === marker && prototypeReads.join() === "prototype";
+        }
+        primitiveValidatedFirst && bufferAllocatedFirst ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn rejects_immutable_typed_array_set_before_argument_access() -> TestResult {
+    ensure_eval(
+        r#"
+        let immutable = new Uint8Array([1, 2, 3]).buffer.transferToImmutable();
+        let target = new Uint8Array(immutable);
+        let calls = [];
+        let source = {
+            get length() { calls.push("source.length"); return 1; },
+            get 0() { calls.push("source[0]"); return 9; }
+        };
+        let offset = {
+            valueOf() { calls.push("offset"); return 0; }
+        };
+        let rejected = false;
+        try { target.set(source, offset); } catch (error) {
+            rejected = error instanceof TypeError;
+        }
+        rejected && calls.length === 0 && target.join() === "1,2,3" ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

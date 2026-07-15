@@ -269,7 +269,8 @@ impl Context {
             return self.construct_regexp_with_new_target(args, new_target);
         }
 
-        let eager_prototype = if native_constructor_resolves_prototype_before_arguments(kind)
+        let eager_prototype = if self
+            .native_constructor_resolves_prototype_before_arguments(kind, args)?
             && !same_value(constructor, new_target)
         {
             Some(self.constructor_instance_prototype_with_default(new_target, kind)?)
@@ -297,17 +298,34 @@ impl Context {
         Error::type_error(format!("'{value}' is not callable"))
     }
 
+    fn native_constructor_resolves_prototype_before_arguments(
+        &self,
+        kind: NativeFunctionKind,
+        args: &[Value],
+    ) -> Result<bool> {
+        if matches!(
+            kind,
+            NativeFunctionKind::Intl(
+                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
+            )
+        ) {
+            return Ok(true);
+        }
+        if !matches!(kind, NativeFunctionKind::TypedArray(_)) {
+            return Ok(false);
+        }
+        let Some(first) = args.first() else {
+            return Ok(true);
+        };
+        let Value::Object(id) = first else {
+            return Ok(false);
+        };
+        self.objects
+            .array_buffer(*id)
+            .map(|buffer| buffer.is_some())
+    }
+
     fn not_constructor_error(value: &Value) -> Error {
         Error::type_error(format!("'{value}' is not a constructor"))
     }
-}
-
-const fn native_constructor_resolves_prototype_before_arguments(kind: NativeFunctionKind) -> bool {
-    matches!(
-        kind,
-        NativeFunctionKind::TypedArray(_)
-            | NativeFunctionKind::Intl(
-                IntlFunctionKind::DisplayNamesConstructor | IntlFunctionKind::CollatorConstructor
-            )
-    )
 }
