@@ -155,6 +155,7 @@ pub struct Context {
 struct Function {
     realm: RealmIndex,
     script_or_module_name: Option<String>,
+    script_or_module_import_meta: Option<Value>,
     self_binding: Option<function::FunctionSelfBinding>,
     arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,

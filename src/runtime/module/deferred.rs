@@ -306,8 +306,8 @@ impl Context {
     }
 
     pub(in crate::runtime) fn import_meta_value(&self) -> Result<Value> {
-        if let Some(import_meta) = &self.active_import_meta {
-            return Ok(import_meta.clone());
+        if let Some(import_meta) = self.active_script_or_module_import_meta() {
+            return Ok(import_meta);
         }
         let Some(name) = self.active_script_or_module_name() else {
             return Err(Error::runtime("import.meta has no active module"));

@@ -94,6 +94,23 @@ class-field initializers neither inherit an enclosing async function's await
 expressions nor lose the Module reservation. These contexts are restored at
 every nested parse boundary instead of being inferred from emitted bytecode.
 
+Frontend tokens preserve ECMAScript distinctions instead of encoding grammar
+forms as ordinary strings. U+FEFF is accepted as source whitespace, braced
+Unicode escapes are bounded by the decoded code point rather than their digit
+count, and template-continuation tokens delimit an empty `yield` operand.
+Likewise, namespace imports use a typed import-name variant, so the ordinary
+string export name `"*"` remains importable. `new import.meta()` is parsed as a
+constructor expression in Module code and reaches the ordinary runtime
+constructability check; only dynamic-import constructor forms are syntax
+errors.
+
+Each source-text module creates its `import.meta` object before declaration
+instantiation. Functions hoisted or evaluated by that module retain the same
+module provenance and a traced edge to that object. Calling the function from
+another module therefore changes neither `import.meta` identity nor the
+referrer used by a nested dynamic import; ambient caller evaluation state is
+not a substitute for the function's defining Script-or-Module owner.
+
 Runtime and public API terminology should call guard misses `slow paths` or
 `generic semantic paths`. A guarded bytecode, inline-cache, direct-native, slot,
 shape, or dense-array specialization may take that slow path when its guard
