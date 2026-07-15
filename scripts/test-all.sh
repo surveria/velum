@@ -5,8 +5,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-# The runner lives in `runner/` as a nested workspace and depends on this local
-# engine crate through `velum = { path = ".." }`.
+# The interactive CLI and runner live in nested workspaces and depend on this
+# local engine crate through `velum = { path = ".." }`.
 export VELUM_BUILD_REPO_ROOT="${VELUM_BUILD_REPO_ROOT:-${repo_root}}"
 export VELUM_BUILD_COMMIT_SHA="${VELUM_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 export VELUM_BENCH_SET="${VELUM_BENCH_SET:-sentinel}"
@@ -41,13 +41,17 @@ if [[ "${VELUM_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   "${script_dir}/test-report-artifact-metadata.sh"
   "${script_dir}/test-jetstream-artifact-metadata.sh"
   cargo fmt --all -- --check
+  cargo fmt --manifest-path cli/Cargo.toml --all -- --check
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --all-targets --all-features -- -D warnings
+  cargo clippy --manifest-path cli/Cargo.toml --all-targets --all-features -- -D warnings
   cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
 
-  # --- Tests and docs for both crates. ---
+  # --- Tests and docs for the engine, CLI, and runner crates. ---
   cargo test --all-targets --all-features
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+  cargo test --manifest-path cli/Cargo.toml --all-targets --all-features
+  RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path cli/Cargo.toml --no-deps --all-features
   cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
   RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
 fi

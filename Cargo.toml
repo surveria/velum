@@ -1,8 +1,8 @@
 # Explicit single-crate workspace root: keeps the engine self-contained and
-# excludes the `runner/` nested workspace, which carries heavier report and
-# benchmark dependencies.
+# excludes the nested CLI and runner workspaces, which carry terminal,
+# reporting, and benchmark dependencies.
 [workspace]
-exclude = ["runner", "src/regress"]
+exclude = ["cli", "runner", "src/regress"]
 
 [package]
 name = "velum"
@@ -21,9 +21,9 @@ path = "src/lib.rs"
 name = "velum"
 path = "src/bin/velum.rs"
 
-# The engine is a standalone, dependency-light crate. The test/benchmark runner
-# lives in `runner/` as a separate nested workspace so its heavier dependencies
-# do not become engine dependencies.
+# The engine is a standalone, dependency-light crate. The interactive CLI and
+# test/benchmark runner live in separate nested workspaces so their heavier
+# dependencies do not become engine dependencies.
 [dependencies]
 anyhow = "1"
 icu_casemap = "2.2"

@@ -35,7 +35,9 @@ jobs:
   rust:
     if: >-
       github.event_name != 'pull_request' ||
-      (github.event.action != 'closed' && github.event.pull_request.draft == false)
+      (github.event.action != 'closed' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository)
     concurrency:
       group: >-
         ${{
@@ -55,6 +57,7 @@ jobs:
       - Linux
       - X64
       - surveria
+      - velum
       - rust
       - isolated
       - gha-runner-ctrl-test
@@ -200,6 +203,7 @@ jobs:
       - Linux
       - X64
       - surveria
+      - velum
       - rust
       - isolated
       - gha-runner-ctrl-test
@@ -291,6 +295,7 @@ jobs:
       - Linux
       - X64
       - surveria
+      - velum
       - rust
       - isolated
       - gha-runner-ctrl-test

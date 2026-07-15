@@ -36,6 +36,7 @@ jobs:
       - Linux
       - X64
       - surveria
+      - velum
       - rust
       - isolated
       - gha-runner-ctrl-test

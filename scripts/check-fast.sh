@@ -18,6 +18,13 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
+if [[ "${VELUM_FAST_CLI:-0}" == "1" ]]; then
+  cargo fmt --manifest-path cli/Cargo.toml --all -- --check
+  cargo clippy --manifest-path cli/Cargo.toml --all-targets --all-features -- -D warnings
+  cargo test --manifest-path cli/Cargo.toml --all-targets --all-features
+  RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path cli/Cargo.toml --no-deps --all-features
+fi
+
 if [[ "${VELUM_FAST_RUNNER:-0}" == "1" ]]; then
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
