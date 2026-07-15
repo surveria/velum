@@ -5,6 +5,7 @@ use super::{VmStorageKind, accounting::STORAGE_KIND_COUNT};
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
 const DEFAULT_MAX_STATEMENTS: usize = 4_096;
 const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
+const DEFAULT_MAX_CALL_DEPTH: usize = 256;
 const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
 const DEFAULT_MAX_STRING_LEN: usize = 65_536;
 const DEFAULT_MAX_BIGINT_BITS: usize = 8_388_608;
@@ -18,6 +19,10 @@ pub struct RuntimeLimits {
     pub max_source_len: usize,
     pub max_statements: usize,
     pub max_expression_depth: usize,
+    /// Maximum active ECMAScript function-call depth before a catchable
+    /// `RangeError` is thrown. The non-catchable runtime-step budget remains
+    /// the embedder's total-execution backstop.
+    pub max_call_depth: usize,
     pub max_runtime_steps: usize,
     pub max_string_len: usize,
     /// Maximum bit length of a materialized `BigInt` result.
@@ -36,6 +41,7 @@ impl Default for RuntimeLimits {
             max_source_len: DEFAULT_MAX_SOURCE_LEN,
             max_statements: DEFAULT_MAX_STATEMENTS,
             max_expression_depth: DEFAULT_MAX_EXPRESSION_DEPTH,
+            max_call_depth: DEFAULT_MAX_CALL_DEPTH,
             max_runtime_steps: DEFAULT_MAX_RUNTIME_STEPS,
             max_string_len: DEFAULT_MAX_STRING_LEN,
             max_bigint_bits: DEFAULT_MAX_BIGINT_BITS,

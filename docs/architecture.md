@@ -350,12 +350,13 @@ Current limits cover:
 - source length
 - statement count
 - expression nesting depth
+- ECMAScript function-call depth, reported to JavaScript as `RangeError`
 - runtime evaluation steps
 - string length
 - number of global bindings
 - number of interned atoms as a reported usage metric
 
-Future limits should cover heap budgets, atom table budgets, stack budgets, module loading, and host callback quotas.
+Future limits should cover heap budgets, atom table budgets, module loading, and host callback quotas.
 
 Every new VM-facing feature should define how it participates in limits before it is considered complete. This includes parser work, runtime steps, heap growth, host callback calls, queued jobs, module loads, and output buffering.
 

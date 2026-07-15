@@ -134,24 +134,26 @@ fn rejects_excessively_nested_function_declarations_with_limit_error() -> TestRe
 #[test]
 fn rejects_recursive_function_declarations_with_call_depth_limit() -> TestResult {
     let limits = RuntimeLimits {
-        max_expression_depth: 8,
+        max_call_depth: 8,
         ..RuntimeLimits::default()
     };
     let runtime = Runtime::with_limits(limits);
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
+    let value = context.eval(
         r"
         function recurse() {
             return recurse();
         }
-        recurse()
+        try {
+            recurse();
+        } catch (error) {
+            error instanceof RangeError ? 42 : 0;
+        }
         ",
-    ) else {
-        return Err("expected recursive function declaration to hit the call depth limit".into());
-    };
+    )?;
 
-    ensure_limit_error(&error, "call stack depth exceeded 8")
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
