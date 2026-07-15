@@ -4,7 +4,6 @@ These rules are mandatory for humans and agents working in any part of this repo
 
 ## Language And Text
 
-- Always answer users in Russian.
 - Code comments must always be written in English.
 - Runtime logs must always be written in English.
 - Documentation text must always be written in English.

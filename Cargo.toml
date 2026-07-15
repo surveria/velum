@@ -10,7 +10,7 @@ version = "0.2.130"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/surveria/rs-quickjs"
-description = "A small JavaScript engine prototype written in safe Rust, using QuickJS as a reference."
+description = "An independent, embeddable ECMAScript bytecode engine written in Rust."
 readme = "README.md"
 
 [lib]
