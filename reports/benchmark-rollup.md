@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260715T012904Z.md`
-- Task: PR #637: bytecode: complete proper tail-position expression lowering
-- Performance: 6.73x (4/5 >1.00x) (from `rsqjs-test-report-20260715T012904Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T012904Z.md`)
+- `rsqjs-test-report-20260715T020622Z.md`
+- Task: PR #638: runner: use canonical pinned Test262 harness semantics
+- Performance: 6.69x (4/5 >1.00x) (from `rsqjs-test-report-20260715T020622Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T020622Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102431 passed / 147 failed (99.86%) (from `rsqjs-test-report-20260715T012904Z.md`)
+- Full Test262: 102463 passed / 115 failed (99.89%) (from `rsqjs-test-report-20260715T020622Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -572,3 +572,4 @@ Latest report:
 | `20260714T222851Z` `9adf95b` PR #635: runtime: restore direct eval local precedence | 6.98x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102386 passed / 192 failed (99.81%) |
 | `20260715T004314Z` `a1dad63` PR #636: architecture: repair module evaluation lifecycle | 6.69x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102420 passed / 158 failed (99.85%) |
 | `20260715T012904Z` `14aaaf5` PR #637: bytecode: complete proper tail-position expression lowering | 6.73x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102431 passed / 147 failed (99.86%) |
+| `20260715T020622Z` `6e7655a` PR #638: runner: use canonical pinned Test262 harness semantics | 6.69x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102463 passed / 115 failed (99.89%) |
