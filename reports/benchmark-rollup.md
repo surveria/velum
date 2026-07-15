@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260715T051656Z.md`
-- Task: PR #642: architecture: unify legacy function activation introspection
-- Performance: 6.88x (4/5 >1.00x) (from `rsqjs-test-report-20260715T051656Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T051656Z.md`)
+- `rsqjs-test-report-20260715T084223Z.md`
+- Task: PR #644: ci: accept Test262 baseline v2 in publisher
+- Performance: 6.97x (4/5 >1.00x) (from `rsqjs-test-report-20260715T084223Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260715T084223Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102525 passed / 53 failed (99.95%) (from `rsqjs-test-report-20260715T051656Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `rsqjs-test-report-20260715T084223Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -577,3 +577,4 @@ Latest report:
 | `20260715T033659Z` `af8c62f` PR #640: architecture: unify Intl locale negotiation | 6.74x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102500 passed / 78 failed (99.92%) |
 | `20260715T042111Z` `db39cc5` PR #641: architecture: complete binary-view exotic lifecycle | 6.75x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102516 passed / 62 failed (99.94%) |
 | `20260715T051656Z` `a00eee3` PR #642: architecture: unify legacy function activation introspection | 6.88x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102525 passed / 53 failed (99.95%) |
+| `20260715T084223Z` `19964ab` PR #644: ci: accept Test262 baseline v2 in publisher | 6.97x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
