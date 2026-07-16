@@ -77,12 +77,12 @@ impl Context {
         this_value: Value,
     ) -> Result<Completion> {
         self.enter_call_stack_frame()?;
-        let result = self.semantic_call_inner(callee, args, this_value);
+        let result = self.dispatch_call(callee, args, this_value);
         self.leave_call_stack_frame();
         result
     }
 
-    fn semantic_call_inner(
+    fn dispatch_call(
         &mut self,
         callee: &Value,
         args: &[Value],
@@ -167,12 +167,12 @@ impl Context {
         new_target: Value,
     ) -> Result<Value> {
         self.enter_call_stack_frame()?;
-        let result = self.semantic_construct_inner(constructor, args, new_target);
+        let result = self.dispatch_construct(constructor, args, new_target);
         self.leave_call_stack_frame();
         result
     }
 
-    fn semantic_construct_inner(
+    fn dispatch_construct(
         &mut self,
         constructor: &Value,
         args: &[Value],
