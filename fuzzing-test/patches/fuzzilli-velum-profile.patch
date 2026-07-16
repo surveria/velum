@@ -185,7 +185,7 @@ new file mode 100644
 +
 +    maxExecsBeforeRespawn: 1000,
 +
-+    timeout: Timeout.value(250),
++    timeout: Timeout.value(4000),
 +
 +    codePrefix: """
 +        """,

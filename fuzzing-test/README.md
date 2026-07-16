@@ -133,7 +133,10 @@ with their FuzzIL form. Duplicate crashes are kept separately below
 timeouts from every worker and ordinary rejected programs from the main worker,
 and can use substantial disk space. Saved timeout programs include the engine
 commit tag and exact Fuzzilli and target arguments needed to identify the
-campaign before replaying the JavaScript against Velum or another engine.
+campaign before replaying the JavaScript against Velum or another engine. The
+Velum Fuzzilli profile uses a four-second execution timeout so campaigns focus
+on crashes and persistent hangs rather than sanitizer-instrumented performance
+outliers.
 
 Fuzzilli stdout and stderr are captured in one detailed log. The launcher prints
 the temporary live path before execution so a second terminal or an agent can
