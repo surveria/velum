@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260716T052539Z.md`
-- Task: PR #654: tests: prepare local Fuzzilli infrastructure
-- Performance: 6.90x (4/5 >1.00x) (from `velum-test-report-20260716T052539Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260716T052539Z.md`)
+- `velum-test-report-20260716T064326Z.md`
+- Task: PR #655: tests: reuse machine-local Fuzzilli binary
+- Performance: 6.78x (4/5 >1.00x) (from `velum-test-report-20260716T064326Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260716T064326Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260716T052539Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260716T064326Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -584,3 +584,4 @@ Latest report:
 | `20260715T210831Z` `b53e64f` PR #652: engine: add an interactive multiline Velum shell | 6.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260715T213450Z` `fcf8df5` PR #653: runner: make Ctrl-C exit the interactive Velum shell | 6.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260716T052539Z` `6c4db29` PR #654: tests: prepare local Fuzzilli infrastructure | 6.90x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260716T064326Z` `d1a9431` PR #655: tests: reuse machine-local Fuzzilli binary | 6.78x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
