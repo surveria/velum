@@ -200,7 +200,7 @@ impl Context {
 #[inline(never)]
 fn native_stack_position() -> usize {
     let marker = 0_u8;
-    std::hint::black_box(&marker) as *const u8 as usize
+    std::ptr::from_ref(std::hint::black_box(&marker)).addr()
 }
 
 fn maximum_call_stack_error() -> Error {
