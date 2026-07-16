@@ -57,9 +57,12 @@ command. The launcher never installs system packages itself.
 ```
 
 The bootstrap script clones the exact pinned Fuzzilli revision into the ignored
-`fuzzing-test/fuzzilli/` directory and applies the tracked Velum profile patch.
-The build script compiles Fuzzilli and an AddressSanitizer-instrumented Velum
-REPRL target.
+`fuzzing-test/fuzzilli/` directory and applies the tracked Velum profile and
+Swift 6.0 source-compatibility patch. The build script compiles Fuzzilli and an
+AddressSanitizer-instrumented Velum REPRL target. Swift 6.0 has an optimizer bug
+that crashes while compiling this pinned Fuzzilli revision, so the build
+disables the affected SIL performance pipeline only on Swift 6.0.x. Newer Swift
+versions use the normal release configuration without that workaround.
 
 Set `VELUM_FUZZ_SANITIZER=none` only for instrumentation diagnostics where
 AddressSanitizer itself prevents the target from starting.

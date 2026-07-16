@@ -15,7 +15,7 @@ const CONTROL_WRITE_PATH: &str = "/proc/self/fd/101";
 const DATA_READ_PATH: &str = "/proc/self/fd/102";
 const FUZZOUT_WRITE_PATH: &str = "/proc/self/fd/103";
 const HANDSHAKE: [u8; 4] = *b"HELO";
-const EXECUTE_COMMAND: [u8; 4] = *b"cexe";
+const EXECUTE_COMMAND: [u8; 4] = *b"exec";
 const MAX_SCRIPT_SIZE: usize = 16 << 20;
 
 /// Runs the Velum Fuzzilli target using the inherited REPRL channels.

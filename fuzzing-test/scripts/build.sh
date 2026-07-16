@@ -38,9 +38,37 @@ if [[ -n "$(git -C "${repo_root}" status --short --untracked-files=normal)" ]]; 
 fi
 printf 'Building from the current Velum checkout: %s\n' "${source_revision}"
 
-swift build --package-path "${fuzzing_dir}/fuzzilli" \
-    --configuration release \
+swift_version="$(swift --version | sed -n \
+    '1s/^Swift version \([0-9][^ ]*\).*/\1/p')"
+if [[ ! "${swift_version}" =~ ^([0-9]+)\.([0-9]+) ]]; then
+    printf 'Failed to determine the Swift compiler version from: %s\n' \
+        "$(swift --version | head -n 1)" >&2
+    exit 1
+fi
+
+swift_major="${BASH_REMATCH[1]}"
+swift_minor="${BASH_REMATCH[2]}"
+if (( swift_major < 6 )); then
+    printf 'Fuzzilli requires Swift 6 or newer; found Swift %s\n' \
+        "${swift_version}" >&2
+    printf '%s\n' 'Install it with: sudo apt install swiftlang' >&2
+    exit 1
+fi
+
+swift_build_args=(
+    --package-path "${fuzzing_dir}/fuzzilli"
+    --configuration release
     --product FuzzilliCli
+)
+if (( swift_major == 6 && swift_minor == 0 )); then
+    printf '%s\n' \
+        'Swift 6.0 optimizer workaround enabled for the Fuzzilli release build.'
+    swift_build_args+=(
+        -Xswiftc -Xfrontend
+        -Xswiftc -disable-sil-perf-optzns
+    )
+fi
+swift build "${swift_build_args[@]}"
 
 target_triple="$(rustc +nightly --version --verbose | sed -n 's/^host: //p')"
 if [[ -z "${target_triple}" ]]; then
