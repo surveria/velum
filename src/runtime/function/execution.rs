@@ -100,20 +100,27 @@ impl Context {
         this_value: Value,
         new_target: Value,
     ) -> Result<Completion> {
-        self.call_depth = self
+        let stack_position = native_stack_position();
+        let starts_call_stack = self.call_depth == 0;
+        if starts_call_stack {
+            self.call_stack_base = Some(stack_position);
+        }
+        let stack_bytes = self
+            .call_stack_base
+            .map_or(0, |base| base.abs_diff(stack_position));
+        let next_call_depth = self
             .call_depth
             .checked_add(1)
             .ok_or_else(|| Error::limit("call stack depth overflowed"))?;
-        if self.call_depth > self.limits.max_call_depth {
-            self.call_depth = self.call_depth.saturating_sub(1);
-            return Err(Error::exception(
-                ErrorName::RangeError,
-                format!(
-                    "maximum call stack depth exceeded {}",
-                    self.limits.max_call_depth
-                ),
-            ));
+        if next_call_depth > self.limits.max_call_depth
+            || stack_bytes >= self.limits.max_call_stack_bytes
+        {
+            if starts_call_stack {
+                self.call_stack_base = None;
+            }
+            return Err(maximum_call_stack_error());
         }
+        self.call_depth = next_call_depth;
         let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
             id,
             args.as_slice().to_vec(),
@@ -121,6 +128,9 @@ impl Context {
             new_target,
         );
         self.call_depth = self.call_depth.saturating_sub(1);
+        if self.call_depth == 0 {
+            self.call_stack_base = None;
+        }
         result
     }
 
@@ -185,6 +195,16 @@ impl Context {
             new_target = next_target;
         }
     }
+}
+
+#[inline(never)]
+fn native_stack_position() -> usize {
+    let marker = 0_u8;
+    std::hint::black_box(&marker) as *const u8 as usize
+}
+
+fn maximum_call_stack_error() -> Error {
+    Error::exception(ErrorName::RangeError, "Maximum call stack size exceeded")
 }
 
 fn tail_call_result(completion: Completion) -> Result<Completion> {

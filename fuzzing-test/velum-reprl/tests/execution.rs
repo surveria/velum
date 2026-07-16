@@ -42,3 +42,16 @@ fn supports_fuzzilli_print_callback() -> TestResult {
     }
     Err(format!("expected fuzzilli callback to succeed, got {status}").into())
 }
+
+#[test]
+fn reports_recursive_stack_exhaustion_without_crashing_the_target() -> TestResult {
+    let fuzzout = OpenOptions::new().write(true).open("/dev/null")?;
+    let status = execute_for_fuzzing(
+        b"function f(...args) { try { f(); } catch (error) {} } f();",
+        Rc::new(RefCell::new(fuzzout)),
+    )?;
+    if status == 0 {
+        return Ok(());
+    }
+    Err(format!("expected caught stack exhaustion to succeed, got {status}").into())
+}
