@@ -20,10 +20,10 @@ pub struct RuntimeLimits {
     pub max_source_len: usize,
     pub max_statements: usize,
     pub max_expression_depth: usize,
-    /// Maximum active ECMAScript function-call depth before a catchable
+    /// Maximum active ECMAScript call and construct invocation depth before a catchable
     /// `RangeError` is thrown. The default leaves the V8-style native stack
     /// byte budget as the effective recursion limit, while embedders can set a
-    /// lower deterministic call-count ceiling.
+    /// lower deterministic invocation-count ceiling.
     pub max_call_depth: usize,
     /// Maximum approximate native stack span used by active ECMAScript calls
     /// before a catchable `RangeError` is thrown. The default mirrors V8's

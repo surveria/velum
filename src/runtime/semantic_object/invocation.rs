@@ -76,6 +76,18 @@ impl Context {
         args: &[Value],
         this_value: Value,
     ) -> Result<Completion> {
+        self.enter_call_stack_frame()?;
+        let result = self.semantic_call_inner(callee, args, this_value);
+        self.leave_call_stack_frame();
+        result
+    }
+
+    fn semantic_call_inner(
+        &mut self,
+        callee: &Value,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Completion> {
         let _root_scope = self.transient_root_scope(
             VmRootKind::TransientCall,
             std::iter::once(callee)
@@ -149,6 +161,18 @@ impl Context {
 
     /// Optional semantic `[[Construct]]` with an explicit `newTarget`.
     pub(in crate::runtime) fn semantic_construct(
+        &mut self,
+        constructor: &Value,
+        args: &[Value],
+        new_target: Value,
+    ) -> Result<Value> {
+        self.enter_call_stack_frame()?;
+        let result = self.semantic_construct_inner(constructor, args, new_target);
+        self.leave_call_stack_frame();
+        result
+    }
+
+    fn semantic_construct_inner(
         &mut self,
         constructor: &Value,
         args: &[Value],

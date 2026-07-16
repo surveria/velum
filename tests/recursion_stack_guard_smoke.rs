@@ -77,6 +77,26 @@ fn lets_embedders_tighten_the_native_stack_budget() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn catches_recursive_native_array_string_conversion() -> TestResult {
+    ensure_source_returns_42(
+        r"
+        function F1() {
+            if (!new.target) { throw 'must be called with new'; }
+        }
+        const value = new F1();
+        const recursive = [F1, value];
+        value.__proto__ = recursive;
+        const target = 1073741825;
+        try {
+            target[recursive] = -19069;
+        } catch (error) {
+            error instanceof RangeError ? 42 : 0;
+        }
+        ",
+    )
+}
+
 fn ensure_source_returns_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

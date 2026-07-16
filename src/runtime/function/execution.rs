@@ -100,6 +100,18 @@ impl Context {
         this_value: Value,
         new_target: Value,
     ) -> Result<Completion> {
+        self.enter_call_stack_frame()?;
+        let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
+            id,
+            args.as_slice().to_vec(),
+            this_value,
+            new_target,
+        );
+        self.leave_call_stack_frame();
+        result
+    }
+
+    pub(in crate::runtime) fn enter_call_stack_frame(&mut self) -> Result<()> {
         let stack_position = native_stack_position();
         let starts_call_stack = self.call_depth == 0;
         if starts_call_stack {
@@ -121,17 +133,14 @@ impl Context {
             return Err(maximum_call_stack_error());
         }
         self.call_depth = next_call_depth;
-        let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
-            id,
-            args.as_slice().to_vec(),
-            this_value,
-            new_target,
-        );
+        Ok(())
+    }
+
+    pub(in crate::runtime) const fn leave_call_stack_frame(&mut self) {
         self.call_depth = self.call_depth.saturating_sub(1);
         if self.call_depth == 0 {
             self.call_stack_base = None;
         }
-        result
     }
 
     fn eval_function_tail_chain<const CAN_SUSPEND: bool>(
