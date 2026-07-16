@@ -1,0 +1,39 @@
+[workspace]
+
+[package]
+name = "velum-fuzz-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "velum-fuzz"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+ctrlc = "3"
+humantime = "2"
+nix = { version = "0.31", features = ["signal"] }
+serde_json = "1"
+tabled = "0.21"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+uninlined_format_args = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+redundant_pub_crate = "deny"
+too_many_lines = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"

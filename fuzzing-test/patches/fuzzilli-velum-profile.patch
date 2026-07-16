@@ -1,0 +1,119 @@
+diff --git a/Sources/Fuzzilli/CodeGen/CodeGenerators.swift b/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
+--- a/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
++++ b/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
+@@ -3609,7 +3609,7 @@ public let CodeGenerators: [CodeGenerator] = [
+             },
+             GeneratorStub(
+                 "BundleScriptEndGenerator",
+-                inContext: .single([.javascript]),
++                inContext: .single([.javascript])
+             ) { b in
+                 b.emit(EndBundleScript())
+             },
+@@ -3630,7 +3630,7 @@ public let CodeGenerators: [CodeGenerator] = [
+             },
+             GeneratorStub(
+                 "BundleModuleEntryPointEndGenerator",
+-                inContext: .single([.moduleTopLevel, .javascript]),
++                inContext: .single([.moduleTopLevel, .javascript])
+             ) { b in
+                 b.endBundleModuleEntryPoint()
+             },
+diff --git a/Sources/Fuzzilli/CodeGen/WasmCodeGenerators.swift b/Sources/Fuzzilli/CodeGen/WasmCodeGenerators.swift
+--- a/Sources/Fuzzilli/CodeGen/WasmCodeGenerators.swift
++++ b/Sources/Fuzzilli/CodeGen/WasmCodeGenerators.swift
+@@ -302,7 +302,7 @@ public let WasmCodeGenerators: [CodeGenerator] = [
+
+     CodeGenerator(
+         "WasmStructSetGenerator", inContext: .single(.wasmFunction),
+-        inputs: .requiredComplex(.init(.anyNonNullableIndexRef, .IsWasmStruct)),
++        inputs: .requiredComplex(.init(.anyNonNullableIndexRef, .IsWasmStruct))
+     ) { b, theStruct in
+         guard
+             case .Index(let desc) = b.type(of: theStruct).wasmReferenceType!
+diff --git a/Sources/Fuzzilli/Profiles/Profile.swift b/Sources/Fuzzilli/Profiles/Profile.swift
+--- a/Sources/Fuzzilli/Profiles/Profile.swift
++++ b/Sources/Fuzzilli/Profiles/Profile.swift
+@@ -49,4 +49,5 @@
+ public let profiles = [
++    "velum": velumProfile,
+     "qtjs": qtjsProfile,
+     "qjs": qjsProfile,
+     "jsc": jscProfile,
+diff --git a/Sources/Fuzzilli/Profiles/VelumProfile.swift b/Sources/Fuzzilli/Profiles/VelumProfile.swift
+new file mode 100644
+--- /dev/null
++++ b/Sources/Fuzzilli/Profiles/VelumProfile.swift
+@@ -0,0 +1,60 @@
++// Copyright 2026 Velum contributors
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     https://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++let velumProfile = Profile(
++    processArgs: { _ in
++        ["--reprl"]
++    },
++
++    processArgsReference: nil,
++
++    processEnv: ["ASAN_OPTIONS": "abort_on_error=1:detect_leaks=0"],
++
++    maxExecsBeforeRespawn: 1000,
++
++    timeout: Timeout.value(250),
++
++    codePrefix: """
++        """,
++
++    codeSuffix: """
++        """,
++
++    ecmaVersion: ECMAScriptVersion.es6,
++
++    startupTests: [
++        ("fuzzilli('FUZZILLI_PRINT', 'test')", .shouldSucceed),
++        ("throw new Error('expected startup exception')", .shouldNotCrash),
++    ],
++
++    additionalCodeGenerators: [],
++
++    additionalProgramTemplates: WeightedList<ProgramTemplate>([]),
++
++    disabledCodeGenerators: [],
++
++    disabledMutators: [],
++
++    additionalBuiltins: [
++        "fuzzilli": .function([.string, .jsAnything] => .undefined),
++    ],
++
++    additionalObjectGroups: [],
++
++    additionalEnumerations: [],
++
++    additionalOptionsBags: [],
++
++    optionalPostProcessor: nil
++)
+diff --git a/Sources/Fuzzilli/Profiles/V8CommonProfile.swift b/Sources/Fuzzilli/Profiles/V8CommonProfile.swift
+--- a/Sources/Fuzzilli/Profiles/V8CommonProfile.swift
++++ b/Sources/Fuzzilli/Profiles/V8CommonProfile.swift
+@@ -889,7 +889,7 @@ public let WasmInJsInliningFuzzer = WasmProgramTemplate("WasmInJsInliningFuzzer"
+         { b.buildPlainFunction(with: params, body) },
+         { b.buildArrowFunction(with: params, body) },
+         { b.buildGeneratorFunction(with: params, body) },
+-        { b.buildAsyncFunction(with: params, body) },
++        { b.buildAsyncFunction(with: params, body) }
+     )
+
+     // Finish the deopt trigger now that the jsFct is in scope.
