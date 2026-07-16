@@ -183,7 +183,7 @@ fn run_campaign(config: &Config) -> anyhow::Result<()> {
     }
 
     let target_triple = rust_target_triple()?;
-    let fuzzilli = fuzzing_dir.join("fuzzilli/.build/release/FuzzilliCli");
+    let fuzzilli = fuzzing_dir.join(".bin/FuzzilliCli");
     let velum_target = fuzzing_dir.join(format!(
         "velum-reprl/target/{target_triple}/release/velum-fuzzilli"
     ));
