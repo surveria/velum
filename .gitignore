@@ -30,6 +30,9 @@
 !/docs/
 !/docs/*.md
 
+!/examples/
+!/examples/*.md
+
 !/src/
 !/src/**/
 !/src/**/*.rs
