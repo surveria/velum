@@ -331,11 +331,14 @@ impl Context {
     }
 
     pub(crate) fn check_utf16_string_len(&self, units: &[u16]) -> Result<()> {
-        if units.len() > self.limits.max_string_len {
+        self.check_utf16_string_length(units.len())
+    }
+
+    pub(crate) fn check_utf16_string_length(&self, length: usize) -> Result<()> {
+        if length > self.limits.max_string_len {
             return Err(Error::limit(format!(
                 "string length {} exceeded {}",
-                units.len(),
-                self.limits.max_string_len
+                length, self.limits.max_string_len
             )));
         }
         Ok(())

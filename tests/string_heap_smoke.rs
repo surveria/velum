@@ -182,6 +182,16 @@ fn string_concat_uses_heap_dedup_and_respects_limits() -> TestResult {
 }
 
 #[test]
+fn string_padding_rejects_oversized_allocation_before_reserving() -> TestResult {
+    let runtime = velum::Runtime::new();
+    let mut context = runtime.context();
+    let Err(error) = context.eval(r#""9223372036854775807".padEnd("9223372036854775807")"#) else {
+        return Err("expected oversized string padding to fail".into());
+    };
+    ensure_text(error.to_string().as_str(), "resource limit")
+}
+
+#[test]
 fn bytecode_string_concat_chain_interns_only_the_final_result() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

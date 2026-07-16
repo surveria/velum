@@ -58,7 +58,7 @@ fn catches_recursive_derived_constructor_call_stack_exhaustion() -> TestResult {
 fn lets_embedders_tighten_the_native_stack_budget() -> TestResult {
     let runtime = Runtime::with_limits(RuntimeLimits {
         max_call_depth: usize::MAX,
-        max_call_stack_bytes: 1,
+        max_call_stack_bytes: 64 * 1_024,
         ..RuntimeLimits::default()
     });
     let mut context = runtime.context();
@@ -90,6 +90,22 @@ fn catches_recursive_native_array_string_conversion() -> TestResult {
         const target = 1073741825;
         try {
             target[recursive] = -19069;
+        } catch (error) {
+            error instanceof RangeError ? 42 : 0;
+        }
+        ",
+    )
+}
+
+#[test]
+fn catches_recursive_proxy_trap_lookup() -> TestResult {
+    ensure_source_returns_42(
+        r"
+        const handler = {};
+        const proxy = new Proxy(function () {}, handler);
+        Object.setPrototypeOf(handler, proxy);
+        try {
+            proxy.answer;
         } catch (error) {
             error instanceof RangeError ? 42 : 0;
         }

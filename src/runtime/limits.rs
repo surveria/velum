@@ -25,10 +25,11 @@ pub struct RuntimeLimits {
     /// byte budget as the effective recursion limit, while embedders can set a
     /// lower deterministic invocation-count ceiling.
     pub max_call_depth: usize,
-    /// Maximum approximate native stack span used by active ECMAScript calls
-    /// before a catchable `RangeError` is thrown. The default mirrors V8's
-    /// 984 KiB stack region. Embedders running on smaller or already-deep
-    /// native stacks should lower this value.
+    /// Maximum approximate native stack span used by guarded ECMAScript
+    /// execution before a catchable `RangeError` is thrown. This includes
+    /// calls, constructs, and recursive semantic internal methods. The default
+    /// mirrors V8's 984 KiB stack region. Embedders running on smaller or
+    /// already-deep native stacks should lower this value.
     pub max_call_stack_bytes: usize,
     pub max_runtime_steps: usize,
     pub max_string_len: usize,

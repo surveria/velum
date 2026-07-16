@@ -22,6 +22,13 @@ impl Context {
         object: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
+        self.enter_native_stack_frame()?;
+        let result = self.dispatch_get(object, property);
+        self.leave_native_stack_frame();
+        result
+    }
+
+    fn dispatch_get(&mut self, object: &Value, property: PropertyLookup<'_>) -> Result<Value> {
         if let Some(read) = self.semantic_property_read(object, property)? {
             return self.finish_semantic_property_read(read, object, property);
         }
