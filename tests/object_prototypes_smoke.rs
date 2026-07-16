@@ -150,6 +150,38 @@ fn rejects_prototype_cycles() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn rejects_function_prototype_cycles() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        function Regular() {}
+        let original = Object.getPrototypeOf(Regular);
+        let reflectRejected = Reflect.setPrototypeOf(Regular, Regular) === false;
+        let objectRejected = false;
+        try {
+            Object.setPrototypeOf(Regular, Regular);
+        } catch (error) {
+            objectRejected = error instanceof TypeError;
+        }
+        let legacyRejected = false;
+        try {
+            Regular.__proto__ = Regular;
+        } catch (error) {
+            legacyRejected = error instanceof TypeError;
+        }
+        reflectRejected &&
+            objectRejected &&
+            legacyRejected &&
+            Object.getPrototypeOf(Regular) === original ? 42 : 0
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

@@ -612,4 +612,20 @@ impl Context {
         self.function_mut(id)?.static_parent = Some(parent);
         Ok(())
     }
+
+    pub(in crate::runtime) fn try_set_function_static_parent(
+        &mut self,
+        id: FunctionId,
+        parent: Value,
+    ) -> Result<bool> {
+        let current = self.function_inheritance_prototype_value(id)?;
+        if crate::runtime::abstract_operations::same_value(&current, &parent) {
+            return Ok(true);
+        }
+        if !self.function_is_extensible(id)? {
+            return Ok(false);
+        }
+        self.set_function_static_parent(id, parent)?;
+        Ok(true)
+    }
 }
