@@ -30,12 +30,13 @@ not engine crashes.
 - `velum-reprl/` is a standalone Rust workspace containing the persistent
   target and sanitizer-coverage bridge.
 - `scripts/` bootstraps and builds the local campaign.
-- `fuzzilli/`, `runs/`, and build outputs are generated locally and ignored.
+- `fuzzilli/`, `.bin/`, `runs/`, and build outputs are generated locally and
+  ignored.
 
 ## Prerequisites
 
 - Git and a C compiler;
-- Swift for building Fuzzilli;
+- Swift for the first Fuzzilli build or a cache miss;
 - the Rust nightly toolchain for sanitizer coverage.
 
 On the current Ubuntu host, Swift can be installed with:
@@ -44,9 +45,10 @@ On the current Ubuntu host, Swift can be installed with:
 sudo apt install swiftlang
 ```
 
-The launcher checks Git, Cargo, rustc, Swift, the nightly toolchain, and the C
-compiler before cloning or building anything. A missing prerequisite stops the
-run before a session directory is created and prints a concrete installation
+The launcher checks Git, Cargo, rustc, the nightly toolchain, and the C compiler
+before building anything. Swift is checked only when the matching Fuzzilli
+binary is absent from the machine cache. A missing prerequisite stops the run
+before a session directory is created and prints a concrete installation
 command. The launcher never installs system packages itself.
 
 ## Bootstrap and build
@@ -58,11 +60,20 @@ command. The launcher never installs system packages itself.
 
 The bootstrap script clones the exact pinned Fuzzilli revision into the ignored
 `fuzzing-test/fuzzilli/` directory and applies the tracked Velum profile and
-Swift 6.0 source-compatibility patch. The build script compiles Fuzzilli and an
+Swift 6.0 source-compatibility patch. The build script restores a matching
+Fuzzilli executable from the machine cache when one exists. On a cache miss it
+compiles Fuzzilli once and stores the executable before building the
 AddressSanitizer-instrumented Velum REPRL target. Swift 6.0 has an optimizer bug
 that crashes while compiling this pinned Fuzzilli revision, so the build
 disables the affected SIL performance pipeline only on Swift 6.0.x. Newer Swift
 versions use the normal release configuration without that workaround.
+
+The default cache is `${XDG_CACHE_HOME:-$HOME/.cache}/velum/fuzzilli`. Its key
+includes the cache schema, operating system, architecture, pinned Fuzzilli
+revision, and Velum profile patch hash. This lets independent repository
+worktrees reuse the expensive executable while automatically invalidating it
+when its source inputs change. Set `VELUM_FUZZILLI_CACHE_DIR` to an absolute
+path to use a different machine-local cache.
 
 Set `VELUM_FUZZ_SANITIZER=none` only for instrumentation diagnostics where
 AddressSanitizer itself prevents the target from starting.
@@ -73,11 +84,12 @@ AddressSanitizer itself prevents the target from starting.
 ./fuzzing-test/run.sh
 ```
 
-By default the launcher incrementally rebuilds the Rust driver, pinned Fuzzilli,
-and the sanitizer-instrumented target against the current Velum checkout. Cargo
-recompiles every changed engine dependency, so a run never intentionally reuses
-a target from older source. Use `--skip-build` only as an explicit local
-optimization when the existing binaries are known to match the checkout.
+By default the launcher incrementally rebuilds the Rust driver, restores or
+builds the pinned Fuzzilli executable, and rebuilds the sanitizer-instrumented
+target against the current Velum checkout. Cargo recompiles every changed engine
+dependency, so a run never intentionally reuses a target from older source. Use
+`--skip-build` only as an explicit local optimization when the existing local
+Fuzzilli link and target binary are known to match the checkout.
 
 After the build, the utility starts one Fuzzilli worker and runs until Ctrl-C.
 Fuzzilli receives the terminal interrupt, finishes its current operation, and
