@@ -113,7 +113,7 @@ impl VmConfig {
 #[derive(Debug)]
 pub struct Vm {
     config: VmConfig,
-    context: Context,
+    pub(super) context: Context,
 }
 
 impl Vm {
