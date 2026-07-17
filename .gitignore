@@ -32,6 +32,8 @@
 
 !/examples/
 !/examples/*.md
+!/examples/**/
+!/examples/**/*.rs
 
 !/src/
 !/src/**/
