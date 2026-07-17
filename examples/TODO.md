@@ -241,10 +241,23 @@ replacement in example 06.
 
 ### Tranche 4: Async Host Functions And Promise Bridge
 
+Status: partially implemented. Global and first-class async Rust callables now
+return ordinary JavaScript Promises. Their `'static` futures produce portable
+`OwnedValue` results, are polled with an embedder-supplied standard `Waker`,
+settle through the existing Promise owner, enqueue reactions in the ordinary
+FIFO job queue, and have explicit pending counts, storage limits, roots, and
+cancellation. Callback arguments must be copied or retained during synchronous
+entry, so no future holds a mutable VM borrow or an unrooted local value.
+
 Add runtime-agnostic async host functions whose invocation immediately creates
 and returns a JavaScript Promise. The application executor polls the Rust
 future; completion is posted back to the owning VM and resolves or rejects the
 Promise through the normal job queue.
+
+Remaining work in this tranche is the VM command/result bridge that lets a
+Rust future enqueue and await a JavaScript callback without borrowing the VM,
+durable arbitrary JavaScript rejection identity across that command boundary,
+and a Rust-side Promise result handle for awaiting JavaScript async calls.
 
 The design must specify:
 

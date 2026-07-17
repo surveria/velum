@@ -84,7 +84,7 @@ impl Context {
         self.create_retained_host_function_value(function)
     }
 
-    fn create_retained_host_function_value(
+    pub(super) fn create_retained_host_function_value(
         &mut self,
         function: HostFunction,
     ) -> Result<RetainedValue> {

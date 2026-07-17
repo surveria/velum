@@ -42,6 +42,7 @@ pub mod function;
 mod gc;
 pub(in crate::runtime) mod generator;
 pub mod globals;
+mod host_future;
 pub mod limits;
 mod module;
 pub mod native;
@@ -70,6 +71,8 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
+pub use host_future::HostFuturePoll;
+use host_future::PendingHostFuture;
 use native::NativeFunctionKind;
 use optimizer::Optimizer;
 pub use optimizer::{OptimizationMode, VmOptimizationSnapshot};
@@ -140,6 +143,8 @@ pub struct Context {
     promises: SlotArena<Promise>,
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
+    host_futures: Vec<PendingHostFuture>,
+    active_host_future_promise: Option<PromiseId>,
     retained_values: RetainedValueRegistry,
     transient_roots: TransientRootRegistry,
     output: Vec<String>,
@@ -454,6 +459,8 @@ impl Context {
             promises: SlotArena::new(),
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
+            host_futures: Vec::new(),
+            active_host_future_promise: None,
             retained_values: RetainedValueRegistry::new(identity, storage_ledger.clone()),
             transient_roots: TransientRootRegistry::new(storage_ledger),
             output: Vec::new(),

@@ -24,7 +24,9 @@ mod value;
 pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
-pub use crate::api::host::{FromJsValue, HostCall, HostOperation, IntoJsValue, LocalValue};
+pub use crate::api::host::{
+    FromJsValue, HostCall, HostFuture, HostOperation, IntoJsValue, IntoOwnedJsValue, LocalValue,
+};
 pub use crate::api::invocation::{
     AccessorPropertyDefinition, DataPropertyDefinition, JsValueRef, PropertyDefinition,
     PropertyDescriptor, PropertyKeyRef,
@@ -43,7 +45,7 @@ pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::{RuntimeLimits, VmStorageLimits};
 pub use crate::runtime::{
-    OptimizationMode, RealmId, RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot,
+    HostFuturePoll, OptimizationMode, RealmId, RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot,
     VmAsyncEdgeStrength, VmCallableEdgeKind, VmCallableEdgeSnapshot, VmGarbageCollectionReport,
     VmGcKind, VmHeapReachabilitySnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
     VmOptimizationSnapshot, VmRootKind, VmRootSnapshot, VmStorageKind, VmStorageSnapshot,
