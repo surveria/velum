@@ -408,6 +408,11 @@ considered complete.
   separate semantic path.
 - The normal fast gate and required complete correctness CI remain green.
 
+Status: direct `embedding_*` runner cases now cover all five public API
+boundaries above. Setup and teardown stay outside the measured interval, every
+operation enters the same public facade used by applications, and no runner
+case imports internal runtime owners.
+
 ## Delivery Order
 
 The intended sequence is:

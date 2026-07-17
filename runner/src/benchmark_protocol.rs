@@ -18,6 +18,7 @@ pub const VERIFY_FUNCTION: &str = "__velumBenchVerify";
 pub enum BenchmarkMode {
     ColdEval,
     PreparedExecution,
+    EmbeddingApi,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -118,6 +119,18 @@ impl ReportedLifecycle {
             teardown: LifecyclePhase::PerOperation,
         }
     }
+
+    pub const fn embedding_api(value: BenchmarkLifecycle) -> Self {
+        Self {
+            load: LifecyclePhase::NotMeasured,
+            compile: LifecyclePhase::NotMeasured,
+            setup: LifecyclePhase::optional_duration(value.setup),
+            warmup: LifecyclePhase::duration(value.warmup),
+            run: LifecyclePhase::duration(value.timed_run),
+            verify: LifecyclePhase::optional_duration(value.verify),
+            teardown: LifecyclePhase::optional_duration(value.teardown),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -146,6 +159,7 @@ impl BenchmarkMode {
         match self {
             Self::ColdEval => "cold_eval",
             Self::PreparedExecution => "prepared_execution",
+            Self::EmbeddingApi => "embedding_api",
         }
     }
 

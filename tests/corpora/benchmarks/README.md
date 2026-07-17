@@ -6,6 +6,14 @@ Benchmark cases are executed sequentially. Local engine measurements always run.
 
 The default `full` set preserves all project cases. `VELUM_BENCH_SET=sentinel` runs the small prepared merge-to-merge set. Filters are comma-separated exact ids; use a trailing `*` only when a prefix is intentional.
 
+The `embedding_*` cases are direct Rust-library measurements registered in
+`runner/src/embedding_benchmarks.rs`. They create reusable state through the
+public `Engine` and `Vm` facade, then time batched call, property, Rust
+callback, async completion, and typed host-object operations. Their setup and
+teardown are reported but remain outside the measured interval. They have no
+QuickJS ratio because the reference engine does not expose the same Rust API.
+Run them with `VELUM_BENCH_SET=full VELUM_BENCH_FILTER='embedding_*'`.
+
 Prepared sources under `prepared/` must define three global functions:
 
 - `__velumBenchSetup()` builds reusable state outside the measured interval.
