@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, task::Context as TaskContext};
+use std::{error::Error as StdError, fmt, future::Future, pin::Pin, task::Context as TaskContext};
 
 use crate::{
     JsBigInt, OwnedValue, RetainedValue,
@@ -6,7 +6,7 @@ use crate::{
         embedding::Vm,
         host::{HostCall, HostFunction, HostFunctionKind},
     },
-    error::Result,
+    error::{Error, Result},
     runtime::{Context, HostFuturePoll},
 };
 
@@ -15,7 +15,57 @@ use crate::{
 /// The future owns everything it needs after the synchronous host-call frame
 /// ends. The embedding application chooses the executor and supplies its
 /// task context through [`Vm::poll_host_futures`].
-pub type HostFuture = Pin<Box<dyn Future<Output = Result<OwnedValue>> + 'static>>;
+pub type HostFuture = Pin<Box<dyn Future<Output = HostTaskResult<OwnedValue>> + 'static>>;
+
+/// Error returned by command-aware asynchronous Rust host work.
+///
+/// A JavaScript rejection retains its original VM-local value until the
+/// surrounding host future settles its JavaScript Promise or the error is
+/// dropped. This makes the result safe even if a command request is polled by
+/// an embedder-owned executor outside [`Vm::poll_host_futures`].
+#[derive(Debug)]
+pub enum HostFutureError {
+    /// Rust or engine failure converted to an ordinary JavaScript Error.
+    Engine(Error),
+    /// Original JavaScript rejection kept rooted in its owning VM.
+    JavaScript(RetainedValue),
+}
+
+impl HostFutureError {
+    fn with_context(self, context: impl AsRef<str>) -> Self {
+        match self {
+            Self::Engine(error) => Self::Engine(error.with_context(context)),
+            Self::JavaScript(value) => Self::JavaScript(value),
+        }
+    }
+}
+
+impl fmt::Display for HostFutureError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Engine(error) => error.fmt(formatter),
+            Self::JavaScript(_) => formatter.write_str("JavaScript Promise rejected"),
+        }
+    }
+}
+
+impl StdError for HostFutureError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::Engine(error) => Some(error),
+            Self::JavaScript(_) => None,
+        }
+    }
+}
+
+impl From<Error> for HostFutureError {
+    fn from(error: Error) -> Self {
+        Self::Engine(error)
+    }
+}
+
+/// Result type for an async host task that can await JavaScript commands.
+pub type HostTaskResult<T> = std::result::Result<T, HostFutureError>;
 
 /// Converts a typed async host-function result into a VM-independent
 /// JavaScript primitive.
@@ -77,7 +127,9 @@ impl HostFunction {
             name,
             HostFunctionKind::AsyncCallback {
                 callback: std::rc::Rc::new(move |call| {
-                    let future: HostFuture = Box::pin(callback(call)?);
+                    let future = callback(call)?;
+                    let future: HostFuture =
+                        Box::pin(async move { future.await.map_err(HostFutureError::from) });
                     Ok(future)
                 }),
             },
@@ -95,8 +147,12 @@ impl HostFunction {
             HostFunctionKind::AsyncCallback {
                 callback: std::rc::Rc::new(move |call| {
                     let future = callback(call)?;
-                    let converted: HostFuture =
-                        Box::pin(async move { future.await?.into_owned_js_value() });
+                    let converted: HostFuture = Box::pin(async move {
+                        future
+                            .await?
+                            .into_owned_js_value()
+                            .map_err(HostFutureError::from)
+                    });
                     Ok(converted)
                 }),
             },
@@ -105,6 +161,45 @@ impl HostFunction {
 
     pub(super) const fn is_async(&self) -> bool {
         matches!(self.kind, HostFunctionKind::AsyncCallback { .. })
+    }
+
+    pub(super) fn new_async_task<F, Fut>(name: String, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        Self::with_kind(
+            name,
+            HostFunctionKind::AsyncCallback {
+                callback: std::rc::Rc::new(move |call| {
+                    let future: HostFuture = Box::pin(callback(call)?);
+                    Ok(future)
+                }),
+            },
+        )
+    }
+
+    pub(super) fn new_async_task_typed<F, Fut, R>(name: String, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<R>> + 'static,
+        R: IntoOwnedJsValue + 'static,
+    {
+        Self::with_kind(
+            name,
+            HostFunctionKind::AsyncCallback {
+                callback: std::rc::Rc::new(move |call| {
+                    let future = callback(call)?;
+                    let converted: HostFuture = Box::pin(async move {
+                        future
+                            .await?
+                            .into_owned_js_value()
+                            .map_err(HostFutureError::from)
+                    });
+                    Ok(converted)
+                }),
+            },
+        )
     }
 
     pub(super) fn start_async(&self, call: HostCall<'_>) -> Result<HostFuture> {
@@ -147,6 +242,31 @@ impl Context {
         self.create_retained_host_function_value(HostFunction::new_async_typed(name, callback))
     }
 
+    fn create_retained_async_host_task<F, Fut>(
+        &mut self,
+        name: String,
+        callback: F,
+    ) -> Result<RetainedValue>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        self.create_retained_host_function_value(HostFunction::new_async_task(name, callback))
+    }
+
+    fn create_retained_async_host_task_typed<F, Fut, R>(
+        &mut self,
+        name: String,
+        callback: F,
+    ) -> Result<RetainedValue>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<R>> + 'static,
+        R: IntoOwnedJsValue + 'static,
+    {
+        self.create_retained_host_function_value(HostFunction::new_async_task_typed(name, callback))
+    }
+
     /// Registers a runtime-agnostic async Rust function as a global binding.
     ///
     /// # Errors
@@ -179,6 +299,39 @@ impl Context {
         R: IntoOwnedJsValue + 'static,
     {
         self.register_host_function_value(HostFunction::new_async_typed(name.into(), callback))
+    }
+
+    /// Registers a command-aware async Rust task as a global binding.
+    ///
+    /// # Errors
+    /// Fails when callable registration fails.
+    pub fn register_async_host_task<F, Fut>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        self.register_host_function_value(HostFunction::new_async_task(name.into(), callback))
+    }
+
+    /// Registers a command-aware async Rust task with typed result conversion.
+    ///
+    /// # Errors
+    /// Fails when callable registration or result conversion fails.
+    pub fn register_async_host_task_typed<F, Fut, R>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<R>> + 'static,
+        R: IntoOwnedJsValue + 'static,
+    {
+        self.register_host_function_value(HostFunction::new_async_task_typed(name.into(), callback))
     }
 }
 
@@ -219,6 +372,43 @@ impl Vm {
             .create_retained_async_host_function_typed(name.into(), callback)
     }
 
+    /// Creates a first-class command-aware async Rust task.
+    ///
+    /// # Errors
+    /// Fails when callable creation or retained-root admission fails.
+    pub fn create_async_host_task<F, Fut>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<RetainedValue>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        self.embedding_context_mut()
+            .create_retained_async_host_task(name.into(), callback)
+    }
+
+    /// Creates a first-class command-aware async Rust task with typed result
+    /// conversion.
+    ///
+    /// # Errors
+    /// Fails when callable creation, retained-root admission, or result
+    /// conversion fails.
+    pub fn create_async_host_task_typed<F, Fut, R>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<RetainedValue>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<R>> + 'static,
+        R: IntoOwnedJsValue + 'static,
+    {
+        self.embedding_context_mut()
+            .create_retained_async_host_task_typed(name.into(), callback)
+    }
+
     /// Registers a runtime-agnostic async Rust function as a global binding.
     ///
     /// # Errors
@@ -253,6 +443,41 @@ impl Vm {
     {
         self.embedding_context_mut()
             .register_async_host_function_typed(name, callback)
+    }
+
+    /// Registers a command-aware async Rust task as a global binding.
+    ///
+    /// # Errors
+    /// Fails when callable registration fails.
+    pub fn register_async_host_task<F, Fut>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        self.embedding_context_mut()
+            .register_async_host_task(name, callback)
+    }
+
+    /// Registers a command-aware async Rust task with typed result conversion.
+    ///
+    /// # Errors
+    /// Fails when callable registration or result conversion fails.
+    pub fn register_async_host_task_typed<F, Fut, R>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<R>> + 'static,
+        R: IntoOwnedJsValue + 'static,
+    {
+        self.embedding_context_mut()
+            .register_async_host_task_typed(name, callback)
     }
 
     /// Polls every pending async host future once in FIFO creation order.

@@ -199,6 +199,38 @@ impl Vm {
         self.context.cancel_jobs()
     }
 
+    /// Executes queued calls submitted by asynchronous Rust host functions.
+    ///
+    /// Promise-valued JavaScript results remain on the ordinary job path; call
+    /// [`Self::run_jobs`] to deliver settled results back to Rust futures.
+    ///
+    /// # Errors
+    /// Fails when command accounting, JavaScript dispatch, or Promise reaction
+    /// admission cannot be completed.
+    pub fn run_host_commands(&mut self) -> Result<usize> {
+        self.context.run_host_commands()
+    }
+
+    /// Returns queued or awaiting-result Rust-to-JavaScript calls.
+    #[must_use]
+    pub fn pending_host_command_count(&self) -> usize {
+        self.context.pending_host_command_count()
+    }
+
+    /// Returns Rust-to-JavaScript calls not yet entered into JavaScript.
+    #[must_use]
+    pub fn queued_host_command_count(&self) -> usize {
+        self.context.queued_host_command_count()
+    }
+
+    /// Cancels queued and awaiting-result Rust-to-JavaScript calls.
+    ///
+    /// # Errors
+    /// Fails when command storage accounting cannot be reconciled.
+    pub fn cancel_host_commands(&mut self) -> Result<usize> {
+        self.context.cancel_host_commands()
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, evaluation, or configured resource limits
     /// fail. An uncaught JavaScript value is returned as

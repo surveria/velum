@@ -9,6 +9,7 @@ use crate::{
         dynamic_import::DynamicImportJob,
         function::{SuspendedAsyncFunction, SuspendedExecutionStorageFootprint},
         generator::GeneratorId,
+        host_command::HostCommandCompletion,
         object::AtomicWaitRegistration,
         resource_scope::ResourceScopeContinuation,
         roots::{DirectRootVisitor, VmRootKind},
@@ -68,6 +69,9 @@ pub(in crate::runtime) enum PromiseReaction {
     },
     ResourceScope {
         continuation: Box<ResourceScopeContinuation>,
+    },
+    HostCommand {
+        completion: HostCommandCompletion,
     },
 }
 
@@ -158,6 +162,10 @@ impl PromiseReaction {
         }
     }
 
+    pub(in crate::runtime) const fn host_command(completion: HostCommandCompletion) -> Self {
+        Self::HostCommand { completion }
+    }
+
     pub(super) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
@@ -211,7 +219,8 @@ impl PromiseReaction {
             Self::ModuleAwait { .. }
             | Self::ModuleDependency { .. }
             | Self::ModuleAlias { .. }
-            | Self::AsyncGeneratorAwait { .. } => {}
+            | Self::AsyncGeneratorAwait { .. }
+            | Self::HostCommand { .. } => {}
             Self::AsyncFromSync { result, iterator } => {
                 visitor.visit(
                     VmAsyncEdgeKind::PromiseReaction,
@@ -254,7 +263,8 @@ impl PromiseReaction {
             | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
-            | Self::ResourceScope { .. } => Ok(SuspendedExecutionStorageFootprint::default()),
+            | Self::ResourceScope { .. }
+            | Self::HostCommand { .. } => Ok(SuspendedExecutionStorageFootprint::default()),
         }
     }
 
@@ -290,7 +300,7 @@ impl PromiseReaction {
             Self::ModuleAwait { .. } | Self::ModuleDependency { .. } | Self::ModuleAlias { .. } => {
                 Ok(())
             }
-            Self::AsyncGeneratorAwait { .. } => Ok(()),
+            Self::AsyncGeneratorAwait { .. } | Self::HostCommand { .. } => Ok(()),
             Self::AsyncFromSync { result, iterator } => {
                 visitor.visit_promise(VmRootKind::QueuedJob, *result)?;
                 visitor.visit_value(VmRootKind::QueuedJob, iterator)
@@ -317,6 +327,9 @@ impl PromiseReaction {
             | Self::ModuleAlias { module, .. } => {
                 Some(PromiseContinuationCancellation::ModuleEvaluation(module))
             }
+            Self::HostCommand { completion } => {
+                Some(PromiseContinuationCancellation::HostCommand(completion))
+            }
             Self::Then { .. }
             | Self::DynamicImportModule { .. }
             | Self::AsyncFromSync { .. }
@@ -340,7 +353,8 @@ impl PromiseReaction {
             | Self::AsyncIteratorDispose { .. }
             | Self::ArrayFromAsync { .. }
             | Self::AsyncDisposableStack { .. }
-            | Self::ResourceScope { .. } => None,
+            | Self::ResourceScope { .. }
+            | Self::HostCommand { .. } => None,
         }
     }
 }
@@ -350,6 +364,7 @@ pub(in crate::runtime) enum PromiseContinuationCancellation {
     AsyncFunction(SuspendedAsyncFunction),
     AsyncGenerator(GeneratorId),
     ModuleEvaluation(usize),
+    HostCommand(HostCommandCompletion),
 }
 
 #[derive(Debug)]

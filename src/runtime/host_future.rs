@@ -1,7 +1,7 @@
 use std::{fmt, task::Context as TaskContext, task::Poll};
 
 use crate::{
-    HostFuture, OwnedValue,
+    HostFuture, HostFutureError, OwnedValue,
     error::{Error, JavaScriptErrorMetadata, Result},
     value::{ErrorName, Value},
 };
@@ -214,13 +214,21 @@ impl Context {
         Ok(())
     }
 
-    fn settle_host_future(&mut self, promise: PromiseId, result: Result<OwnedValue>) -> Result<()> {
+    fn settle_host_future(
+        &mut self,
+        promise: PromiseId,
+        result: std::result::Result<OwnedValue, HostFutureError>,
+    ) -> Result<()> {
         match result {
             Ok(value) => match self.runtime_value(value.into()) {
                 Ok(value) => self.resolve_promise(promise, value),
                 Err(error) => self.reject_host_future_error(promise, &error),
             },
-            Err(error) => self.reject_host_future_error(promise, &error),
+            Err(HostFutureError::Engine(error)) => self.reject_host_future_error(promise, &error),
+            Err(HostFutureError::JavaScript(reason)) => {
+                let reason = self.resolve_retained_value(&reason)?;
+                self.reject_promise(promise, reason)
+            }
         }
     }
 

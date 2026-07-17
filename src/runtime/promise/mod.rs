@@ -406,6 +406,9 @@ impl Context {
                 PromiseContinuationCancellation::ModuleEvaluation(module) => {
                     self.cancel_module_evaluation(module)?;
                 }
+                PromiseContinuationCancellation::HostCommand(completion) => {
+                    completion.cancel()?;
+                }
             }
         }
         reaction_count
@@ -670,6 +673,9 @@ impl Context {
                         PromiseStatus::Rejected => Completion::Throw(state.value),
                     };
                     self.resume_resource_scope_disposal(*continuation, resume)
+                }
+                PromiseReaction::HostCommand { completion } => {
+                    self.settle_host_command_reaction(completion, state)
                 }
                 PromiseReaction::Then { .. } => {
                     Err(Error::runtime("Promise reaction kind disappeared"))
