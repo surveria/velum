@@ -9,7 +9,7 @@ use crate::{
     runtime::object::ObjectHeap,
     runtime::retained_values::RetainedValueRegistry,
     runtime::{
-        Context, RealmId, RetainedValue, VmRootSnapshot,
+        Context, HostAsyncContext, RealmId, RetainedValue, VmRootSnapshot,
         function::{FunctionIntrinsicDefaults, FunctionProperties},
     },
     syntax::DeclKind,
@@ -19,7 +19,7 @@ use crate::{
 mod async_callable;
 mod callable;
 
-pub use async_callable::{HostFuture, IntoOwnedJsValue};
+pub use async_callable::{HostFuture, HostFutureError, HostTaskResult, IntoOwnedJsValue};
 
 const EMPTY_HOST_FUNCTION_NAME_ERROR: &str = "host function name must not be empty";
 const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
@@ -238,6 +238,7 @@ impl HostFunction {
             identity,
             objects,
             retained_values,
+            async_context: None,
             roots,
             args,
         };
@@ -379,6 +380,7 @@ pub struct HostCall<'call> {
     identity: &'call VmIdentity,
     objects: &'call ObjectHeap,
     retained_values: &'call RetainedValueRegistry,
+    async_context: Option<&'call HostAsyncContext>,
     roots: VmRootSnapshot,
     args: &'call [Value],
 }
@@ -394,6 +396,20 @@ impl<'call> HostCall<'call> {
     #[must_use]
     pub const fn root_snapshot(self) -> VmRootSnapshot {
         self.roots
+    }
+
+    /// Returns a VM-bound sender for queued JavaScript calls.
+    ///
+    /// The sender is available only while starting an asynchronous host
+    /// function. It can be moved into that function's Rust future and never
+    /// borrows or reenters the VM.
+    ///
+    /// # Errors
+    /// Fails when a synchronous host callback requests an async context.
+    pub fn async_context(self) -> Result<HostAsyncContext> {
+        self.async_context.cloned().ok_or_else(|| {
+            Error::runtime("async JavaScript context requires an async host function")
+        })
     }
 
     #[must_use]
@@ -651,11 +667,13 @@ impl Context {
         if function.is_async() {
             let admission = self.prepare_host_future()?;
             let roots = self.root_snapshot()?;
+            let async_context = self.host_async_context();
             let call = HostCall {
                 function_name: function.name.as_str(),
                 identity: self.identity(),
                 objects: &self.objects,
                 retained_values: self.retained_value_registry(),
+                async_context: Some(&async_context),
                 roots,
                 args: &values,
             };

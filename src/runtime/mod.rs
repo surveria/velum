@@ -42,6 +42,7 @@ pub mod function;
 mod gc;
 pub(in crate::runtime) mod generator;
 pub mod globals;
+mod host_command;
 mod host_future;
 pub mod limits;
 mod module;
@@ -71,6 +72,8 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
+use host_command::HostCommandQueue;
+pub use host_command::{HostAsyncContext, HostCommandRequest};
 pub use host_future::HostFuturePoll;
 use host_future::PendingHostFuture;
 use native::NativeFunctionKind;
@@ -145,6 +148,7 @@ pub struct Context {
     promise_jobs: VecDeque<PromiseJob>,
     host_futures: Vec<PendingHostFuture>,
     active_host_future_promise: Option<PromiseId>,
+    host_commands: HostCommandQueue,
     retained_values: RetainedValueRegistry,
     transient_roots: TransientRootRegistry,
     output: Vec<String>,
@@ -461,6 +465,7 @@ impl Context {
             promise_jobs: VecDeque::new(),
             host_futures: Vec::new(),
             active_host_future_promise: None,
+            host_commands: HostCommandQueue::new(identity.clone(), storage_ledger.clone()),
             retained_values: RetainedValueRegistry::new(identity, storage_ledger.clone()),
             transient_roots: TransientRootRegistry::new(storage_ledger),
             output: Vec::new(),

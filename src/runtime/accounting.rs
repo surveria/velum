@@ -2,8 +2,8 @@ use crate::error::{Error, Result};
 
 use super::Context;
 
-pub(super) const STORAGE_KIND_COUNT: usize = 27;
-const LEDGER_ENFORCED_KINDS: [VmStorageKind; 20] = [
+pub(super) const STORAGE_KIND_COUNT: usize = 28;
+const LEDGER_ENFORCED_KINDS: [VmStorageKind; 21] = [
     VmStorageKind::Binding,
     VmStorageKind::JavaScriptFunction,
     VmStorageKind::NativeFunction,
@@ -18,6 +18,7 @@ const LEDGER_ENFORCED_KINDS: [VmStorageKind; 20] = [
     VmStorageKind::PromiseReaction,
     VmStorageKind::PromiseJob,
     VmStorageKind::HostFuture,
+    VmStorageKind::HostCommand,
     VmStorageKind::RetainedHandle,
     VmStorageKind::TransientRoot,
     VmStorageKind::ExecutionFrame,
@@ -52,6 +53,7 @@ pub enum VmStorageKind {
     PromiseReaction,
     PromiseJob,
     HostFuture,
+    HostCommand,
     RetainedHandle,
     TransientRoot,
     ExecutionFrame,
@@ -83,6 +85,7 @@ impl VmStorageKind {
         Self::PromiseReaction,
         Self::PromiseJob,
         Self::HostFuture,
+        Self::HostCommand,
         Self::RetainedHandle,
         Self::TransientRoot,
         Self::ExecutionFrame,
@@ -120,14 +123,15 @@ impl VmStorageKind {
             Self::PromiseReaction => 16,
             Self::PromiseJob => 17,
             Self::HostFuture => 18,
-            Self::RetainedHandle => 19,
-            Self::TransientRoot => 20,
-            Self::ExecutionFrame => 21,
-            Self::OutputEntry => 22,
-            Self::CacheEntry => 23,
-            Self::Association => 24,
-            Self::Module => 25,
-            Self::SourceRecord => 26,
+            Self::HostCommand => 19,
+            Self::RetainedHandle => 20,
+            Self::TransientRoot => 21,
+            Self::ExecutionFrame => 22,
+            Self::OutputEntry => 23,
+            Self::CacheEntry => 24,
+            Self::Association => 25,
+            Self::Module => 26,
+            Self::SourceRecord => 27,
         }
     }
 }
@@ -346,6 +350,10 @@ impl Context {
             object_counts.byte_buffer_payload_bytes(),
         )?;
         counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes())?;
+        counter.record_payload_bytes(
+            VmStorageKind::HostCommand,
+            self.host_commands.active_payload_bytes(),
+        )?;
         counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)
     }
 
@@ -488,6 +496,10 @@ impl Context {
         )?;
         counter.record(VmStorageKind::PromiseJob, self.promise_jobs.len())?;
         counter.record(VmStorageKind::HostFuture, self.host_futures.len())?;
+        counter.record(
+            VmStorageKind::HostCommand,
+            self.host_commands.active_count(),
+        )?;
         counter.record(
             VmStorageKind::RetainedHandle,
             self.retained_values.active_count(),

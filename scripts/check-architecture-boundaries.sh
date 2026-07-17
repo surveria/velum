@@ -679,8 +679,8 @@ src/runtime/native/builtins/shadow_realm.rs'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
-    fail "host local-value boundary changed; HostCall requires the active VM identity, object heap, and retained registry"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,async_context:Option<&'callHostAsyncContext>,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM identity, object heap, retained registry, and optional async command sender"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
       "${repo_root}/src/api/host.rs" \
@@ -965,7 +965,7 @@ check_direct_root_boundary() {
 check_async_host_future_boundary() {
   local poll_owner
   for source in \
-    'pub type HostFuture = Pin<Box<dyn Future<Output = Result<OwnedValue>>' \
+    'pub type HostFuture = Pin<Box<dyn Future<Output = HostTaskResult<OwnedValue>>' \
     'pub fn poll_host_futures(' \
     'pub fn cancel_host_futures(&mut self) -> Result<usize>'; do
     if ! grep -F -q "${source}" "${repo_root}/src/api/host/async_callable.rs"; then
@@ -995,6 +995,43 @@ check_async_host_future_boundary() {
       "${repo_root}/src/api/host/async_callable.rs" \
       "${repo_root}/src/runtime/host_future.rs"; then
     fail "async host future boundary changed; source evaluation is not an async bridge"
+  fi
+}
+
+check_async_host_command_boundary() {
+  local command_owner
+  for source in \
+    'pub fn async_context(self) -> Result<HostAsyncContext>' \
+    'pub fn call(' \
+    'pub enum HostFutureError {' \
+    'JavaScript(RetainedValue),' \
+    'pub fn register_async_host_task_typed' \
+    'pub fn run_host_commands(&mut self) -> Result<usize>' \
+    'self.embedding_call(&callable, &args, Value::Undefined)' \
+    'self.promise_resolve_for_await(value)' \
+    'PromiseReaction::host_command(completion)' \
+    'super::control::Completion::Throw(reason) => match self.retain_embedder_value(reason) {' \
+    'Ok(reason) => HostCommandResponse::Rejected(reason),' \
+    'VmStorageKind::HostCommand'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/host.rs" \
+        "${repo_root}/src/api/host/async_callable.rs" \
+        "${repo_root}/src/runtime/host_command.rs" \
+        "${repo_root}/src/runtime/promise"; then
+      fail "async host command boundary changed; required queue/semantic/Promise source '${source}' is missing"
+    fi
+  done
+
+  command_owner="$(
+    sed -n '/pub fn run_host_commands(/,/^    }/p' \
+      "${repo_root}/src/runtime/host_command.rs"
+  )"
+  if grep -E -q '(run_jobs|poll_host_futures)[[:space:]]*\(' <<<"${command_owner}"; then
+    fail "async host command boundary changed; command dispatch must not drive Promise jobs or Rust futures implicitly"
+  fi
+  if grep -E -q '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/runtime/host_command.rs"; then
+    fail "async host command boundary changed; generated source or eval is not a command bridge"
   fi
 }
 
@@ -1594,6 +1631,7 @@ run_checks() {
   require_file src/runtime/optimizer.rs
   require_file src/runtime/gc.rs
   require_file src/runtime/host_future.rs
+  require_file src/runtime/host_command.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1633,6 +1671,7 @@ run_checks() {
   check_update_numeric_coercion_boundary
   check_direct_root_boundary
   check_async_host_future_boundary
+  check_async_host_command_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
   check_structured_control_boundary
@@ -1931,6 +1970,12 @@ mutate_async_host_future_promise_owner() {
     "${fixture_root}/src/runtime/host_future.rs"
 }
 
+mutate_async_host_command_semantic_owner() {
+  local fixture_root="$1"
+  portable_sed '/self.embedding_call(&callable, &args, Value::Undefined)/d' \
+    "${fixture_root}/src/runtime/host_command.rs"
+}
+
 mutate_gc_cache_invalidation() {
   local fixture_root="$1"
   portable_sed '/self.invalidate_identity_caches();/d' \
@@ -2124,6 +2169,8 @@ run_self_tests() {
     'garbage collection boundary changed' mutate_gc_root_source
   expect_guard_failure "${temp_dir}" async-host-future-promise-owner \
     'async host future boundary changed' mutate_async_host_future_promise_owner
+  expect_guard_failure "${temp_dir}" async-host-command-semantic-owner \
+    'async host command boundary changed' mutate_async_host_command_semantic_owner
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
     'garbage collection boundary changed' mutate_gc_cache_invalidation
   expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \

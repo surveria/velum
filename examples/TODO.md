@@ -36,16 +36,17 @@ Their implementation must follow these rules:
 
 ## Example Catalog
 
-No example is implemented by this planning task. `Deferred` means the current
-public API is sufficient or nearly sufficient, while `Capability work` means a
-first-class engine API must land before the example can be written honestly.
+No example is implemented yet. `Deferred` means the current public API is
+sufficient or nearly sufficient, `Ready to implement` means its blocking
+capability tranche has landed, and `Capability work` means a first-class
+engine API must still land before the example can be written honestly.
 
 | ID | Planned directory | Status | Purpose |
 | --- | --- | --- | --- |
 | 00 | `00_hello_world` | Deferred | Create an `Engine` and `Vm`, evaluate `print("Hello, world!")`, and collect the output. |
 | 01 | `01_basic_eval` | Deferred | Evaluate named source, return an `OwnedValue`, capture output, and classify errors. |
 | 02 | `02_typed_host_functions` | Deferred | Register synchronous typed Rust functions with checked arguments, return conversion, captured application state, and contextual errors. |
-| 03 | `03_async_rust_javascript_roundtrip` | Capability work | Demonstrate an awaited Rust-to-JavaScript-to-Rust-to-JavaScript round trip without reentrant mutable VM access. |
+| 03 | `03_async_rust_javascript_roundtrip` | Ready to implement | Demonstrate an awaited Rust-to-JavaScript-to-Rust-to-JavaScript round trip without reentrant mutable VM access. |
 | 04 | `04_callbacks_and_intervals` | Capability work | Pass a Rust callable into JavaScript, retain it on a JavaScript object, and invoke it ten times through an embedder-provided interval scheduler. |
 | 05 | `05_rust_backed_websocket` | Capability work | Expose a mock JavaScript `WebSocket` class whose instances own typed Rust state and methods. |
 | 06 | `06_javascript_class_from_rust` | Capability work | Construct a JavaScript class from Rust, call methods, await a method result, inspect and mutate fields, add a property, and replace a method. |
@@ -241,23 +242,28 @@ replacement in example 06.
 
 ### Tranche 4: Async Host Functions And Promise Bridge
 
-Status: partially implemented. Global and first-class async Rust callables now
-return ordinary JavaScript Promises. Their `'static` futures produce portable
-`OwnedValue` results, are polled with an embedder-supplied standard `Waker`,
-settle through the existing Promise owner, enqueue reactions in the ordinary
-FIFO job queue, and have explicit pending counts, storage limits, roots, and
-cancellation. Callback arguments must be copied or retained during synchronous
-entry, so no future holds a mutable VM borrow or an unrooted local value.
+Status: implemented for the bidirectional host-task round trip. Global and
+first-class async Rust callables return ordinary JavaScript Promises. Their
+`'static` futures produce portable `OwnedValue` results, are polled with an
+embedder-supplied standard `Waker`, settle through the existing Promise owner,
+enqueue reactions in the ordinary FIFO job queue, and have explicit pending
+counts, storage limits, roots, and cancellation. Command-aware tasks receive a
+VM-bound `HostAsyncContext`, enqueue a retained JavaScript callable plus owned
+arguments without borrowing the VM, and await `HostCommandRequest`. Explicit
+`run_host_commands`, `run_jobs`, and `poll_host_futures` phases preserve owner
+boundaries. Fulfilments return owned primitives; arbitrary JavaScript
+rejections cross the Rust future boundary as rooted `HostFutureError` values
+and retain exact identity.
 
 Add runtime-agnostic async host functions whose invocation immediately creates
 and returns a JavaScript Promise. The application executor polls the Rust
 future; completion is posted back to the owning VM and resolves or rejects the
 Promise through the normal job queue.
 
-Remaining work in this tranche is the VM command/result bridge that lets a
-Rust future enqueue and await a JavaScript callback without borrowing the VM,
-durable arbitrary JavaScript rejection identity across that command boundary,
-and a Rust-side Promise result handle for awaiting JavaScript async calls.
+Remaining adjacent work is a general embedder-side Promise result handle for
+awaiting a Promise returned by a direct Rust-to-JavaScript call outside an
+active async host task. That is still required for the fully Rust-driven async
+method portion of example 06, but it no longer blocks example 03.
 
 The design must specify:
 

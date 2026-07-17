@@ -163,10 +163,25 @@ impl VmStorageLedger {
         kind: VmStorageKind,
         released_count: usize,
     ) {
+        self.release_on_drop(kind, released_count, 0);
+    }
+
+    /// Releases count and payload ownership from a destructor that cannot
+    /// report errors.
+    pub(in crate::runtime) fn release_on_drop(
+        &self,
+        kind: VmStorageKind,
+        released_count: usize,
+        released_payload_bytes: usize,
+    ) {
         let Ok(count) = self.count_cell(kind) else {
             return;
         };
+        let Ok(payload_bytes) = self.payload_cell(kind) else {
+            return;
+        };
         count.set(count.get().saturating_sub(released_count));
+        payload_bytes.set(payload_bytes.get().saturating_sub(released_payload_bytes));
     }
 
     pub(in crate::runtime) fn release(
