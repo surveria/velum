@@ -392,7 +392,7 @@ impl ObjectHeap {
         prototype: Option<Value>,
         max_objects: usize,
     ) -> Result<ObjectId> {
-        self.objects.reserve_removals(1)?;
+        self.reserve_created_object_rollback()?;
         let object_index = self.objects.next_index();
         self.host_payloads
             .attach_new(object_index, payload, traced_values, logical_bytes)?;
@@ -418,7 +418,7 @@ impl ObjectHeap {
     ) -> Result<ObjectId> {
         self.host_payloads.payload_id(source.index())?;
         let prototype = self.object(source)?.prototype.clone();
-        self.objects.reserve_removals(1)?;
+        self.reserve_created_object_rollback()?;
         let object_index = self.objects.next_index();
         self.host_payloads
             .attach_shared(object_index, source.index())?;
@@ -461,15 +461,7 @@ impl ObjectHeap {
 
     fn discard_host_object_parts(&mut self, id: ObjectId, association_index: usize) -> Result<()> {
         self.host_payloads.detach_created(association_index)?;
-        let removed = self.objects.remove_reserved(id.index())?;
-        if removed.is_none() {
-            return Err(Error::runtime("host object rollback record disappeared"));
-        }
-        let Some(private_slots) = self.private_slots.get_mut(id.index()) else {
-            return Err(Error::runtime("host object private slot is not defined"));
-        };
-        private_slots.clear();
-        self.bump_prototype_lookup_version()
+        self.discard_created_empty_object(id)
     }
 
     pub(in crate::runtime) fn prepare_host_payload_sweep(&mut self, marks: &[bool]) -> Result<()> {
@@ -494,31 +486,10 @@ impl Context {
         &mut self,
         payload: T,
         logical_bytes: usize,
-        prototype: Option<&crate::RetainedValue>,
+        prototype: crate::runtime::EmbeddingObjectPrototype<'_>,
         traced_values: &[crate::RetainedValue],
     ) -> Result<crate::RetainedValue> {
-        let prototype = if let Some(prototype) = prototype {
-            match self.resolve_retained_value(prototype)? {
-                Value::Null => None,
-                value @ (Value::Object(_)
-                | Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_)) => Some(value),
-                _ => {
-                    return Err(Error::runtime(
-                        "host object prototype must be an object or null",
-                    ));
-                }
-            }
-        } else {
-            let constructor_key = self.object_constructor_property_key()?;
-            let prototype = self.objects.object_prototype_id(
-                constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            )?;
-            Some(Value::Object(prototype))
-        };
+        let prototype = self.resolve_embedding_object_prototype(prototype)?;
         let mut edges = Vec::new();
         edges
             .try_reserve(traced_values.len())

@@ -1,10 +1,12 @@
 use crate::{RetainedValue, api::embedding::Vm, error::Result};
 
+use super::object::ObjectPrototypeOption;
+
 /// Creation policy for an ordinary JavaScript object with a typed Rust payload.
 #[derive(Clone, Copy, Debug)]
 pub struct HostObjectOptions<'value> {
     logical_payload_bytes: usize,
-    prototype: Option<&'value RetainedValue>,
+    prototype: ObjectPrototypeOption<'value>,
     traced_values: &'value [RetainedValue],
 }
 
@@ -15,17 +17,18 @@ impl HostObjectOptions<'_> {
     pub const fn new(logical_payload_bytes: usize) -> Self {
         Self {
             logical_payload_bytes,
-            prototype: None,
+            prototype: ObjectPrototypeOption::Default,
             traced_values: &[],
         }
     }
 }
 
 impl<'value> HostObjectOptions<'value> {
-    /// Uses this object or `null` value as the wrapper's `[[Prototype]]`.
+    /// Uses this VM-local object or retained `null` as the wrapper's
+    /// `[[Prototype]]`.
     #[must_use]
     pub const fn with_prototype(mut self, prototype: &'value RetainedValue) -> Self {
-        self.prototype = Some(prototype);
+        self.prototype = ObjectPrototypeOption::Explicit(prototype);
         self
     }
 
@@ -36,6 +39,15 @@ impl<'value> HostObjectOptions<'value> {
     #[must_use]
     pub const fn with_traced_values(mut self, values: &'value [RetainedValue]) -> Self {
         self.traced_values = values;
+        self
+    }
+}
+
+impl HostObjectOptions<'_> {
+    /// Creates a wrapper whose `[[Prototype]]` is `null`.
+    #[must_use]
+    pub const fn with_null_prototype(mut self) -> Self {
+        self.prototype = ObjectPrototypeOption::Null;
         self
     }
 }
@@ -58,7 +70,7 @@ impl Vm {
         self.embedding_context_mut().create_typed_host_object(
             payload,
             options.logical_payload_bytes,
-            options.prototype,
+            options.prototype.into_embedding(),
             options.traced_values,
         )
     }

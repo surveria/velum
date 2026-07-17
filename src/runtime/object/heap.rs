@@ -138,6 +138,23 @@ impl ObjectHeap {
         self.push_object(object, max_objects).map(Value::Object)
     }
 
+    pub(in crate::runtime) fn reserve_created_object_rollback(&mut self) -> Result<()> {
+        self.objects.reserve_removals(1)
+    }
+
+    pub(in crate::runtime) fn discard_created_empty_object(&mut self, id: ObjectId) -> Result<()> {
+        self.validate_id(id)?;
+        let removed = self.objects.remove_reserved(id.index())?;
+        if removed.is_none() {
+            return Err(Error::runtime("created object rollback record disappeared"));
+        }
+        let Some(private_slots) = self.private_slots.get_mut(id.index()) else {
+            return Err(Error::runtime("created object private slot is not defined"));
+        };
+        private_slots.clear();
+        self.bump_prototype_lookup_version()
+    }
+
     pub(in crate::runtime) fn create_boxed_primitive(
         &mut self,
         value: ObjectPrimitiveValue,
