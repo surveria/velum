@@ -161,6 +161,8 @@ pub struct Context {
     agent_can_block: bool,
     optimizer: Optimizer,
     call_depth: usize,
+    native_stack_depth: usize,
+    native_stack_base: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -478,6 +480,8 @@ impl Context {
             agent_can_block: false,
             optimizer: Optimizer::new(optimization_mode),
             call_depth: 0,
+            native_stack_depth: 0,
+            native_stack_base: None,
         }
     }
 

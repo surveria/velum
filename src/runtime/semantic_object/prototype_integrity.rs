@@ -49,16 +49,14 @@ impl Context {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return Ok(None);
         };
+        if !matches!(prototype, Value::Null) && self.semantic_object_ref(&prototype)?.is_none() {
+            return Ok(Some(false));
+        }
         let updated = match object_ref.value {
             Value::Object(id) if self.objects.is_proxy(*id) => {
                 self.proxy_set_prototype_of(*id, prototype)?
             }
             Value::Object(id) => {
-                if !matches!(prototype, Value::Null)
-                    && self.semantic_object_ref(&prototype)?.is_none()
-                {
-                    return Ok(Some(false));
-                }
                 if self.semantic_prototype_chain_contains(&prototype, target)? {
                     false
                 } else {
@@ -66,8 +64,11 @@ impl Context {
                 }
             }
             Value::Function(id) => {
-                self.set_function_static_parent(*id, prototype)?;
-                true
+                if self.semantic_prototype_chain_contains(&prototype, target)? {
+                    false
+                } else {
+                    self.try_set_function_static_parent(*id, prototype)?
+                }
             }
             Value::NativeFunction(_) => false,
             Value::HostFunction(id) => {

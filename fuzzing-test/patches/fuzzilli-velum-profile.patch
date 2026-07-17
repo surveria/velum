@@ -1,3 +1,16 @@
+diff --git a/Sources/Fuzzilli/Base/Events.swift b/Sources/Fuzzilli/Base/Events.swift
+--- a/Sources/Fuzzilli/Base/Events.swift
++++ b/Sources/Fuzzilli/Base/Events.swift
+@@ -65,6 +65,9 @@ public class Events {
+     /// Signals that a program causing a timeout has been found.
+     public let TimeOutFound = Event<Program>()
+
++    /// Signals that a child fuzzer found a timeout that the parent should persist.
++    public let ChildTimeOutFound = Event<Program>()
++
+     /// Signals that a new interesting program has been found, after the program has been minimized.
+     public let InterestingProgramFound = Event<(program: Program, origin: ProgramOrigin)>()
+
 diff --git a/Sources/Fuzzilli/CodeGen/CodeGenerators.swift b/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
 --- a/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
 +++ b/Sources/Fuzzilli/CodeGen/CodeGenerators.swift
@@ -40,6 +53,108 @@ diff --git a/Sources/Fuzzilli/Profiles/Profile.swift b/Sources/Fuzzilli/Profiles
      "qtjs": qtjsProfile,
      "qjs": qjsProfile,
      "jsc": jscProfile,
+diff --git a/Sources/Fuzzilli/Modules/Storage.swift b/Sources/Fuzzilli/Modules/Storage.swift
+--- a/Sources/Fuzzilli/Modules/Storage.swift
++++ b/Sources/Fuzzilli/Modules/Storage.swift
+@@ -143,8 +143,11 @@ public class Storage: Module {
+             }
+
+             fuzzer.registerEventListener(for: fuzzer.events.TimeOutFound) { program in
+-                let filename = "program_\(self.formatDate())_\(program.id)"
+-                self.storeProgram(program, as: filename, in: self.timeOutDir)
++                self.storeTimedOutProgram(program)
++            }
++
++            fuzzer.registerEventListener(for: fuzzer.events.ChildTimeOutFound) { program in
++                self.storeTimedOutProgram(program)
+             }
+         }
+
+@@ -176,6 +179,25 @@ public class Storage: Module {
+         }
+     }
+
++    private func storeTimedOutProgram(_ program: Program) {
++        let hasTimeoutInfo = program.comments.at(.footer)?.contains("TIMEOUT INFO") ?? false
++        if !hasTimeoutInfo {
++            program.comments.add("TIMEOUT INFO", at: .footer)
++            program.comments.add("============", at: .footer)
++            if let tag = fuzzer.config.tag {
++                program.comments.add("INSTANCE TAG: \(tag)", at: .footer)
++            }
++            program.comments.add(
++                "FUZZER ARGS: \(fuzzer.config.arguments.joined(separator: " "))", at: .footer)
++            program.comments.add(
++                "TARGET ARGS: \(fuzzer.runner.processArguments.joined(separator: " "))",
++                at: .footer)
++        }
++
++        let filename = "program_\(formatDate())_\(program.id)"
++        storeProgram(program, as: filename, in: timeOutDir)
++    }
++
+     func storeProgram(_ program: Program, as filename: String, in directory: String) {
+         // Always include comments when writing programs to disk
+         let options = LiftingOptions.includeComments
+diff --git a/Sources/Fuzzilli/Modules/Sync.swift b/Sources/Fuzzilli/Modules/Sync.swift
+--- a/Sources/Fuzzilli/Modules/Sync.swift
++++ b/Sources/Fuzzilli/Modules/Sync.swift
+@@ -83,6 +83,9 @@ enum MessageType: UInt32 {
+
+     // Log messages are forwarded from child to parent nides.
+     case log = 6
++
++    // A program that timed out. Only sent from a child to its parent.
++    case timedOutProgram = 7
+ }
+
+ /// Distributed fuzzing nodes can be configured to only share their corpus in one direction in the tree.
+@@ -284,6 +287,15 @@ public class DistributedFuzzingParentNode: DistributedFuzzingNode, Module {
+                 logger.warning("Received malformed program from child node: \(error)")
+             }
+
++        case .timedOutProgram:
++            do {
++                let proto = try Fuzzilli_Protobuf_Program(serializedBytes: data)
++                let program = try Program(from: proto)
++                fuzzer.dispatchEvent(fuzzer.events.ChildTimeOutFound, data: program)
++            } catch {
++                logger.warning("Received malformed timeout program from child node: \(error)")
++            }
++
+         case .statistics:
+             if let data = try? Fuzzilli_Protobuf_Statistics(serializedBytes: data) {
+                 if let stats = Statistics.instance(for: fuzzer) {
+@@ -394,6 +406,10 @@ public class DistributedFuzzingChildNode: DistributedFuzzingNode, Module {
+             self.sendProgram(ev.program, as: .crashingProgram)
+         }
+
++        fuzzer.registerEventListener(for: fuzzer.events.TimeOutFound) { program in
++            self.sendProgram(program, as: .timedOutProgram)
++        }
++
+         fuzzer.registerEventListener(for: fuzzer.events.Shutdown) { _ in
+             if !self.parentIsShuttingDown {
+                 let shutdownGroup = DispatchGroup()
+@@ -507,6 +523,7 @@ public class DistributedFuzzingChildNode: DistributedFuzzingNode, Module {
+             }
+
+         case .crashingProgram,
++            .timedOutProgram,
+             .statistics,
+             .log:
+             logger.error("Received unexpected message: \(messageType)")
+@@ -514,7 +531,9 @@ public class DistributedFuzzingChildNode: DistributedFuzzingNode, Module {
+     }
+
+     private func sendProgram(_ program: Program, as type: MessageType) {
+-        assert(type == .interestingProgram || type == .crashingProgram)
++        assert(
++            type == .interestingProgram || type == .crashingProgram
++                || type == .timedOutProgram)
+         let proto = program.asProtobuf()
+         guard let payload = try? proto.serializedData() else {
+             return logger.error("Failed to serialize program")
 diff --git a/Sources/Fuzzilli/Profiles/VelumProfile.swift b/Sources/Fuzzilli/Profiles/VelumProfile.swift
 new file mode 100644
 --- /dev/null
@@ -70,7 +185,7 @@ new file mode 100644
 +
 +    maxExecsBeforeRespawn: 1000,
 +
-+    timeout: Timeout.value(250),
++    timeout: Timeout.value(4000),
 +
 +    codePrefix: """
 +        """,
@@ -117,3 +232,45 @@ diff --git a/Sources/Fuzzilli/Profiles/V8CommonProfile.swift b/Sources/Fuzzilli/
      )
 
      // Finish the deopt trigger now that the jsFct is in scope.
+diff --git a/Sources/FuzzilliCli/main.swift b/Sources/FuzzilliCli/main.swift
+--- a/Sources/FuzzilliCli/main.swift
++++ b/Sources/FuzzilliCli/main.swift
+@@ -30,6 +30,7 @@ if args["-h"] != nil || args["--help"] != nil || args.numPositionalArguments !=
+             --profile=name               : Select one of several preconfigured profiles.
+                                            Available profiles: \(profiles.keys).
+             --jobs=n                     : Total number of fuzzing jobs. This will start a main instance and n-1 worker instances.
++            --immediateWorkers           : Start thread workers immediately instead of staggering startup over 1-10 minutes.
+             --engine=name                : The fuzzing engine to use. Available engines: "mutation" (default), "hybrid", "multi".
+                                            Only the mutation engine should be regarded stable at this point.
+             --corpus=name                : The corpus scheduler to use. Available schedulers: "basic" (default), "markov"
+@@ -136,6 +137,7 @@ if profile == nil || profileName == nil {
+ }
+
+ let numJobs = args.int(for: "--jobs") ?? 1
++let immediateWorkers = args.has("--immediateWorkers")
+ let logLevelName = args["--logLevel"] ?? "info"
+ let engineName = args["--engine"] ?? "mutation"
+ let corpusName = args["--corpus"] ?? "basic"
+@@ -838,13 +840,15 @@ for i in 1..<numJobs {
+
+     let worker = makeFuzzer(with: workerConfig)
+     worker.async {
+-        // Wait some time between starting workers to reduce the load on the main instance.
+-        // If we start the workers right away, they will all very quickly find new coverage
+-        // and send lots of (probably redundant) programs to the main instance.
+-        let minDelay = 1 * Minutes
+-        let maxDelay = 10 * Minutes
+-        let delay = Double.random(in: minDelay...maxDelay)
+-        Thread.sleep(forTimeInterval: delay)
++        if !immediateWorkers {
++            // Wait some time between starting workers to reduce the load on the main instance.
++            // If we start the workers right away, they will all very quickly find new coverage
++            // and send lots of (probably redundant) programs to the main instance.
++            let minDelay = 1 * Minutes
++            let maxDelay = 10 * Minutes
++            let delay = Double.random(in: minDelay...maxDelay)
++            Thread.sleep(forTimeInterval: delay)
++        }
+
+         worker.addModule(Statistics())
+         worker.addModule(ThreadChild(for: worker, parent: fuzzer))

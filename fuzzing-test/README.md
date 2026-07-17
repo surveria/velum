@@ -115,6 +115,11 @@ For a bounded smoke run or a chosen output path:
     --iterations 1000 --jobs 1 --output /tmp/velum-fuzz-smoke
 ```
 
+`--jobs N` runs one main Fuzzilli instance and `N - 1` synchronized thread
+workers. The Velum launcher starts all requested workers immediately so bounded
+campaigns use the requested CPU capacity from the beginning instead of
+Fuzzilli's default 1-10 minute startup stagger.
+
 Resume the coverage corpus from an earlier session without discarding its crash
 history:
 
@@ -122,10 +127,16 @@ history:
 ./fuzzing-test/run.sh --resume fuzzing-test/runs/session-123
 ```
 
-Unique crash reproducers are saved as `crashes/*.js` together with their FuzzIL
-form. Duplicate crashes are kept separately below `crashes/duplicates/`. Pass
-`--diagnostics` only when needed: it also retains timeouts and ordinary rejected
-programs and can use substantial disk space.
+Unique crash reproducers from every worker are saved as `crashes/*.js` together
+with their FuzzIL form. Duplicate crashes are kept separately below
+`crashes/duplicates/`. Pass `--diagnostics` only when needed: it also retains
+timeouts from every worker and ordinary rejected programs from the main worker,
+and can use substantial disk space. Saved timeout programs include the engine
+commit tag and exact Fuzzilli and target arguments needed to identify the
+campaign before replaying the JavaScript against Velum or another engine. The
+Velum Fuzzilli profile uses a four-second execution timeout so campaigns focus
+on crashes and persistent hangs rather than sanitizer-instrumented performance
+outliers.
 
 Fuzzilli stdout and stderr are captured in one detailed log. The launcher prints
 the temporary live path before execution so a second terminal or an agent can

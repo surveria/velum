@@ -33,7 +33,7 @@ Options:
   --jobs N         Run N Fuzzilli workers (default: 1)
   --output PATH    Store this session at PATH
   --resume PATH    Resume the corpus from an existing session
-  --diagnostics    Also retain invalid programs and timeouts
+  --diagnostics    Retain main-worker invalid programs and all worker timeouts
   --reproduce FILE Run one saved JavaScript reproducer
   --skip-build     Reuse existing Fuzzilli and target binaries
   -h, --help       Show this help
@@ -232,6 +232,9 @@ fn run_campaign(config: &Config) -> anyhow::Result<()> {
         .arg("--exportStatistics")
         .arg("--statisticsExportInterval=1")
         .arg(format!("--tag=velum-{engine_commit}"));
+    if config.jobs.get() > 1 {
+        command.arg("--immediateWorkers");
+    }
     if let Some(iterations) = config.iterations {
         command.arg(format!("--maxIterations={iterations}"));
     }
@@ -246,6 +249,7 @@ fn run_campaign(config: &Config) -> anyhow::Result<()> {
     let pending_log = PendingLog::new(&run_dir)?;
 
     println!("Velum Fuzzilli session: {}", run_dir.display());
+    println!("Parallel Fuzzilli workers: {}", config.jobs);
     println!(
         "Live log while running: {}",
         pending_log.temporary_path().display()

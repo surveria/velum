@@ -290,6 +290,7 @@ impl Context {
     }
 
     fn repeat_to_code_unit_len(&self, filler: &[u16], target_len: usize) -> Result<Vec<u16>> {
+        self.check_utf16_string_length(target_len)?;
         let mut output = Vec::with_capacity(target_len);
         for unit in filler.iter().copied().cycle().take(target_len) {
             output.push(unit);

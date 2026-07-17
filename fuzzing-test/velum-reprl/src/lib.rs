@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{Context as _, bail, ensure};
-use velum::{Error, Runtime};
+use velum::{Error, Runtime, RuntimeLimits};
 
 const CONTROL_READ_PATH: &str = "/proc/self/fd/100";
 const CONTROL_WRITE_PATH: &str = "/proc/self/fd/101";
@@ -17,6 +17,7 @@ const FUZZOUT_WRITE_PATH: &str = "/proc/self/fd/103";
 const HANDSHAKE: [u8; 4] = *b"HELO";
 const EXECUTE_COMMAND: [u8; 4] = *b"exec";
 const MAX_SCRIPT_SIZE: usize = 16 << 20;
+const ASAN_MAX_CALL_STACK_BYTES: usize = 960 * 1_024;
 
 /// Runs the Velum Fuzzilli target using the inherited REPRL channels.
 ///
@@ -164,7 +165,10 @@ fn serve(
 /// cannot be installed.
 pub fn execute_for_fuzzing(script: &[u8], fuzzout: Rc<RefCell<File>>) -> anyhow::Result<u8> {
     let source = std::str::from_utf8(script).context("Fuzzilli script is not valid UTF-8")?;
-    let runtime = Runtime::new();
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_call_stack_bytes: ASAN_MAX_CALL_STACK_BYTES,
+        ..RuntimeLimits::default()
+    });
     let mut context = runtime.context();
     context
         .register_host_function_typed("fuzzilli", move |call| {
