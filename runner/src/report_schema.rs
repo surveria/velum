@@ -645,11 +645,23 @@ impl Measurement {
     fn from_columns(measurement: &str, median: &str, cv: &str) -> anyhow::Result<Self> {
         Ok(Self {
             availability: MeasurementAvailability::from_label(median)?,
-            wall_duration_ns: optional_duration(measurement)?,
-            median_duration_ns: optional_duration(median)?,
+            wall_duration_ns: optional_measurement_duration(measurement)?,
+            median_duration_ns: optional_measurement_duration(median)?,
             coefficient_variation_permille: optional_cv_permille(cv)?,
         })
     }
+}
+
+fn optional_measurement_duration(value: &str) -> anyhow::Result<Option<u64>> {
+    if matches!(
+        MeasurementAvailability::from_label(value),
+        Ok(MeasurementAvailability::NotConfigured
+            | MeasurementAvailability::NotAvailable
+            | MeasurementAvailability::NotMeasured)
+    ) {
+        return Ok(None);
+    }
+    optional_duration(value)
 }
 
 impl CaseStatus {
@@ -759,5 +771,25 @@ impl QualityStatus {
             NO_VALUE => Ok(Self::NotMeasured),
             _ => bail!("unknown measurement quality status '{label}'"),
         }
+    }
+}
+
+#[cfg(test)]
+mod measurement_tests {
+    use super::{Measurement, MeasurementAvailability};
+
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn accepts_explicitly_unconfigured_reference_columns() -> TestResult {
+        let measurement = Measurement::from_columns("-", "🟡 not configured", "-")?;
+        if measurement.availability == MeasurementAvailability::NotConfigured
+            && measurement.wall_duration_ns.is_none()
+            && measurement.median_duration_ns.is_none()
+            && measurement.coefficient_variation_permille.is_none()
+        {
+            return Ok(());
+        }
+        Err(format!("unexpected reference measurement: {measurement:?}").into())
     }
 }

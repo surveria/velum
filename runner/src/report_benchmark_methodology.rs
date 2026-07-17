@@ -53,6 +53,7 @@ impl BenchmarkMethodology {
 pub enum BenchmarkMode {
     ColdEval,
     PreparedExecution,
+    EmbeddingApi,
 }
 
 impl BenchmarkMode {
@@ -60,6 +61,7 @@ impl BenchmarkMode {
         match self {
             Self::ColdEval => "cold_eval",
             Self::PreparedExecution => "prepared_execution",
+            Self::EmbeddingApi => "embedding_api",
         }
     }
 }
@@ -69,6 +71,7 @@ impl From<SourceMode> for BenchmarkMode {
         match value {
             SourceMode::ColdEval => Self::ColdEval,
             SourceMode::PreparedExecution => Self::PreparedExecution,
+            SourceMode::EmbeddingApi => Self::EmbeddingApi,
         }
     }
 }

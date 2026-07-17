@@ -1,3 +1,5 @@
+use crate::benchmark_case::EmbeddingBenchmark;
+
 use super::super::BenchmarkCase;
 
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
@@ -144,8 +146,37 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     cases.extend(benchmark_typed_array_image_cases());
     cases.extend(benchmark_operator_cases());
     cases.extend(benchmark_runtime_cases());
+    cases.extend(benchmark_embedding_cases());
     cases.extend(benchmark_prepared_sentinel_cases());
     cases
+}
+
+fn benchmark_embedding_cases() -> Vec<BenchmarkCase> {
+    const SOURCE: &str = "runner/src/embedding_benchmarks.rs";
+
+    vec![
+        BenchmarkCase::embedding("embedding_sync_call", SOURCE, EmbeddingBenchmark::SyncCall),
+        BenchmarkCase::embedding(
+            "embedding_property_get",
+            SOURCE,
+            EmbeddingBenchmark::PropertyGet,
+        ),
+        BenchmarkCase::embedding(
+            "embedding_rust_callback",
+            SOURCE,
+            EmbeddingBenchmark::RustCallback,
+        ),
+        BenchmarkCase::embedding(
+            "embedding_async_completion",
+            SOURCE,
+            EmbeddingBenchmark::AsyncCompletion,
+        ),
+        BenchmarkCase::embedding(
+            "embedding_host_object_payload",
+            SOURCE,
+            EmbeddingBenchmark::HostObjectPayload,
+        ),
+    ]
 }
 
 fn benchmark_typed_array_image_cases() -> Vec<BenchmarkCase> {

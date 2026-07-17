@@ -1,5 +1,14 @@
 use crate::benchmark_protocol::{BenchmarkInput, BenchmarkMode};
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum EmbeddingBenchmark {
+    SyncCall,
+    PropertyGet,
+    RustCallback,
+    AsyncCompletion,
+    HostObjectPayload,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct BenchmarkCase {
     pub id: &'static str,
@@ -7,6 +16,7 @@ pub struct BenchmarkCase {
     pub mode: BenchmarkMode,
     pub input: BenchmarkInput,
     pub sentinel: bool,
+    pub embedding: Option<EmbeddingBenchmark>,
 }
 
 impl BenchmarkCase {
@@ -17,6 +27,7 @@ impl BenchmarkCase {
             mode: BenchmarkMode::ColdEval,
             input: BenchmarkInput::Standard,
             sentinel: false,
+            embedding: None,
         }
     }
 
@@ -27,6 +38,7 @@ impl BenchmarkCase {
             mode: BenchmarkMode::ColdEval,
             input: BenchmarkInput::HostImage { byte_len },
             sentinel: false,
+            embedding: None,
         }
     }
 
@@ -37,6 +49,22 @@ impl BenchmarkCase {
             mode: BenchmarkMode::PreparedExecution,
             input: BenchmarkInput::Standard,
             sentinel: true,
+            embedding: None,
+        }
+    }
+
+    pub const fn embedding(
+        id: &'static str,
+        path: &'static str,
+        benchmark: EmbeddingBenchmark,
+    ) -> Self {
+        Self {
+            id,
+            path,
+            mode: BenchmarkMode::EmbeddingApi,
+            input: BenchmarkInput::Standard,
+            sentinel: false,
+            embedding: Some(benchmark),
         }
     }
 }

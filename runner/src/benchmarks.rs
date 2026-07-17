@@ -6,9 +6,8 @@
 //! component on either side and the runner owns every measurement. The CLI /
 //! startup-subtraction machinery it replaces has been removed.
 //!
-//! Peak-memory comparison used to piggyback on a CLI process; a byte-level
-//! in-process memory parity needs per-VM heap accounting that Velum does
-//! not expose yet, so the `memory_ratio` column is reserved (`-`) for now.
+//! Peak-memory parity needs per-VM heap accounting that Velum does not expose,
+//! so the `memory_ratio` column is reserved (`-`) for now.
 
 use std::fs;
 
@@ -27,9 +26,10 @@ use super::{prepared_benchmarks, report_text, timing};
 
 #[path = "benchmark_configuration_report.rs"]
 mod configuration_report;
+#[path = "embedding_benchmarks.rs"]
+mod embedding_benchmarks;
 #[path = "prepared_benchmark_report.rs"]
 mod prepared_report;
-
 use configuration_report::{configuration_failure_outcome, configuration_failure_report};
 
 pub const BUDGET_LABEL: &str = "1.00x";
@@ -230,6 +230,9 @@ fn run_benchmark_case(
     baseline: &mut QuickjsBaseline,
     host_profile: &str,
 ) -> BenchmarkOutcome {
+    if let Some(benchmark) = case.embedding {
+        return embedding_benchmarks::run(case, benchmark, config);
+    }
     let case_timer = timing::RunTimer::start();
     let loaded = timing::timed(|| fs::read_to_string(case.path));
     let source = match loaded.value {
