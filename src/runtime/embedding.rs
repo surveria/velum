@@ -9,11 +9,11 @@ use crate::{
 };
 
 impl Context {
-    pub(crate) fn embedding_is_callable(&self, value: &Value) -> Result<bool> {
+    pub(crate) fn embedding_callable_status(&self, value: &Value) -> Result<bool> {
         self.semantic_is_callable(value)
     }
 
-    pub(crate) fn embedding_is_constructor(&self, value: &Value) -> Result<bool> {
+    pub(crate) fn embedding_constructor_status(&self, value: &Value) -> Result<bool> {
         self.semantic_is_constructor(value)
     }
 
@@ -170,7 +170,7 @@ impl Context {
         match result {
             Ok(value) => Ok(value),
             Err(error) => {
-                let fallback_span = error.source_span();
+                let diagnostic_span = error.source_span();
                 let Some(value) = runtime_exception_value(self, &error)? else {
                     return Err(error);
                 };
@@ -183,7 +183,7 @@ impl Context {
                     self.identity().clone(),
                     value,
                     metadata,
-                    fallback_span,
+                    diagnostic_span,
                 ))
             }
         }

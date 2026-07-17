@@ -230,8 +230,9 @@ impl Vm {
     /// # Errors
     /// Fails for a foreign or stale retained handle or invalid VM state.
     pub fn is_callable(&self, value: &RetainedValue) -> Result<bool> {
-        let value = self.context.resolve_retained_value(value)?;
-        self.context.embedding_is_callable(&value)
+        let context = self.embedding_context_ref();
+        let value = context.resolve_retained_value(value)?;
+        context.embedding_callable_status(&value)
     }
 
     /// Returns whether a retained value implements JavaScript `[[Construct]]`.
@@ -239,8 +240,9 @@ impl Vm {
     /// # Errors
     /// Fails for a foreign or stale retained handle or invalid VM state.
     pub fn is_constructor(&self, value: &RetainedValue) -> Result<bool> {
-        let value = self.context.resolve_retained_value(value)?;
-        self.context.embedding_is_constructor(&value)
+        let context = self.embedding_context_ref();
+        let value = context.resolve_retained_value(value)?;
+        context.embedding_constructor_status(&value)
     }
 
     /// Calls a retained JavaScript callable with `undefined` as its receiver.
@@ -276,7 +278,7 @@ impl Vm {
         args: &[JsValueRef<'_>],
     ) -> Result<RetainedValue> {
         let value = self.call(callable, args)?;
-        self.context.retain_embedder_value(value)
+        self.embedding_context_ref().retain_embedder_value(value)
     }
 
     /// Calls a retained JavaScript callable with an explicit receiver.
@@ -292,10 +294,13 @@ impl Vm {
         receiver: JsValueRef<'_>,
         args: &[JsValueRef<'_>],
     ) -> Result<Value> {
-        let callable = self.context.resolve_retained_value(callable)?;
+        let callable = self
+            .embedding_context_ref()
+            .resolve_retained_value(callable)?;
         let receiver = self.resolve_js_value(receiver)?;
         let args = self.resolve_arguments(args)?;
-        self.context.embedding_call(&callable, &args, receiver)
+        self.embedding_context_mut()
+            .embedding_call(&callable, &args, receiver)
     }
 
     /// Calls with an explicit receiver and copies a primitive result.
@@ -323,7 +328,7 @@ impl Vm {
         args: &[JsValueRef<'_>],
     ) -> Result<RetainedValue> {
         let value = self.call_with_receiver(callable, receiver, args)?;
-        self.context.retain_embedder_value(value)
+        self.embedding_context_ref().retain_embedder_value(value)
     }
 
     /// Looks up and calls a method with the original target as its receiver.
@@ -342,7 +347,7 @@ impl Vm {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
         let args = self.resolve_arguments(args)?;
-        self.context
+        self.embedding_context_mut()
             .embedding_call_method(&target, &property, &args)
     }
 
@@ -371,7 +376,7 @@ impl Vm {
         args: &[JsValueRef<'_>],
     ) -> Result<RetainedValue> {
         let value = self.call_method(target, property, args)?;
-        self.context.retain_embedder_value(value)
+        self.embedding_context_ref().retain_embedder_value(value)
     }
 
     /// Constructs an object with the constructor itself as `newTarget`.
@@ -386,9 +391,12 @@ impl Vm {
         constructor: &RetainedValue,
         args: &[JsValueRef<'_>],
     ) -> Result<Value> {
-        let constructor = self.context.resolve_retained_value(constructor)?;
+        let constructor = self
+            .embedding_context_ref()
+            .resolve_retained_value(constructor)?;
         let args = self.resolve_arguments(args)?;
-        self.context.embedding_construct(&constructor, &args)
+        self.embedding_context_mut()
+            .embedding_construct(&constructor, &args)
     }
 
     /// Constructs an object and retains the new instance.
@@ -401,7 +409,7 @@ impl Vm {
         args: &[JsValueRef<'_>],
     ) -> Result<RetainedValue> {
         let value = self.construct(constructor, args)?;
-        self.context.retain_embedder_value(value)
+        self.embedding_context_ref().retain_embedder_value(value)
     }
 
     /// Reads a property through JavaScript `[[Get]]` semantics.
@@ -418,7 +426,8 @@ impl Vm {
     ) -> Result<Value> {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
-        self.context.embedding_get_property(&target, &property)
+        self.embedding_context_mut()
+            .embedding_get_property(&target, &property)
     }
 
     /// Reads a property and copies a primitive result.
@@ -444,7 +453,7 @@ impl Vm {
         property: PropertyKeyRef<'_>,
     ) -> Result<RetainedValue> {
         let value = self.get_property(target, property)?;
-        self.context.retain_embedder_value(value)
+        self.embedding_context_ref().retain_embedder_value(value)
     }
 
     /// Writes a property with `Reflect.set`-style boolean failure reporting.
@@ -546,7 +555,7 @@ impl Vm {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
         let descriptor = self
-            .context
+            .embedding_context_mut()
             .embedding_own_property_descriptor(&target, &property)?;
         descriptor
             .map(|descriptor| self.retain_property_descriptor(descriptor))
@@ -563,8 +572,12 @@ impl Vm {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
         let value = self.resolve_js_value(value)?;
-        self.context
-            .embedding_set_property(&target, &property, value, throw_on_failure)
+        self.embedding_context_mut().embedding_set_property(
+            &target,
+            &property,
+            value,
+            throw_on_failure,
+        )
     }
 
     fn define_property_internal(
@@ -577,8 +590,12 @@ impl Vm {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
         let update = self.resolve_property_definition(definition)?;
-        self.context
-            .embedding_define_property(&target, &property, update, throw_on_failure)
+        self.embedding_context_mut().embedding_define_property(
+            &target,
+            &property,
+            update,
+            throw_on_failure,
+        )
     }
 
     fn delete_property_internal(
@@ -589,7 +606,7 @@ impl Vm {
     ) -> Result<bool> {
         let target = self.resolve_js_value(target)?;
         let property = self.resolve_property_key(property)?;
-        self.context
+        self.embedding_context_mut()
             .embedding_delete_property(&target, &property, throw_on_failure)
     }
 
@@ -610,19 +627,29 @@ impl Vm {
             JsValueRef::Null => Ok(Value::Null),
             JsValueRef::Bool(value) => Ok(Value::Bool(value)),
             JsValueRef::Number(value) => Ok(Value::Number(value)),
-            JsValueRef::BigInt(value) => self.context.runtime_value(Value::BigInt(value.clone())),
-            JsValueRef::String(value) => self.context.heap_string_value(value),
-            JsValueRef::ExactString(value) => self.context.heap_js_string_value(value),
-            JsValueRef::Owned(value) => self.context.runtime_value(value.clone().into()),
-            JsValueRef::Retained(value) => self.context.resolve_retained_value(value),
+            JsValueRef::BigInt(value) => self
+                .embedding_context_mut()
+                .runtime_value(Value::BigInt(value.clone())),
+            JsValueRef::String(value) => self.embedding_context_mut().heap_string_value(value),
+            JsValueRef::ExactString(value) => {
+                self.embedding_context_mut().heap_js_string_value(value)
+            }
+            JsValueRef::Owned(value) => self
+                .embedding_context_mut()
+                .runtime_value(value.clone().into()),
+            JsValueRef::Retained(value) => {
+                self.embedding_context_ref().resolve_retained_value(value)
+            }
         }
     }
 
     fn resolve_property_key(&mut self, property: PropertyKeyRef<'_>) -> Result<Value> {
         match property {
-            PropertyKeyRef::Name(name) => self.context.heap_string_value(name),
+            PropertyKeyRef::Name(name) => self.embedding_context_mut().heap_string_value(name),
             PropertyKeyRef::Symbol(handle) => {
-                let value = self.context.resolve_retained_value(handle)?;
+                let value = self
+                    .embedding_context_ref()
+                    .resolve_retained_value(handle)?;
                 if matches!(value, Value::Symbol(_)) {
                     return Ok(value);
                 }
@@ -665,7 +692,9 @@ impl Vm {
     ) -> Result<PropertyDescriptor> {
         match descriptor {
             OwnPropertyDescriptor::Data(descriptor) => Ok(PropertyDescriptor::Data {
-                value: self.context.retain_embedder_value(descriptor.value())?,
+                value: self
+                    .embedding_context_ref()
+                    .retain_embedder_value(descriptor.value())?,
                 writable: descriptor.writable().is_yes(),
                 enumerable: descriptor.enumerable().is_yes(),
                 configurable: descriptor.configurable().is_yes(),
@@ -683,7 +712,9 @@ impl Vm {
         if matches!(value, Value::Undefined) {
             return Ok(None);
         }
-        self.context.retain_embedder_value(value).map(Some)
+        self.embedding_context_ref()
+            .retain_embedder_value(value)
+            .map(Some)
     }
 }
 

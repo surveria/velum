@@ -113,7 +113,7 @@ impl VmConfig {
 #[derive(Debug)]
 pub struct Vm {
     config: VmConfig,
-    pub(super) context: Context,
+    context: Context,
 }
 
 impl Vm {
@@ -165,6 +165,14 @@ impl Vm {
 
     #[must_use]
     pub const fn context(&mut self) -> &mut Context {
+        &mut self.context
+    }
+
+    pub(super) const fn embedding_context_ref(&self) -> &Context {
+        &self.context
+    }
+
+    pub(super) const fn embedding_context_mut(&mut self) -> &mut Context {
         &mut self.context
     }
 
