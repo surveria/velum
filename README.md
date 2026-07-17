@@ -24,6 +24,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
+  <a href="examples/README.md">Examples</a> ·
   <a href="#why-velum">Why Velum</a> ·
   <a href="#interesting-internals">Internals</a> ·
   <a href="#roadmap">Roadmap</a>
@@ -234,6 +235,11 @@ portable `OwnedValue`s, VM-bound `RetainedValue`s, configurable runtime and
 storage limits, and heap/optimization snapshots. Async host calls return
 ordinary JavaScript Promises; `poll_host_futures` advances Rust futures and
 `run_jobs` separately drains the Promise reactions they enqueue.
+
+The complete [embedding example suite](examples/README.md) provides fifteen
+directly runnable programs, progressing from Hello World through bidirectional
+async calls, stored callbacks, Rust-backed classes, module loading, shared
+memory, observability, and deterministic teardown.
 
 ## Interesting internals
 

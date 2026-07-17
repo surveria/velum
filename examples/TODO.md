@@ -3,11 +3,9 @@
 This document defines the target embedding examples for Velum and the engine
 capabilities required to implement them as real application-facing APIs.
 
-The examples that can already be written with the current public API are
-intentionally deferred. The immediate priority is the missing embedding
-surface needed by the bidirectional async, callback, host-class, and
-Rust-driven object examples. Once that surface is complete, the full example
-suite should be implemented against the same stable API.
+The capability tranches and all fifteen examples are implemented. This file
+retains the product acceptance requirements and architectural rationale behind
+the runnable suite documented in `examples/README.md`.
 
 ## Hard Requirements
 
@@ -36,30 +34,27 @@ Their implementation must follow these rules:
 
 ## Example Catalog
 
-No example is implemented yet. `Deferred` means the current public API is
-sufficient or nearly sufficient, `Ready to implement` means its blocking
-capability tranche has landed, and `Capability work` means a first-class
-engine API must still land before the example can be written honestly.
+Every catalog entry is directly runnable with `cargo run --example <name>`.
 
 | ID | Planned directory | Status | Purpose |
 | --- | --- | --- | --- |
-| 00 | `00_hello_world` | Deferred | Create an `Engine` and `Vm`, evaluate `print("Hello, world!")`, and collect the output. |
-| 01 | `01_basic_eval` | Deferred | Evaluate named source, return an `OwnedValue`, capture output, and classify errors. |
-| 02 | `02_typed_host_functions` | Deferred | Register synchronous typed Rust functions with checked arguments, return conversion, captured application state, and contextual errors. |
-| 03 | `03_async_rust_javascript_roundtrip` | Ready to implement | Demonstrate an awaited Rust-to-JavaScript-to-Rust-to-JavaScript round trip without reentrant mutable VM access. |
-| 04 | `04_callbacks_and_intervals` | Ready to implement | Pass a Rust callable into JavaScript, retain it on a JavaScript object, and invoke it ten times through an embedder-provided interval scheduler. |
-| 05 | `05_rust_backed_websocket` | Ready to implement | Expose a mock JavaScript `WebSocket` class whose instances own typed Rust state and methods. |
-| 06 | `06_javascript_class_from_rust` | Ready to implement | Construct a JavaScript class from Rust, call methods, await a method result, inspect and mutate fields, add a property, and replace a method. |
-| 07 | `07_values_and_handles` | Deferred | Explain portable `OwnedValue`, VM-bound `RetainedValue`, callback-local values, explicit release, GC rooting, and cross-VM rejection. |
-| 08 | `08_compile_once_run_many` | Deferred | Compile once, execute repeatedly in one VM, and share immutable compiled code across isolated VMs. |
-| 09 | `09_sandboxed_execution` | Deferred | Configure source, stack, runtime-step, storage, object, string, and buffer limits with a deterministic clock and structured failures. |
-| 10 | `10_custom_module_loader` | Deferred | Implement application-owned module resolution, canonical identities, import policy, attributes, cycles, dynamic import, and `import.meta`. |
-| 11 | `11_promises_and_jobs` | Deferred | Integrate JavaScript Promise jobs with an application-controlled outer loop, including draining and cancellation. |
-| 12 | `12_realms_and_plugins` | Deferred | Compare realms and independent VMs, showing isolated globals and intrinsics versus shared VM ownership. |
-| 13 | `13_shared_memory_between_vms` | Deferred | Transfer a `SharedArrayBufferHandle` between independent VMs and coordinate through `Atomics`. |
-| 14 | `14_observability_and_teardown` | Deferred | Inspect usage, storage, roots, heap reachability, optimization counters, explicit GC, build identity, and deterministic teardown. |
+| 00 | `00_hello_world` | Implemented | Create an `Engine` and `Vm`, evaluate `print("Hello, world!")`, and collect the output. |
+| 01 | `01_basic_eval` | Implemented | Evaluate named source, return an `OwnedValue`, capture output, and classify errors. |
+| 02 | `02_typed_host_functions` | Implemented | Register synchronous typed Rust functions with checked arguments, return conversion, captured application state, and contextual errors. |
+| 03 | `03_async_rust_javascript_roundtrip` | Implemented | Demonstrate an awaited Rust-to-JavaScript-to-Rust-to-JavaScript round trip without reentrant mutable VM access. |
+| 04 | `04_callbacks_and_intervals` | Implemented | Pass a Rust callable into JavaScript, retain it on a JavaScript object, and invoke it ten times through an embedder-provided interval scheduler. |
+| 05 | `05_rust_backed_websocket` | Implemented | Expose a mock JavaScript `WebSocket` class whose instances own typed Rust state and methods. |
+| 06 | `06_javascript_class_from_rust` | Implemented | Construct a JavaScript class from Rust, call methods, await a method result, inspect and mutate fields, add a property, and replace a method. |
+| 07 | `07_values_and_handles` | Implemented | Explain portable `OwnedValue`, VM-bound `RetainedValue`, callback-local values, explicit release, GC rooting, and cross-VM rejection. |
+| 08 | `08_compile_once_run_many` | Implemented | Compile once, execute repeatedly in one VM, and share immutable compiled code across isolated VMs. |
+| 09 | `09_sandboxed_execution` | Implemented | Configure source, stack, runtime-step, storage, object, string, and buffer limits with a deterministic clock and structured failures. |
+| 10 | `10_custom_module_loader` | Implemented | Implement application-owned module resolution, canonical identities, import policy, attributes, cycles, dynamic import, and `import.meta`. |
+| 11 | `11_promises_and_jobs` | Implemented | Integrate JavaScript Promise jobs with an application-controlled outer loop, including draining and cancellation. |
+| 12 | `12_realms_and_plugins` | Implemented | Compare realms and independent VMs, showing isolated globals and intrinsics versus shared VM ownership. |
+| 13 | `13_shared_memory_between_vms` | Implemented | Transfer a `SharedArrayBufferHandle` between independent VMs and coordinate through `Atomics`. |
+| 14 | `14_observability_and_teardown` | Implemented | Inspect usage, storage, roots, heap reachability, optimization counters, explicit GC, build identity, and deterministic teardown. |
 
-## Blocked Example Specifications
+## Acceptance Example Specifications
 
 ### 03: Async Rust And JavaScript Round Trip
 
@@ -357,6 +352,11 @@ This tranche unlocks example 05. The mock WebSocket should be the acceptance
 case, not a special runtime object kind built only for that class.
 
 ### Tranche 7: Public Facade And Full Example Suite
+
+Status: implemented. Examples 00 through 14 are Cargo-discovered binaries and
+`examples/README.md` provides the ordered learning path. The module-loader and
+shared-buffer scenarios use thin `Vm` facade methods over their existing
+runtime owners; no example imports `Context` or internal arena identifiers.
 
 Review the completed surface through `Engine` and `Vm`. Example code should not
 drop into internal modules, depend on raw arena identifiers, or use `Context`
