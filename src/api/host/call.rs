@@ -71,6 +71,26 @@ impl<'value> LocalValue<'value> {
         SharedArrayBufferHandle::from_buffer(&buffer)
     }
 
+    /// Borrows the typed Rust payload attached to this host object.
+    ///
+    /// The borrow is limited to the active host callback. An asynchronous
+    /// callback may copy or clone application-owned state while starting its
+    /// future, but the returned reference cannot cross an await point.
+    ///
+    /// # Errors
+    /// Fails with a JavaScript `TypeError` when the value is not a host object
+    /// carrying the requested payload type.
+    pub fn host_payload<T: 'static>(self) -> Result<&'value T> {
+        let Value::Object(id) = self.value else {
+            return Err(Error::type_error(
+                "host method receiver has an incompatible Rust payload",
+            ));
+        };
+        self.objects.host_payload(*id).map_err(|_error| {
+            Error::type_error("host method receiver has an incompatible Rust payload")
+        })
+    }
+
     /// Retains this callback-local value beyond the active host call.
     ///
     /// # Errors
@@ -97,6 +117,7 @@ pub struct HostCall<'call> {
     pub(super) async_context: Option<&'call HostAsyncContext>,
     pub(super) roots: VmRootSnapshot,
     pub(super) receiver: &'call Value,
+    pub(super) new_target: Option<&'call Value>,
     pub(super) args: &'call [Value],
 }
 
@@ -119,6 +140,18 @@ impl<'call> HostCall<'call> {
             self.retained_values,
             self.receiver,
         )
+    }
+
+    /// Returns the exact `new.target` value for a construct call.
+    ///
+    /// Ordinary calls, methods, and asynchronous host functions return
+    /// `None`. Host-class constructor factories receive a callback-local value
+    /// that can be inspected or explicitly retained like any other local
+    /// value.
+    #[must_use]
+    pub fn new_target(self) -> Option<LocalValue<'call>> {
+        self.new_target
+            .map(|value| LocalValue::new(self.identity, self.objects, self.retained_values, value))
     }
 
     /// Returns the direct-root snapshot captured immediately before this host

@@ -1,11 +1,12 @@
 use crate::{
+    api::host_class::{ErasedHostInstance, HostMethodResult},
     error::{Error, Result},
     runtime::{
         Context,
         control::runtime_exception_value,
         object::{OwnPropertyDescriptor, PropertyUpdate},
     },
-    value::Value,
+    value::{HostFunctionId, Value},
 };
 
 use super::RetainedValue;
@@ -114,6 +115,112 @@ impl Context {
     ) -> Result<Value> {
         let operation = self.semantic_construct(constructor, args, constructor.clone());
         self.embedding_result(operation)
+    }
+
+    pub(crate) fn eval_host_constructor(
+        &mut self,
+        id: HostFunctionId,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        let prototype = self.host_constructor_instance_prototype(new_target)?;
+        let function = self.host_function(id)?.clone();
+        if !function.is_constructor() {
+            return Err(Error::type_error("host function is not a constructor"));
+        }
+        let roots = self.root_snapshot()?;
+        let instance = function.construct(
+            self.identity(),
+            &self.objects,
+            self.retained_value_registry(),
+            roots,
+            new_target,
+            args,
+        )?;
+        let mut traced_values = Vec::new();
+        traced_values
+            .try_reserve(instance.traced_values.len())
+            .map_err(|_| Error::limit("host instance traced-value capacity exceeded"))?;
+        for value in &instance.traced_values {
+            traced_values.push(self.resolve_retained_value(value)?);
+        }
+        let ErasedHostInstance {
+            payload,
+            logical_payload_bytes,
+            traced_values: retained_traces,
+        } = instance;
+        let id = self.objects.create_host_object(
+            payload,
+            traced_values,
+            logical_payload_bytes,
+            Some(prototype),
+            self.limits.max_objects,
+        )?;
+        drop(retained_traces);
+        Ok(Value::Object(id))
+    }
+
+    pub(crate) fn rollback_host_class_graph(
+        &mut self,
+        prototype: crate::value::ObjectId,
+        function_ids: &[HostFunctionId],
+    ) -> Result<()> {
+        self.host_functions.reserve_removals(function_ids.len())?;
+        self.objects.reserve_created_object_rollback()?;
+        let before = self.owner_storage_snapshot()?;
+        for id in function_ids {
+            let removed = self.host_functions.remove_reserved(id.index())?;
+            if removed.is_none() {
+                return Err(Error::runtime(
+                    "host class rollback function entry disappeared",
+                ));
+            }
+        }
+        self.objects.discard_created_object(prototype)?;
+        let after = self.owner_storage_snapshot()?;
+        self.release_collected_storage(&before, &after)
+    }
+
+    fn host_constructor_instance_prototype(&mut self, new_target: &Value) -> Result<Value> {
+        let prototype = self.get_named(new_target, super::CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
+        if self.semantic_object_ref(&prototype)?.is_some() {
+            return Ok(prototype);
+        }
+        let realm = self.callable_realm_index(new_target)?;
+        self.with_realm(realm, |context| {
+            let constructor_key = context.object_constructor_property_key()?;
+            context
+                .objects
+                .object_prototype_id(
+                    constructor_key,
+                    context.limits.max_objects,
+                    context.limits.max_object_properties,
+                )
+                .map(Value::Object)
+        })
+    }
+
+    fn embedding_clone_host_wrapper(&mut self, receiver: &Value) -> Result<Value> {
+        let Value::Object(source) = receiver else {
+            return Err(Error::type_error(
+                "shared host wrapper requires an object receiver",
+            ));
+        };
+        self.objects
+            .clone_host_object(*source, self.limits.max_objects)
+            .map(Value::Object)
+    }
+
+    pub(crate) fn embedding_resolve_host_method_result(
+        &mut self,
+        result: HostMethodResult,
+        receiver: &Value,
+    ) -> Result<Value> {
+        match result {
+            HostMethodResult::Value(value) => self.checked_host_return_value(value),
+            HostMethodResult::Retained(value) => self.resolve_retained_value(&value),
+            HostMethodResult::SharedReceiver => self.embedding_clone_host_wrapper(receiver),
+        }
     }
 
     pub(crate) fn embedding_get_property(

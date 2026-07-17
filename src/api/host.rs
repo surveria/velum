@@ -1,11 +1,17 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    api::owned_value::OwnedValue,
+    api::{
+        host_class::{ErasedHostInstance, HostMethodResult},
+        owned_value::OwnedValue,
+    },
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::call::RuntimeCallArgs,
-    runtime::object::ObjectHeap,
+    runtime::object::{
+        DataPropertyDescriptor, ObjectHeap, PropertyConfigurable, PropertyEnumerable,
+        PropertyWritable,
+    },
     runtime::retained_values::RetainedValueRegistry,
     runtime::{
         Context, RealmId, VmRootSnapshot,
@@ -28,6 +34,8 @@ const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
 
 type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
 type AsyncHostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<HostFuture>;
+type HostConstructorCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<ErasedHostInstance>;
+type HostMethodCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<HostMethodResult>;
 
 /// Engine-owned operations that an embedder can expose under a chosen global
 /// function name.
@@ -150,6 +158,7 @@ impl FromJsValue<'_> for String {
 pub struct HostFunction {
     name: String,
     kind: HostFunctionKind,
+    realm: Option<RealmId>,
     properties: FunctionProperties,
 }
 
@@ -162,20 +171,40 @@ enum HostFunctionKind {
     AsyncCallback {
         callback: Rc<AsyncHostCallback>,
     },
+    Constructor {
+        callback: Rc<HostConstructorCallback>,
+    },
+    Method {
+        callback: Rc<HostMethodCallback>,
+    },
     Operation(HostOperation),
     RealmEval(RealmId),
     IsHtmlDda,
 }
 
 impl HostFunction {
-    const fn with_kind(name: String, kind: HostFunctionKind) -> Self {
+    fn with_kind(name: String, kind: HostFunctionKind) -> Self {
+        Self::with_kind_and_properties(name, kind, 0, None)
+    }
+
+    fn with_kind_and_properties(
+        name: String,
+        kind: HostFunctionKind,
+        length: u16,
+        prototype: Option<DataPropertyDescriptor>,
+    ) -> Self {
         let properties = FunctionProperties::new(
             Value::Undefined,
-            FunctionIntrinsicDefaults::new(Value::Number(0.0), Value::Undefined, None),
+            FunctionIntrinsicDefaults::new(
+                Value::Number(f64::from(length)),
+                Value::Undefined,
+                prototype,
+            ),
         );
         Self {
             name,
             kind,
+            realm: None,
             properties,
         }
     }
@@ -193,15 +222,15 @@ impl HostFunction {
         )
     }
 
-    const fn operation(name: String, operation: HostOperation) -> Self {
+    fn operation(name: String, operation: HostOperation) -> Self {
         Self::with_kind(name, HostFunctionKind::Operation(operation))
     }
 
-    const fn realm_eval(name: String, realm: RealmId) -> Self {
+    fn realm_eval(name: String, realm: RealmId) -> Self {
         Self::with_kind(name, HostFunctionKind::RealmEval(realm))
     }
 
-    const fn is_html_dda(name: String) -> Self {
+    fn is_html_dda(name: String) -> Self {
         Self::with_kind(name, HostFunctionKind::IsHtmlDda)
     }
 
@@ -226,6 +255,45 @@ impl HostFunction {
         Self::new(name, move |call| callback(call)?.into_js_value())
     }
 
+    pub(crate) fn new_constructor<F>(
+        name: String,
+        length: u16,
+        prototype: Value,
+        callback: F,
+    ) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<ErasedHostInstance> + 'static,
+    {
+        let prototype = DataPropertyDescriptor::new(
+            prototype,
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        );
+        Self::with_kind_and_properties(
+            name,
+            HostFunctionKind::Constructor {
+                callback: Rc::new(callback),
+            },
+            length,
+            Some(prototype),
+        )
+    }
+
+    pub(crate) fn new_method<F>(name: String, length: u16, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<HostMethodResult> + 'static,
+    {
+        Self::with_kind_and_properties(
+            name,
+            HostFunctionKind::Method {
+                callback: Rc::new(callback),
+            },
+            length,
+            None,
+        )
+    }
+
     fn call(
         &self,
         identity: &VmIdentity,
@@ -243,10 +311,68 @@ impl HostFunction {
             async_context: None,
             roots,
             receiver,
+            new_target: None,
             args,
         };
         let HostFunctionKind::Callback { callback, .. } = &self.kind else {
             return Err(Error::runtime("host operation was routed as a callback"));
+        };
+        callback(call).map_err(|error| error.with_context(self.context_message()))
+    }
+
+    pub(crate) fn call_method(
+        &self,
+        identity: &VmIdentity,
+        objects: &ObjectHeap,
+        retained_values: &RetainedValueRegistry,
+        roots: VmRootSnapshot,
+        receiver: &Value,
+        args: &[Value],
+    ) -> Result<HostMethodResult> {
+        let call = HostCall {
+            function_name: self.name.as_str(),
+            identity,
+            objects,
+            retained_values,
+            async_context: None,
+            roots,
+            receiver,
+            new_target: None,
+            args,
+        };
+        let HostFunctionKind::Method { callback } = &self.kind else {
+            return Err(Error::runtime(
+                "host function was not routed as a class method",
+            ));
+        };
+        callback(call).map_err(|error| error.with_context(self.context_message()))
+    }
+
+    pub(crate) fn construct(
+        &self,
+        identity: &VmIdentity,
+        objects: &ObjectHeap,
+        retained_values: &RetainedValueRegistry,
+        roots: VmRootSnapshot,
+        new_target: &Value,
+        args: &[Value],
+    ) -> Result<ErasedHostInstance> {
+        let receiver = Value::Undefined;
+        let call = HostCall {
+            function_name: self.name.as_str(),
+            identity,
+            objects,
+            retained_values,
+            async_context: None,
+            roots,
+            receiver: &receiver,
+            new_target: Some(new_target),
+            args,
+        };
+        let HostFunctionKind::Constructor { callback } = &self.kind else {
+            return Err(Error::runtime(
+                "host function was not routed as a constructor",
+            ));
         };
         callback(call).map_err(|error| error.with_context(self.context_message()))
     }
@@ -267,6 +393,22 @@ impl HostFunction {
         &mut self.properties
     }
 
+    pub(crate) const fn realm(&self) -> Option<&RealmId> {
+        self.realm.as_ref()
+    }
+
+    pub(crate) fn set_realm(&mut self, realm: RealmId) {
+        self.realm = Some(realm);
+    }
+
+    pub(crate) const fn is_constructor(&self) -> bool {
+        matches!(self.kind, HostFunctionKind::Constructor { .. })
+    }
+
+    const fn is_method(&self) -> bool {
+        matches!(self.kind, HostFunctionKind::Method { .. })
+    }
+
     fn release_property_storage(&mut self) -> Result<()> {
         self.properties.release_storage()
     }
@@ -276,6 +418,8 @@ impl HostFunction {
             HostFunctionKind::Operation(operation) => Some(operation),
             HostFunctionKind::Callback { .. }
             | HostFunctionKind::AsyncCallback { .. }
+            | HostFunctionKind::Constructor { .. }
+            | HostFunctionKind::Method { .. }
             | HostFunctionKind::RealmEval(_)
             | HostFunctionKind::IsHtmlDda => None,
         }
@@ -286,6 +430,8 @@ impl HostFunction {
             HostFunctionKind::RealmEval(realm) => Some(realm.clone()),
             HostFunctionKind::Callback { .. }
             | HostFunctionKind::AsyncCallback { .. }
+            | HostFunctionKind::Constructor { .. }
+            | HostFunctionKind::Method { .. }
             | HostFunctionKind::Operation(_)
             | HostFunctionKind::IsHtmlDda => None,
         }
@@ -301,6 +447,8 @@ impl HostFunction {
                 allow_vm_handles, ..
             } => allow_vm_handles,
             HostFunctionKind::AsyncCallback { .. }
+            | HostFunctionKind::Constructor { .. }
+            | HostFunctionKind::Method { .. }
             | HostFunctionKind::Operation(_)
             | HostFunctionKind::RealmEval(_)
             | HostFunctionKind::IsHtmlDda => false,
@@ -482,6 +630,24 @@ impl Context {
             std::iter::once(this_value).chain(values.iter()),
         )?;
         let function = self.host_function(id)?.clone();
+        if function.is_constructor() {
+            return Err(Error::type_error(format!(
+                "Class constructor '{}' cannot be invoked without 'new'",
+                function.name
+            )));
+        }
+        if function.is_method() {
+            let roots = self.root_snapshot()?;
+            let result = function.call_method(
+                self.identity(),
+                &self.objects,
+                self.retained_value_registry(),
+                roots,
+                this_value,
+                &values,
+            )?;
+            return self.embedding_resolve_host_method_result(result, this_value);
+        }
         if let Some(operation) = function.operation_kind() {
             return self
                 .eval_host_operation(operation, &values)
@@ -507,6 +673,7 @@ impl Context {
                 async_context: Some(&async_context),
                 roots,
                 receiver: this_value,
+                new_target: None,
                 args: &values,
             };
             return match function.start_async(call) {
@@ -581,6 +748,7 @@ impl Context {
     fn initialize_host_function_object(&mut self, function: &mut HostFunction) -> Result<()> {
         let prototype = self.function_constructor_prototype_value()?;
         let name = self.heap_string_value(&function.name)?;
+        function.set_realm(self.current_realm());
         function
             .properties_mut()
             .set_inheritance_prototype(prototype);
@@ -604,7 +772,7 @@ impl Context {
         self.host_function(id).map(|_| ())
     }
 
-    fn checked_host_return_value(&mut self, value: Value) -> Result<Value> {
+    pub(crate) fn checked_host_return_value(&mut self, value: Value) -> Result<Value> {
         match value {
             Value::Function(_)
             | Value::NativeFunction(_)

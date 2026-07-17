@@ -168,7 +168,15 @@ impl HostFunction {
         F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
         Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
     {
-        Self::with_kind(
+        Self::new_async_task_with_length(name, 0, callback)
+    }
+
+    pub(crate) fn new_async_task_with_length<F, Fut>(name: String, length: u16, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Fut> + 'static,
+        Fut: Future<Output = HostTaskResult<OwnedValue>> + 'static,
+    {
+        Self::with_kind_and_properties(
             name,
             HostFunctionKind::AsyncCallback {
                 callback: std::rc::Rc::new(move |call| {
@@ -176,6 +184,8 @@ impl HostFunction {
                     Ok(future)
                 }),
             },
+            length,
+            None,
         )
     }
 

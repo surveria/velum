@@ -148,8 +148,8 @@ impl Context {
                 Ok(kind.is_constructable())
             }
             Value::Object(id) => self.objects.proxy_constructability(*id),
-            Value::HostFunction(_)
-            | Value::Undefined
+            Value::HostFunction(id) => Ok(self.host_function(*id)?.is_constructor()),
+            Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
@@ -209,6 +209,9 @@ impl Context {
             }
             Value::Object(id) if self.objects.proxy_constructability(*id)? => {
                 self.proxy_construct(*id, args, new_target)
+            }
+            Value::HostFunction(id) if self.host_function(*id)?.is_constructor() => {
+                self.eval_host_constructor(*id, args, &new_target)
             }
             Value::Function(_)
             | Value::Object(_)

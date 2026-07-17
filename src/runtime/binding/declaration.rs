@@ -597,6 +597,16 @@ impl Context {
         self.define_atom(atom, name, value, kind, None)
     }
 
+    pub(crate) fn prepare_embedding_binding(&mut self, name: &str) -> Result<()> {
+        let atom = self.intern_atom(name)?;
+        if self.active_bindings().contains(atom) {
+            return Err(Error::runtime(format!(
+                "'{name}' has already been declared"
+            )));
+        }
+        self.ensure_binding_capacity_for_atom(atom)
+    }
+
     pub(crate) fn define_static(
         &mut self,
         name: &StaticBinding,

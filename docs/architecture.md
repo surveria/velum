@@ -315,6 +315,20 @@ VM-local values must be rooted beyond the callback with `LocalValue::retain`.
 VM-owned object/function callback returns remain conservative until host
 returns accept `RetainedValue` directly.
 
+Rust-backed classes use `Vm::register_host_class` with a `HostClass<T>`
+builder. The constructor factory receives the same callback-local `HostCall`
+boundary and returns a `HostInstance<T>`; runtime construction resolves
+`newTarget.prototype`, allocates an ordinary JavaScript object, and attaches
+the typed payload through the existing host-payload registry. Prototype
+methods, getters, setters, and static members are ordinary descriptors whose
+callables enter the shared semantic call owner. `LocalValue::host_payload`
+checks the receiver type before user method logic runs. A synchronous method
+may return a portable value, an identity-checked retained value, or request a
+distinct wrapper that explicitly shares the receiver payload. Async methods
+may borrow payload state only while constructing an owned `'static` future;
+Promise settlement remains on the normal host-future and job paths. Host
+constructors and classes do not generate source or use eval.
+
 Async Rust callbacks use `register_async_host_function` or the typed variant.
 The synchronous callback entry must copy primitive arguments or retain
 VM-local values before returning a `'static` Rust future. Invocation creates an

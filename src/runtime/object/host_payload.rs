@@ -439,7 +439,7 @@ impl ObjectHeap {
         }
     }
 
-    pub(in crate::runtime) fn host_payload<T: 'static>(&self, id: ObjectId) -> Result<&T> {
+    pub(crate) fn host_payload<T: 'static>(&self, id: ObjectId) -> Result<&T> {
         self.validate_id(id)?;
         self.host_payloads.payload(id.index())
     }
