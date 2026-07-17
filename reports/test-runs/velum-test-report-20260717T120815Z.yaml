@@ -1,0 +1,630 @@
+schema_version: 1
+detail_level: summary
+metadata:
+  timestamp: 20260717T120815Z
+  commit: 4ed8db77c267ffa802e5742d3ce4a3464cef29c4
+  tree: ea0dc721835c4e258c1c11baf1c57dc44896e38e
+  event: pull_request
+  run_id: '29579163940'
+  run_attempt: '1'
+  repository: surveria/velum
+  workflow: CI
+  pull_request: '666'
+  task: 'engine: expose JavaScript receivers to host calls'
+  engine_version: 0.2.130
+  engine_commit: 4ed8db77c267ffa802e5742d3ce4a3464cef29c4
+  runner_version: 0.2.30
+  runner_commit: 4ed8db77c267ffa802e5742d3ce4a3464cef29c4
+environment:
+  operating_system: linux
+  architecture: x86_64
+  available_parallelism: 32
+  build_profile: release
+  kernel_release: 6.17.0-40-generic
+  cpu_model: AMD Ryzen 9 9950X3D 16-Core Processor
+  cpu_affinity: 0-31
+  scaling_governor: powersave
+configuration:
+  report_mode: full
+  jetstream: disabled
+  quickjs_differential: configured
+  test262: configured
+  test262_mode: full
+  test262_path_filters: []
+  test262_flag_filters: []
+  benchmark_set: sentinel
+  quickjs_baseline: require
+  benchmark:
+    reference_quickjs_compiled: false
+    warmup_duration_ns: 150000000
+    minimum_sample_duration_ns: 500000000
+    samples: 10
+    minimum_operation_duration_ns: 1000000
+    maximum_cv_permille: 100
+    attempts: 3
+    maximum_operation_duration_ns: 2000000000
+    maximum_total_duration_ns: 3000000000
+components:
+- mode: correctness
+  timestamp: 20260717T120057Z
+  commit: 6066297ecbad7dbd5368101402d8a963fe517e99
+  tree: ea0dc721835c4e258c1c11baf1c57dc44896e38e
+  run_id: '29578652669'
+  duration_ns: 211487380949
+- mode: performance
+  timestamp: 20260717T120815Z
+  commit: 4ed8db77c267ffa802e5742d3ce4a3464cef29c4
+  tree: ea0dc721835c4e258c1c11baf1c57dc44896e38e
+  run_id: '29579163940'
+  duration_ns: 9191134251
+duration_ns: 220678515200
+suites:
+- name: Engine fixtures
+  required: true
+  status: passed
+  counts:
+    total: 69
+    executed: 69
+    passed: 69
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 69
+  duration_ns: 15905836
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 active subset
+  required: true
+  status: passed
+  counts:
+    total: 121
+    executed: 121
+    passed: 121
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 121
+  duration_ns: 37748344
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 file conformance
+  required: false
+  status: passed
+  counts:
+    total: 53404
+    executed: 53404
+    passed: 53404
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 53404
+  duration_ns: 210825865601
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 expected-pass baseline
+  required: true
+  status: passed
+  counts:
+    total: 102578
+    executed: 102578
+    passed: 102578
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 102578
+  duration_ns: 0
+  skip_reasons: []
+  feature_areas: []
+- name: Test262 full corpus
+  required: false
+  status: passed
+  counts:
+    total: 102578
+    executed: 102578
+    passed: 102578
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 102578
+  duration_ns: 210825865601
+  skip_reasons: []
+  feature_areas:
+  - name: language/expressions
+    total: 21284
+    executed: 21284
+    passed: 21284
+    manifest_enabled: 141
+    top_skip_reason: none
+  - name: language/statements
+    total: 18001
+    executed: 18001
+    passed: 18001
+    manifest_enabled: 276
+    top_skip_reason: none
+  - name: built-ins/Temporal
+    total: 9206
+    executed: 9206
+    passed: 9206
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Object
+    total: 6802
+    executed: 6802
+    passed: 6802
+    manifest_enabled: 14
+    top_skip_reason: none
+  - name: built-ins/Array
+    total: 6115
+    executed: 6115
+    passed: 6115
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: intl402/Temporal
+    total: 4058
+    executed: 4058
+    passed: 4058
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/RegExp
+    total: 3756
+    executed: 3756
+    passed: 3756
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/TypedArray
+    total: 2876
+    executed: 2876
+    passed: 2876
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: staging/sm
+    total: 2631
+    executed: 2631
+    passed: 2631
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/String
+    total: 2443
+    executed: 2443
+    passed: 2443
+    manifest_enabled: 3
+    top_skip_reason: none
+  - name: built-ins/Promise
+    total: 1452
+    executed: 1452
+    passed: 1452
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/TypedArrayConstructors
+    total: 1446
+    executed: 1446
+    passed: 1446
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Date
+    total: 1188
+    executed: 1188
+    passed: 1188
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/DataView
+    total: 1122
+    executed: 1122
+    passed: 1122
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/literals
+    total: 1037
+    executed: 1037
+    passed: 1037
+    manifest_enabled: 3
+    top_skip_reason: none
+  - name: built-ins/Iterator
+    total: 1028
+    executed: 1028
+    passed: 1028
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: annexB/language
+    total: 895
+    executed: 895
+    passed: 895
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Function
+    total: 893
+    executed: 893
+    passed: 893
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Atomics
+    total: 778
+    executed: 778
+    passed: 778
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Set
+    total: 764
+    executed: 764
+    passed: 764
+    manifest_enabled: 1
+    top_skip_reason: none
+  - name: built-ins/Number
+    total: 680
+    executed: 680
+    passed: 680
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Math
+    total: 654
+    executed: 654
+    passed: 654
+    manifest_enabled: 42
+    top_skip_reason: none
+  - name: built-ins/Proxy
+    total: 607
+    executed: 607
+    passed: 607
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/module-code
+    total: 602
+    executed: 602
+    passed: 602
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/identifiers
+    total: 535
+    executed: 535
+    passed: 535
+    manifest_enabled: 12
+    top_skip_reason: none
+  - name: intl402/NumberFormat
+    total: 498
+    executed: 498
+    passed: 498
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: intl402/DateTimeFormat
+    total: 488
+    executed: 488
+    passed: 488
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: annexB/built-ins
+    total: 482
+    executed: 482
+    passed: 482
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: language/arguments-object
+    total: 460
+    executed: 460
+    passed: 460
+    manifest_enabled: 10
+    top_skip_reason: none
+  - name: language/eval-code
+    total: 454
+    executed: 454
+    passed: 454
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/ArrayBuffer
+    total: 442
+    executed: 442
+    passed: 442
+    manifest_enabled: 0
+    top_skip_reason: none
+  - name: built-ins/Map
+    total: 405
+    executed: 405
+    passed: 405
+    manifest_enabled: 4
+    top_skip_reason: none
+  - name: other feature areas
+    total: 8496
+    executed: 8496
+    passed: 8496
+    manifest_enabled: 71
+    top_skip_reason: none
+- name: QuickJS differential
+  required: true
+  status: passed
+  counts:
+    total: 99
+    executed: 99
+    passed: 99
+  case_details:
+    completeness: partial
+    recorded_rows: 0
+    omitted_rows: 99
+  duration_ns: 97125526
+  skip_reasons: []
+  feature_areas: []
+benchmarks:
+  name: Benchmarks
+  duration_ns: 9191047231
+  counts:
+    measured: 5
+    in_process_measured: 5
+    failed: 0
+    invalid: 0
+    skipped_reference: 0
+    over_latency_budget: 4
+    over_memory_budget: 0
+  rows:
+  - id: sentinel_arithmetic
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_arithmetic.js
+    iterations: 10
+    case_duration_ns: 1108850000
+    engine:
+      availability: measured
+      wall_duration_ns: 1108830000
+      median_duration_ns: 85070000
+      coefficient_variation_permille: 5
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 14720000
+      coefficient_variation_permille: 1
+    latency_ratio_centi_units: 577
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 2910
+        compile:
+          kind: duration
+          duration_ns: 154581
+        setup:
+          kind: duration
+          duration_ns: 106590
+        warmup:
+          kind: duration
+          duration_ns: 170649134
+        run:
+          kind: duration
+          duration_ns: 850930490
+        verify:
+          kind: duration
+          duration_ns: 86976402
+        teardown:
+          kind: duration
+          duration_ns: 12890
+      checksum:
+        kind: number
+        bits: 4719737225112190976
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_array_index
+    status: within_budget
+    source: tests/corpora/benchmarks/prepared/sentinel_array_index.js
+    iterations: 100
+    case_duration_ns: 650960000
+    engine:
+      availability: measured
+      wall_duration_ns: 650940000
+      median_duration_ns: 4910000
+      coefficient_variation_permille: 6
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 9200000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 53
+    latency_budget: within
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 13080
+        compile:
+          kind: duration
+          duration_ns: 131960
+        setup:
+          kind: duration
+          duration_ns: 2004971
+        warmup:
+          kind: duration
+          duration_ns: 151875587
+        run:
+          kind: duration
+          duration_ns: 491962175
+        verify:
+          kind: duration
+          duration_ns: 4897291
+        teardown:
+          kind: duration
+          duration_ns: 64610
+      checksum:
+        kind: number
+        bits: 4719737225112190976
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: not_counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed
+  - id: sentinel_property_read
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_property_read.js
+    iterations: 9
+    case_duration_ns: 3587110000
+    engine:
+      availability: measured
+      wall_duration_ns: 3587090000
+      median_duration_ns: 325050000
+      coefficient_variation_permille: 2
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 20110000
+      coefficient_variation_permille: 1
+    latency_ratio_centi_units: 1615
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 14120
+        compile:
+          kind: duration
+          duration_ns: 115280
+        setup:
+          kind: duration
+          duration_ns: 54840
+        warmup:
+          kind: duration
+          duration_ns: 323434792
+        run:
+          kind: duration
+          duration_ns: 2928549899
+        verify:
+          kind: duration
+          duration_ns: 334915506
+        teardown:
+          kind: duration
+          duration_ns: 18790
+      checksum:
+        kind: number
+        bits: 4711750372648026112
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_function_call
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_function_call.js
+    iterations: 10
+    case_duration_ns: 2962010000
+    engine:
+      availability: measured
+      wall_duration_ns: 2961990000
+      median_duration_ns: 246800000
+      coefficient_variation_permille: 2
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 17120000
+      coefficient_variation_permille: 0
+    latency_ratio_centi_units: 1441
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 16920
+        compile:
+          kind: duration
+          duration_ns: 117680
+        setup:
+          kind: duration
+          duration_ns: 49890
+        warmup:
+          kind: duration
+          duration_ns: 246699393
+        run:
+          kind: duration
+          duration_ns: 2469494957
+        verify:
+          kind: duration
+          duration_ns: 245608762
+        teardown:
+          kind: duration
+          duration_ns: 15580
+      checksum:
+        kind: number
+        bits: 4607182418800017408
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
+  - id: sentinel_string_scan
+    status: tracked_exception
+    source: tests/corpora/benchmarks/prepared/sentinel_string_scan.js
+    iterations: 10
+    case_duration_ns: 881850000
+    engine:
+      availability: measured
+      wall_duration_ns: 881820000
+      median_duration_ns: 62140000
+      coefficient_variation_permille: 2
+    reference:
+      availability: measured
+      wall_duration_ns: 0
+      median_duration_ns: 2210000
+      coefficient_variation_permille: 1
+    latency_ratio_centi_units: 2800
+    latency_budget: over
+    quality: valid
+    methodology:
+      mode: prepared_execution
+      lifecycle:
+        load:
+          kind: duration
+          duration_ns: 18130
+        compile:
+          kind: duration
+          duration_ns: 134520
+        setup:
+          kind: duration
+          duration_ns: 11507414
+        warmup:
+          kind: duration
+          duration_ns: 186206139
+        run:
+          kind: duration
+          duration_ns: 621346624
+        verify:
+          kind: duration
+          duration_ns: 62029134
+        teardown:
+          kind: duration
+          duration_ns: 595170
+      checksum:
+        kind: number
+        bits: 4704986177113948160
+      reference_source: quickjs_baseline
+    count_contribution:
+      measured: counted
+      in_process_measured: counted
+      failed: not_counted
+      invalid: not_counted
+      skipped_reference: not_counted
+      over_latency_budget: counted
+      over_memory_budget: not_counted
+    detail: sequential benchmark completed; latency budget exception tracked
