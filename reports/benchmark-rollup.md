@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260717T120815Z.md`
-- Task: PR #666: engine: expose JavaScript receivers to host calls
-- Performance: 7.24x (4/5 >1.00x) (from `velum-test-report-20260717T120815Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260717T120815Z.md`)
+- `velum-test-report-20260717T132158Z.md`
+- Task: PR #668: docs: add complete runnable embedding examples
+- Performance: 6.89x (4/5 >1.00x) (from `velum-test-report-20260717T132158Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260717T132158Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260717T120815Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260717T132158Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -595,3 +595,4 @@ Latest report:
 | `20260717T093826Z` `c3da2ab` PR #664: engine: add direct embedding object creation | 6.90x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260717T101432Z` `636cd57` PR #665: bench: add direct embedding API benchmarks | 6.79x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260717T120815Z` `4ed8db7` PR #666: engine: expose JavaScript receivers to host calls | 7.24x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260717T132158Z` `f88ce02` PR #668: docs: add complete runnable embedding examples | 6.89x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
