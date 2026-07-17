@@ -218,6 +218,14 @@ foundation for every later callback and class API.
 
 ### Tranche 3: First-Class Rust Callable Values
 
+Status: partially implemented. `Vm::create_host_function` and
+`Vm::create_host_function_typed` now create retained Rust-backed callables
+without global bindings. They can be passed into JavaScript, stored in ordinary
+properties, invoked later, traced through GC, and collected with their Rust
+captures after the final JavaScript edge disappears. Exposing the observable
+call receiver through `HostCall` remains required before this tranche is
+complete.
+
 Separate creation of a Rust-backed callable value from installation of a named
 global binding. A callable must be passable as an argument, storable in an
 object, retrievable as a retained handle, and callable with an observable

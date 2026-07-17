@@ -16,6 +16,8 @@ use crate::{
     value::{HostFunctionId, Value},
 };
 
+mod callable;
+
 const EMPTY_HOST_FUNCTION_NAME_ERROR: &str = "host function name must not be empty";
 const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
     "host functions cannot return VM-owned handles in the skeleton API";
