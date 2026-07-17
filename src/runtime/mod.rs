@@ -71,6 +71,7 @@ pub use async_trace::{VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength}
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
+pub use embedding::EmbeddingObjectPrototype;
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
 use host_command::HostCommandQueue;
 pub use host_command::{HostAsyncContext, HostCommandRequest, QueuedCallRequest, QueuedCallResult};

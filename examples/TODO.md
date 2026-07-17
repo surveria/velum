@@ -197,8 +197,10 @@ The design must cover:
 Status: implemented on `Vm` with raw, owned, and retained call/property result
 boundaries plus call, explicit-receiver call, method call, construction,
 property get/set/define/delete, descriptor inspection, and callable/constructor
-checks. The public facade delegates to the existing semantic owners and does
-not synthesize source or use eval.
+checks. `Vm::create_object` and `Vm::create_object_with_options` also allocate
+empty ordinary objects with the default, explicit VM-checked, or null prototype
+for later host prototype construction. The public facade delegates to the
+existing semantic owners and does not synthesize source or use eval.
 
 Expose first-class public operations for:
 
@@ -323,7 +325,8 @@ collectible. `HostInstance` and `HostPayload` limits, logical payload bytes,
 rollback, GC, exact-once destruction, snapshots, and teardown are covered by
 direct public API tests. Constructor/class registration, receiver extraction,
 prototype member registration, and async method policy remain to complete this
-tranche.
+tranche. Direct ordinary-object creation now supplies class prototype objects
+without source generation.
 
 Add a VM-local typed host-payload registry plus a class registration surface.
 The JavaScript wrapper remains an ordinary object with standard descriptors,

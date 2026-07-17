@@ -146,6 +146,32 @@ fn traced_values_are_internal_edges_and_payload_cycles_are_collectible() -> Test
 }
 
 #[test]
+fn host_wrapper_can_select_a_null_prototype_without_source() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let host = vm.create_host_object(
+        SharedState {
+            value: Cell::new(5),
+        },
+        HostObjectOptions::new(4).with_null_prototype(),
+    )?;
+
+    ensure_owned(
+        &vm.get_property_owned((&host).into(), PropertyKeyRef::Name("toString"))?,
+        &OwnedValue::Undefined,
+    )?;
+    ensure_usize(
+        vm.host_payload::<SharedState>(&host)?.value.get() as usize,
+        5,
+        "null-prototype host payload",
+    )?;
+
+    host.release()?;
+    vm.collect_garbage()?;
+    ensure_host_storage(&vm, 0, 0, 0)
+}
+
+#[test]
 fn checked_access_rejects_foreign_plain_and_mismatched_values() -> TestResult {
     let engine = Engine::new();
     let mut first = engine.create_vm();
@@ -181,7 +207,10 @@ fn checked_access_rejects_foreign_plain_and_mismatched_values() -> TestResult {
     ) else {
         return Err("primitive prototype unexpectedly created a host object".into());
     };
-    ensure_runtime_error(&error, "host object prototype must be an object or null")?;
+    ensure_runtime_error(
+        &error,
+        "embedding object prototype must be an object or null",
+    )?;
     ensure_usize(
         invalid_prototype_drops.get(),
         1,

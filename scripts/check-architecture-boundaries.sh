@@ -1100,6 +1100,36 @@ check_typed_host_object_boundary() {
   fi
 }
 
+check_embedding_object_creation_boundary() {
+  local source
+
+  for source in \
+    'pub fn create_object(&mut self) -> Result<RetainedValue>' \
+    'pub fn create_object_with_options(' \
+    'pub const fn with_null_prototype(mut self) -> Self {' \
+    'create_with_semantic_prototype(prototype, self.limits.max_objects)?;' \
+    'self.semantic_object_ref(&value)?.is_some()' \
+    'self.objects.reserve_created_object_rollback()?;' \
+    'self.objects.discard_created_empty_object(id)?;'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/object.rs" \
+        "${repo_root}/src/runtime/embedding.rs"; then
+      fail "embedding object creation boundary changed; direct semantic or rollback source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'let mut object = Object::ordinary();' \
+      "${repo_root}/src/runtime/object/heap.rs"; then
+    fail "embedding object creation boundary changed; ordinary ObjectHeap allocation is required"
+  fi
+  if grep -R -E -q --include='*.rs' \
+      '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/api/object.rs" \
+      "${repo_root}/src/runtime/embedding.rs"; then
+    fail "embedding object creation boundary changed; generated source or eval is not an object factory"
+  fi
+}
+
 check_activation_frame_boundary() {
   local legacy_fields
   if ! grep -F -q 'pub(in crate::runtime) enum ActivationFrame {' \
@@ -1716,6 +1746,7 @@ run_checks() {
   require_file src/api/host/async_callable.rs
   require_file src/api/queued_call.rs
   require_file src/api/host_object.rs
+  require_file src/api/object.rs
   require_dir src/compiler
   require_dir src/bytecode
   require_dir src/runtime/bytecode/control
@@ -1743,6 +1774,7 @@ run_checks() {
   check_async_host_future_boundary
   check_async_host_command_boundary
   check_typed_host_object_boundary
+  check_embedding_object_creation_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
   check_structured_control_boundary
@@ -2053,6 +2085,12 @@ mutate_typed_host_object_edge() {
     "${fixture_root}/src/runtime/object/trace.rs"
 }
 
+mutate_embedding_object_creation_rollback() {
+  local fixture_root="$1"
+  portable_sed '/self.objects.discard_created_empty_object(id)?;/d' \
+    "${fixture_root}/src/runtime/embedding.rs"
+}
+
 mutate_gc_cache_invalidation() {
   local fixture_root="$1"
   portable_sed '/self.invalidate_identity_caches();/d' \
@@ -2250,6 +2288,8 @@ run_self_tests() {
     'async host command boundary changed' mutate_async_host_command_semantic_owner
   expect_guard_failure "${temp_dir}" typed-host-object-edge \
     'typed host object boundary changed' mutate_typed_host_object_edge
+  expect_guard_failure "${temp_dir}" embedding-object-creation-rollback \
+    'embedding object creation boundary changed' mutate_embedding_object_creation_rollback
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
     'garbage collection boundary changed' mutate_gc_cache_invalidation
   expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \

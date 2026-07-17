@@ -498,6 +498,15 @@ may change while ordinary wrapper semantics, VM identity checks, explicit
 sharing, edge tracing, exact-once release, and ledger reconciliation remain the
 invariants.
 
+The embedding object factory is the same allocation boundary without a host
+payload association. `Vm::create_object` selects the active realm's canonical
+`Object.prototype`; options can instead select a checked VM-local semantic
+object or null. The result is immediately admitted to the retained-handle
+registry. Root admission failure removes the just-created empty object through
+the same pre-reserved rollback owner used by host wrappers. This facade does
+not compile source, and all later properties, prototypes, descriptors, Proxies,
+and calls remain under the shared semantic-object operations.
+
 Runtime atoms keep source-order `AtomId` values in one append-only name owner;
 the current hash index shares each immutable name payload with that owner and
 adds no second string copy. Atom count and UTF-8 payload-byte limits are

@@ -8,7 +8,69 @@ use crate::{
     value::Value,
 };
 
+use super::RetainedValue;
+
+#[derive(Clone, Copy, Debug)]
+pub enum EmbeddingObjectPrototype<'value> {
+    Default,
+    Null,
+    Explicit(&'value RetainedValue),
+}
+
 impl Context {
+    pub(crate) fn resolve_embedding_object_prototype(
+        &mut self,
+        prototype: EmbeddingObjectPrototype<'_>,
+    ) -> Result<Option<Value>> {
+        match prototype {
+            EmbeddingObjectPrototype::Null => Ok(None),
+            EmbeddingObjectPrototype::Explicit(prototype) => {
+                let value = self.resolve_retained_value(prototype)?;
+                if matches!(value, Value::Null) {
+                    return Ok(None);
+                }
+                if self.semantic_object_ref(&value)?.is_some() {
+                    return Ok(Some(value));
+                }
+                Err(Error::runtime(
+                    "embedding object prototype must be an object or null",
+                ))
+            }
+            EmbeddingObjectPrototype::Default => {
+                let constructor_key = self.object_constructor_property_key()?;
+                let prototype = self.objects.object_prototype_id(
+                    constructor_key,
+                    self.limits.max_objects,
+                    self.limits.max_object_properties,
+                )?;
+                Ok(Some(Value::Object(prototype)))
+            }
+        }
+    }
+
+    pub(crate) fn create_embedding_object(
+        &mut self,
+        prototype: EmbeddingObjectPrototype<'_>,
+    ) -> Result<RetainedValue> {
+        let prototype = self.resolve_embedding_object_prototype(prototype)?;
+        self.objects.reserve_created_object_rollback()?;
+        let value = self
+            .objects
+            .create_with_semantic_prototype(prototype, self.limits.max_objects)?;
+        let Value::Object(id) = value else {
+            return Err(Error::runtime(
+                "ordinary object creation returned a non-object value",
+            ));
+        };
+        match self.retain_embedder_value(Value::Object(id)) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                self.objects.discard_created_empty_object(id)?;
+                Err(error)
+            }
+        }
+    }
+
     pub(crate) fn embedding_callable_status(&self, value: &Value) -> Result<bool> {
         self.semantic_is_callable(value)
     }
