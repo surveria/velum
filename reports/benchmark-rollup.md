@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260716T192948Z.md`
-- Task: PR #657: docs: plan embedding examples and capability roadmap
-- Performance: 6.83x (4/5 >1.00x) (from `velum-test-report-20260716T192948Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260716T192948Z.md`)
+- `velum-test-report-20260717T062115Z.md`
+- Task: PR #658: engine: expose embedding invocation and property APIs
+- Performance: 6.77x (4/5 >1.00x) (from `velum-test-report-20260717T062115Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260717T062115Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260716T192948Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260717T062115Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -586,3 +586,4 @@ Latest report:
 | `20260716T052539Z` `6c4db29` PR #654: tests: prepare local Fuzzilli infrastructure | 6.90x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260716T064326Z` `d1a9431` PR #655: tests: reuse machine-local Fuzzilli binary | 6.78x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260716T192948Z` `ab3dc99` PR #657: docs: plan embedding examples and capability roadmap | 6.83x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260717T062115Z` `41ade4e` PR #658: engine: expose embedding invocation and property APIs | 6.77x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
