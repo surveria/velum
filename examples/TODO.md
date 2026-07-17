@@ -314,6 +314,17 @@ network, filesystem, GUI, and application callbacks.
 
 ### Tranche 6: Typed Host Objects And Classes
 
+Status: the typed payload foundation is implemented. `Vm::create_host_object`
+creates an ordinary wrapper with an optional explicit prototype and checked
+VM-local Rust payload; `Vm::clone_host_object` creates a distinct wrapper that
+shares only that payload. Payload-owned JavaScript values are explicit traced
+internal edges rather than permanent roots, so wrapper cycles remain
+collectible. `HostInstance` and `HostPayload` limits, logical payload bytes,
+rollback, GC, exact-once destruction, snapshots, and teardown are covered by
+direct public API tests. Constructor/class registration, receiver extraction,
+prototype member registration, and async method policy remain to complete this
+tranche.
+
 Add a VM-local typed host-payload registry plus a class registration surface.
 The JavaScript wrapper remains an ordinary object with standard descriptors,
 prototype behavior, callability rules, and Proxy observability. Only the opaque

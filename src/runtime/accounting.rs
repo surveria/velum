@@ -2,8 +2,8 @@ use crate::error::{Error, Result};
 
 use super::Context;
 
-pub(super) const STORAGE_KIND_COUNT: usize = 28;
-const LEDGER_ENFORCED_KINDS: [VmStorageKind; 21] = [
+pub(super) const STORAGE_KIND_COUNT: usize = 30;
+const LEDGER_ENFORCED_KINDS: [VmStorageKind; 23] = [
     VmStorageKind::Binding,
     VmStorageKind::JavaScriptFunction,
     VmStorageKind::NativeFunction,
@@ -19,6 +19,8 @@ const LEDGER_ENFORCED_KINDS: [VmStorageKind; 21] = [
     VmStorageKind::PromiseJob,
     VmStorageKind::HostFuture,
     VmStorageKind::HostCommand,
+    VmStorageKind::HostInstance,
+    VmStorageKind::HostPayload,
     VmStorageKind::RetainedHandle,
     VmStorageKind::TransientRoot,
     VmStorageKind::ExecutionFrame,
@@ -62,6 +64,8 @@ pub enum VmStorageKind {
     Association,
     Module,
     SourceRecord,
+    HostInstance,
+    HostPayload,
 }
 
 impl VmStorageKind {
@@ -94,6 +98,8 @@ impl VmStorageKind {
         Self::Association,
         Self::Module,
         Self::SourceRecord,
+        Self::HostInstance,
+        Self::HostPayload,
     ];
 
     /// Returns every storage category in stable reporting order.
@@ -132,6 +138,8 @@ impl VmStorageKind {
             Self::Association => 25,
             Self::Module => 26,
             Self::SourceRecord => 27,
+            Self::HostInstance => 28,
+            Self::HostPayload => 29,
         }
     }
 }
@@ -354,6 +362,10 @@ impl Context {
             VmStorageKind::HostCommand,
             self.host_commands.active_payload_bytes(),
         )?;
+        counter.record_payload_bytes(
+            VmStorageKind::HostPayload,
+            object_counts.host_payload_bytes(),
+        )?;
         counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)
     }
 
@@ -470,6 +482,8 @@ impl Context {
         counter.record(VmStorageKind::Object, object_counts.objects())?;
         counter.record(VmStorageKind::ObjectProperty, object_counts.properties())?;
         counter.record(VmStorageKind::ByteBuffer, object_counts.byte_buffers())?;
+        counter.record(VmStorageKind::HostInstance, object_counts.host_instances())?;
+        counter.record(VmStorageKind::HostPayload, object_counts.host_payloads())?;
         counter.record(VmStorageKind::CacheEntry, object_counts.cache_entries())?;
         counter.record(VmStorageKind::Association, object_counts.associations())
     }

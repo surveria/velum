@@ -14,8 +14,9 @@ impl ObjectHeap {
         &self,
         visitor: &mut V,
     ) -> Result<()> {
-        for object in &self.objects {
+        for (index, object) in self.objects.indexed() {
             object.visit_strong_edges(visitor)?;
+            self.host_payloads.visit_edges(index, visitor)?;
         }
         for (index, _object) in self.objects.indexed() {
             self.visit_private_slot_strong_edges(index, visitor)?;
@@ -29,7 +30,8 @@ impl ObjectHeap {
         visitor: &mut V,
     ) -> Result<()> {
         self.object(id)?.visit_strong_edges(visitor)?;
-        self.visit_private_slot_strong_edges(id.index(), visitor)
+        self.visit_private_slot_strong_edges(id.index(), visitor)?;
+        self.visit_host_payload_edges(id, visitor)
     }
 
     fn visit_private_slot_strong_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(

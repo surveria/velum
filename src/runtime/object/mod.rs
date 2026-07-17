@@ -10,6 +10,7 @@ mod data;
 mod data_view;
 mod date;
 mod heap;
+mod host_payload;
 mod integrity;
 mod intl;
 mod private_slot;

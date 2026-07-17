@@ -21,6 +21,7 @@ mod storage;
 mod syntax;
 mod value;
 
+pub use crate::api::HostObjectOptions;
 pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
