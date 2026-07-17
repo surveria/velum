@@ -109,7 +109,7 @@ impl Context {
                     .map(Completion::Normal)
             }
             Value::HostFunction(id) => self
-                .eval_host_function(*id, RuntimeCallArgs::values(args))
+                .eval_host_function(*id, RuntimeCallArgs::values(args), &this_value)
                 .map(Completion::Normal),
             Value::Object(id) if self.objects.is_function_prototype(*id)? => {
                 Ok(Completion::Normal(Value::Undefined))

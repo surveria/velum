@@ -1,7 +1,6 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    SharedArrayBufferHandle,
     api::owned_value::OwnedValue,
     error::{Error, Result},
     ownership::VmIdentity,
@@ -9,7 +8,7 @@ use crate::{
     runtime::object::ObjectHeap,
     runtime::retained_values::RetainedValueRegistry,
     runtime::{
-        Context, HostAsyncContext, RealmId, RetainedValue, VmRootSnapshot,
+        Context, RealmId, VmRootSnapshot,
         function::{FunctionIntrinsicDefaults, FunctionProperties},
     },
     syntax::DeclKind,
@@ -17,9 +16,11 @@ use crate::{
 };
 
 mod async_callable;
+mod call;
 mod callable;
 
 pub use async_callable::{HostFuture, HostFutureError, HostTaskResult, IntoOwnedJsValue};
+pub use call::{HostCall, LocalValue};
 
 const EMPTY_HOST_FUNCTION_NAME_ERROR: &str = "host function name must not be empty";
 const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
@@ -231,6 +232,7 @@ impl HostFunction {
         objects: &ObjectHeap,
         retained_values: &RetainedValueRegistry,
         roots: VmRootSnapshot,
+        receiver: &Value,
         args: &[Value],
     ) -> Result<Value> {
         let call = HostCall {
@@ -240,6 +242,7 @@ impl HostFunction {
             retained_values,
             async_context: None,
             roots,
+            receiver,
             args,
         };
         let HostFunctionKind::Callback { callback, .. } = &self.kind else {
@@ -311,181 +314,6 @@ impl fmt::Debug for HostFunction {
             .debug_struct("HostFunction")
             .field("name", &self.name)
             .finish_non_exhaustive()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct LocalValue<'value> {
-    identity: &'value VmIdentity,
-    objects: &'value ObjectHeap,
-    retained_values: &'value RetainedValueRegistry,
-    value: &'value Value,
-}
-
-impl<'value> LocalValue<'value> {
-    /// Returns the VM owner of this callback-local value.
-    #[must_use]
-    pub const fn identity(self) -> &'value VmIdentity {
-        self.identity
-    }
-
-    /// Borrows the underlying JavaScript value for synchronous inspection.
-    #[must_use]
-    pub const fn as_value(self) -> &'value Value {
-        self.value
-    }
-
-    /// Copies this callback-local value into a VM-independent primitive.
-    ///
-    /// # Errors
-    /// Fails for Symbols, objects, and functions, which require a retained
-    /// VM-local handle instead of an owned primitive.
-    pub fn to_owned_value(self) -> Result<OwnedValue> {
-        OwnedValue::try_from(self.value)
-    }
-
-    /// Clones an opaque handle to this value's shared backing store.
-    ///
-    /// # Errors
-    /// Fails when the value is not a `SharedArrayBuffer`.
-    pub fn to_shared_array_buffer(self) -> Result<SharedArrayBufferHandle> {
-        let Value::Object(id) = self.value else {
-            return Err(Error::type_error("value is not a SharedArrayBuffer"));
-        };
-        let Some(buffer) = self.objects.array_buffer(*id)? else {
-            return Err(Error::type_error("value is not a SharedArrayBuffer"));
-        };
-        SharedArrayBufferHandle::from_buffer(&buffer)
-    }
-
-    /// Retains this callback-local value beyond the active host call.
-    ///
-    /// # Errors
-    /// Fails when retained-slot allocation fails.
-    pub fn retain(self) -> Result<RetainedValue> {
-        self.retained_values
-            .retain(self.identity, self.value.clone())
-    }
-
-    /// Creates a JavaScript throw that remains bound to the argument's VM.
-    #[must_use]
-    pub fn javascript_error(self) -> Error {
-        Error::javascript_local(self.identity.clone(), self.value.clone())
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct HostCall<'call> {
-    function_name: &'call str,
-    identity: &'call VmIdentity,
-    objects: &'call ObjectHeap,
-    retained_values: &'call RetainedValueRegistry,
-    async_context: Option<&'call HostAsyncContext>,
-    roots: VmRootSnapshot,
-    args: &'call [Value],
-}
-
-impl<'call> HostCall<'call> {
-    #[must_use]
-    pub const fn function_name(self) -> &'call str {
-        self.function_name
-    }
-
-    /// Returns the direct-root snapshot captured immediately before this host
-    /// callback began.
-    #[must_use]
-    pub const fn root_snapshot(self) -> VmRootSnapshot {
-        self.roots
-    }
-
-    /// Returns a VM-bound sender for queued JavaScript calls.
-    ///
-    /// The sender is available only while starting an asynchronous host
-    /// function. It can be moved into that function's Rust future and never
-    /// borrows or reenters the VM.
-    ///
-    /// # Errors
-    /// Fails when a synchronous host callback requests an async context.
-    pub fn async_context(self) -> Result<HostAsyncContext> {
-        self.async_context.cloned().ok_or_else(|| {
-            Error::runtime("async JavaScript context requires an async host function")
-        })
-    }
-
-    #[must_use]
-    pub const fn len(self) -> usize {
-        self.args.len()
-    }
-
-    #[must_use]
-    pub const fn is_empty(self) -> bool {
-        self.args.is_empty()
-    }
-
-    #[must_use]
-    pub fn value(self, index: usize) -> Option<LocalValue<'call>> {
-        self.args.get(index).map(|value| LocalValue {
-            identity: self.identity,
-            objects: self.objects,
-            retained_values: self.retained_values,
-            value,
-        })
-    }
-
-    /// # Errors
-    /// Fails when the argument is missing.
-    pub fn required_value(self, index: usize, label: &str) -> Result<LocalValue<'call>> {
-        let Some(value) = self.value(index) else {
-            return Err(Self::missing_argument(index, label));
-        };
-        Ok(value)
-    }
-
-    /// # Errors
-    /// Fails when the argument is missing or is not a JavaScript number.
-    pub fn number(self, index: usize, label: &str) -> Result<f64> {
-        self.argument(index, label)
-    }
-
-    /// # Errors
-    /// Fails when the argument is missing or is not a JavaScript string.
-    pub fn string(self, index: usize, label: &str) -> Result<&'call str> {
-        self.argument(index, label)
-    }
-
-    /// # Errors
-    /// Fails when the argument is missing or is not a JavaScript boolean.
-    pub fn boolean(self, index: usize, label: &str) -> Result<bool> {
-        self.argument(index, label)
-    }
-
-    /// # Errors
-    /// Fails when the argument is missing or cannot be converted into `T`.
-    pub fn argument<T>(self, index: usize, label: &str) -> Result<T>
-    where
-        T: FromJsValue<'call>,
-    {
-        let value = self.required_value(index, label)?;
-        let Some(converted) = T::from_js_value(value.as_value()) else {
-            return Err(Self::type_error(
-                index,
-                label,
-                T::EXPECTED_TYPE,
-                value.as_value(),
-            ));
-        };
-        Ok(converted)
-    }
-
-    fn missing_argument(index: usize, label: &str) -> Error {
-        Error::runtime(format!("missing argument '{label}' at index {index}"))
-    }
-
-    fn type_error(index: usize, label: &str, expected: &str, actual: &Value) -> Error {
-        Error::runtime(format!(
-            "argument '{label}' at index {index} expected {expected}, got {}",
-            actual.type_name()
-        ))
     }
 }
 
@@ -646,10 +474,13 @@ impl Context {
         &mut self,
         id: HostFunctionId,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
     ) -> Result<Value> {
         let values = args.to_owned_values();
-        let _root_scope =
-            self.transient_root_scope(crate::runtime::VmRootKind::TransientCall, values.iter())?;
+        let _root_scope = self.transient_root_scope(
+            crate::runtime::VmRootKind::TransientCall,
+            std::iter::once(this_value).chain(values.iter()),
+        )?;
         let function = self.host_function(id)?.clone();
         if let Some(operation) = function.operation_kind() {
             return self
@@ -675,6 +506,7 @@ impl Context {
                 retained_values: self.retained_value_registry(),
                 async_context: Some(&async_context),
                 roots,
+                receiver: this_value,
                 args: &values,
             };
             return match function.start_async(call) {
@@ -692,6 +524,7 @@ impl Context {
             &self.objects,
             self.retained_value_registry(),
             roots,
+            this_value,
             &values,
         )?;
         if allow_vm_handles {

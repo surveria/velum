@@ -94,7 +94,7 @@ check_owned_value_boundary() {
     fail "OwnedValue boundary admitted a VM-local id or identity-bearing value"
   fi
   if ! grep -F -q 'pub fn to_owned_value(self) -> Result<OwnedValue>' \
-      "${repo_root}/src/api/host.rs" \
+      "${repo_root}/src/api/host/call.rs" \
     || ! grep -F -q 'pub fn eval_owned(&mut self, source: &str) -> Result<OwnedValue>' \
       "${repo_root}/src/api/owned_value.rs" \
     || ! grep -F -q 'impl IntoJsValue for OwnedValue' \
@@ -126,7 +126,7 @@ check_retained_value_boundary() {
     || ! grep -F -q 'pub fn get_global_retained(&self, name: &str) -> Result<Option<RetainedValue>>' \
       "${repo_root}/src/api/embedding.rs" \
     || ! grep -F -q 'pub fn retain(self) -> Result<RetainedValue>' \
-      "${repo_root}/src/api/host.rs" \
+      "${repo_root}/src/api/host/call.rs" \
     || ! grep -F -q 'if identity != &self.identity' \
       "${repo_root}/src/runtime/retained_values.rs" \
     || ! grep -F -q '|| &handle.identity != identity' \
@@ -667,8 +667,8 @@ src/runtime/native/builtins/shadow_realm.rs'
       /^pub struct LocalValue/ { inside = 1; next }
       inside && /^}/ { exit }
       inside { print }
-    ' "${repo_root}/src/api/host.rs"
-  } | tr -d '[:space:]')"
+    ' "${repo_root}/src/api/host/call.rs"
+  } | sed -E 's/pub\(super\)//g' | tr -d '[:space:]')"
   if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,objects:&'valueObjectHeap,retained_values:&'valueRetainedValueRegistry,value:&'valueValue," ]]; then
     fail "host local-value boundary changed; LocalValue requires borrowed owner, object heap, retained registry, and Value"
   fi
@@ -677,13 +677,13 @@ src/runtime/native/builtins/shadow_realm.rs'
       /^pub struct HostCall/ { inside = 1; next }
       inside && /^}/ { exit }
       inside { print }
-    ' "${repo_root}/src/api/host.rs"
-  } | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,async_context:Option<&'callHostAsyncContext>,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
-    fail "host local-value boundary changed; HostCall requires the active VM identity, object heap, retained registry, and optional async command sender"
+    ' "${repo_root}/src/api/host/call.rs"
+  } | sed -E 's/pub\(super\)//g' | tr -d '[:space:]')"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,async_context:Option<&'callHostAsyncContext>,roots:VmRootSnapshot,receiver:&'callValue,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM owner, callback-local receiver and arguments, root snapshot, and optional async command sender"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
-      "${repo_root}/src/api/host.rs" \
+      "${repo_root}/src/api/host/call.rs" \
     || ! grep -F -q 'identity != context.identity()' \
       "${repo_root}/src/runtime/control/assertions.rs"; then
     fail "host local-value boundary changed; JavaScript host errors require owner validation"
@@ -951,7 +951,7 @@ check_direct_root_boundary() {
     || ! grep -F -q 'pub fn root_snapshot(&self) -> Result<VmRootSnapshot>' \
       "${repo_root}/src/api/embedding.rs" \
     || ! grep -F -q 'pub const fn root_snapshot(self) -> VmRootSnapshot' \
-      "${repo_root}/src/api/host.rs" \
+      "${repo_root}/src/api/host/call.rs" \
     || ! grep -F -q 'pub(in crate::runtime) struct TransientRootRegistry {' \
       "${repo_root}/src/runtime/transient_roots.rs" \
     || ! grep -F -q '#[must_use = "transient roots must stay alive across the allocation point"]' \
@@ -1015,6 +1015,7 @@ check_async_host_command_boundary() {
     'VmStorageKind::HostCommand'; do
     if ! grep -R -q -F --include='*.rs' "${source}" \
         "${repo_root}/src/api/host.rs" \
+        "${repo_root}/src/api/host/call.rs" \
         "${repo_root}/src/api/host/async_callable.rs" \
         "${repo_root}/src/runtime/host_command.rs" \
         "${repo_root}/src/runtime/host_command" \
@@ -1966,7 +1967,7 @@ mutate_update_numeric_coercion_owner() {
 mutate_host_local_value_identity() {
   local fixture_root="$1"
   portable_sed '/    identity: &.value VmIdentity,/d' \
-    "${fixture_root}/src/api/host.rs"
+    "${fixture_root}/src/api/host/call.rs"
 }
 
 mutate_javascript_exception_visibility() {

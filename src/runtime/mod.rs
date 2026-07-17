@@ -538,7 +538,7 @@ impl Context {
                 .eval_native_function_in_realm(function, kind, args, &this_value)
                 .map(Completion::Normal),
             CallValueCache::HostFunction(id) => self
-                .eval_host_function(id, RuntimeCallArgs::values(args))
+                .eval_host_function(id, RuntimeCallArgs::values(args), &this_value)
                 .map(Completion::Normal),
         }
     }
