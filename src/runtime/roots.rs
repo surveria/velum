@@ -2,7 +2,7 @@ use crate::{error::Result, value::Value};
 
 use super::{Context, binding::scope::BindingScope, object::PropertyKey, promise::PromiseId};
 
-const ROOT_KIND_COUNT: usize = 15;
+const ROOT_KIND_COUNT: usize = 16;
 
 /// Direct VM root categories that exist independently of heap trace edges.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -17,6 +17,7 @@ pub enum VmRootKind {
     ActiveSuper,
     BytecodeFrame,
     QueuedJob,
+    HostFuture,
     RuntimeAnchor,
     RetainedHandle,
     TransientOperand,
@@ -36,6 +37,7 @@ impl VmRootKind {
         Self::ActiveSuper,
         Self::BytecodeFrame,
         Self::QueuedJob,
+        Self::HostFuture,
         Self::RuntimeAnchor,
         Self::RetainedHandle,
         Self::TransientOperand,
@@ -61,11 +63,12 @@ impl VmRootKind {
             Self::ActiveSuper => 7,
             Self::BytecodeFrame => 8,
             Self::QueuedJob => 9,
-            Self::RuntimeAnchor => 10,
-            Self::RetainedHandle => 11,
-            Self::TransientOperand => 12,
-            Self::TransientCall => 13,
-            Self::TransientTemporary => 14,
+            Self::HostFuture => 10,
+            Self::RuntimeAnchor => 11,
+            Self::RetainedHandle => 12,
+            Self::TransientOperand => 13,
+            Self::TransientCall => 14,
+            Self::TransientTemporary => 15,
         }
     }
 
@@ -205,6 +208,7 @@ impl Context {
         for job in &self.promise_jobs {
             job.visit_direct_roots(visitor)?;
         }
+        self.visit_host_future_roots(visitor)?;
         self.retained_values.visit(visitor)?;
         self.transient_roots.visit(visitor)?;
         Ok(())

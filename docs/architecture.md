@@ -313,6 +313,26 @@ can be copied with `LocalValue::to_owned_value` or rooted beyond the callback
 with `LocalValue::retain`. VM-owned object/function callback returns remain
 conservative until host returns accept `RetainedValue` directly.
 
+Async Rust callbacks use `register_async_host_function` or the typed variant.
+The synchronous callback entry must copy primitive arguments or retain
+VM-local values before returning a `'static` Rust future. Invocation creates an
+ordinary pending JavaScript Promise and records the future as a checked
+`HostFuture` storage owner whose direct root keeps the Promise record alive.
+The engine does not choose or run an executor: the application supplies a
+standard task context to `poll_host_futures`. A completed future resolves or
+rejects its existing Promise, appends reactions to the same FIFO Promise job
+queue used by JavaScript async functions and modules, and releases its owner
+exactly once. `cancel_host_futures` drops captures and rejects pending Promises;
+reaction execution remains an explicit `run_jobs` step.
+
+Async success values cross the suspension boundary only as `OwnedValue`
+primitives. A future never holds `&mut Vm`, raw arena identifiers, or a
+callback-local `Value`. Rust errors are materialized as JavaScript Error
+objects with host-function context. Preserving an arbitrary JavaScript thrown
+value across a Rust await requires the later retained command/result bridge;
+the current future-result boundary deliberately does not treat an unrooted
+exception value as durable.
+
 ## Safety Policy
 
 The crate uses `#![deny(unsafe_code)]`, and the lint is also declared in `Cargo.toml`.

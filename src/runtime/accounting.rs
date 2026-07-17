@@ -2,8 +2,8 @@ use crate::error::{Error, Result};
 
 use super::Context;
 
-pub(super) const STORAGE_KIND_COUNT: usize = 26;
-const LEDGER_ENFORCED_KINDS: [VmStorageKind; 19] = [
+pub(super) const STORAGE_KIND_COUNT: usize = 27;
+const LEDGER_ENFORCED_KINDS: [VmStorageKind; 20] = [
     VmStorageKind::Binding,
     VmStorageKind::JavaScriptFunction,
     VmStorageKind::NativeFunction,
@@ -17,6 +17,7 @@ const LEDGER_ENFORCED_KINDS: [VmStorageKind; 19] = [
     VmStorageKind::Promise,
     VmStorageKind::PromiseReaction,
     VmStorageKind::PromiseJob,
+    VmStorageKind::HostFuture,
     VmStorageKind::RetainedHandle,
     VmStorageKind::TransientRoot,
     VmStorageKind::ExecutionFrame,
@@ -50,6 +51,7 @@ pub enum VmStorageKind {
     Promise,
     PromiseReaction,
     PromiseJob,
+    HostFuture,
     RetainedHandle,
     TransientRoot,
     ExecutionFrame,
@@ -80,6 +82,7 @@ impl VmStorageKind {
         Self::Promise,
         Self::PromiseReaction,
         Self::PromiseJob,
+        Self::HostFuture,
         Self::RetainedHandle,
         Self::TransientRoot,
         Self::ExecutionFrame,
@@ -116,14 +119,15 @@ impl VmStorageKind {
             Self::Promise => 15,
             Self::PromiseReaction => 16,
             Self::PromiseJob => 17,
-            Self::RetainedHandle => 18,
-            Self::TransientRoot => 19,
-            Self::ExecutionFrame => 20,
-            Self::OutputEntry => 21,
-            Self::CacheEntry => 22,
-            Self::Association => 23,
-            Self::Module => 24,
-            Self::SourceRecord => 25,
+            Self::HostFuture => 18,
+            Self::RetainedHandle => 19,
+            Self::TransientRoot => 20,
+            Self::ExecutionFrame => 21,
+            Self::OutputEntry => 22,
+            Self::CacheEntry => 23,
+            Self::Association => 24,
+            Self::Module => 25,
+            Self::SourceRecord => 26,
         }
     }
 }
@@ -483,6 +487,7 @@ impl Context {
             self.promise_reaction_count()?,
         )?;
         counter.record(VmStorageKind::PromiseJob, self.promise_jobs.len())?;
+        counter.record(VmStorageKind::HostFuture, self.host_futures.len())?;
         counter.record(
             VmStorageKind::RetainedHandle,
             self.retained_values.active_count(),

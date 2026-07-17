@@ -8,7 +8,7 @@ fn fresh_vm_has_a_complete_empty_storage_map() -> TestResult {
     let vm = engine.create_vm();
     let snapshot = vm.storage_snapshot()?;
 
-    ensure_usize(VmStorageKind::all().len(), 26, "storage kind count")?;
+    ensure_usize(VmStorageKind::all().len(), 27, "storage kind count")?;
     ensure(snapshot.is_empty(), "fresh VM storage should be empty")?;
     ensure_usize(snapshot.total(), 0, "fresh storage total")?;
     ensure_usize(

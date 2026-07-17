@@ -229,8 +229,11 @@ fn main() -> velum::Result<()> {
 
 The public surface also includes module compilation and embedder-controlled
 loading, multiple realms, explicit Promise job draining and cancellation,
+runtime-agnostic async Rust host functions with embedder-driven polling,
 portable `OwnedValue`s, VM-bound `RetainedValue`s, configurable runtime and
-storage limits, and heap/optimization snapshots.
+storage limits, and heap/optimization snapshots. Async host calls return
+ordinary JavaScript Promises; `poll_host_futures` advances Rust futures and
+`run_jobs` separately drains the Promise reactions they enqueue.
 
 ## Interesting internals
 

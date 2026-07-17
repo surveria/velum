@@ -16,13 +16,17 @@ use crate::{
     value::{HostFunctionId, Value},
 };
 
+mod async_callable;
 mod callable;
+
+pub use async_callable::{HostFuture, IntoOwnedJsValue};
 
 const EMPTY_HOST_FUNCTION_NAME_ERROR: &str = "host function name must not be empty";
 const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
     "host functions cannot return VM-owned handles in the skeleton API";
 
 type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
+type AsyncHostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<HostFuture>;
 
 /// Engine-owned operations that an embedder can expose under a chosen global
 /// function name.
@@ -154,6 +158,9 @@ enum HostFunctionKind {
         callback: Rc<HostCallback>,
         allow_vm_handles: bool,
     },
+    AsyncCallback {
+        callback: Rc<AsyncHostCallback>,
+    },
     Operation(HostOperation),
     RealmEval(RealmId),
     IsHtmlDda,
@@ -264,6 +271,7 @@ impl HostFunction {
         match self.kind {
             HostFunctionKind::Operation(operation) => Some(operation),
             HostFunctionKind::Callback { .. }
+            | HostFunctionKind::AsyncCallback { .. }
             | HostFunctionKind::RealmEval(_)
             | HostFunctionKind::IsHtmlDda => None,
         }
@@ -273,6 +281,7 @@ impl HostFunction {
         match &self.kind {
             HostFunctionKind::RealmEval(realm) => Some(realm.clone()),
             HostFunctionKind::Callback { .. }
+            | HostFunctionKind::AsyncCallback { .. }
             | HostFunctionKind::Operation(_)
             | HostFunctionKind::IsHtmlDda => None,
         }
@@ -287,7 +296,8 @@ impl HostFunction {
             HostFunctionKind::Callback {
                 allow_vm_handles, ..
             } => allow_vm_handles,
-            HostFunctionKind::Operation(_)
+            HostFunctionKind::AsyncCallback { .. }
+            | HostFunctionKind::Operation(_)
             | HostFunctionKind::RealmEval(_)
             | HostFunctionKind::IsHtmlDda => false,
         }
@@ -637,6 +647,25 @@ impl Context {
         }
         if function.is_html_dda_kind() {
             return Ok(Value::Null);
+        }
+        if function.is_async() {
+            let admission = self.prepare_host_future()?;
+            let roots = self.root_snapshot()?;
+            let call = HostCall {
+                function_name: function.name.as_str(),
+                identity: self.identity(),
+                objects: &self.objects,
+                retained_values: self.retained_value_registry(),
+                roots,
+                args: &values,
+            };
+            return match function.start_async(call) {
+                Ok(future) => self.activate_host_future(admission, future),
+                Err(error) => {
+                    drop(admission);
+                    self.create_rejected_host_future(&error)
+                }
+            };
         }
         let allow_vm_handles = function.allows_vm_handles();
         let roots = self.root_snapshot()?;

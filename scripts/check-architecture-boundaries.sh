@@ -962,6 +962,42 @@ check_direct_root_boundary() {
   fi
 }
 
+check_async_host_future_boundary() {
+  local poll_owner
+  for source in \
+    'pub type HostFuture = Pin<Box<dyn Future<Output = Result<OwnedValue>>' \
+    'pub fn poll_host_futures(' \
+    'pub fn cancel_host_futures(&mut self) -> Result<usize>'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/api/host/async_callable.rs"; then
+      fail "async host future boundary changed; public owned-result source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    '.reserve_count(VmStorageKind::HostFuture, 1)?' \
+    'let (promise, object) = self.create_pending_promise()?;' \
+    'Ok(value) => self.resolve_promise(promise, value),' \
+    'self.reject_promise(promise, reason)' \
+    'visitor.visit_promise(VmRootKind::HostFuture, future.promise)?;'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/host_future.rs"; then
+      fail "async host future boundary changed; shared Promise/root source '${source}' is missing"
+    fi
+  done
+
+  poll_owner="$(
+    sed -n '/pub fn poll_host_futures(/,/^    }/p' \
+      "${repo_root}/src/runtime/host_future.rs"
+  )"
+  if grep -F -q 'self.run_jobs(' <<<"${poll_owner}"; then
+    fail "async host future boundary changed; Rust polling must not execute JavaScript jobs"
+  fi
+  if grep -E -q '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/api/host/async_callable.rs" \
+      "${repo_root}/src/runtime/host_future.rs"; then
+    fail "async host future boundary changed; source evaluation is not an async bridge"
+  fi
+}
+
 check_activation_frame_boundary() {
   local legacy_fields
   if ! grep -F -q 'pub(in crate::runtime) enum ActivationFrame {' \
@@ -1557,6 +1593,7 @@ run_checks() {
   require_file src/runtime/function/suspended.rs
   require_file src/runtime/optimizer.rs
   require_file src/runtime/gc.rs
+  require_file src/runtime/host_future.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1570,6 +1607,7 @@ run_checks() {
   require_file src/bytecode/block.rs
   require_file src/runtime/object/mod.rs
   require_file src/api/embedding.rs
+  require_file src/api/host/async_callable.rs
   require_dir src/compiler
   require_dir src/bytecode
   require_dir src/runtime/bytecode/control
@@ -1594,6 +1632,7 @@ run_checks() {
   check_destructuring_assignment_boundary
   check_update_numeric_coercion_boundary
   check_direct_root_boundary
+  check_async_host_future_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
   check_structured_control_boundary
@@ -1886,6 +1925,12 @@ mutate_gc_root_source() {
     "${fixture_root}/src/runtime/gc.rs"
 }
 
+mutate_async_host_future_promise_owner() {
+  local fixture_root="$1"
+  portable_sed '/Ok(value) => self.resolve_promise(promise, value),/d' \
+    "${fixture_root}/src/runtime/host_future.rs"
+}
+
 mutate_gc_cache_invalidation() {
   local fixture_root="$1"
   portable_sed '/self.invalidate_identity_caches();/d' \
@@ -2077,6 +2122,8 @@ run_self_tests() {
     'asynchronous edge boundary changed' mutate_promise_reaction_edge
   expect_guard_failure "${temp_dir}" gc-root-source \
     'garbage collection boundary changed' mutate_gc_root_source
+  expect_guard_failure "${temp_dir}" async-host-future-promise-owner \
+    'async host future boundary changed' mutate_async_host_future_promise_owner
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
     'garbage collection boundary changed' mutate_gc_cache_invalidation
   expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \
