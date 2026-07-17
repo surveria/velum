@@ -21,8 +21,6 @@ mod storage;
 mod syntax;
 mod value;
 
-pub use crate::api::HostObjectOptions;
-pub use crate::api::ObjectOptions;
 pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
@@ -36,6 +34,7 @@ pub use crate::api::invocation::{
 };
 pub use crate::api::owned_value::OwnedValue;
 pub use crate::api::shared_array_buffer::SharedArrayBufferHandle;
+pub use crate::api::{HostClass, HostInstance, HostMethodResult, HostObjectOptions, ObjectOptions};
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_module::{
     CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImport, ModuleImportName,

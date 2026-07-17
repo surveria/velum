@@ -350,8 +350,17 @@ impl Context {
                         Error::type_error("Cannot resolve the realm of a revoked Proxy")
                     })?;
                 }
-                Value::HostFunction(_)
-                | Value::Undefined
+                Value::HostFunction(id) => {
+                    let realm = self
+                        .host_function(id)?
+                        .realm()
+                        .ok_or_else(|| Error::runtime("host function realm is not initialized"))?;
+                    if realm.identity != self.identity {
+                        return Err(Error::runtime("host function realm belongs to another VM"));
+                    }
+                    return Ok(realm.index);
+                }
+                Value::Undefined
                 | Value::Null
                 | Value::Bool(_)
                 | Value::Number(_)

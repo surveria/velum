@@ -47,9 +47,9 @@ engine API must still land before the example can be written honestly.
 | 01 | `01_basic_eval` | Deferred | Evaluate named source, return an `OwnedValue`, capture output, and classify errors. |
 | 02 | `02_typed_host_functions` | Deferred | Register synchronous typed Rust functions with checked arguments, return conversion, captured application state, and contextual errors. |
 | 03 | `03_async_rust_javascript_roundtrip` | Ready to implement | Demonstrate an awaited Rust-to-JavaScript-to-Rust-to-JavaScript round trip without reentrant mutable VM access. |
-| 04 | `04_callbacks_and_intervals` | Capability work | Pass a Rust callable into JavaScript, retain it on a JavaScript object, and invoke it ten times through an embedder-provided interval scheduler. |
-| 05 | `05_rust_backed_websocket` | Capability work | Expose a mock JavaScript `WebSocket` class whose instances own typed Rust state and methods. |
-| 06 | `06_javascript_class_from_rust` | Capability work | Construct a JavaScript class from Rust, call methods, await a method result, inspect and mutate fields, add a property, and replace a method. |
+| 04 | `04_callbacks_and_intervals` | Ready to implement | Pass a Rust callable into JavaScript, retain it on a JavaScript object, and invoke it ten times through an embedder-provided interval scheduler. |
+| 05 | `05_rust_backed_websocket` | Ready to implement | Expose a mock JavaScript `WebSocket` class whose instances own typed Rust state and methods. |
+| 06 | `06_javascript_class_from_rust` | Ready to implement | Construct a JavaScript class from Rust, call methods, await a method result, inspect and mutate fields, add a property, and replace a method. |
 | 07 | `07_values_and_handles` | Deferred | Explain portable `OwnedValue`, VM-bound `RetainedValue`, callback-local values, explicit release, GC rooting, and cross-VM rejection. |
 | 08 | `08_compile_once_run_many` | Deferred | Compile once, execute repeatedly in one VM, and share immutable compiled code across isolated VMs. |
 | 09 | `09_sandboxed_execution` | Deferred | Configure source, stack, runtime-step, storage, object, string, and buffer limits with a deterministic clock and structured failures. |
@@ -318,17 +318,23 @@ network, filesystem, GUI, and application callbacks.
 
 ### Tranche 6: Typed Host Objects And Classes
 
-Status: the typed payload foundation is implemented. `Vm::create_host_object`
+Status: implemented. `Vm::create_host_object`
 creates an ordinary wrapper with an optional explicit prototype and checked
 VM-local Rust payload; `Vm::clone_host_object` creates a distinct wrapper that
 shares only that payload. Payload-owned JavaScript values are explicit traced
 internal edges rather than permanent roots, so wrapper cycles remain
 collectible. `HostInstance` and `HostPayload` limits, logical payload bytes,
 rollback, GC, exact-once destruction, snapshots, and teardown are covered by
-direct public API tests. Constructor/class registration, receiver extraction,
-prototype member registration, and async method policy remain to complete this
-tranche. Direct ordinary-object creation now supplies class prototype objects
-without source generation.
+direct public API tests. `HostClass<T>` registers a realm-bound constructable
+host function with ordinary prototype methods, getters, setters, sync/async
+static members, and typed async methods. Construction honors
+`newTarget.prototype`, including subclasses, and exposes callback-local
+`new.target`. `LocalValue::host_payload` checks method receivers before
+embedder logic starts. `HostMethodResult` can return portable values, checked
+retained values, or an explicitly shared wrapper through the existing payload
+clone owner. Direct tests cover descriptors, Rust- and JavaScript-driven
+construction, subclassing, async settlement, wrong receivers, traced cycles,
+limits, rollback, and shared payload identity without source generation.
 
 Add a VM-local typed host-payload registry plus a class registration surface.
 The JavaScript wrapper remains an ordinary object with standard descriptors,

@@ -54,7 +54,7 @@ now use the ordinary `Object(ObjectId)` representation.
 | `Object(ObjectId)` | `ObjectId(usize)` into `Context.objects: ObjectHeap` | `ObjectHeap`, with Proxy pre-dispatch in `Context` and built-ins | callable/constructable Proxy objects enter `semantic_call`/`semantic_construct` using immutable capability flags | AS-02a facade and AS-02b/AS-02c internal methods |
 | `Function(FunctionId)` | `FunctionId(usize)` into `Context.functions` | `FunctionProperties` in `runtime/function/properties.rs` | `semantic_call`/`semantic_construct`, with bytecode functions as the payload backend | AS-02a/AS-02c; retain the function arena as a payload store if useful |
 | `NativeFunction(NativeFunctionId)` | `NativeFunctionId(usize)` into `Context.native_functions`, plus `NativeFunctionRegistry` | a second `FunctionProperties` implementation path | common semantic dispatch with guarded direct-native call/construct backends | AS-02a/AS-02c; native code remains a payload behind common methods |
-| `HostFunction(HostFunctionId)` | `HostFunctionId(usize)` into `Context.host_functions` | the shared `FunctionProperties` owner, including realm-correct inheritance, descriptors, own keys, integrity state, ledger charges, and typed strong edges | `semantic_call`; never constructable | AS-02a/AS-02c and AS-05a host-handle boundary; host object surface completed by the callable-as-object audit tranche |
+| `HostFunction(HostFunctionId)` | `HostFunctionId(usize)` into `Context.host_functions` | the shared `FunctionProperties` owner, including realm-correct inheritance, descriptors, own keys, integrity state, ledger charges, typed strong edges, and an explicit creation realm | `semantic_call`; host-class constructors also enter `semantic_construct`, honor `newTarget`, and allocate ordinary typed-payload wrappers | AS-02a/AS-02c and AS-05a host-handle boundary; host object and constructable class surfaces use the same callable and semantic-object owners |
 
 AS-04b1 stores stable built-in Error class/message metadata in an `Object`
 internal slot. The JavaScript-visible `name`, `message`, descriptor, prototype,
@@ -498,6 +498,24 @@ may change while ordinary wrapper semantics, VM identity checks, explicit
 sharing, edge tracing, exact-once release, and ledger reconciliation remain the
 invariants.
 
+Typed host classes build directly on that wrapper invariant. `HostClass<T>`
+creates one realm-bound constructable `HostFunction`; the semantic construct
+owner validates `newTarget`, reads its observable `prototype`, selects the
+new-target realm's `Object.prototype` fallback, calls the Rust payload factory,
+and attaches the erased typed payload while its declared JavaScript traces are
+still retained. Class methods and accessors are ordinary non-enumerable,
+configurable descriptors on an ordinary prototype object. Receiver extraction
+uses the callback-local `LocalValue` and the existing object-to-payload
+association before embedder logic starts. Static and async members remain
+ordinary host callables; async entry can only copy or clone payload-owned state
+into an owned future. A shared-wrapper method delegates to the same explicit
+payload-clone owner as `Vm::clone_host_object`. Construction, subclassing,
+descriptors, Proxy behavior, GC cycles, limits, and teardown therefore have no
+host-only semantic path. Class registration keeps explicit retained staging
+roots and raw ids for only the newly created prototype and callables; a
+mid-registration limit or descriptor failure drops those roots, removes that
+isolated graph, and reconciles its ledger charges before returning the error.
+
 The embedding object factory is the same allocation boundary without a host
 payload association. `Vm::create_object` selects the active realm's canonical
 `Object.prototype`; options can instead select a checked VM-local semantic
@@ -634,6 +652,10 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   type-checked extraction of an opaque, thread-safe shared backing-store handle
   without exposing raw object ids. Arbitrary host JavaScript throws are created
   from this local capability rather than an unowned Value;
+- host-class constructor calls additionally expose callback-local `new.target`;
+  `LocalValue::host_payload` borrows typed receiver state only for the active
+  call, and an async method must finish that borrow before returning its owned
+  future;
 - host return validation rejects Function, NativeFunction, HostFunction, and
   Object. Same-VM `String(JsString)` and `Symbol` values remain permitted,
   portable strings are admitted centrally, and foreign owners are rejected
@@ -937,6 +959,7 @@ without pinning implementation statements.
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
 | embedding invocation boundary | JsValueRef inputs resolve portable data or source-proven retained handles before dispatch; Vm call, method, construct, get, set, define, delete, and descriptor operations delegate to the existing semantic owners; durable results and descriptor members are explicit RetainedValue roots, while JavaScript throws regain VM identity and metadata at the public boundary | generated-source or eval bridges, a parallel call/property implementation, dispatch before all retained inputs are owner-checked, durable raw Value ids, descriptor values without root ownership, or an identityless JavaScript exception |
 | first-class host callable boundary | public Rust callables use the existing VM-local HostFunction arena and semantic call owner without a required global binding; creation returns a source-proven RetainedValue transactionally, and later JavaScript storage, tracing, collection, error context, accounting, and capture destruction use the existing callable owners | a host-only callable representation, mandatory global installation, an unrooted public callable id, a retained-limit failure that leaks an arena entry or accounting, or callback storage outside ordinary trace and GC ownership |
+| typed host class boundary | `HostClass<T>` registers a realm-bound constructable HostFunction whose `[[Construct]]` dispatch resolves ordinary `newTarget` prototype semantics and attaches `HostInstance<T>` through the existing typed-payload registry; methods, accessors, statics, async entry, retained results, and explicitly shared wrappers remain ordinary callable/property/object operations with callback-local receiver checks | eval or generated class source, a host-only object or construct path, payload access before VM/type validation, a payload borrow held across await, implicit payload sharing, untraced instance values, or construction outside host instance/payload limits and GC ownership |
 | async host future boundary | async Rust callables remain ordinary HostFunction values; synchronous entry copies or retains arguments before producing a runtime-agnostic future, each pending future owns and directly roots one existing Promise record, embedder polling settles through the shared Promise owner, command-aware tasks can carry an exactly rooted JavaScript rejection while ordinary tasks retain the ergonomic `Result<T, Error>` contract, reactions enter the ordinary FIFO job queue, and completion or cancellation releases typed HostFuture accounting exactly once | holding a mutable VM borrow across await, raw unrooted VM values in async results, an engine-owned runtime dependency, a parallel Promise or reaction queue, polling that runs JavaScript jobs implicitly, an unrooted pending Promise or rejection, or cancellation that leaks future captures |
 | async host command and external event boundary | an async host-call frame can copy a VM-bound sender into its Rust future, while an embedder can transactionally duplicate borrowed callback, receiver, and mixed portable/retained argument roots into the same limited, accounted VM-local FIFO; explicit dispatch delegates to the shared semantic call owner with the original receiver, adopts synchronous and asynchronous results through the existing Promise owner, and an ordinary Promise reaction returns either an owned primitive, an exactly retained VM-local fulfilment, or an exactly retained JavaScript rejection; the async host-task facade accepts primitive fulfilments, while the general queued-call facade exposes the owned/retained result boundary; dispatch, Promise jobs, and Rust-future or external-request polling remain explicit phases with FIFO order, backpressure, cancellation, abandonment, and teardown boundaries | generated source or eval, holding a mutable VM borrow across await, a parallel JavaScript call implementation, bypassing Promise adoption, implicit job/future driving, an unrooted callable, receiver, argument, fulfilment, or rejection, a foreign-VM handle, a wake while the command mutex is held, or command storage/captures that survive abandonment or cancellation |
 | direct-root boundary | one typed visitor, public bounded snapshots, and scoped transient roots cover durable and temporary VM reachability | bypassing the visitor/snapshot contract or losing scoped temporary ownership; root categories and traversal organization may change with behavioral reachability evidence |

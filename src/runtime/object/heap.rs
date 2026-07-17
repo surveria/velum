@@ -143,6 +143,10 @@ impl ObjectHeap {
     }
 
     pub(in crate::runtime) fn discard_created_empty_object(&mut self, id: ObjectId) -> Result<()> {
+        self.discard_created_object(id)
+    }
+
+    pub(in crate::runtime) fn discard_created_object(&mut self, id: ObjectId) -> Result<()> {
         self.validate_id(id)?;
         let removed = self.objects.remove_reserved(id.index())?;
         if removed.is_none() {

@@ -679,8 +679,8 @@ src/runtime/native/builtins/shadow_realm.rs'
       inside { print }
     ' "${repo_root}/src/api/host/call.rs"
   } | sed -E 's/pub\(super\)//g' | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,async_context:Option<&'callHostAsyncContext>,roots:VmRootSnapshot,receiver:&'callValue,args:&'call[Value]," ]]; then
-    fail "host local-value boundary changed; HostCall requires the active VM owner, callback-local receiver and arguments, root snapshot, and optional async command sender"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,objects:&'callObjectHeap,retained_values:&'callRetainedValueRegistry,async_context:Option<&'callHostAsyncContext>,roots:VmRootSnapshot,receiver:&'callValue,new_target:Option<&'callValue>,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM owner, callback-local receiver, optional new.target, arguments, root snapshot, and optional async command sender"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
       "${repo_root}/src/api/host/call.rs" \
@@ -1098,6 +1098,50 @@ check_typed_host_object_boundary() {
   if grep -E -q '(DirectRootVisitor|VmRootKind)' \
       "${repo_root}/src/runtime/object/host_payload.rs"; then
     fail "typed host object boundary changed; payload values must be wrapper edges, not independent roots"
+  fi
+}
+
+check_typed_host_class_boundary() {
+  local source
+
+  for source in \
+    'pub struct HostClass<T>' \
+    'pub struct HostInstance<T>' \
+    'pub fn register_host_class<T:' \
+    'pub fn host_payload<T:' \
+    'HostMethodResult::SharedReceiver' \
+    'HostFunction::new_async_task_with_length' \
+    'context.rollback_host_class_graph(prototype_id, &function_ids)'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/host_class.rs" \
+        "${repo_root}/src/api/host_class/staging.rs" \
+        "${repo_root}/src/api/host/call.rs" \
+        "${repo_root}/src/runtime/embedding.rs"; then
+      fail "typed host class boundary changed; public class or method source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'Value::HostFunction(id) if self.host_function(*id)?.is_constructor()' \
+    'self.host_constructor_instance_prototype(new_target)?' \
+    'self.objects.create_host_object(' \
+    'new_target: Some(new_target)' \
+    'receiver.host_payload::<T>()?'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/host.rs" \
+        "${repo_root}/src/api/host_class.rs" \
+        "${repo_root}/src/runtime/embedding.rs" \
+        "${repo_root}/src/runtime/semantic_object/invocation.rs"; then
+      fail "typed host class boundary changed; semantic construct, ordinary wrapper, or receiver source '${source}' is missing"
+    fi
+  done
+
+  if grep -R -E -q --include='*.rs' \
+      '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/api/host_class.rs" \
+      "${repo_root}/src/api/host_class/staging.rs" \
+      "${repo_root}/src/runtime/embedding.rs"; then
+    fail "typed host class boundary changed; generated source or eval is not a class bridge"
   fi
 }
 
@@ -1746,6 +1790,8 @@ run_checks() {
   require_file src/api/embedding.rs
   require_file src/api/host/async_callable.rs
   require_file src/api/queued_call.rs
+  require_file src/api/host_class.rs
+  require_file src/api/host_class/staging.rs
   require_file src/api/host_object.rs
   require_file src/api/object.rs
   require_dir src/compiler
@@ -1775,6 +1821,7 @@ run_checks() {
   check_async_host_future_boundary
   check_async_host_command_boundary
   check_typed_host_object_boundary
+  check_typed_host_class_boundary
   check_embedding_object_creation_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -2086,6 +2133,12 @@ mutate_typed_host_object_edge() {
     "${fixture_root}/src/runtime/object/trace.rs"
 }
 
+mutate_typed_host_class_construct_dispatch() {
+  local fixture_root="$1"
+  portable_sed '/Value::HostFunction(id) if self.host_function(\*id)?.is_constructor()/d' \
+    "${fixture_root}/src/runtime/semantic_object/invocation.rs"
+}
+
 mutate_embedding_object_creation_rollback() {
   local fixture_root="$1"
   portable_sed '/self.objects.discard_created_empty_object(id)?;/d' \
@@ -2289,6 +2342,8 @@ run_self_tests() {
     'async host command boundary changed' mutate_async_host_command_semantic_owner
   expect_guard_failure "${temp_dir}" typed-host-object-edge \
     'typed host object boundary changed' mutate_typed_host_object_edge
+  expect_guard_failure "${temp_dir}" typed-host-class-construct-dispatch \
+    'typed host class boundary changed' mutate_typed_host_class_construct_dispatch
   expect_guard_failure "${temp_dir}" embedding-object-creation-rollback \
     'embedding object creation boundary changed' mutate_embedding_object_creation_rollback
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
