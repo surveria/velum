@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260717T072248Z.md`
-- Task: PR #660: engine: add async host future bridge
-- Performance: 6.81x (4/5 >1.00x) (from `velum-test-report-20260717T072248Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260717T072248Z.md`)
+- `velum-test-report-20260717T080759Z.md`
+- Task: PR #661: engine: add async JavaScript command bridge
+- Performance: 6.80x (4/5 >1.00x) (from `velum-test-report-20260717T080759Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260717T080759Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260717T072248Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260717T080759Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -589,3 +589,4 @@ Latest report:
 | `20260717T062115Z` `41ade4e` PR #658: engine: expose embedding invocation and property APIs | 6.77x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260717T064359Z` `9b853f6` PR #659: engine: expose first-class Rust callable values | 6.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260717T072248Z` `b506ec2` PR #660: engine: add async host future bridge | 6.81x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260717T080759Z` `7ac6c11` PR #661: engine: add async JavaScript command bridge | 6.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
