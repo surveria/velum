@@ -46,11 +46,11 @@ pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::{RuntimeLimits, VmStorageLimits};
 pub use crate::runtime::{
-    HostAsyncContext, HostCommandRequest, HostFuturePoll, OptimizationMode, RealmId, RetainedValue,
-    VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength, VmCallableEdgeKind,
-    VmCallableEdgeSnapshot, VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot,
-    VmObjectEdgeKind, VmObjectEdgeSnapshot, VmOptimizationSnapshot, VmRootKind, VmRootSnapshot,
-    VmStorageKind, VmStorageSnapshot,
+    HostAsyncContext, HostCommandRequest, HostFuturePoll, OptimizationMode, QueuedCallRequest,
+    QueuedCallResult, RealmId, RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot,
+    VmAsyncEdgeStrength, VmCallableEdgeKind, VmCallableEdgeSnapshot, VmGarbageCollectionReport,
+    VmGcKind, VmHeapReachabilitySnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
+    VmOptimizationSnapshot, VmRootKind, VmRootSnapshot, VmStorageKind, VmStorageSnapshot,
 };
 pub use crate::source::{SourceId, SourceSpan};
 pub use crate::storage::string_heap::{JsString, StringId};

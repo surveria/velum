@@ -1,16 +1,9 @@
-use std::{
-    collections::VecDeque,
-    fmt,
-    future::Future,
-    pin::Pin,
-    rc::{Rc, Weak},
-    task::{Context as TaskContext, Poll, Waker},
-};
+use std::{collections::VecDeque, fmt, rc::Rc, task::Waker};
 
 use parking_lot::Mutex;
 
 use crate::{
-    HostFutureError, HostTaskResult, OwnedValue, RetainedValue,
+    HostFutureError, OwnedValue, RetainedValue,
     error::{Error, Result},
     ownership::VmIdentity,
     value::Value,
@@ -22,6 +15,12 @@ use super::{
     storage_ledger::VmStorageLedger,
 };
 
+mod external;
+mod request;
+
+use request::HostCommandTarget;
+pub use request::{HostAsyncContext, HostCommandRequest, QueuedCallRequest, QueuedCallResult};
+
 const INITIAL_HOST_COMMAND_GENERATION: u64 = 1;
 const HOST_COMMAND_CANCELLED_MESSAGE: &str = "JavaScript host command was cancelled";
 const HOST_COMMAND_TORN_DOWN_MESSAGE: &str = "JavaScript host command owner was torn down";
@@ -29,143 +28,10 @@ const HOST_COMMAND_STALE_MESSAGE: &str = "JavaScript host command request is sta
 const FOREIGN_HOST_COMMAND_CALLABLE_MESSAGE: &str =
     "JavaScript host command callable belongs to another VM";
 
-/// VM-bound command sender available to an asynchronous Rust host function.
-///
-/// The sender never borrows or reenters the VM. It transfers an explicitly
-/// retained callable and owned primitive arguments into a VM-local FIFO queue.
-#[derive(Clone)]
-pub struct HostAsyncContext {
-    identity: VmIdentity,
-    state: Weak<Mutex<HostCommandState>>,
-}
-
-impl HostAsyncContext {
-    /// Queues one JavaScript call with `undefined` as its receiver.
-    ///
-    /// The returned future completes only after [`crate::Vm::run_host_commands`]
-    /// invokes the callable and the ordinary Promise job queue delivers its
-    /// synchronous or asynchronous result.
-    ///
-    /// # Errors
-    /// Fails for a foreign callable, a torn-down VM, exhausted queue storage,
-    /// or configured host-command limits.
-    pub fn call(
-        &self,
-        callable: RetainedValue,
-        args: Vec<OwnedValue>,
-    ) -> Result<HostCommandRequest> {
-        if callable.identity() != &self.identity {
-            return Err(Error::runtime(FOREIGN_HOST_COMMAND_CALLABLE_MESSAGE));
-        }
-        let Some(state) = self.state.upgrade() else {
-            return Err(Error::runtime(HOST_COMMAND_TORN_DOWN_MESSAGE));
-        };
-        let id = state.lock().enqueue(callable, args)?;
-        Ok(HostCommandRequest {
-            target: HostCommandTarget {
-                state: Rc::downgrade(&state),
-                id,
-            },
-            active: true,
-        })
-    }
-
-    /// Returns the VM generation that owns this command queue.
-    #[must_use]
-    pub const fn identity(&self) -> &VmIdentity {
-        &self.identity
-    }
-}
-
-impl fmt::Debug for HostAsyncContext {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("HostAsyncContext")
-            .field("identity", &self.identity)
-            .finish_non_exhaustive()
-    }
-}
-
-/// Future for the primitive result of one queued JavaScript call.
-///
-/// Dropping the future abandons the request and releases its callable,
-/// arguments, response, and storage accounting. A JavaScript rejection is
-/// returned as [`HostFutureError::JavaScript`] with its original VM-local
-/// value identity and root preserved.
-#[must_use = "a queued JavaScript call does not complete unless its future is polled"]
-pub struct HostCommandRequest {
-    target: HostCommandTarget,
-    active: bool,
-}
-
-impl Future for HostCommandRequest {
-    type Output = HostTaskResult<OwnedValue>;
-
-    fn poll(self: Pin<&mut Self>, context: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        let request = self.get_mut();
-        let result = request.target.poll(context);
-        if result.is_ready() {
-            request.active = false;
-        }
-        result
-    }
-}
-
-impl fmt::Debug for HostCommandRequest {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("HostCommandRequest")
-            .field("active", &self.active)
-            .finish_non_exhaustive()
-    }
-}
-
-impl Drop for HostCommandRequest {
-    fn drop(&mut self) {
-        if self.active {
-            self.target.abandon();
-            self.active = false;
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct HostCommandId {
+pub(super) struct HostCommandId {
     index: usize,
     generation: u64,
-}
-
-#[derive(Clone)]
-struct HostCommandTarget {
-    state: Weak<Mutex<HostCommandState>>,
-    id: HostCommandId,
-}
-
-impl HostCommandTarget {
-    fn poll(&self, context: &TaskContext<'_>) -> Poll<HostTaskResult<OwnedValue>> {
-        let Some(state) = self.state.upgrade() else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
-                HOST_COMMAND_TORN_DOWN_MESSAGE,
-            ))));
-        };
-        state.lock().poll_response(self.id, context)
-    }
-
-    fn abandon(&self) {
-        let Some(state) = self.state.upgrade() else {
-            return;
-        };
-        state.lock().abandon(self.id);
-    }
-}
-
-impl fmt::Debug for HostCommandTarget {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("HostCommandTarget")
-            .field("id", &self.id)
-            .finish_non_exhaustive()
-    }
 }
 
 pub(super) struct HostCommandQueue {
@@ -209,6 +75,10 @@ impl HostCommandQueue {
         }))
     }
 
+    fn enqueue_external(&self, command: HostCommand) -> Result<QueuedCallRequest> {
+        QueuedCallRequest::enqueue(&self.state, command)
+    }
+
     pub(super) fn active_count(&self) -> usize {
         self.state.lock().active_count
     }
@@ -241,7 +111,7 @@ impl fmt::Debug for HostCommandQueue {
     }
 }
 
-struct HostCommandState {
+pub(super) struct HostCommandState {
     entries: Vec<HostCommandEntry>,
     queued: VecDeque<HostCommandId>,
     active_count: usize,
@@ -264,11 +134,45 @@ enum HostCommandStatus {
 
 struct HostCommand {
     callable: RetainedValue,
-    args: Vec<OwnedValue>,
+    receiver: HostCommandValue,
+    args: Vec<HostCommandValue>,
+}
+
+impl HostCommand {
+    fn payload_bytes(&self) -> Result<usize> {
+        self.args
+            .iter()
+            .try_fold(self.receiver.payload_bytes()?, |total, value| {
+                total
+                    .checked_add(value.payload_bytes()?)
+                    .ok_or_else(|| Error::limit("host command payload bytes overflowed"))
+            })
+    }
+}
+
+enum HostCommandValue {
+    Owned(OwnedValue),
+    Retained(RetainedValue),
+}
+
+impl HostCommandValue {
+    fn payload_bytes(&self) -> Result<usize> {
+        match self {
+            Self::Owned(value) => owned_value_payload_bytes(value),
+            Self::Retained(_) => Ok(0),
+        }
+    }
+
+    fn resolve(&self, context: &mut Context) -> Result<Value> {
+        match self {
+            Self::Owned(value) => context.runtime_value(value.clone().into()),
+            Self::Retained(value) => context.resolve_retained_value(value),
+        }
+    }
 }
 
 enum HostCommandResponse {
-    Fulfilled(OwnedValue),
+    Fulfilled(QueuedCallResult),
     Rejected(RetainedValue),
     Failed(Error),
 }
@@ -276,12 +180,12 @@ enum HostCommandResponse {
 impl HostCommandResponse {
     fn payload_bytes(&self) -> Result<usize> {
         match self {
-            Self::Fulfilled(value) => owned_value_payload_bytes(value),
+            Self::Fulfilled(value) => value.payload_bytes(),
             Self::Rejected(_) | Self::Failed(_) => Ok(0),
         }
     }
 
-    fn into_result(self) -> HostTaskResult<OwnedValue> {
+    fn into_result(self) -> crate::HostTaskResult<QueuedCallResult> {
         match self {
             Self::Fulfilled(value) => Ok(value),
             Self::Rejected(value) => Err(HostFutureError::JavaScript(value)),
@@ -291,8 +195,8 @@ impl HostCommandResponse {
 }
 
 impl HostCommandState {
-    fn enqueue(&mut self, callable: RetainedValue, args: Vec<OwnedValue>) -> Result<HostCommandId> {
-        let payload_bytes = owned_values_payload_bytes(&args)?;
+    fn enqueue(&mut self, command: HostCommand) -> Result<HostCommandId> {
+        let payload_bytes = command.payload_bytes()?;
         let projected_count = self
             .active_count
             .checked_add(1)
@@ -331,7 +235,7 @@ impl HostCommandState {
                 return Err(Error::runtime("host command reusable slot disappeared"));
             };
             entry.generation = generation;
-            entry.status = Some(HostCommandStatus::Queued(HostCommand { callable, args }));
+            entry.status = Some(HostCommandStatus::Queued(command));
             entry.payload_bytes = payload_bytes;
             entry.waker = None;
             HostCommandId { index, generation }
@@ -339,7 +243,7 @@ impl HostCommandState {
             let index = self.entries.len();
             self.entries.push(HostCommandEntry {
                 generation: INITIAL_HOST_COMMAND_GENERATION,
-                status: Some(HostCommandStatus::Queued(HostCommand { callable, args })),
+                status: Some(HostCommandStatus::Queued(command)),
                 payload_bytes,
                 waker: None,
             });
@@ -394,31 +298,31 @@ impl HostCommandState {
     fn poll_response(
         &mut self,
         id: HostCommandId,
-        context: &TaskContext<'_>,
-    ) -> Poll<HostTaskResult<OwnedValue>> {
+        context: &std::task::Context<'_>,
+    ) -> std::task::Poll<crate::HostTaskResult<QueuedCallResult>> {
         let Some(entry) = self.matching_entry_mut(id) else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 HOST_COMMAND_STALE_MESSAGE,
             ))));
         };
         if !matches!(entry.status, Some(HostCommandStatus::Ready(_))) {
             if entry.status.is_none() {
-                return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+                return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                     HOST_COMMAND_STALE_MESSAGE,
                 ))));
             }
             entry.waker = Some(context.waker().clone());
-            return Poll::Pending;
+            return std::task::Poll::Pending;
         }
         let payload_bytes = entry.payload_bytes;
         let Some(active_count) = self.active_count.checked_sub(1) else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command count accounting underflowed",
             ))));
         };
         let Some(active_payload_bytes) = self.active_payload_bytes.checked_sub(payload_bytes)
         else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command payload accounting underflowed",
             ))));
         };
@@ -426,15 +330,15 @@ impl HostCommandState {
             self.storage_ledger
                 .release(VmStorageKind::HostCommand, 1, payload_bytes)
         {
-            return Poll::Ready(Err(HostFutureError::from(error)));
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(error)));
         }
         let Some(entry) = self.matching_entry_mut(id) else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "ready host command slot disappeared",
             ))));
         };
         let Some(HostCommandStatus::Ready(response)) = entry.status.take() else {
-            return Poll::Ready(Err(HostFutureError::from(Error::runtime(
+            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command response disappeared",
             ))));
         };
@@ -442,7 +346,7 @@ impl HostCommandState {
         entry.waker = None;
         self.active_count = active_count;
         self.active_payload_bytes = active_payload_bytes;
-        Poll::Ready(response.into_result())
+        std::task::Poll::Ready(response.into_result())
     }
 
     fn complete(
@@ -600,7 +504,7 @@ impl Context {
     pub fn run_host_commands(&mut self) -> Result<usize> {
         let mut executed = 0_usize;
         while let Some((completion, command)) = self.take_host_command()? {
-            self.start_host_command(completion, command)?;
+            self.start_host_command(completion, &command)?;
             executed = executed
                 .checked_add(1)
                 .ok_or_else(|| Error::limit("host command execution count overflowed"))?;
@@ -638,7 +542,7 @@ impl Context {
                 Ok(reason) => HostCommandResponse::Rejected(reason),
                 Err(error) => HostCommandResponse::Failed(error),
             },
-            super::control::Completion::Normal(value) => match OwnedValue::try_from(value) {
+            super::control::Completion::Normal(value) => match self.host_command_result(value) {
                 Ok(value) => HostCommandResponse::Fulfilled(value),
                 Err(error) => HostCommandResponse::Failed(error),
             },
@@ -656,9 +560,13 @@ impl Context {
     fn start_host_command(
         &mut self,
         completion: HostCommandCompletion,
-        command: HostCommand,
+        command: &HostCommand,
     ) -> Result<()> {
         let callable = match self.resolve_retained_value(&command.callable) {
+            Ok(value) => value,
+            Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
+        };
+        let receiver = match command.receiver.resolve(self) {
             Ok(value) => value,
             Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
         };
@@ -668,17 +576,18 @@ impl Context {
                 "host command argument capacity exceeded",
             )));
         }
-        for argument in command.args {
-            match self.runtime_value(argument.into()) {
+        for argument in &command.args {
+            match argument.resolve(self) {
                 Ok(value) => args.push(value),
                 Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
             }
         }
-        let _roots = match self.transient_root_scope(VmRootKind::TransientCall, args.iter()) {
+        let roots = std::iter::once(&receiver).chain(args.iter());
+        let _roots = match self.transient_root_scope(VmRootKind::TransientCall, roots) {
             Ok(roots) => roots,
             Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
         };
-        let value = match self.embedding_call(&callable, &args, Value::Undefined) {
+        let value = match self.embedding_call(&callable, &args, receiver) {
             Ok(value) => value,
             Err(error) => {
                 return self.complete_host_command_error(completion, error);
@@ -720,17 +629,26 @@ impl Context {
         };
         completion.complete(response)
     }
+
+    fn host_command_result(&self, value: Value) -> Result<QueuedCallResult> {
+        if matches!(
+            value,
+            Value::Symbol(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+                | Value::Object(_)
+        ) || matches!(&value, Value::String(string) if string.as_utf8().is_none())
+        {
+            return self
+                .retain_embedder_value(value)
+                .map(QueuedCallResult::Retained);
+        }
+        OwnedValue::try_from(value).map(QueuedCallResult::Owned)
+    }
 }
 
-fn owned_values_payload_bytes(values: &[OwnedValue]) -> Result<usize> {
-    values.iter().try_fold(0_usize, |total, value| {
-        total
-            .checked_add(owned_value_payload_bytes(value)?)
-            .ok_or_else(|| Error::limit("host command payload bytes overflowed"))
-    })
-}
-
-fn owned_value_payload_bytes(value: &OwnedValue) -> Result<usize> {
+pub(super) fn owned_value_payload_bytes(value: &OwnedValue) -> Result<usize> {
     match value {
         OwnedValue::String(value) => Ok(value.len()),
         OwnedValue::BigInt(value) => {
