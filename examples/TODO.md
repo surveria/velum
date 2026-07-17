@@ -260,10 +260,13 @@ and returns a JavaScript Promise. The application executor polls the Rust
 future; completion is posted back to the owning VM and resolves or rejects the
 Promise through the normal job queue.
 
-Remaining adjacent work is a general embedder-side Promise result handle for
-awaiting a Promise returned by a direct Rust-to-JavaScript call outside an
-active async host task. That is still required for the fully Rust-driven async
-method portion of example 06, but it no longer blocks example 03.
+The same command owner now also backs `Vm::enqueue_call` and
+`Vm::enqueue_call_with_receiver`. Those operations transactionally duplicate
+borrowed callback, receiver, and mixed portable/retained argument roots, then
+return a `QueuedCallRequest` that adopts synchronous or Promise results.
+Portable fulfilments are copied and VM-local fulfilments remain explicitly
+rooted. This completes the general embedder-side Promise result handle needed
+by the fully Rust-driven async method portion of example 06.
 
 The design must specify:
 
@@ -282,6 +285,18 @@ The design must specify:
 This tranche unlocks example 03 and the async portion of example 06.
 
 ### Tranche 5: External Event And Timer Scheduling
+
+Status: the engine primitive is implemented. `Vm::enqueue_call` and
+`Vm::enqueue_call_with_receiver` enqueue repeated external calls through the
+same limited `HostCommand` FIFO used by async host tasks. A borrowed retained
+callback can remain owned by an application timer while every due event gets
+independent callable, receiver, and retained-argument roots. Results and exact
+JavaScript rejections are observable through `QueuedCallRequest`; dropping a
+request abandons dispatch, and VM-wide cancellation or teardown wakes or
+terminates pending owners deterministically. Host-command count and payload
+limits provide queue backpressure. The deterministic virtual-clock scheduler
+and its per-timer accounting remain example-owned code for tranche 7 rather
+than unconditional engine globals.
 
 Expose a controlled way for the embedding application to enqueue a call to a
 retained callable. Build the example-only interval service on that primitive.

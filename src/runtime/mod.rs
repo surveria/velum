@@ -73,7 +73,7 @@ use binding::static_bindings::StaticBindingCacheHandle;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
 use host_command::HostCommandQueue;
-pub use host_command::{HostAsyncContext, HostCommandRequest};
+pub use host_command::{HostAsyncContext, HostCommandRequest, QueuedCallRequest, QueuedCallResult};
 pub use host_future::HostFuturePoll;
 use host_future::PendingHostFuture;
 use native::NativeFunctionKind;

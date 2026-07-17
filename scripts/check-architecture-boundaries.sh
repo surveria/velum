@@ -1007,7 +1007,7 @@ check_async_host_command_boundary() {
     'JavaScript(RetainedValue),' \
     'pub fn register_async_host_task_typed' \
     'pub fn run_host_commands(&mut self) -> Result<usize>' \
-    'self.embedding_call(&callable, &args, Value::Undefined)' \
+    'self.embedding_call(&callable, &args, receiver)' \
     'self.promise_resolve_for_await(value)' \
     'PromiseReaction::host_command(completion)' \
     'super::control::Completion::Throw(reason) => match self.retain_embedder_value(reason) {' \
@@ -1017,6 +1017,7 @@ check_async_host_command_boundary() {
         "${repo_root}/src/api/host.rs" \
         "${repo_root}/src/api/host/async_callable.rs" \
         "${repo_root}/src/runtime/host_command.rs" \
+        "${repo_root}/src/runtime/host_command" \
         "${repo_root}/src/runtime/promise"; then
       fail "async host command boundary changed; required queue/semantic/Promise source '${source}' is missing"
     fi
@@ -1029,10 +1030,29 @@ check_async_host_command_boundary() {
   if grep -E -q '(run_jobs|poll_host_futures)[[:space:]]*\(' <<<"${command_owner}"; then
     fail "async host command boundary changed; command dispatch must not drive Promise jobs or Rust futures implicitly"
   fi
-  if grep -E -q '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
-      "${repo_root}/src/runtime/host_command.rs"; then
+  if grep -R -E -q --include='*.rs' \
+      '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/api/queued_call.rs" \
+      "${repo_root}/src/runtime/host_command.rs" \
+      "${repo_root}/src/runtime/host_command"; then
     fail "async host command boundary changed; generated source or eval is not a command bridge"
   fi
+
+  for source in \
+    'pub fn enqueue_call_with_receiver(' \
+    'pub enum QueuedCallResult {' \
+    'Retained(RetainedValue),' \
+    'self.duplicate_command_root(callable)?' \
+    'receiver: HostCommandValue,' \
+    'HostCommandValue::Retained' \
+    'map(QueuedCallResult::Retained)'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/queued_call.rs" \
+        "${repo_root}/src/runtime/host_command.rs" \
+        "${repo_root}/src/runtime/host_command"; then
+      fail "external queued-call boundary changed; source '${source}' is missing"
+    fi
+  done
 }
 
 check_activation_frame_boundary() {
@@ -1632,6 +1652,8 @@ run_checks() {
   require_file src/runtime/gc.rs
   require_file src/runtime/host_future.rs
   require_file src/runtime/host_command.rs
+  require_file src/runtime/host_command/external.rs
+  require_file src/runtime/host_command/request.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1646,6 +1668,7 @@ run_checks() {
   require_file src/runtime/object/mod.rs
   require_file src/api/embedding.rs
   require_file src/api/host/async_callable.rs
+  require_file src/api/queued_call.rs
   require_dir src/compiler
   require_dir src/bytecode
   require_dir src/runtime/bytecode/control
@@ -1972,7 +1995,7 @@ mutate_async_host_future_promise_owner() {
 
 mutate_async_host_command_semantic_owner() {
   local fixture_root="$1"
-  portable_sed '/self.embedding_call(&callable, &args, Value::Undefined)/d' \
+  portable_sed '/self.embedding_call(&callable, &args, receiver)/d' \
     "${fixture_root}/src/runtime/host_command.rs"
 }
 
