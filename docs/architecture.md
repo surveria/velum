@@ -307,11 +307,13 @@ Host extensions are a first-class design concern:
 
 The current synchronous host-function API is registered through
 `Context::register_host_function`. Callbacks receive a `HostCall` view with
-checked argument accessors such as `number`, `string`, and `boolean`, and they
-return `Result<Value>`. Callback storage is VM-local. A callback-local value
-can be copied with `LocalValue::to_owned_value` or rooted beyond the callback
-with `LocalValue::retain`. VM-owned object/function callback returns remain
-conservative until host returns accept `RetainedValue` directly.
+the exact JavaScript receiver, checked argument accessors such as `number`,
+`string`, and `boolean`, and they return `Result<Value>`. Callback storage is
+VM-local. The receiver and arguments are callback-local `LocalValue` views:
+portable primitives can be copied with `LocalValue::to_owned_value`, while
+VM-local values must be rooted beyond the callback with `LocalValue::retain`.
+VM-owned object/function callback returns remain conservative until host
+returns accept `RetainedValue` directly.
 
 Async Rust callbacks use `register_async_host_function` or the typed variant.
 The synchronous callback entry must copy primitive arguments or retain
