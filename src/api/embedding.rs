@@ -1,5 +1,6 @@
 use crate::api::host::{HostCall, IntoJsValue};
 use crate::api::owned_value::OwnedValue;
+use crate::api::shared_array_buffer::SharedArrayBufferHandle;
 use crate::compiled_module::{CompiledModule, ModuleLoader};
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
@@ -328,6 +329,23 @@ impl Vm {
         loader: &mut L,
     ) -> Result<Value> {
         self.context.eval_module_named(source_name, source, loader)
+    }
+
+    /// Installs the application-owned loader used by dynamic module requests.
+    pub fn set_dynamic_module_loader(&mut self, loader: impl ModuleLoader + 'static) {
+        self.context.set_dynamic_module_loader(loader);
+    }
+
+    /// Installs a VM-local wrapper for a shared backing store.
+    ///
+    /// # Errors
+    /// Fails when the binding conflicts or wrapper allocation exceeds limits.
+    pub fn register_shared_array_buffer(
+        &mut self,
+        name: &str,
+        handle: &SharedArrayBufferHandle,
+    ) -> Result<()> {
+        self.context.register_shared_array_buffer(name, handle)
     }
 
     #[must_use]

@@ -296,6 +296,13 @@ Embedding API invariants:
 - The API should keep bytecode internals hidden unless exposing a VM control is
   clearly useful for embedders.
 
+The public `Vm` facade owns application-facing module and shared-memory
+installation as well: `set_dynamic_module_loader` delegates to the existing
+VM-owned dynamic loader capability, while `register_shared_array_buffer`
+creates a VM-local wrapper around an explicitly shared backing-store handle.
+Neither operation exposes `Context`, arena identifiers, or mutable global
+engine state.
+
 Host extensions are a first-class design concern:
 
 - Rust code must be able to register typed host functions under explicit names.
