@@ -131,9 +131,9 @@ impl VmCallableEdgeSnapshot {
     }
 }
 
-/// Counted view of strong-reference slots stored in the ordinary object
-/// arena. Context side-table associations are intentionally excluded until
-/// AS-05b1b3.
+/// Counted view of strong-reference slots owned by ordinary objects, including
+/// wrapper-indexed host-payload edges. Non-reference side-table associations
+/// are intentionally excluded.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VmObjectEdgeSnapshot {
     counts: [usize; OBJECT_EDGE_KIND_COUNT],

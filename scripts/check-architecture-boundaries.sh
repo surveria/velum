@@ -1055,6 +1055,51 @@ check_async_host_command_boundary() {
   done
 }
 
+check_typed_host_object_boundary() {
+  local source
+
+  for source in \
+    'pub struct HostObjectOptions' \
+    'pub fn create_host_object<T:' \
+    'pub fn clone_host_object(&mut self, source: &RetainedValue)' \
+    'pub fn host_payload<T:' \
+    'pub fn update_host_payload_bytes(' \
+    'self.objects.discard_host_object(id)?;'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/api/host_object.rs" \
+        "${repo_root}/src/runtime/object/host_payload.rs"; then
+      fail "typed host object boundary changed; public checked owner source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'let mut object = Object::ordinary();' \
+    'traced_values: Vec<Value>,' \
+    'VmObjectEdgeKind::InternalSlot' \
+    'self.host_payloads.visit_edges(index, visitor)?;' \
+    'self.visit_host_payload_edges(id, visitor)' \
+    'VmStorageKind::HostInstance' \
+    'VmStorageKind::HostPayload'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" \
+        "${repo_root}/src/runtime/object/host_payload.rs" \
+        "${repo_root}/src/runtime/object/trace.rs" \
+        "${repo_root}/src/runtime/accounting.rs"; then
+      fail "typed host object boundary changed; ordinary-object, edge, or accounting source '${source}' is missing"
+    fi
+  done
+
+  if grep -R -E -q --include='*.rs' \
+      '(^|[^A-Za-z_])(eval|eval_named)[[:space:]]*\(' \
+      "${repo_root}/src/api/host_object.rs" \
+      "${repo_root}/src/runtime/object/host_payload.rs"; then
+    fail "typed host object boundary changed; generated source or eval is not a payload bridge"
+  fi
+  if grep -E -q '(DirectRootVisitor|VmRootKind)' \
+      "${repo_root}/src/runtime/object/host_payload.rs"; then
+    fail "typed host object boundary changed; payload values must be wrapper edges, not independent roots"
+  fi
+}
+
 check_activation_frame_boundary() {
   local legacy_fields
   if ! grep -F -q 'pub(in crate::runtime) enum ActivationFrame {' \
@@ -1331,7 +1376,7 @@ check_object_edge_boundary() {
   fi
 
   for source in \
-    'for object in &self.objects {' \
+    'for (index, object) in self.objects.indexed() {' \
     'for entry in &self.named_properties {' \
     'self.array_storage.visit_strong_edges(visitor)?;' \
     'if let Some(prototype) = &self.prototype {' \
@@ -1655,6 +1700,7 @@ run_checks() {
   require_file src/runtime/host_command/external.rs
   require_file src/runtime/host_command/request.rs
   require_file src/runtime/object/accounting.rs
+  require_file src/runtime/object/host_payload.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
@@ -1669,6 +1715,7 @@ run_checks() {
   require_file src/api/embedding.rs
   require_file src/api/host/async_callable.rs
   require_file src/api/queued_call.rs
+  require_file src/api/host_object.rs
   require_dir src/compiler
   require_dir src/bytecode
   require_dir src/runtime/bytecode/control
@@ -1695,6 +1742,7 @@ run_checks() {
   check_direct_root_boundary
   check_async_host_future_boundary
   check_async_host_command_boundary
+  check_typed_host_object_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
   check_structured_control_boundary
@@ -1999,6 +2047,12 @@ mutate_async_host_command_semantic_owner() {
     "${fixture_root}/src/runtime/host_command.rs"
 }
 
+mutate_typed_host_object_edge() {
+  local fixture_root="$1"
+  portable_sed '/self.visit_host_payload_edges(id, visitor)/d' \
+    "${fixture_root}/src/runtime/object/trace.rs"
+}
+
 mutate_gc_cache_invalidation() {
   local fixture_root="$1"
   portable_sed '/self.invalidate_identity_caches();/d' \
@@ -2194,6 +2248,8 @@ run_self_tests() {
     'async host future boundary changed' mutate_async_host_future_promise_owner
   expect_guard_failure "${temp_dir}" async-host-command-semantic-owner \
     'async host command boundary changed' mutate_async_host_command_semantic_owner
+  expect_guard_failure "${temp_dir}" typed-host-object-edge \
+    'typed host object boundary changed' mutate_typed_host_object_edge
   expect_guard_failure "${temp_dir}" gc-cache-invalidation \
     'garbage collection boundary changed' mutate_gc_cache_invalidation
   expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \

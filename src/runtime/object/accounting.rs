@@ -7,10 +7,13 @@ pub(in crate::runtime) struct ObjectStorageCounts {
     objects: usize,
     properties: usize,
     byte_buffers: usize,
+    host_instances: usize,
+    host_payloads: usize,
     cache_entries: usize,
     associations: usize,
     object_payload_bytes: usize,
     byte_buffer_payload_bytes: usize,
+    host_payload_bytes: usize,
 }
 
 impl ObjectStorageCounts {
@@ -24,6 +27,14 @@ impl ObjectStorageCounts {
 
     pub(in crate::runtime) const fn byte_buffers(self) -> usize {
         self.byte_buffers
+    }
+
+    pub(in crate::runtime) const fn host_instances(self) -> usize {
+        self.host_instances
+    }
+
+    pub(in crate::runtime) const fn host_payloads(self) -> usize {
+        self.host_payloads
     }
 
     pub(in crate::runtime) const fn cache_entries(self) -> usize {
@@ -40,6 +51,10 @@ impl ObjectStorageCounts {
 
     pub(in crate::runtime) const fn byte_buffer_payload_bytes(self) -> usize {
         self.byte_buffer_payload_bytes
+    }
+
+    pub(in crate::runtime) const fn host_payload_bytes(self) -> usize {
+        self.host_payload_bytes
     }
 }
 
@@ -63,6 +78,8 @@ impl ObjectHeap {
             objects: self.objects.len(),
             properties,
             byte_buffers: self.byte_buffer_count,
+            host_instances: self.host_payloads.instance_count(),
+            host_payloads: self.host_payloads.payload_count(),
             cache_entries: self.shapes.storage_entry_count()?,
             associations: usize::from(self.object_prototype.is_some())
                 .checked_add(usize::from(self.array_prototype.is_some()))
@@ -70,6 +87,7 @@ impl ObjectHeap {
                 .ok_or_else(|| Error::limit("object anchor association count overflowed"))?,
             object_payload_bytes: self.object_payload_bytes,
             byte_buffer_payload_bytes: self.byte_buffer_payload_bytes,
+            host_payload_bytes: self.host_payloads.logical_payload_bytes()?,
         })
     }
 }

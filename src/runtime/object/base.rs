@@ -41,11 +41,12 @@ impl PrototypeLookupVersion {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ObjectHeap {
     pub(super) objects: SlotArena<super::Object>,
     pub(super) private_slots: Vec<Vec<crate::runtime::private::PrivateSlot>>,
     pub(super) shapes: ShapeTable,
+    pub(super) host_payloads: super::host_payload::HostPayloadRegistry,
     /// Working slots for the active realm, parked in `RealmState` on a switch.
     pub(in crate::runtime) object_prototype: Option<ObjectId>,
     pub(in crate::runtime) array_prototype: Option<ObjectId>,
@@ -66,6 +67,7 @@ impl ObjectHeap {
             objects: SlotArena::new(),
             private_slots: Vec::new(),
             shapes: ShapeTable::new(storage_ledger.clone()),
+            host_payloads: super::host_payload::HostPayloadRegistry::new(storage_ledger.clone()),
             object_prototype: None,
             array_prototype: None,
             storage_limits,
@@ -90,12 +92,14 @@ impl ObjectHeap {
     }
 
     pub(in crate::runtime) fn sweep_unmarked_objects(&mut self, marks: &[bool]) -> Result<usize> {
+        self.prepare_host_payload_sweep(marks)?;
         for (index, slots) in self.private_slots.iter_mut().enumerate() {
             if !marks.get(index).copied().unwrap_or(false) {
                 slots.clear();
             }
         }
         let removed = self.objects.sweep_unmarked(marks)?;
+        self.sweep_host_payloads(marks)?;
         if removed == 0 {
             return Ok(0);
         }
