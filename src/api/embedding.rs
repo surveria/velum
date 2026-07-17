@@ -168,6 +168,14 @@ impl Vm {
         &mut self.context
     }
 
+    pub(super) const fn embedding_context_ref(&self) -> &Context {
+        &self.context
+    }
+
+    pub(super) const fn embedding_context_mut(&mut self) -> &mut Context {
+        &mut self.context
+    }
+
     /// Runs queued Promise reactions until the VM job queue is empty.
     ///
     /// # Errors

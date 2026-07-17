@@ -25,6 +25,10 @@ pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
 pub use crate::api::host::{FromJsValue, HostCall, HostOperation, IntoJsValue, LocalValue};
+pub use crate::api::invocation::{
+    AccessorPropertyDefinition, DataPropertyDefinition, JsValueRef, PropertyDefinition,
+    PropertyDescriptor, PropertyKeyRef,
+};
 pub use crate::api::owned_value::OwnedValue;
 pub use crate::api::shared_array_buffer::SharedArrayBufferHandle;
 pub use crate::build_info::{BuildInfo, engine_build_info};

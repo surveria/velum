@@ -174,6 +174,10 @@ required.
 
 ### Tranche 1: Public Invocation Values And Arguments
 
+Status: implemented by `JsValueRef`, `PropertyKeyRef`, and the existing
+`OwnedValue`/`RetainedValue` ownership boundaries. Every retained input is
+resolved against the target VM before JavaScript dispatch.
+
 Define a public argument representation that can borrow either a portable
 primitive or a retained VM value. Define explicit owned and retained result
 variants rather than returning raw durable `Value` identifiers.
@@ -188,6 +192,12 @@ The design must cover:
 - storage accounting for every retained argument and result owner.
 
 ### Tranche 2: Rust-To-JavaScript Object, Call, And Construct API
+
+Status: implemented on `Vm` with raw, owned, and retained call/property result
+boundaries plus call, explicit-receiver call, method call, construction,
+property get/set/define/delete, descriptor inspection, and callable/constructor
+checks. The public facade delegates to the existing semantic owners and does
+not synthesize source or use eval.
 
 Expose first-class public operations for:
 

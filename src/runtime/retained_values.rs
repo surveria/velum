@@ -231,7 +231,7 @@ impl RetainedValueRegistry {
             .count()
     }
 
-    fn value(&self, identity: &VmIdentity, handle: &RetainedValue) -> Result<Value> {
+    pub(crate) fn value(&self, identity: &VmIdentity, handle: &RetainedValue) -> Result<Value> {
         if identity != &self.identity
             || &handle.identity != identity
             || !handle.registry.ptr_eq(&Rc::downgrade(&self.state))
@@ -254,8 +254,12 @@ impl RetainedValueRegistry {
 }
 
 impl Context {
-    fn retain_value(&self, value: Value) -> Result<RetainedValue> {
+    pub(crate) fn retain_embedder_value(&self, value: Value) -> Result<RetainedValue> {
         self.retained_values.retain(self.identity(), value)
+    }
+
+    pub(crate) fn resolve_retained_value(&self, handle: &RetainedValue) -> Result<Value> {
+        self.retained_values.value(self.identity(), handle)
     }
 
     pub(crate) const fn retained_value_registry(&self) -> &RetainedValueRegistry {
@@ -268,7 +272,7 @@ impl Context {
     /// Fails when evaluation or retained-slot allocation fails.
     pub fn eval_retained(&mut self, source: &str) -> Result<RetainedValue> {
         let value = self.eval(source)?;
-        self.retain_value(value)
+        self.retain_embedder_value(value)
     }
 
     /// Evaluates compiled source and retains its result as a VM-bound root.
@@ -277,7 +281,7 @@ impl Context {
     /// Fails when evaluation or retained-slot allocation fails.
     pub fn eval_compiled_retained(&mut self, script: &CompiledScript) -> Result<RetainedValue> {
         let value = self.eval_compiled(script)?;
-        self.retain_value(value)
+        self.retain_embedder_value(value)
     }
 
     /// Retains the current value of a global binding when it exists.
@@ -286,7 +290,7 @@ impl Context {
     /// Fails when retained-slot allocation fails.
     pub fn get_global_retained(&self, name: &str) -> Result<Option<RetainedValue>> {
         self.get_global(name)
-            .map(|value| self.retain_value(value))
+            .map(|value| self.retain_embedder_value(value))
             .transpose()
     }
 

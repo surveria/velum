@@ -621,6 +621,17 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   undefined/null/Boolean/Number/BigInt/String data, copies heap strings, rejects every
   VM-local variant, and can be used as a typed host return after the source VM
   is gone;
+- `JsValueRef` is the borrowed embedding-input boundary. It admits portable
+  primitives, exact UTF-16 strings, `OwnedValue`, or a source-proven
+  `RetainedValue`; every retained callee, receiver, argument, property value,
+  and Symbol key is resolved through the owning registry before JavaScript
+  dispatch begins;
+- `Vm` call, method, construction, and property operations delegate to the
+  shared semantic call/construct/property owners. The public layer selects a
+  raw call-local, copied `OwnedValue`, or rooted `RetainedValue` result and
+  converts thrown completions back into identity-bearing public JavaScript
+  errors. Property descriptors use ordinary semantic descriptor dispatch and
+  expose their values, getters, and setters only as explicit retained roots;
 - `Vm::root_snapshot` and `Context::root_snapshot` expose checked reference
   counts for fourteen direct-root categories: bindings, active calls, parked
   bytecode frames, queued jobs, runtime anchors, retained handles, and
@@ -889,6 +900,7 @@ without pinning implementation statements.
 | host local-value boundary | LocalValue and HostCall borrow the active owner, object heap, and retained registry; shared backing stores cross VM boundaries only through an opaque thread-safe handle; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, exposing a raw object id, sharing mutable VM state with a backing store, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/BigInt/String and copies local heap text; BigInt is an immutable ownerless mathematical payload | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
+| embedding invocation boundary | JsValueRef inputs resolve portable data or source-proven retained handles before dispatch; Vm call, method, construct, get, set, define, delete, and descriptor operations delegate to the existing semantic owners; durable results and descriptor members are explicit RetainedValue roots, while JavaScript throws regain VM identity and metadata at the public boundary | generated-source or eval bridges, a parallel call/property implementation, dispatch before all retained inputs are owner-checked, durable raw Value ids, descriptor values without root ownership, or an identityless JavaScript exception |
 | direct-root boundary | one typed visitor, public bounded snapshots, and scoped transient roots cover durable and temporary VM reachability | bypassing the visitor/snapshot contract or losing scoped temporary ownership; root categories and traversal organization may change with behavioral reachability evidence |
 | storage accounting boundary | typed owner categories feed checked counts, payload totals, full reconciliation, public snapshots, and consuming teardown; detached async and generator execution carries one owner-derived footprint across Promise reactions, ready jobs, generator states, cancellation, and recount | dropping typed accounting, reconciliation, limits, snapshots, teardown evidence, or behavioral reconciliation across suspended-owner transfers; categories, owner traversal, and footprint representations may change without mirroring exact source statements in the guard |
 | callable strong-edge boundary | seven categories enumerate every current JavaScript/native/host/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
