@@ -163,12 +163,25 @@ impl<'a> Parser<'a> {
             return Err(self.error(CompileErrorKind::InvalidQuantifier));
         }
         let normalized_max = if legacy_lookahead { Some(min) } else { max };
-        self.node(Node::Repeat {
-            body: Box::new(atom),
+        let (mut prefix, repeated) = if let Node::LegacySequence(mut nodes) = atom {
+            let repeated = nodes
+                .pop()
+                .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
+            (Some(nodes), repeated)
+        } else {
+            (None, atom)
+        };
+        let repeated = self.node(Node::Repeat {
+            body: Box::new(repeated),
             min,
             max: normalized_max,
             greedy,
-        })
+        })?;
+        let Some(nodes) = prefix.as_mut() else {
+            return Ok(repeated);
+        };
+        nodes.push(repeated);
+        self.node(Node::Concat(std::mem::take(nodes)))
     }
 
     fn parse_atom(&mut self) -> Result<Node, CompileError> {
@@ -209,7 +222,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_quantifier_bounds(&mut self) -> Result<Option<(u32, Option<u32>)>, CompileError> {
+    fn parse_quantifier_bounds(&mut self) -> Result<Option<(u64, Option<u64>)>, CompileError> {
         match self.peek() {
             Some(value) if value == u16::from(b'*') => {
                 self.advance_one()?;
@@ -228,7 +241,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_braced_quantifier(&mut self) -> Result<Option<(u32, Option<u32>)>, CompileError> {
+    fn parse_braced_quantifier(&mut self) -> Result<Option<(u64, Option<u64>)>, CompileError> {
         let checkpoint = self.position;
         self.advance_one()?;
         let Some(min) = self.parse_decimal()? else {
@@ -270,7 +283,7 @@ impl<'a> Parser<'a> {
     const fn invalid_braced_quantifier(
         &mut self,
         checkpoint: usize,
-    ) -> Result<Option<(u32, Option<u32>)>, CompileError> {
+    ) -> Result<Option<(u64, Option<u64>)>, CompileError> {
         self.position = checkpoint;
         if self.flags.has_unicode_mode() {
             Err(CompileError::new(
@@ -282,15 +295,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_decimal(&mut self) -> Result<Option<u32>, CompileError> {
-        let mut value = 0_u32;
+    fn parse_decimal(&mut self) -> Result<Option<u64>, CompileError> {
+        let mut value = 0_u64;
         let mut found = false;
         while let Some(unit) = self.peek() {
             if !(u16::from(b'0')..=u16::from(b'9')).contains(&unit) {
                 break;
             }
             found = true;
-            let digit = u32::from(unit - u16::from(b'0'));
+            let digit = u64::from(unit - u16::from(b'0'));
             value = value
                 .checked_mul(10)
                 .and_then(|current| current.checked_add(digit))
@@ -530,7 +543,7 @@ fn resolve_backreferences(
             }
             Ok(())
         }
-        Node::Concat(nodes) | Node::Alternation(nodes) => {
+        Node::Concat(nodes) | Node::LegacySequence(nodes) | Node::Alternation(nodes) => {
             for child in nodes {
                 resolve_backreferences(child, capture_count, capture_names)?;
             }

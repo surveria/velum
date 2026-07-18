@@ -34,15 +34,15 @@ jiff-tzdb = "0.1.8"
 num-bigint = "0.4"
 num-traits = "0.2"
 parking_lot = "0.12"
-regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 temporal_rs = { version = "0.2.4", default-features = false, features = ["compiled_data", "float64_representable_durations", "std"] }
 thiserror = "2"
 unicode-ident = "1"
 unicode-normalization = "0.1"
 unicode-segmentation = "1.13"
+velum-regexp = { path = "crates/velum-regexp" }
 
 [dev-dependencies]
-velum-regexp = { path = "crates/velum-regexp" }
+regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 
 [lints.rust]
 unsafe_code = "deny"

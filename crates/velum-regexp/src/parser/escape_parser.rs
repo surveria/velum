@@ -190,7 +190,9 @@ impl Parser<'_> {
         Ok(value)
     }
 
-    fn try_parse_trailing_surrogate_escape(&mut self) -> Result<Option<u32>, CompileError> {
+    pub(super) fn try_parse_trailing_surrogate_escape(
+        &mut self,
+    ) -> Result<Option<u32>, CompileError> {
         let checkpoint = self.position;
         if self.peek() != Some(u16::from(b'\\')) {
             return Ok(None);
@@ -324,7 +326,7 @@ impl Parser<'_> {
                 .pop()
                 .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, pattern_offset));
         }
-        self.node(Node::Concat(nodes))
+        self.node(Node::LegacySequence(nodes))
     }
 }
 
@@ -344,7 +346,11 @@ pub(super) fn control_letter_value(value: u16) -> Option<u32> {
     }
 }
 
-fn combine_surrogates(high: u32, low: u32, pattern_offset: usize) -> Result<u32, CompileError> {
+pub(super) fn combine_surrogates(
+    high: u32,
+    low: u32,
+    pattern_offset: usize,
+) -> Result<u32, CompileError> {
     let shifted = high
         .checked_sub(0xD800)
         .and_then(|value| value.checked_mul(0x400))

@@ -145,6 +145,35 @@ impl CharacterClass {
     }
 }
 
+pub fn normalize_range_terms(terms: Vec<CharacterClassTerm>) -> Vec<CharacterClassTerm> {
+    let mut ranges = Vec::new();
+    let mut retained = Vec::new();
+    for term in terms {
+        if let CharacterClassTerm::Range { start, end } = term {
+            ranges.push((start, end));
+        } else {
+            retained.push(term);
+        }
+    }
+    ranges.sort_unstable();
+    let mut merged = Vec::<(u32, u32)>::new();
+    for (start, end) in ranges {
+        if let Some((_, previous_end)) = merged.last_mut()
+            && start <= previous_end.saturating_add(1)
+        {
+            *previous_end = (*previous_end).max(end);
+            continue;
+        }
+        merged.push((start, end));
+    }
+    retained.extend(
+        merged
+            .into_iter()
+            .map(|(start, end)| CharacterClassTerm::Range { start, end }),
+    );
+    retained
+}
+
 fn retained_nested_term_bytes(roots: &[CharacterClassTerm]) -> Result<usize, SizeOverflow> {
     let mut total = 0_usize;
     let mut pending = roots.iter().collect::<Vec<_>>();

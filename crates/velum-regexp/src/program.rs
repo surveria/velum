@@ -81,6 +81,11 @@ pub enum Instruction {
         id: usize,
         no_progress: InstructionIndex,
     },
+    OversizedRepeat {
+        minimum_input_units: Option<u64>,
+        execution_limit: u64,
+        reverse: bool,
+    },
 }
 
 #[derive(Debug, Clone)]

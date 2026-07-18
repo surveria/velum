@@ -63,6 +63,30 @@ fn callers_cannot_raise_the_pattern_size_ceiling() -> TestResult {
 }
 
 #[test]
+fn callers_cannot_raise_the_ecmascript_repeat_ceiling() -> TestResult {
+    let pattern = "a{9007199254740992}".encode_utf16().collect::<Vec<_>>();
+    let result = Regex::compile(
+        &pattern,
+        Flags::default(),
+        CompileLimits {
+            max_repeat_count: u64::MAX,
+            ..CompileLimits::MAXIMUM
+        },
+    );
+    if matches!(
+        result,
+        Err(ref error)
+            if error.kind
+                == CompileErrorKind::RepeatLimit {
+                    limit: CompileLimits::MAXIMUM.max_repeat_count,
+                }
+    ) {
+        return Ok(());
+    }
+    Err(format!("unexpected hard repeat ceiling result: {result:?}").into())
+}
+
+#[test]
 fn callers_cannot_raise_the_backtrack_storage_ceiling() -> TestResult {
     let regex = Regex::compile(
         &"a*".encode_utf16().collect::<Vec<_>>(),

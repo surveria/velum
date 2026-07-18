@@ -39,6 +39,7 @@ fn rejects_match(pattern: &str, input: &str, flags: Flags) -> TestResult {
 #[test]
 fn modifiers_scope_dot_all_and_multiline_without_leaking() -> TestResult {
     matches(r"(?s:^.$)", "\n", Flags::default())?;
+    matches(r"(?s-:^.$)", "\n", Flags::default())?;
     rejects_match(r"(?-s:^.$)", "\n", Flags::default().with_dot_all(true))?;
     rejects_match(r"(?s:^.$)", "𐌀", Flags::default())?;
     matches(r"(?m:^b)", "a\nb", Flags::default())?;
@@ -89,7 +90,7 @@ fn modifiers_work_inside_reverse_execution_and_quantifiers() -> TestResult {
 #[test]
 fn invalid_modifier_lists_report_structured_errors() -> TestResult {
     for pattern in [
-        "(?i-i:a)", "(?ii:a)", "(?i-:a)", "(?-:a)", "(?--i:a)", "(?i=a)", "(?i)",
+        "(?i-i:a)", "(?ii:a)", "(?-:a)", "(?--i:a)", "(?i=a)", "(?i)",
     ] {
         let result = compile(pattern, Flags::default());
         if !matches!(result, Err(ref error) if error.kind == CompileErrorKind::InvalidModifier) {

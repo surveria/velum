@@ -1,6 +1,7 @@
 use crate::{CompileError, CompileErrorKind, ast::Node, is_id_continue, is_id_start};
 
 use super::Parser;
+use super::escape_parser::combine_surrogates;
 
 impl Parser<'_> {
     pub(super) fn parse_named_backreference(
@@ -91,15 +92,16 @@ impl Parser<'_> {
         }
         self.advance_one()?;
         let parsed = if self.peek() == Some(u16::from(b'{')) {
-            if !self.flags.has_unicode_mode() {
-                return Err(CompileError::new(
-                    CompileErrorKind::InvalidCaptureName,
-                    start,
-                ));
-            }
             self.parse_braced_hex()
         } else {
-            self.parse_fixed_hex(4)
+            let value = self.parse_fixed_hex(4)?;
+            if (0xD800..=0xDBFF).contains(&value)
+                && let Some(low) = self.try_parse_trailing_surrogate_escape()?
+            {
+                combine_surrogates(value, low, start)
+            } else {
+                Ok(value)
+            }
         };
         parsed.map_err(|_| CompileError::new(CompileErrorKind::InvalidCaptureName, start))
     }

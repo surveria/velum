@@ -10,19 +10,23 @@ pub struct CompileLimits {
     pub max_character_class_terms: usize,
     pub max_class_strings: usize,
     pub max_class_string_units: usize,
-    pub max_repeat_count: u32,
+    pub max_repeat_count: u64,
 }
 
 impl Default for CompileLimits {
     fn default() -> Self {
-        Self::MAXIMUM
+        Self {
+            max_pattern_units: 65_536,
+            max_repeat_count: 1_000_000,
+            ..Self::MAXIMUM
+        }
     }
 }
 
 impl CompileLimits {
-    /// Engine-enforced ceilings that callers may lower but cannot raise.
+    /// Engine-enforced ceilings for caller-selected compile limits.
     pub const MAXIMUM: Self = Self {
-        max_pattern_units: 65_536,
+        max_pattern_units: 1_048_576,
         max_nesting_depth: 256,
         max_nodes: 65_536,
         max_instructions: 262_144,
@@ -31,7 +35,7 @@ impl CompileLimits {
         max_character_class_terms: 65_536,
         max_class_strings: 16_384,
         max_class_string_units: 131_072,
-        max_repeat_count: 1_000_000,
+        max_repeat_count: 9_007_199_254_740_991,
     };
 
     pub(crate) fn constrained(self) -> Self {
@@ -68,15 +72,19 @@ pub struct ExecutionLimits {
 
 impl Default for ExecutionLimits {
     fn default() -> Self {
-        Self::MAXIMUM
+        Self {
+            max_steps: 1_000_000,
+            max_candidate_starts: 65_537,
+            ..Self::MAXIMUM
+        }
     }
 }
 
 impl ExecutionLimits {
-    /// Engine-enforced ceilings that callers may lower but cannot raise.
+    /// Engine-enforced ceilings for caller-selected execution limits.
     pub const MAXIMUM: Self = Self {
-        max_steps: 1_000_000,
-        max_candidate_starts: 65_537,
+        max_steps: 268_435_456,
+        max_candidate_starts: 33_554_433,
         max_backtrack_frames: 65_536,
         max_undo_records: 262_144,
         max_capture_slots: 4_096,

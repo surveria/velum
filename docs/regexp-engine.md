@@ -2,20 +2,27 @@
 
 ## Status
 
-Velum currently executes ECMAScript regular expressions through the vendored
-`regress` crate. The project-owned `velum-regexp` and
-`velum-regexp-unicode-gen` crates are being developed beside that path. The
-runtime must not switch until the replacement gates in this document pass.
+Velum now executes ECMAScript regular expressions through the project-owned
+`velum-regexp` crate. The root engine depends on that crate in production and
+keeps the vendored `regress` crate only as a development-time behavioral
+oracle. `velum-regexp-unicode-gen` remains maintenance-only tooling.
+
+The native backend is still a draft integration candidate. On pinned Test262
+commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`, the focused RegExp profile
+passes all 3,922 selected variants: 3,756 `built-ins/RegExp` variants, 124
+Annex B variants, 34 RegExp iterator variants, and eight staging variants.
+Removal of the retained oracle still requires the complete ready-PR
+correctness gate, fuzzing, and comparative performance evidence.
 
 The implementation is specification-led. Existing engines may be queried as
 behavioral or performance oracles, but their implementation structure is not
 the design source for this subsystem.
 
-Runtime storage and built-ins now depend on one project-owned
-`CompiledRegExp` seam in `regexp_syntax`; direct `regress` types and calls are
-confined to that private backend module. A root integration test links
-`velum-regexp` as a development dependency and compares it with the current
-backend without changing the runtime default. The deterministic corpus now
+Runtime storage and built-ins depend on one project-owned `CompiledRegExp`
+seam in `regexp_syntax`; production source does not name or call `regress`.
+The root integration test links the retained oracle as a development
+dependency and compares it with the native backend. The deterministic corpus
+now
 covers 12,650 syntax and match comparisons: structured short patterns,
 seed-reproducible generated expression shapes, Unicode and Unicode Sets
 properties, captures, lookarounds, named backreferences, scoped modifiers,
@@ -29,10 +36,10 @@ The standalone suite also adapts 41 matcher-level cases from the pinned
 Test262 lookbehind corpus under its BSD license. Exact expected UTF-16 spans
 and captures cover reverse capture order, alternation priority, atomicity,
 nested assertions, greedy and variable-length bodies, backreferences, negative
-capture rollback, and word boundaries without using the current backend as the
+capture rollback, and word boundaries without using the retained oracle as the
 expected-result source.
 
-The current native slice implements literals, alternation, captures, greedy
+The native runtime backend implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
 classes, numeric and named backreferences, atomic positive and negative
 lookaheads, variable-length positive and negative lookbehinds, and Unicode
@@ -53,8 +60,7 @@ nested union, intersection, subtraction, complement, `\q{...}` string
 disjunctions, and properties of strings. One-code-point strings are normalized
 into the code-point domain before set algebra; remaining strings use
 longest-first matching with explicit backtracking alternatives in both forward
-and reverse execution. This is an in-progress compatibility surface, not yet a
-runtime replacement. Scoped `(?ims-ims:...)` modifiers are represented in the
+and reverse execution. Scoped `(?ims-ims:...)` modifiers are represented in the
 semantic IR and baked into affected VM instructions; they do not mutate shared
 executor state. Parser-sensitive Unicode Set algebra observes the same scoped
 ignore-case mode before lowering.
@@ -107,8 +113,10 @@ integer wrap, or unbounded retained allocation.
 
 `CompileLimits::MAXIMUM` and `ExecutionLimits::MAXIMUM` are immutable engine
 ceilings. Caller-provided values are constrained to those ceilings at the
-public API boundary, so embedders may reduce resource budgets but cannot raise
-the native parser depth or allocation bounds. Wide disjunction compilation is
+public API boundary. Conservative standalone defaults leave bounded headroom
+for an embedding to select larger pattern and search budgets without exceeding
+the hard ceilings. Velum uses that headroom only behind the VM-owned source,
+string, storage, and runtime-step limits. Wide disjunction compilation is
 iterative rather than recursive; structural recursion remains protected by the
 enforced nesting ceiling.
 
@@ -121,6 +129,9 @@ Compilation limits cover at least:
 - character-class ranges and string alternatives;
 - Unicode Set expression depth, evaluation work, and retained tree storage;
 - emitted instructions and auxiliary table bytes.
+- ECMAScript repeat counts through `Number.MAX_SAFE_INTEGER`, with oversized
+  executable work represented by a bounded guard instead of instruction
+  expansion.
 
 Execution limits cover at least:
 
@@ -135,6 +146,8 @@ The standalone crate reports structured syntax, compile-limit, execution-limit,
 and interruption errors. Velum supplies an execution-control adapter that
 charges the VM runtime-step budget and observes cancellation. Resource failures
 remain non-catchable embedder errors, matching the existing VM architecture.
+Long terminal repetitions avoid retaining one backtrack and undo record per
+consumed code point when the end assertion makes the branch deterministic.
 
 ## Matching Strategy
 
@@ -174,9 +187,9 @@ Replacement requires all of the following:
    and resource tests in `velum-regexp`.
 2. Deterministic generator golden tests plus corruption, truncation, duplicate,
    overlap, alias, and version-mismatch tests.
-3. Licensed behavioral cases imported from `regress` only with source and
-   license provenance recorded; implementation code is not transliterated.
-4. Generated differential cases compared with the existing engine and QuickJS,
+3. Any licensed behavioral cases imported from another project must record
+   source and license provenance; implementation code is not transliterated.
+4. Generated differential cases compared with the retained oracle and QuickJS,
    including syntax acceptance, failure class, full match, captures, names, and
    UTF-16 spans.
 5. Complete pinned Test262 RegExp and Unicode-property coverage with no lost
@@ -188,10 +201,11 @@ Replacement requires all of the following:
    Unicode Sets, string properties, cancellation, and every configured limit.
 8. Direct embedding tests proving independent VM budgets, immutable shared data,
    retained-storage accounting, teardown, and non-catchable resource errors.
-9. Benchmarks against both the current engine and QuickJS across literal search,
+9. Benchmarks against both the retained oracle and QuickJS across literal search,
    alternation, classes, captures, lookarounds, backreferences, Unicode, failure,
    and adversarial bounded workloads.
 
-The runtime switches only after these gates pass on the exact integration tree.
-The vendored dependency and its compatibility oracle remain available until the
-new path is the default and the complete correctness gate is green.
+The native path is now the runtime default on the draft integration branch.
+The vendored compatibility oracle remains development-only until every
+remaining gate passes on the exact ready-PR tree; it is not removed merely
+because the focused RegExp profile is green.

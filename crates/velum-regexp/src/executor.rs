@@ -316,6 +316,9 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                 Ok(next_step(sequential, position))
             }
             Instruction::Split { first, second } => {
+                if let Some(target) = self.deterministic_end_split(first, second, position) {
+                    return Ok(next_step(target, position));
+                }
                 self.push_backtrack(state, second, position)?;
                 Ok(next_step(first, position))
             }
@@ -335,7 +338,42 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                     Ok(next_step(sequential, position))
                 }
             }
+            Instruction::OversizedRepeat {
+                minimum_input_units,
+                execution_limit,
+                reverse,
+            } => self.execute_oversized_repeat(
+                minimum_input_units,
+                execution_limit,
+                reverse,
+                position,
+            ),
             _ => Err(ExecutionError::InvalidProgram),
+        }
+    }
+
+    fn execute_oversized_repeat(
+        &self,
+        minimum_input_units: Option<u64>,
+        execution_limit: u64,
+        reverse: bool,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let available = if reverse {
+            position
+        } else {
+            self.input
+                .len()
+                .checked_sub(position)
+                .ok_or(ExecutionError::InvalidProgram)?
+        };
+        let available = u64::try_from(available).map_err(|_| ExecutionError::SizeOverflow)?;
+        if minimum_input_units.is_some_and(|required| available < required) {
+            Ok(StepOutcome::Failed)
+        } else {
+            Err(ExecutionError::RepeatLimit {
+                limit: execution_limit,
+            })
         }
     }
 
@@ -391,6 +429,49 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                     .is_some_and(|unit| is_line_terminator(*unit)))
     }
 
+    fn deterministic_end_split(
+        &self,
+        first: InstructionIndex,
+        second: InstructionIndex,
+        position: usize,
+    ) -> Option<InstructionIndex> {
+        let first_instruction = self.program.instructions.get(first).copied()?;
+        let second_instruction = self.program.instructions.get(second).copied()?;
+        match (first_instruction, second_instruction) {
+            (consuming, Instruction::AssertEnd { flags })
+                if !flags.multiline() && self.always_consumes_forward(consuming) =>
+            {
+                Some(if position == self.input.len() {
+                    second
+                } else {
+                    first
+                })
+            }
+            (Instruction::AssertEnd { flags }, consuming)
+                if !flags.multiline() && self.always_consumes_forward(consuming) =>
+            {
+                Some(if position == self.input.len() {
+                    first
+                } else {
+                    second
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn always_consumes_forward(&self, instruction: Instruction) -> bool {
+        match instruction {
+            Instruction::Char { .. } | Instruction::Any { .. } => true,
+            Instruction::Class { id, .. } => self
+                .program
+                .classes
+                .get(id)
+                .is_some_and(|class| class.strings.iter().all(|string| !string.is_empty())),
+            _ => false,
+        }
+    }
+
     fn set_capture(
         &mut self,
         state: &mut AttemptState,
@@ -430,6 +511,10 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         state: &mut AttemptState,
         record: UndoRecord,
     ) -> Result<(), ExecutionError> {
+        if state.backtrack.is_empty() {
+            state.undo.clear();
+            return Ok(());
+        }
         if state.undo.len() >= self.limits.max_undo_records {
             return Err(ExecutionError::UndoLimit {
                 limit: self.limits.max_undo_records,

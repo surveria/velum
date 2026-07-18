@@ -34,6 +34,7 @@ pub enum Node {
     AssertStart,
     AssertEnd,
     Concat(Vec<Self>),
+    LegacySequence(Vec<Self>),
     Alternation(Vec<Self>),
     Capture {
         id: usize,
@@ -41,8 +42,8 @@ pub enum Node {
     },
     Repeat {
         body: Box<Self>,
-        min: u32,
-        max: Option<u32>,
+        min: u64,
+        max: Option<u64>,
         greedy: bool,
     },
 }

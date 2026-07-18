@@ -1,7 +1,7 @@
 use crate::{
     CompileError, CompileErrorKind,
     ast::Node,
-    character_class::{CharacterClass, CharacterClassTerm},
+    character_class::{CharacterClass, CharacterClassTerm, normalize_range_terms},
     unicode_property_ranges, unicode_string_property,
 };
 
@@ -53,7 +53,14 @@ impl Parser<'_> {
                 break;
             }
             let first = self.parse_class_atom()?;
-            if matches!(&first, ClassAtom::Single(_)) && self.class_range_follows()? {
+            let range_follows = self.class_range_follows()?;
+            if range_follows
+                && !matches!(&first, ClassAtom::Single(_))
+                && self.flags.has_unicode_mode()
+            {
+                return Err(self.error(CompileErrorKind::InvalidCharacterClass));
+            }
+            if range_follows && matches!(&first, ClassAtom::Single(_)) {
                 self.advance_one()?;
                 let second = self.parse_class_atom()?;
                 let (ClassAtom::Single(start), ClassAtom::Single(end)) = (first, second) else {
@@ -75,6 +82,7 @@ impl Parser<'_> {
         if inverted && !strings.is_empty() {
             return Err(self.error(CompileErrorKind::InvalidCharacterClass));
         }
+        let terms = normalize_range_terms(terms);
         self.node(Node::Class(CharacterClass {
             inverted,
             codepoint_work: terms.len(),

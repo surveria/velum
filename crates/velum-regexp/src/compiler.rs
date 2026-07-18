@@ -97,7 +97,7 @@ impl Compiler {
             }
             Node::AssertStart => self.emit(Instruction::AssertStart { flags }).map(drop),
             Node::AssertEnd => self.emit(Instruction::AssertEnd { flags }).map(drop),
-            Node::Concat(nodes) => {
+            Node::Concat(nodes) | Node::LegacySequence(nodes) => {
                 match direction {
                     Direction::Forward => {
                         for child in nodes {
@@ -227,12 +227,24 @@ impl Compiler {
     fn compile_repeat(
         &mut self,
         body: &Node,
-        min: u32,
-        max: Option<u32>,
+        min: u64,
+        max: Option<u64>,
         greedy: bool,
         direction: Direction,
         flags: Flags,
     ) -> Result<(), CompileError> {
+        let execution_limit = u64::try_from(self.limits.max_instructions)
+            .map_err(|_| CompileError::new(CompileErrorKind::SizeOverflow, 0))?;
+        if min > execution_limit && self.permits_oversized_repeats() {
+            let body_units = minimum_input_units(body);
+            let minimum_input_units = (body_units > 0).then(|| body_units.saturating_mul(min));
+            self.emit(Instruction::OversizedRepeat {
+                minimum_input_units,
+                execution_limit,
+                reverse: matches!(direction, Direction::Reverse),
+            })?;
+            return Ok(());
+        }
         for _ in 0..min {
             self.emit_capture_clears(body)?;
             self.compile_node_in(body, direction, flags)?;
@@ -249,6 +261,10 @@ impl Compiler {
             }
             None => self.compile_unbounded(body, greedy, direction, flags),
         }
+    }
+
+    const fn permits_oversized_repeats(&self) -> bool {
+        self.limits.max_instructions == CompileLimits::MAXIMUM.max_instructions
     }
 
     fn compile_optional(
@@ -312,7 +328,7 @@ impl Compiler {
                 self.emit(Instruction::ClearCapture(*id))?;
                 self.emit_capture_clears(body)
             }
-            Node::Concat(nodes) | Node::Alternation(nodes) => {
+            Node::Concat(nodes) | Node::LegacySequence(nodes) | Node::Alternation(nodes) => {
                 for child in nodes {
                     self.emit_capture_clears(child)?;
                 }
@@ -456,5 +472,29 @@ impl Compiler {
         };
         *matched_instruction = Instruction::PositiveLookaheadMatched { success };
         Ok(())
+    }
+}
+
+fn minimum_input_units(node: &Node) -> u64 {
+    match node {
+        Node::Literal(_) | Node::Any => 1,
+        Node::Class(class) => u64::from(class.strings.iter().all(|string| !string.is_empty())),
+        Node::Concat(nodes) | Node::LegacySequence(nodes) => {
+            nodes.iter().fold(0_u64, |total, child| {
+                total.saturating_add(minimum_input_units(child))
+            })
+        }
+        Node::Alternation(nodes) => nodes.iter().map(minimum_input_units).min().unwrap_or(0),
+        Node::Capture { body, .. } | Node::Modifier { body, .. } => minimum_input_units(body),
+        Node::Repeat { body, min, .. } => minimum_input_units(body).saturating_mul(*min),
+        Node::Empty
+        | Node::Backreference { .. }
+        | Node::NamedBackreference { .. }
+        | Node::BackreferenceSet { .. }
+        | Node::WordBoundary(_)
+        | Node::Lookahead { .. }
+        | Node::Lookbehind { .. }
+        | Node::AssertStart
+        | Node::AssertEnd => 0,
     }
 }

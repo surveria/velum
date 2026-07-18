@@ -92,6 +92,34 @@ fn control_and_malformed_hex_escapes_distinguish_legacy_mode() -> TestResult {
 }
 
 #[test]
+fn legacy_invalid_control_prefix_keeps_quantifiers_on_the_final_atom() -> TestResult {
+    let regex = compile(r"\c*", Flags::default())?;
+    for rejected in ["\n", "c*"] {
+        let input = rejected.encode_utf16().collect::<Vec<_>>();
+        if regex
+            .find(&input, 0, ExecutionLimits::default())?
+            .matched
+            .is_some()
+        {
+            return Err(format!("invalid control fallback matched {rejected:?}").into());
+        }
+    }
+    let input = r"\c*".encode_utf16().collect::<Vec<_>>();
+    let matched = regex
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("invalid control fallback did not match its source prefix")?;
+    if matched.span == (0..2) {
+        return Ok(());
+    }
+    Err(format!(
+        "unexpected invalid control fallback span: {:?}",
+        matched.span
+    )
+    .into())
+}
+
+#[test]
 fn escaped_surrogate_pairs_match_one_unicode_code_point() -> TestResult {
     let unicode = Flags::default().with_unicode(true);
     assert_matches(r"^\uD83D\uDE00$", "😀", unicode)?;

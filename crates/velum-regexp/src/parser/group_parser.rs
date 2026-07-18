@@ -145,7 +145,7 @@ impl Parser<'_> {
                 return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
             };
             if unit == u16::from(b':') {
-                if (removing || !saw_set) && !saw_unset {
+                if !saw_set && !saw_unset {
                     return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
                 }
                 self.advance_one()?;
