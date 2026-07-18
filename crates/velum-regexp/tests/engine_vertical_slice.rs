@@ -320,6 +320,135 @@ fn positive_lookahead_is_atomic_when_later_matching_fails() -> TestResult {
 }
 
 #[test]
+fn lookbehinds_match_in_reverse_without_consuming_input() -> TestResult {
+    let positive = compile(r"(?<=a)b")?;
+    let input = "ab".encode_utf16().collect::<Vec<_>>();
+    let matched = positive
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a positive lookbehind match")?;
+    if matched.span != (1..2) {
+        return Err(format!("unexpected positive lookbehind span: {matched:?}").into());
+    }
+
+    let negative = compile(r"(?<!a)b")?;
+    if negative
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Err("negative lookbehind matched a forbidden prefix".into());
+    }
+    let input = "cb".encode_utf16().collect::<Vec<_>>();
+    let matched = negative
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a negative lookbehind match")?;
+    if matched.span == (1..2) {
+        return Ok(());
+    }
+    Err(format!("unexpected negative lookbehind span: {matched:?}").into())
+}
+
+#[test]
+fn lookbehind_captures_follow_ecmascript_reverse_greediness() -> TestResult {
+    let regex = compile(r"(?<=([ab]+)([bc]+))$")?;
+    let input = "abc".encode_utf16().collect::<Vec<_>>();
+    let matched = regex
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a variable-length lookbehind match")?;
+    let first = matched
+        .captures
+        .first()
+        .and_then(|capture| capture.span.clone())
+        .ok_or("expected the first reverse capture")?;
+    let second = matched
+        .captures
+        .get(1)
+        .and_then(|capture| capture.span.clone())
+        .ok_or("expected the second reverse capture")?;
+    if matched.span == (3..3) && first == (0..1) && second == (1..3) {
+        return Ok(());
+    }
+    Err(format!("unexpected reverse capture allocation: {matched:?}").into())
+}
+
+#[test]
+fn lookbehind_supports_reverse_backreferences_and_unicode_positions() -> TestResult {
+    let backreference = compile(r"(?<=\1(a))b")?;
+    let input = "aab".encode_utf16().collect::<Vec<_>>();
+    let matched = backreference
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a reverse backreference match")?;
+    let capture = matched
+        .captures
+        .first()
+        .and_then(|capture| capture.span.clone())
+        .ok_or("expected a reverse backreference capture")?;
+    if matched.span != (2..3) || capture != (1..2) {
+        return Err(format!("unexpected reverse backreference match: {matched:?}").into());
+    }
+
+    let unicode = compile_with_flags(r"(?<=(😀+))b", Flags::default().with_unicode(true))?;
+    let input = "😀😀b".encode_utf16().collect::<Vec<_>>();
+    let matched = unicode
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a Unicode lookbehind match")?;
+    let capture = matched
+        .captures
+        .first()
+        .and_then(|capture| capture.span.clone())
+        .ok_or("expected a Unicode lookbehind capture")?;
+    if matched.span == (4..5) && capture == (0..4) {
+        return Ok(());
+    }
+    Err(format!("unexpected Unicode lookbehind match: {matched:?}").into())
+}
+
+#[test]
+fn lookbehind_is_atomic_rollback_safe_and_resource_bounded() -> TestResult {
+    let atomic = compile(r"(?<=(a+))b\1")?;
+    let input = "aaba".encode_utf16().collect::<Vec<_>>();
+    if atomic
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Err("positive lookbehind was incorrectly re-entered after success".into());
+    }
+
+    let rollback = compile(r"(?<!(a))b\1")?;
+    let input = "b".encode_utf16().collect::<Vec<_>>();
+    let matched = rollback
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected negative lookbehind rollback match")?;
+    if matched
+        .captures
+        .first()
+        .is_none_or(|capture| capture.span.is_some())
+    {
+        return Err(format!("negative lookbehind leaked a capture: {matched:?}").into());
+    }
+
+    let limited = rollback.find(
+        &input,
+        0,
+        ExecutionLimits {
+            max_backtrack_frames: 0,
+            ..ExecutionLimits::default()
+        },
+    );
+    if matches!(limited, Err(ExecutionError::BacktrackLimit { limit: 0 })) {
+        return Ok(());
+    }
+    Err(format!("unexpected lookbehind frame limit result: {limited:?}").into())
+}
+
+#[test]
 fn invalid_backreferences_and_lookahead_frames_are_bounded() -> TestResult {
     let invalid = compile_with_flags(r"(a)\2", Flags::default().with_unicode(true));
     if !matches!(

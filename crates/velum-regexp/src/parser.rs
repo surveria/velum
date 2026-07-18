@@ -105,7 +105,11 @@ impl<'a> Parser<'a> {
         let atom = self.parse_atom()?;
         let assertion = matches!(
             atom,
-            Node::AssertStart | Node::AssertEnd | Node::WordBoundary(_) | Node::Lookahead { .. }
+            Node::AssertStart
+                | Node::AssertEnd
+                | Node::WordBoundary(_)
+                | Node::Lookahead { .. }
+                | Node::Lookbehind { .. }
         );
         let Some((min, max)) = self.parse_quantifier_bounds()? else {
             return Ok(atom);
@@ -171,34 +175,41 @@ impl<'a> Parser<'a> {
     fn parse_group(&mut self) -> Result<Node, CompileError> {
         self.advance_one()?;
         self.enter_depth()?;
-        let (capturing, lookahead, capture_name) = if self.peek() == Some(u16::from(b'?')) {
-            self.advance_one()?;
-            match self.peek() {
-                Some(value) if value == u16::from(b':') => {
-                    self.advance_one()?;
-                    (false, None, None)
-                }
-                Some(value) if value == u16::from(b'=') => {
-                    self.advance_one()?;
-                    (false, Some(true), None)
-                }
-                Some(value) if value == u16::from(b'!') => {
-                    self.advance_one()?;
-                    (false, Some(false), None)
-                }
-                Some(value) if value == u16::from(b'<') => {
-                    self.advance_one()?;
-                    if matches!(self.peek(), Some(marker) if marker == u16::from(b'=') || marker == u16::from(b'!'))
-                    {
-                        return Err(self.error(CompileErrorKind::UnsupportedSyntax));
+        let (capturing, lookahead, lookbehind, capture_name) =
+            if self.peek() == Some(u16::from(b'?')) {
+                self.advance_one()?;
+                match self.peek() {
+                    Some(value) if value == u16::from(b':') => {
+                        self.advance_one()?;
+                        (false, None, None, None)
                     }
-                    (true, None, Some(self.parse_capture_name()?))
+                    Some(value) if value == u16::from(b'=') => {
+                        self.advance_one()?;
+                        (false, Some(true), None, None)
+                    }
+                    Some(value) if value == u16::from(b'!') => {
+                        self.advance_one()?;
+                        (false, Some(false), None, None)
+                    }
+                    Some(value) if value == u16::from(b'<') => {
+                        self.advance_one()?;
+                        match self.peek() {
+                            Some(marker) if marker == u16::from(b'=') => {
+                                self.advance_one()?;
+                                (false, None, Some(true), None)
+                            }
+                            Some(marker) if marker == u16::from(b'!') => {
+                                self.advance_one()?;
+                                (false, None, Some(false), None)
+                            }
+                            _ => (true, None, None, Some(self.parse_capture_name()?)),
+                        }
+                    }
+                    _ => return Err(self.error(CompileErrorKind::UnsupportedSyntax)),
                 }
-                _ => return Err(self.error(CompileErrorKind::UnsupportedSyntax)),
-            }
-        } else {
-            (true, None, None)
-        };
+            } else {
+                (true, None, None, None)
+            };
         let capture_id = if capturing {
             let id = self.capture_count;
             self.capture_count = self
@@ -234,6 +245,11 @@ impl<'a> Parser<'a> {
             .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
         if let Some(positive) = lookahead {
             self.node(Node::Lookahead {
+                body: Box::new(body),
+                positive,
+            })
+        } else if let Some(positive) = lookbehind {
+            self.node(Node::Lookbehind {
                 body: Box::new(body),
                 positive,
             })
@@ -628,7 +644,10 @@ fn resolve_backreferences(
             }
             Ok(())
         }
-        Node::Capture { body, .. } | Node::Repeat { body, .. } | Node::Lookahead { body, .. } => {
+        Node::Capture { body, .. }
+        | Node::Repeat { body, .. }
+        | Node::Lookahead { body, .. }
+        | Node::Lookbehind { body, .. } => {
             resolve_backreferences(body, capture_count, capture_names)
         }
         Node::Empty

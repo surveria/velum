@@ -56,6 +56,14 @@ pub fn decode_backward(
     position: usize,
     unicode: bool,
 ) -> Result<Option<u32>, ExecutionError> {
+    Ok(decode_backward_with_position(input, position, unicode)?.map(|(value, _)| value))
+}
+
+pub fn decode_backward_with_position(
+    input: &[u16],
+    position: usize,
+    unicode: bool,
+) -> Result<Option<(u32, usize)>, ExecutionError> {
     let Some(previous_position) = position.checked_sub(1) else {
         return Ok(None);
     };
@@ -63,16 +71,16 @@ pub fn decode_backward(
         return Err(ExecutionError::InvalidProgram);
     };
     if !unicode || !(LOW_SURROGATE_START..=LOW_SURROGATE_END).contains(&last) {
-        return Ok(Some(u32::from(last)));
+        return Ok(Some((u32::from(last), previous_position)));
     }
     let Some(high_position) = previous_position.checked_sub(1) else {
-        return Ok(Some(u32::from(last)));
+        return Ok(Some((u32::from(last), previous_position)));
     };
     let Some(first) = input.get(high_position).copied() else {
         return Err(ExecutionError::InvalidProgram);
     };
     if !(HIGH_SURROGATE_START..=HIGH_SURROGATE_END).contains(&first) {
-        return Ok(Some(u32::from(last)));
+        return Ok(Some((u32::from(last), previous_position)));
     }
     let high = u32::from(first - HIGH_SURROGATE_START);
     let low = u32::from(last - LOW_SURROGATE_START);
@@ -83,7 +91,7 @@ pub fn decode_backward(
         )
         .and_then(|value| value.checked_add(low))
         .ok_or(ExecutionError::SizeOverflow)?;
-    Ok(Some(scalar))
+    Ok(Some((scalar, high_position)))
 }
 
 pub const fn is_line_terminator(value: u16) -> bool {

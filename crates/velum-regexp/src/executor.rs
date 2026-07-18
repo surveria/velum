@@ -6,6 +6,8 @@ use crate::{
     program::{Instruction, InstructionIndex, Program},
 };
 
+mod consume;
+
 #[derive(Debug, Clone, Copy, Default)]
 struct CaptureSlot {
     start: Option<usize>,
@@ -168,11 +170,31 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         match current {
             Instruction::Accept => Ok(StepOutcome::Accept),
             Instruction::Char(expected) => self.consume_char(expected, sequential, position),
+            Instruction::CharReverse(expected) => {
+                self.consume_char_reverse(expected, sequential, position)
+            }
             Instruction::Backreference(id) => {
                 self.consume_backreference(state, id, sequential, position)
             }
+            Instruction::BackreferenceReverse(id) => {
+                self.consume_backreference_reverse(state, id, sequential, position)
+            }
             Instruction::Class(id) => self.consume_class(id, sequential, position),
+            Instruction::ClassReverse(id) => self.consume_class_reverse(id, sequential, position),
             Instruction::Any => self.consume_any(sequential, position),
+            Instruction::AnyReverse => self.consume_any_reverse(sequential, position),
+            _ => self.execute_assertion_instruction(current, state, sequential, position),
+        }
+    }
+
+    fn execute_assertion_instruction(
+        &mut self,
+        current: Instruction,
+        state: &mut AttemptState,
+        sequential: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        match current {
             Instruction::WordBoundary(inverted) => {
                 self.assert_word_boundary(inverted, sequential, position)
             }
@@ -213,6 +235,18 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             } else {
                 StepOutcome::Failed
             }),
+            _ => self.execute_vm_instruction(current, state, sequential, position),
+        }
+    }
+
+    fn execute_vm_instruction(
+        &mut self,
+        current: Instruction,
+        state: &mut AttemptState,
+        sequential: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        match current {
             Instruction::SaveStart(id) => {
                 self.set_capture(
                     state,
@@ -234,6 +268,31 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                     CaptureSlot {
                         start: previous.start,
                         end: Some(position),
+                    },
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::SaveEndReverse(id) => {
+                self.set_capture(
+                    state,
+                    id,
+                    CaptureSlot {
+                        start: None,
+                        end: Some(position),
+                    },
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::SaveStartReverse(id) => {
+                let Some(previous) = state.captures.get(id).copied() else {
+                    return Err(ExecutionError::InvalidProgram);
+                };
+                self.set_capture(
+                    state,
+                    id,
+                    CaptureSlot {
+                        start: Some(position),
+                        end: previous.end,
                     },
                 )?;
                 Ok(next_step(sequential, position))
@@ -262,102 +321,8 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                     Ok(next_step(sequential, position))
                 }
             }
+            _ => Err(ExecutionError::InvalidProgram),
         }
-    }
-
-    fn consume_char(
-        &self,
-        expected: u32,
-        instruction: InstructionIndex,
-        position: usize,
-    ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
-        Ok(match decoded {
-            Some((actual, next)) if self.characters_equal(actual, expected) => {
-                next_step(instruction, next)
-            }
-            Some(_) | None => StepOutcome::Failed,
-        })
-    }
-
-    fn consume_any(
-        &self,
-        instruction: InstructionIndex,
-        position: usize,
-    ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
-        let Some((actual, next)) = decoded else {
-            return Ok(StepOutcome::Failed);
-        };
-        let line_terminator = u16::try_from(actual).is_ok_and(is_line_terminator);
-        if line_terminator && !self.program.flags.dot_all() {
-            Ok(StepOutcome::Failed)
-        } else {
-            Ok(next_step(instruction, next))
-        }
-    }
-
-    fn consume_backreference(
-        &mut self,
-        state: &AttemptState,
-        id: usize,
-        instruction: InstructionIndex,
-        position: usize,
-    ) -> Result<StepOutcome, ExecutionError> {
-        let Some(slot) = state.captures.get(id).copied() else {
-            return Err(ExecutionError::InvalidProgram);
-        };
-        let Some(span) = slot.span() else {
-            return Ok(next_step(instruction, position));
-        };
-        let mut capture_position = span.start;
-        let mut input_position = position;
-        while capture_position < span.end {
-            self.charge_step()?;
-            let Some((expected, next_capture)) = decode_forward(
-                self.input,
-                capture_position,
-                self.program.flags.has_unicode_mode(),
-            )?
-            else {
-                return Err(ExecutionError::InvalidProgram);
-            };
-            if next_capture > span.end {
-                return Err(ExecutionError::InvalidProgram);
-            }
-            let Some((actual, next_input)) = decode_forward(
-                self.input,
-                input_position,
-                self.program.flags.has_unicode_mode(),
-            )?
-            else {
-                return Ok(StepOutcome::Failed);
-            };
-            if !self.characters_equal(actual, expected) {
-                return Ok(StepOutcome::Failed);
-            }
-            capture_position = next_capture;
-            input_position = next_input;
-        }
-        Ok(next_step(instruction, input_position))
-    }
-
-    fn consume_class(
-        &self,
-        id: usize,
-        instruction: InstructionIndex,
-        position: usize,
-    ) -> Result<StepOutcome, ExecutionError> {
-        let Some(class) = self.program.classes.get(id) else {
-            return Err(ExecutionError::InvalidProgram);
-        };
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
-        Ok(match decoded {
-            Some((actual, next)) if class.matches(actual, self.program.flags) => {
-                next_step(instruction, next)
-            }
-            Some(_) | None => StepOutcome::Failed,
-        })
     }
 
     fn at_word_boundary(&self, position: usize) -> Result<bool, ExecutionError> {

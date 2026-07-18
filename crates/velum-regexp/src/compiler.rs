@@ -11,6 +11,12 @@ pub struct Compiler {
     progress_count: usize,
 }
 
+#[derive(Clone, Copy)]
+enum Direction {
+    Forward,
+    Reverse,
+}
+
 impl Compiler {
     pub(super) fn compile(
         parsed: &ParsedPattern,
@@ -36,62 +42,117 @@ impl Compiler {
     }
 
     fn compile_node(&mut self, node: &Node) -> Result<(), CompileError> {
+        self.compile_node_in(node, Direction::Forward)
+    }
+
+    fn compile_node_in(&mut self, node: &Node, direction: Direction) -> Result<(), CompileError> {
         match node {
             Node::Empty => Ok(()),
-            Node::Literal(value) => self.emit(Instruction::Char(*value)).map(drop),
-            Node::Backreference { id, .. } => self.emit(Instruction::Backreference(*id)).map(drop),
+            Node::Literal(value) => self.emit_character(*value, direction),
+            Node::Backreference { id, .. } => self.emit_backreference(*id, direction),
             Node::NamedBackreference { .. } => {
                 Err(CompileError::new(CompileErrorKind::UnknownCaptureName, 0))
             }
             Node::Class(class) => {
                 let id = self.classes.len();
                 self.classes.push(class.clone());
-                self.emit(Instruction::Class(id)).map(drop)
+                let instruction = match direction {
+                    Direction::Forward => Instruction::Class(id),
+                    Direction::Reverse => Instruction::ClassReverse(id),
+                };
+                self.emit(instruction).map(drop)
             }
-            Node::Any => self.emit(Instruction::Any).map(drop),
+            Node::Any => {
+                let instruction = match direction {
+                    Direction::Forward => Instruction::Any,
+                    Direction::Reverse => Instruction::AnyReverse,
+                };
+                self.emit(instruction).map(drop)
+            }
             Node::WordBoundary(inverted) => {
                 self.emit(Instruction::WordBoundary(*inverted)).map(drop)
             }
-            Node::Lookahead { body, positive } => self.compile_lookahead(body, *positive),
+            Node::Lookahead { body, positive } => {
+                self.compile_assertion(body, *positive, Direction::Forward)
+            }
+            Node::Lookbehind { body, positive } => {
+                self.compile_assertion(body, *positive, Direction::Reverse)
+            }
             Node::AssertStart => self.emit(Instruction::AssertStart).map(drop),
             Node::AssertEnd => self.emit(Instruction::AssertEnd).map(drop),
             Node::Concat(nodes) => {
-                for child in nodes {
-                    self.compile_node(child)?;
+                match direction {
+                    Direction::Forward => {
+                        for child in nodes {
+                            self.compile_node_in(child, direction)?;
+                        }
+                    }
+                    Direction::Reverse => {
+                        for child in nodes.iter().rev() {
+                            self.compile_node_in(child, direction)?;
+                        }
+                    }
                 }
                 Ok(())
             }
-            Node::Alternation(nodes) => self.compile_alternatives(nodes),
+            Node::Alternation(nodes) => self.compile_alternatives(nodes, direction),
             Node::Capture { id, body } => {
-                self.emit(Instruction::SaveStart(*id))?;
-                self.compile_node(body)?;
-                self.emit(Instruction::SaveEnd(*id)).map(drop)
+                match direction {
+                    Direction::Forward => self.emit(Instruction::SaveStart(*id))?,
+                    Direction::Reverse => self.emit(Instruction::SaveEndReverse(*id))?,
+                };
+                self.compile_node_in(body, direction)?;
+                let instruction = match direction {
+                    Direction::Forward => Instruction::SaveEnd(*id),
+                    Direction::Reverse => Instruction::SaveStartReverse(*id),
+                };
+                self.emit(instruction).map(drop)
             }
             Node::Repeat {
                 body,
                 min,
                 max,
                 greedy,
-            } => self.compile_repeat(body, *min, *max, *greedy),
+            } => self.compile_repeat(body, *min, *max, *greedy, direction),
         }
     }
 
-    fn compile_alternatives(&mut self, nodes: &[Node]) -> Result<(), CompileError> {
+    fn emit_character(&mut self, value: u32, direction: Direction) -> Result<(), CompileError> {
+        let instruction = match direction {
+            Direction::Forward => Instruction::Char(value),
+            Direction::Reverse => Instruction::CharReverse(value),
+        };
+        self.emit(instruction).map(drop)
+    }
+
+    fn emit_backreference(&mut self, id: usize, direction: Direction) -> Result<(), CompileError> {
+        let instruction = match direction {
+            Direction::Forward => Instruction::Backreference(id),
+            Direction::Reverse => Instruction::BackreferenceReverse(id),
+        };
+        self.emit(instruction).map(drop)
+    }
+
+    fn compile_alternatives(
+        &mut self,
+        nodes: &[Node],
+        direction: Direction,
+    ) -> Result<(), CompileError> {
         let Some((first, rest)) = nodes.split_first() else {
             return Ok(());
         };
         if rest.is_empty() {
-            return self.compile_node(first);
+            return self.compile_node_in(first, direction);
         }
         let split = self.emit(Instruction::Split {
             first: 0,
             second: 0,
         })?;
         let first_target = self.next_index();
-        self.compile_node(first)?;
+        self.compile_node_in(first, direction)?;
         let jump = self.emit(Instruction::Jump(0))?;
         let second_target = self.next_index();
-        self.compile_alternatives(rest)?;
+        self.compile_alternatives(rest, direction)?;
         let end = self.next_index();
         self.patch_split(split, first_target, second_target)?;
         self.patch_jump(jump, end)
@@ -103,10 +164,11 @@ impl Compiler {
         min: u32,
         max: Option<u32>,
         greedy: bool,
+        direction: Direction,
     ) -> Result<(), CompileError> {
         for _ in 0..min {
             self.emit_capture_clears(body)?;
-            self.compile_node(body)?;
+            self.compile_node_in(body, direction)?;
         }
         match max {
             Some(maximum) => {
@@ -114,22 +176,27 @@ impl Compiler {
                     .checked_sub(min)
                     .ok_or_else(|| CompileError::new(CompileErrorKind::InvalidQuantifier, 0))?;
                 for _ in 0..optional {
-                    self.compile_optional(body, greedy)?;
+                    self.compile_optional(body, greedy, direction)?;
                 }
                 Ok(())
             }
-            None => self.compile_unbounded(body, greedy),
+            None => self.compile_unbounded(body, greedy, direction),
         }
     }
 
-    fn compile_optional(&mut self, body: &Node, greedy: bool) -> Result<(), CompileError> {
+    fn compile_optional(
+        &mut self,
+        body: &Node,
+        greedy: bool,
+        direction: Direction,
+    ) -> Result<(), CompileError> {
         let split = self.emit(Instruction::Split {
             first: 0,
             second: 0,
         })?;
         let body_target = self.next_index();
         self.emit_capture_clears(body)?;
-        self.compile_node(body)?;
+        self.compile_node_in(body, direction)?;
         let end = self.next_index();
         if greedy {
             self.patch_split(split, body_target, end)
@@ -138,7 +205,12 @@ impl Compiler {
         }
     }
 
-    fn compile_unbounded(&mut self, body: &Node, greedy: bool) -> Result<(), CompileError> {
+    fn compile_unbounded(
+        &mut self,
+        body: &Node,
+        greedy: bool,
+        direction: Direction,
+    ) -> Result<(), CompileError> {
         let progress_id = self.allocate_progress()?;
         self.emit(Instruction::ResetProgress(progress_id))?;
         let loop_start = self.next_index();
@@ -148,7 +220,7 @@ impl Compiler {
         })?;
         let body_target = self.next_index();
         self.emit_capture_clears(body)?;
-        self.compile_node(body)?;
+        self.compile_node_in(body, direction)?;
         let check = self.emit(Instruction::CheckProgress {
             id: progress_id,
             no_progress: 0,
@@ -175,9 +247,9 @@ impl Compiler {
                 }
                 Ok(())
             }
-            Node::Repeat { body, .. } | Node::Lookahead { body, .. } => {
-                self.emit_capture_clears(body)
-            }
+            Node::Repeat { body, .. }
+            | Node::Lookahead { body, .. }
+            | Node::Lookbehind { body, .. } => self.emit_capture_clears(body),
             Node::Empty
             | Node::Literal(_)
             | Node::Backreference { .. }
@@ -190,10 +262,15 @@ impl Compiler {
         }
     }
 
-    fn compile_lookahead(&mut self, body: &Node, positive: bool) -> Result<(), CompileError> {
+    fn compile_assertion(
+        &mut self,
+        body: &Node,
+        positive: bool,
+        direction: Direction,
+    ) -> Result<(), CompileError> {
         if positive {
             let start = self.emit(Instruction::PositiveLookaheadStart { failure: 0 })?;
-            self.compile_node(body)?;
+            self.compile_node_in(body, direction)?;
             let matched = self.emit(Instruction::PositiveLookaheadMatched { success: 0 })?;
             let failure = self.next_index();
             self.emit(Instruction::Fail)?;
@@ -201,7 +278,7 @@ impl Compiler {
             return self.patch_positive_lookahead(start, matched, failure, success);
         }
         let start = self.emit(Instruction::NegativeLookaheadStart { success: 0 })?;
-        self.compile_node(body)?;
+        self.compile_node_in(body, direction)?;
         self.emit(Instruction::NegativeLookaheadMatched)?;
         let success = self.next_index();
         self.patch_negative_lookahead(start, success)

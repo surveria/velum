@@ -19,6 +19,10 @@ pub enum Node {
         body: Box<Self>,
         positive: bool,
     },
+    Lookbehind {
+        body: Box<Self>,
+        positive: bool,
+    },
     AssertStart,
     AssertEnd,
     Concat(Vec<Self>),

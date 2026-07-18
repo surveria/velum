@@ -8,9 +8,13 @@ pub type InstructionIndex = usize;
 pub enum Instruction {
     Accept,
     Char(u32),
+    CharReverse(u32),
     Backreference(usize),
+    BackreferenceReverse(usize),
     Class(usize),
+    ClassReverse(usize),
     Any,
+    AnyReverse,
     WordBoundary(bool),
     PositiveLookaheadStart {
         failure: InstructionIndex,
@@ -27,6 +31,8 @@ pub enum Instruction {
     AssertEnd,
     SaveStart(usize),
     SaveEnd(usize),
+    SaveStartReverse(usize),
+    SaveEndReverse(usize),
     ClearCapture(usize),
     Split {
         first: InstructionIndex,
