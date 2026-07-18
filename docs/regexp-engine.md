@@ -15,10 +15,12 @@ Runtime storage and built-ins now depend on one project-owned
 `CompiledRegExp` seam in `regexp_syntax`; direct `regress` types and calls are
 confined to that private backend module. A root integration test links
 `velum-regexp` as a development dependency and compares it with the current
-backend without changing the runtime default. The initial deterministic corpus
-covers 2,259 syntax and match comparisons, including 2,240 structured short
-pattern/input/flag/sticky combinations plus curated captures, lookarounds,
-named backreferences, scoped modifiers, Unicode, and Unicode Sets cases.
+backend without changing the runtime default. The deterministic corpus now
+covers 9,266 syntax and match comparisons: structured short patterns,
+seed-reproducible generated expression shapes, Unicode and Unicode Sets
+properties, captures, lookarounds, named backreferences, scoped modifiers,
+search starts, sticky matching, and exact UTF-16 lone-surrogate and
+mid-surrogate positions.
 
 The current native slice implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
