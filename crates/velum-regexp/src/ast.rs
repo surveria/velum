@@ -12,6 +12,9 @@ pub enum Node {
         name: String,
         pattern_offset: usize,
     },
+    BackreferenceSet {
+        ids: Vec<usize>,
+    },
     Class(CharacterClass),
     Any,
     WordBoundary(bool),

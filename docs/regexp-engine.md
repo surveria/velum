@@ -38,6 +38,12 @@ semantic IR and baked into affected VM instructions; they do not mutate shared
 executor state. Parser-sensitive Unicode Set algebra observes the same scoped
 ignore-case mode before lowering.
 
+Duplicate named captures are accepted only when their parser-recorded
+disjunction paths are mutually exclusive. Named backreferences lower to the
+bounded set of capture slots sharing that name and select the single slot that
+participated in the current path or repetition. Slot selection is charged to
+the same execution and host-control budgets as ordinary backreference work.
+
 ## Crate Boundary
 
 `velum-regexp` is a dependency-light library. It owns pattern parsing, semantic

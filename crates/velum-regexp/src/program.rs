@@ -23,6 +23,14 @@ pub enum Instruction {
         id: usize,
         flags: Flags,
     },
+    BackreferenceSet {
+        id: usize,
+        flags: Flags,
+    },
+    BackreferenceSetReverse {
+        id: usize,
+        flags: Flags,
+    },
     Class {
         id: usize,
         flags: Flags,
@@ -79,6 +87,7 @@ pub enum Instruction {
 pub struct Program {
     pub instructions: Vec<Instruction>,
     pub classes: Vec<CharacterClass>,
+    pub backreference_sets: Vec<Box<[usize]>>,
     pub flags: Flags,
     pub capture_count: usize,
     pub capture_names: Vec<Option<String>>,
@@ -107,13 +116,34 @@ impl Program {
                     .ok_or(SizeOverflow)
             },
         )?;
+        let backreference_set_headers = self
+            .backreference_sets
+            .len()
+            .checked_mul(size_of::<Box<[usize]>>())
+            .ok_or(SizeOverflow)?;
+        let backreference_set_bytes = self.backreference_sets.iter().try_fold(
+            class_bytes
+                .checked_add(backreference_set_headers)
+                .ok_or(SizeOverflow)?,
+            |total, set| {
+                total
+                    .checked_add(
+                        set.len()
+                            .checked_mul(size_of::<usize>())
+                            .ok_or(SizeOverflow)?,
+                    )
+                    .ok_or(SizeOverflow)
+            },
+        )?;
         let name_headers = self
             .capture_names
             .len()
             .checked_mul(size_of::<Option<String>>())
             .ok_or(SizeOverflow)?;
         self.capture_names.iter().try_fold(
-            class_bytes.checked_add(name_headers).ok_or(SizeOverflow)?,
+            backreference_set_bytes
+                .checked_add(name_headers)
+                .ok_or(SizeOverflow)?,
             |total, name| {
                 total
                     .checked_add(name.as_ref().map_or(0, String::len))

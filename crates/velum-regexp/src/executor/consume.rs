@@ -163,6 +163,69 @@ impl<C: ExecutionControl> Executor<'_, C> {
         Ok(next_step(instruction, input_position))
     }
 
+    pub(super) fn consume_backreference_set(
+        &mut self,
+        state: &AttemptState,
+        set_id: usize,
+        instruction: InstructionIndex,
+        position: usize,
+        flags: Flags,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let selected = self.select_backreference_capture(state, set_id)?;
+        let Some(id) = selected else {
+            return Ok(next_step(instruction, position));
+        };
+        self.consume_backreference(state, id, instruction, position, flags)
+    }
+
+    pub(super) fn consume_backreference_set_reverse(
+        &mut self,
+        state: &AttemptState,
+        set_id: usize,
+        instruction: InstructionIndex,
+        position: usize,
+        flags: Flags,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let selected = self.select_backreference_capture(state, set_id)?;
+        let Some(id) = selected else {
+            return Ok(next_step(instruction, position));
+        };
+        self.consume_backreference_reverse(state, id, instruction, position, flags)
+    }
+
+    fn select_backreference_capture(
+        &mut self,
+        state: &AttemptState,
+        set_id: usize,
+    ) -> Result<Option<usize>, ExecutionError> {
+        let Some(work) = self
+            .program
+            .backreference_sets
+            .get(set_id)
+            .map(|ids| ids.len())
+        else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        self.charge_steps(work)?;
+        let Some(ids) = self.program.backreference_sets.get(set_id) else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        let mut selected = None;
+        for id in ids {
+            let Some(slot) = state.captures.get(*id) else {
+                return Err(ExecutionError::InvalidProgram);
+            };
+            if slot.span().is_none() {
+                continue;
+            }
+            if selected.is_some() {
+                return Err(ExecutionError::InvalidProgram);
+            }
+            selected = Some(*id);
+        }
+        Ok(selected)
+    }
+
     pub(super) fn consume_class(
         &mut self,
         state: &mut AttemptState,

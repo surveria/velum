@@ -7,6 +7,7 @@ use crate::{
 pub struct Compiler {
     instructions: Vec<Instruction>,
     classes: Vec<crate::character_class::CharacterClass>,
+    backreference_sets: Vec<Box<[usize]>>,
     limits: CompileLimits,
     progress_count: usize,
 }
@@ -26,6 +27,7 @@ impl Compiler {
         let mut compiler = Self {
             instructions: Vec::new(),
             classes: Vec::new(),
+            backreference_sets: Vec::new(),
             limits,
             progress_count: 0,
         };
@@ -34,6 +36,7 @@ impl Compiler {
         Ok(Program {
             instructions: compiler.instructions,
             classes: compiler.classes,
+            backreference_sets: compiler.backreference_sets,
             flags,
             capture_count: parsed.capture_count,
             capture_names: parsed.capture_names.clone(),
@@ -55,6 +58,9 @@ impl Compiler {
             Node::Empty => Ok(()),
             Node::Literal(value) => self.emit_character(*value, direction, flags),
             Node::Backreference { id, .. } => self.emit_backreference(*id, direction, flags),
+            Node::BackreferenceSet { ids, .. } => {
+                self.emit_backreference_set(ids, direction, flags)
+            }
             Node::NamedBackreference { .. } => {
                 Err(CompileError::new(CompileErrorKind::UnknownCaptureName, 0))
             }
@@ -158,6 +164,30 @@ impl Compiler {
             Direction::Reverse => Instruction::BackreferenceReverse { id, flags },
         };
         self.emit(instruction).map(drop)
+    }
+
+    fn emit_backreference_set(
+        &mut self,
+        ids: &[usize],
+        direction: Direction,
+        flags: Flags,
+    ) -> Result<(), CompileError> {
+        if self.backreference_sets.len() >= self.limits.max_instructions {
+            return Err(CompileError::new(
+                CompileErrorKind::InstructionLimit {
+                    limit: self.limits.max_instructions,
+                },
+                0,
+            ));
+        }
+        let id = self.backreference_sets.len();
+        let instruction = match direction {
+            Direction::Forward => Instruction::BackreferenceSet { id, flags },
+            Direction::Reverse => Instruction::BackreferenceSetReverse { id, flags },
+        };
+        self.emit(instruction)?;
+        self.backreference_sets.push(Box::from(ids));
+        Ok(())
     }
 
     fn compile_alternatives(
@@ -285,6 +315,7 @@ impl Compiler {
             Node::Empty
             | Node::Literal(_)
             | Node::Backreference { .. }
+            | Node::BackreferenceSet { .. }
             | Node::NamedBackreference { .. }
             | Node::Class(_)
             | Node::Any

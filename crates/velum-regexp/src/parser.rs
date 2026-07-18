@@ -3,6 +3,8 @@ mod escape_parser;
 mod name_parser;
 mod unicode_set_parser;
 
+use core::cmp::Ordering;
+
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
     ast::{Node, ParsedPattern},
@@ -20,6 +22,9 @@ pub struct Parser<'a> {
     total_capture_count: usize,
     has_named_capture: bool,
     capture_names: Vec<Option<String>>,
+    disjunction_count: usize,
+    alternative_path: Vec<(usize, usize)>,
+    capture_paths: Vec<Vec<(usize, usize)>>,
 }
 
 enum PropertyEscape {
@@ -67,6 +72,9 @@ impl<'a> Parser<'a> {
             total_capture_count: capture_scan.count,
             has_named_capture: capture_scan.has_named,
             capture_names: Vec::new(),
+            disjunction_count: 0,
+            alternative_path: Vec::new(),
+            capture_paths: Vec::new(),
         };
         let mut root = parser.parse_disjunction(false)?;
         if parser.position != pattern.len() {
@@ -81,13 +89,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_disjunction(&mut self, in_group: bool) -> Result<Node, CompileError> {
+        let disjunction_id = self.disjunction_count;
+        self.disjunction_count = self
+            .disjunction_count
+            .checked_add(1)
+            .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
         let mut alternatives = Vec::new();
+        let mut alternative_id = 0_usize;
         loop {
-            alternatives.push(self.parse_alternative()?);
+            self.alternative_path.push((disjunction_id, alternative_id));
+            let alternative_result = self.parse_alternative();
+            self.alternative_path
+                .pop()
+                .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
+            alternatives.push(alternative_result?);
             if self.peek() != Some(u16::from(b'|')) {
                 break;
             }
             self.advance_one()?;
+            alternative_id = alternative_id
+                .checked_add(1)
+                .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
         }
         if !in_group && self.peek() == Some(u16::from(b')')) {
             return Err(self.error(CompileErrorKind::UnexpectedToken));
@@ -213,14 +235,12 @@ impl<'a> Parser<'a> {
                 }));
             }
             if let Some(name) = capture_name.as_ref()
-                && self
-                    .capture_names
-                    .iter()
-                    .any(|existing| existing.as_ref() == Some(name))
+                && self.capture_name_conflicts(name)
             {
                 return Err(self.error(CompileErrorKind::DuplicateCaptureName));
             }
             self.capture_names.push(capture_name);
+            self.capture_paths.push(self.alternative_path.clone());
             Some(id)
         } else {
             None
@@ -358,6 +378,16 @@ impl<'a> Parser<'a> {
             }
             self.advance_one()?;
         }
+    }
+
+    fn capture_name_conflicts(&self, name: &str) -> bool {
+        self.capture_names
+            .iter()
+            .zip(&self.capture_paths)
+            .any(|(existing, path)| {
+                existing.as_deref() == Some(name)
+                    && !alternative_paths_are_disjoint(path, &self.alternative_path)
+            })
     }
 
     fn parse_quantifier_bounds(&mut self) -> Result<Option<(u32, Option<u32>)>, CompileError> {
@@ -562,6 +592,29 @@ const fn with_modifier_flag(flags: Flags, unit: u16, enabled: bool) -> Flags {
     }
 }
 
+fn alternative_paths_are_disjoint(left: &[(usize, usize)], right: &[(usize, usize)]) -> bool {
+    let mut left_index = 0_usize;
+    let mut right_index = 0_usize;
+    while let (
+        Some((left_disjunction, left_alternative)),
+        Some((right_disjunction, right_alternative)),
+    ) = (left.get(left_index), right.get(right_index))
+    {
+        match left_disjunction.cmp(right_disjunction) {
+            Ordering::Equal => {
+                if left_alternative != right_alternative {
+                    return true;
+                }
+                left_index = left_index.saturating_add(1);
+                right_index = right_index.saturating_add(1);
+            }
+            Ordering::Less => left_index = left_index.saturating_add(1),
+            Ordering::Greater => right_index = right_index.saturating_add(1),
+        }
+    }
+    false
+}
+
 const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, CompileError> {
     let (ranges, inverted) = match value {
         0x0064 => (DIGIT_RANGES, false),
@@ -654,16 +707,28 @@ fn resolve_backreferences(
             name,
             pattern_offset,
         } => {
-            let id = capture_names
+            let ids = capture_names
                 .iter()
-                .position(|candidate| candidate.as_ref() == Some(name))
-                .ok_or_else(|| {
-                    CompileError::new(CompileErrorKind::UnknownCaptureName, *pattern_offset)
-                })?;
-            *node = Node::Backreference {
-                id,
-                pattern_offset: *pattern_offset,
-            };
+                .enumerate()
+                .filter_map(|(id, candidate)| (candidate.as_ref() == Some(name)).then_some(id))
+                .collect::<Vec<_>>();
+            match ids.as_slice() {
+                [] => {
+                    return Err(CompileError::new(
+                        CompileErrorKind::UnknownCaptureName,
+                        *pattern_offset,
+                    ));
+                }
+                [id] => {
+                    *node = Node::Backreference {
+                        id: *id,
+                        pattern_offset: *pattern_offset,
+                    };
+                }
+                _ => {
+                    *node = Node::BackreferenceSet { ids };
+                }
+            }
             Ok(())
         }
         Node::Concat(nodes) | Node::Alternation(nodes) => {
@@ -680,6 +745,7 @@ fn resolve_backreferences(
         Node::Empty
         | Node::Literal(_)
         | Node::Backreference { .. }
+        | Node::BackreferenceSet { .. }
         | Node::Class(_)
         | Node::Any
         | Node::WordBoundary(_)

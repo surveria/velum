@@ -181,6 +181,12 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             Instruction::BackreferenceReverse { id, flags } => {
                 self.consume_backreference_reverse(state, id, sequential, position, flags)
             }
+            Instruction::BackreferenceSet { id, flags } => {
+                self.consume_backreference_set(state, id, sequential, position, flags)
+            }
+            Instruction::BackreferenceSetReverse { id, flags } => {
+                self.consume_backreference_set_reverse(state, id, sequential, position, flags)
+            }
             Instruction::Class { id, flags } => {
                 self.consume_class(state, id, sequential, position, flags)
             }
