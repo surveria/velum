@@ -25,8 +25,10 @@ order. Decimal, octal, control, identity, hexadecimal, and Unicode escapes use
 separate legacy and Unicode-mode validation, including forward capture counts
 and escaped surrogate-pair composition. Unicode 17.0.0 generation currently
 emits all 53 ECMAScript binary properties, 38 General Category values, and 176
-Script values. This is an in-progress compatibility surface, not yet a runtime
-replacement.
+Script values. It also emits the seven properties of strings defined by
+ECMAScript from the pinned emoji sequence sources: 7,906 property-sequence rows
+including the deterministic `RGI_Emoji` union. This is an in-progress
+compatibility surface, not yet a runtime replacement.
 
 ## Crate Boundary
 

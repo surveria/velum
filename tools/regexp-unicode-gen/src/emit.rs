@@ -4,6 +4,7 @@ use crate::{
     CodePointRange, GeneratorError, SourceManifest,
     binary::{GeneratedProperty, PropertySpec},
     case::CaseMapping,
+    strings::GeneratedStringProperty,
     values::GeneratedValue,
 };
 
@@ -61,6 +62,53 @@ pub fn value_properties(
         emit_compact_ranges(&mut output, &name, &value.ranges)?;
     }
     emit_value_lookup(&mut output, values, constant_prefix, function_name)?;
+    Ok(output)
+}
+
+pub fn string_properties(
+    manifest: &SourceManifest,
+    generator_version: &str,
+    format_version: u32,
+    properties: &[GeneratedStringProperty],
+) -> Result<String, GeneratorError> {
+    let mut output = String::new();
+    emit_header(&mut output, manifest, generator_version, format_version)?;
+    for property in properties {
+        let mut data = Vec::new();
+        let mut offsets = vec![0_u32];
+        for sequence in &property.sequences {
+            data.extend(sequence.iter().copied());
+            offsets.push(u32::try_from(data.len()).map_err(|error| {
+                GeneratorError::new(format!(
+                    "string property {} offset overflowed: {error}",
+                    property.name
+                ))
+            })?);
+        }
+        let name = rust_name(&property.name);
+        emit_code_point_array(&mut output, &format!("{name}_DATA"), &data)?;
+        emit_offset_array(&mut output, &format!("{name}_OFFSETS"), &offsets)?;
+    }
+    writeln!(output).map_err(format_error)?;
+    writeln!(output, "#[rustfmt::skip]").map_err(format_error)?;
+    writeln!(
+        output,
+        "pub fn string_property(name: &str) -> Option<(&'static [u32], &'static [u32])> {{"
+    )
+    .map_err(format_error)?;
+    writeln!(output, "    match name {{").map_err(format_error)?;
+    for property in properties {
+        let name = rust_name(&property.name);
+        writeln!(
+            output,
+            "        {:?} => Some(({name}_DATA, {name}_OFFSETS)),",
+            property.name
+        )
+        .map_err(format_error)?;
+    }
+    writeln!(output, "        _ => None,").map_err(format_error)?;
+    writeln!(output, "    }}").map_err(format_error)?;
+    writeln!(output, "}}").map_err(format_error)?;
     Ok(output)
 }
 
@@ -336,6 +384,44 @@ fn emit_mapping_array(
             output.push_str(", ");
             emit_code_point(output, mapping.target)?;
             output.push_str("),");
+        }
+        output.push('\n');
+    }
+    output.push_str("];\n");
+    Ok(())
+}
+
+fn emit_code_point_array(
+    output: &mut String,
+    name: &str,
+    values: &[u32],
+) -> Result<(), GeneratorError> {
+    writeln!(output).map_err(format_error)?;
+    writeln!(output, "#[rustfmt::skip]").map_err(format_error)?;
+    writeln!(output, "const {name}: &[u32] = &[").map_err(format_error)?;
+    for chunk in values.chunks(RANGES_PER_LINE) {
+        output.push_str("    ");
+        for value in chunk {
+            emit_code_point(output, *value)?;
+            output.push_str(", ");
+        }
+        output.push('\n');
+    }
+    output.push_str("];\n");
+    Ok(())
+}
+
+fn emit_offset_array(
+    output: &mut String,
+    name: &str,
+    values: &[u32],
+) -> Result<(), GeneratorError> {
+    writeln!(output, "#[rustfmt::skip]").map_err(format_error)?;
+    writeln!(output, "const {name}: &[u32] = &[").map_err(format_error)?;
+    for chunk in values.chunks(RANGES_PER_LINE) {
+        output.push_str("    ");
+        for value in chunk {
+            write!(output, "{value}, ").map_err(format_error)?;
         }
         output.push('\n');
     }

@@ -4,6 +4,7 @@ mod generated_core;
 mod generated_general_category;
 mod generated_script;
 mod generated_script_extensions;
+mod generated_string;
 
 use core::cmp::Ordering;
 
@@ -64,6 +65,33 @@ pub fn unicode_property_ranges(
         }
         Some(_) => None,
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct UnicodeStringProperty {
+    data: &'static [u32],
+    offsets: &'static [u32],
+}
+
+impl UnicodeStringProperty {
+    #[must_use]
+    pub const fn sequence_count(self) -> usize {
+        self.offsets.len().saturating_sub(1)
+    }
+
+    #[must_use]
+    pub fn sequence(self, index: usize) -> Option<&'static [u32]> {
+        let end_index = index.checked_add(1)?;
+        let start = usize::try_from(*self.offsets.get(index)?).ok()?;
+        let end = usize::try_from(*self.offsets.get(end_index)?).ok()?;
+        self.data.get(start..end)
+    }
+}
+
+#[must_use]
+pub fn unicode_string_property(name: &str) -> Option<UnicodeStringProperty> {
+    generated_string::string_property(name)
+        .map(|(data, offsets)| UnicodeStringProperty { data, offsets })
 }
 
 #[must_use]

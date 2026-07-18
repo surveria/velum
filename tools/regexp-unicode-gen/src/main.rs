@@ -27,11 +27,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     let summary = generate(&config)?;
     println!(
-        "generated Unicode {}: {} binary properties, {} general categories, {} scripts, {} simple folds, {} legacy uppercase mappings, {} ID_Start ranges, {} ID_Continue ranges, {} bytes",
+        "generated Unicode {}: {} binary properties, {} general categories, {} scripts, {} string properties with {} sequences, {} simple folds, {} legacy uppercase mappings, {} ID_Start ranges, {} ID_Continue ranges, {} bytes",
         summary.unicode_version,
         summary.binary_properties,
         summary.general_categories,
         summary.scripts,
+        summary.string_properties,
+        summary.string_sequences,
         summary.simple_case_mappings,
         summary.legacy_uppercase_mappings,
         summary.id_start_ranges,

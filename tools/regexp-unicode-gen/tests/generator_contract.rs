@@ -1,6 +1,7 @@
 use velum_regexp_unicode_gen::{
-    CodePointRange, SourceManifest, all_data_ranges, legacy_reverse_mappings, legacy_uppercase,
-    property_ranges, property_value_ranges, simple_case_folding, subtract_ranges,
+    CodePointRange, SourceManifest, all_data_ranges, generate_string_properties,
+    legacy_reverse_mappings, legacy_uppercase, property_ranges, property_value_ranges,
+    simple_case_folding, subtract_ranges,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -162,4 +163,42 @@ fn case_mapping_parsers_keep_only_ecmascript_simple_mappings() -> TestResult {
         return Ok(());
     }
     Err(format!("unexpected legacy mappings: {uppercase:?} {reverse:?}").into())
+}
+
+#[test]
+fn string_property_parser_expands_ranges_and_builds_rgi_union() -> TestResult {
+    let sequences = "231A..231B ; Basic_Emoji ; watches\n0023 FE0F 20E3 ; Emoji_Keycap_Sequence ; keycap\n1F1E6 1F1E8 ; RGI_Emoji_Flag_Sequence ; flag\n1F3F4 E0067 E0062 E007F ; RGI_Emoji_Tag_Sequence ; tag\n1F44B 1F3FB ; RGI_Emoji_Modifier_Sequence ; modifier\n";
+    let zwj = "1F468 200D 1F466 ; RGI_Emoji_ZWJ_Sequence ; family\n";
+    let properties = generate_string_properties(sequences, zwj)?;
+    let basic = properties
+        .iter()
+        .find(|property| property.name == "Basic_Emoji")
+        .ok_or("Basic_Emoji was not generated")?;
+    let rgi = properties
+        .iter()
+        .find(|property| property.name == "RGI_Emoji")
+        .ok_or("RGI_Emoji was not generated")?;
+    if properties.len() == 7
+        && basic.sequences == [vec![0x231A], vec![0x231B]]
+        && rgi.sequences.len() == 7
+    {
+        return Ok(());
+    }
+    Err(format!("unexpected generated string properties: {properties:?}").into())
+}
+
+#[test]
+fn string_property_parser_rejects_unknown_and_invalid_data() -> TestResult {
+    let unknown = generate_string_properties(
+        "1F600 ; Future_Emoji_Property ; unknown\n",
+        "1F468 200D 1F466 ; RGI_Emoji_ZWJ_Sequence ; family\n",
+    );
+    let invalid = generate_string_properties(
+        "110000 ; Basic_Emoji ; invalid\n",
+        "1F468 200D 1F466 ; RGI_Emoji_ZWJ_Sequence ; family\n",
+    );
+    if unknown.is_err() && invalid.is_err() {
+        return Ok(());
+    }
+    Err("invalid Unicode string property data was accepted".into())
 }
