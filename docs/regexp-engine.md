@@ -47,6 +47,9 @@ Legacy mode also accepts Annex B quantifiers on lookaheads. Because assertions
 are zero width, lowering retains only the required iterations: a zero minimum
 does not leak captures, while a positive minimum executes exactly that bounded
 count. Unicode modes and all other assertion kinds reject quantifiers.
+Malformed braced quantifiers remain literal text only in legacy mode. Unicode
+and Unicode Sets modes reject them, along with unescaped `]`, `{`, and `}`
+outside character classes, while preserving valid escaped syntax.
 
 ## Crate Boundary
 

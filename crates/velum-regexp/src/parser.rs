@@ -199,6 +199,9 @@ impl<'a> Parser<'a> {
             {
                 Err(self.error(CompileErrorKind::UnexpectedToken))
             }
+            value if self.flags.has_unicode_mode() && matches!(value, 0x005D | 0x007B | 0x007D) => {
+                Err(self.error(CompileErrorKind::UnexpectedToken))
+            }
             _ => {
                 let value = self.decode_pattern_value()?;
                 self.node(Node::Literal(value))
@@ -229,8 +232,7 @@ impl<'a> Parser<'a> {
         let checkpoint = self.position;
         self.advance_one()?;
         let Some(min) = self.parse_decimal()? else {
-            self.position = checkpoint;
-            return Ok(None);
+            return self.invalid_braced_quantifier(checkpoint);
         };
         let max = match self.peek() {
             Some(value) if value == u16::from(b'}') => Some(min),
@@ -239,13 +241,11 @@ impl<'a> Parser<'a> {
                 self.parse_decimal()?
             }
             _ => {
-                self.position = checkpoint;
-                return Ok(None);
+                return self.invalid_braced_quantifier(checkpoint);
             }
         };
         if self.peek() != Some(u16::from(b'}')) {
-            self.position = checkpoint;
-            return Ok(None);
+            return self.invalid_braced_quantifier(checkpoint);
         }
         self.advance_one()?;
         if min > self.limits.max_repeat_count
@@ -265,6 +265,21 @@ impl<'a> Parser<'a> {
             ));
         }
         Ok(Some((min, max)))
+    }
+
+    const fn invalid_braced_quantifier(
+        &mut self,
+        checkpoint: usize,
+    ) -> Result<Option<(u32, Option<u32>)>, CompileError> {
+        self.position = checkpoint;
+        if self.flags.has_unicode_mode() {
+            Err(CompileError::new(
+                CompileErrorKind::InvalidQuantifier,
+                checkpoint,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_decimal(&mut self) -> Result<Option<u32>, CompileError> {
