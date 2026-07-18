@@ -133,6 +133,35 @@ fn rejects_missing_flat_map_callbacks_and_limits_steps() -> TestResult {
 }
 
 #[test]
+fn guards_deep_flattening_of_self_referential_arrays() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        const self = [];
+        self[0] = self;
+        let selfCycleGuarded = false;
+        try {
+            self.flat(268435440);
+        } catch (error) {
+            selfCycleGuarded =
+                error instanceof RangeError &&
+                String(error.message).includes("Maximum call stack size exceeded");
+        }
+
+        const flat = [1508738142, 10, 8, 13, 0].flat(268435440);
+        selfCycleGuarded &&
+            flat.length === 5 &&
+            flat[0] === 1508738142 &&
+            flat[4] === 0 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn compiled_calls_mark_flat_and_flat_map_direct_targets() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
