@@ -8,6 +8,8 @@ pub struct CompileLimits {
     pub max_captures: usize,
     pub max_capture_name_units: usize,
     pub max_character_class_terms: usize,
+    pub max_class_strings: usize,
+    pub max_class_string_units: usize,
     pub max_repeat_count: u32,
 }
 
@@ -21,6 +23,8 @@ impl Default for CompileLimits {
             max_captures: 4_096,
             max_capture_name_units: 1_024,
             max_character_class_terms: 65_536,
+            max_class_strings: 16_384,
+            max_class_string_units: 131_072,
             max_repeat_count: 1_000_000,
         }
     }

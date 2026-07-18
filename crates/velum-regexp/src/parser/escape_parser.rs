@@ -17,14 +17,12 @@ impl Parser<'_> {
                 return self.node(Node::Class(CharacterClass {
                     inverted: false,
                     terms: vec![predefined_class_term(unit)?],
+                    strings: Vec::new(),
+                    codepoint_work: 1,
                 }));
             }
             0x0070 | 0x0050 if self.flags.has_unicode_mode() => {
-                let term = self.parse_property_term(unit == 0x0050, escape_offset)?;
-                return self.node(Node::Class(CharacterClass {
-                    inverted: false,
-                    terms: vec![term],
-                }));
+                return self.parse_property_class(unit == 0x0050, escape_offset);
             }
             value if (u16::from(b'1')..=u16::from(b'9')).contains(&value) => {
                 return self.parse_decimal_escape(value, escape_offset);

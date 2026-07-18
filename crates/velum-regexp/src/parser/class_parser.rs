@@ -2,11 +2,11 @@ use crate::{
     CompileError, CompileErrorKind,
     ast::Node,
     character_class::{CharacterClass, CharacterClassTerm},
-    unicode_property_ranges,
+    unicode_property_ranges, unicode_string_property,
 };
 
 use super::{
-    Parser,
+    Parser, PropertyEscape,
     escape_parser::{control_letter_value, is_decimal_digit},
     is_syntax_character, predefined_class_term,
 };
@@ -14,22 +14,27 @@ use super::{
 enum ClassAtom {
     Single(u32),
     Term(CharacterClassTerm),
+    Strings(Vec<Box<[u32]>>),
 }
 
 impl ClassAtom {
-    const fn into_term(self) -> CharacterClassTerm {
+    fn into_term(self) -> Option<CharacterClassTerm> {
         match self {
-            Self::Single(value) => CharacterClassTerm::Range {
+            Self::Single(value) => Some(CharacterClassTerm::Range {
                 start: value,
                 end: value,
-            },
-            Self::Term(term) => term,
+            }),
+            Self::Term(term) => Some(term),
+            Self::Strings(_) => None,
         }
     }
 }
 
 impl Parser<'_> {
     pub(super) fn parse_character_class(&mut self) -> Result<Node, CompileError> {
+        if self.flags.unicode_sets() {
+            return self.parse_unicode_set_class_node();
+        }
         self.advance_one()?;
         let inverted = if self.peek() == Some(u16::from(b'^')) {
             self.advance_one()?;
@@ -38,6 +43,7 @@ impl Parser<'_> {
             false
         };
         let mut terms = Vec::new();
+        let mut strings = Vec::new();
         loop {
             let Some(unit) = self.peek() else {
                 return Err(self.error(CompileErrorKind::UnterminatedCharacterClass));
@@ -57,11 +63,24 @@ impl Parser<'_> {
                     return Err(self.error(CompileErrorKind::InvalidCharacterClass));
                 }
                 self.push_class_term(&mut terms, CharacterClassTerm::Range { start, end })?;
+            } else if let ClassAtom::Strings(values) = first {
+                strings.extend(values);
             } else {
-                self.push_class_term(&mut terms, first.into_term())?;
+                let term = first
+                    .into_term()
+                    .ok_or_else(|| self.error(CompileErrorKind::InvalidCharacterClass))?;
+                self.push_class_term(&mut terms, term)?;
             }
         }
-        self.node(Node::Class(CharacterClass { inverted, terms }))
+        if inverted && !strings.is_empty() {
+            return Err(self.error(CompileErrorKind::InvalidCharacterClass));
+        }
+        self.node(Node::Class(CharacterClass {
+            inverted,
+            codepoint_work: terms.len(),
+            terms,
+            strings,
+        }))
     }
 
     fn parse_class_atom(&mut self) -> Result<ClassAtom, CompileError> {
@@ -82,9 +101,12 @@ impl Parser<'_> {
             0x0064 | 0x0044 | 0x0073 | 0x0053 | 0x0077 | 0x0057 => {
                 predefined_class_term(escaped).map(ClassAtom::Term)
             }
-            0x0070 | 0x0050 if self.flags.has_unicode_mode() => self
-                .parse_property_term(escaped == 0x0050, escape_offset)
-                .map(ClassAtom::Term),
+            0x0070 | 0x0050 if self.flags.has_unicode_mode() => {
+                match self.parse_property_escape(escaped == 0x0050, escape_offset)? {
+                    PropertyEscape::CodePoints(term) => Ok(ClassAtom::Term(term)),
+                    PropertyEscape::Strings(strings) => Ok(ClassAtom::Strings(strings)),
+                }
+            }
             0x0063 => self.parse_class_control_escape(escape_offset),
             0x006E => Ok(ClassAtom::Single(0x000A)),
             0x0072 => Ok(ClassAtom::Single(0x000D)),
@@ -162,11 +184,34 @@ impl Parser<'_> {
         }))
     }
 
-    pub(super) fn parse_property_term(
+    pub(super) fn parse_property_class(
         &mut self,
         inverted: bool,
         escape_offset: usize,
-    ) -> Result<CharacterClassTerm, CompileError> {
+    ) -> Result<Node, CompileError> {
+        let property = self.parse_property_escape(inverted, escape_offset)?;
+        let class = match property {
+            PropertyEscape::CodePoints(term) => CharacterClass {
+                inverted: false,
+                terms: vec![term],
+                strings: Vec::new(),
+                codepoint_work: 1,
+            },
+            PropertyEscape::Strings(strings) => CharacterClass {
+                inverted: false,
+                terms: Vec::new(),
+                strings,
+                codepoint_work: 0,
+            },
+        };
+        self.node(Node::Class(class))
+    }
+
+    pub(super) fn parse_property_escape(
+        &mut self,
+        inverted: bool,
+        escape_offset: usize,
+    ) -> Result<PropertyEscape, CompileError> {
         if self.peek() != Some(u16::from(b'{')) {
             return Err(CompileError::new(
                 CompileErrorKind::InvalidUnicodeProperty,
@@ -218,14 +263,66 @@ impl Parser<'_> {
                 escape_offset,
             ));
         }
+        if property_name.is_none()
+            && self.flags.unicode_sets()
+            && let Some(property) = unicode_string_property(property_value)
+        {
+            if inverted {
+                return Err(CompileError::new(
+                    CompileErrorKind::InvalidUnicodeProperty,
+                    escape_offset,
+                ));
+            }
+            return self
+                .copy_string_property(property, escape_offset)
+                .map(PropertyEscape::Strings);
+        }
         let ranges = unicode_property_ranges(property_name, property_value).ok_or_else(|| {
             CompileError::new(CompileErrorKind::InvalidUnicodeProperty, escape_offset)
         })?;
-        Ok(CharacterClassTerm::StaticRanges {
-            ranges,
-            inverted,
-            complement_before_case_fold: inverted,
-        })
+        Ok(PropertyEscape::CodePoints(
+            CharacterClassTerm::StaticRanges {
+                ranges,
+                inverted,
+                complement_before_case_fold: inverted,
+            },
+        ))
+    }
+
+    fn copy_string_property(
+        &self,
+        property: crate::UnicodeStringProperty,
+        escape_offset: usize,
+    ) -> Result<Vec<Box<[u32]>>, CompileError> {
+        let count = property.sequence_count();
+        if count > self.limits.max_class_strings {
+            return Err(CompileError::new(
+                CompileErrorKind::ClassStringLimit {
+                    limit: self.limits.max_class_strings,
+                },
+                escape_offset,
+            ));
+        }
+        let mut total_units = 0_usize;
+        let mut strings = Vec::with_capacity(count);
+        for index in 0..count {
+            let sequence = property.sequence(index).ok_or_else(|| {
+                CompileError::new(CompileErrorKind::InvalidUnicodeProperty, escape_offset)
+            })?;
+            total_units = total_units
+                .checked_add(sequence.len())
+                .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, escape_offset))?;
+            if total_units > self.limits.max_class_string_units {
+                return Err(CompileError::new(
+                    CompileErrorKind::ClassStringUnitLimit {
+                        limit: self.limits.max_class_string_units,
+                    },
+                    escape_offset,
+                ));
+            }
+            strings.push(Box::<[u32]>::from(sequence));
+        }
+        Ok(strings)
     }
 
     fn class_range_follows(&self) -> Result<bool, CompileError> {

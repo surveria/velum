@@ -179,8 +179,10 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             Instruction::BackreferenceReverse(id) => {
                 self.consume_backreference_reverse(state, id, sequential, position)
             }
-            Instruction::Class(id) => self.consume_class(id, sequential, position),
-            Instruction::ClassReverse(id) => self.consume_class_reverse(id, sequential, position),
+            Instruction::Class(id) => self.consume_class(state, id, sequential, position),
+            Instruction::ClassReverse(id) => {
+                self.consume_class_reverse(state, id, sequential, position)
+            }
             Instruction::Any => self.consume_any(sequential, position),
             Instruction::AnyReverse => self.consume_any_reverse(sequential, position),
             _ => self.execute_assertion_instruction(current, state, sequential, position),
@@ -520,10 +522,14 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
     }
 
     fn charge_step(&mut self) -> Result<(), ExecutionError> {
+        self.charge_steps(1)
+    }
+
+    fn charge_steps(&mut self, amount: usize) -> Result<(), ExecutionError> {
         self.stats.steps = self
             .stats
             .steps
-            .checked_add(1)
+            .checked_add(amount)
             .ok_or(ExecutionError::SizeOverflow)?;
         if self.stats.steps > self.limits.max_steps {
             return Err(ExecutionError::StepLimit {
@@ -531,7 +537,7 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             });
         }
         self.control
-            .charge_steps(1)
+            .charge_steps(amount)
             .map_err(ExecutionError::Interrupted)
     }
 

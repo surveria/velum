@@ -1,6 +1,7 @@
 mod class_parser;
 mod escape_parser;
 mod name_parser;
+mod unicode_set_parser;
 
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
@@ -19,6 +20,11 @@ pub struct Parser<'a> {
     total_capture_count: usize,
     has_named_capture: bool,
     capture_names: Vec<Option<String>>,
+}
+
+enum PropertyEscape {
+    CodePoints(CharacterClassTerm),
+    Strings(Vec<Box<[u32]>>),
 }
 
 impl<'a> Parser<'a> {

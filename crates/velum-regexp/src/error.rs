@@ -11,6 +11,8 @@ pub enum CompileErrorKind {
     InstructionLimit { limit: usize },
     CaptureLimit { limit: usize },
     CaptureNameLimit { limit: usize },
+    ClassStringLimit { limit: usize },
+    ClassStringUnitLimit { limit: usize },
     RepeatLimit { limit: u32 },
     UnexpectedToken,
     UnterminatedGroup,

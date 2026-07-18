@@ -40,6 +40,16 @@ pub enum CharacterClassTerm {
         inverted: bool,
         complement_before_case_fold: bool,
     },
+    Union(Vec<Self>),
+    Intersection {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    Subtraction {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    Complement(Box<Self>),
 }
 
 impl CharacterClassTerm {
@@ -81,6 +91,14 @@ impl CharacterClassTerm {
                     matched != *inverted
                 }
             }
+            Self::Union(terms) => terms.iter().any(|term| term.matches(value, flags)),
+            Self::Intersection { left, right } => {
+                left.matches(value, flags) && right.matches(value, flags)
+            }
+            Self::Subtraction { left, right } => {
+                left.matches(value, flags) && !right.matches(value, flags)
+            }
+            Self::Complement(term) => !term.matches(value, flags),
         }
     }
 }
@@ -89,6 +107,8 @@ impl CharacterClassTerm {
 pub struct CharacterClass {
     pub inverted: bool,
     pub terms: Vec<CharacterClassTerm>,
+    pub strings: Vec<Box<[u32]>>,
+    pub codepoint_work: usize,
 }
 
 impl CharacterClass {
@@ -98,11 +118,73 @@ impl CharacterClass {
     }
 
     pub fn retained_payload_bytes(&self) -> Result<usize, SizeOverflow> {
-        self.terms
+        let term_bytes = self
+            .terms
             .len()
             .checked_mul(size_of::<CharacterClassTerm>())
-            .ok_or(SizeOverflow)
+            .ok_or(SizeOverflow)?;
+        let nested_term_bytes = retained_nested_term_bytes(&self.terms)?;
+        let string_headers = self
+            .strings
+            .len()
+            .checked_mul(size_of::<Box<[u32]>>())
+            .ok_or(SizeOverflow)?;
+        self.strings.iter().try_fold(
+            term_bytes
+                .checked_add(nested_term_bytes)
+                .and_then(|total| total.checked_add(string_headers))
+                .ok_or(SizeOverflow)?,
+            |total, string| {
+                let bytes = string
+                    .len()
+                    .checked_mul(size_of::<u32>())
+                    .ok_or(SizeOverflow)?;
+                total.checked_add(bytes).ok_or(SizeOverflow)
+            },
+        )
     }
+}
+
+fn retained_nested_term_bytes(roots: &[CharacterClassTerm]) -> Result<usize, SizeOverflow> {
+    let mut total = 0_usize;
+    let mut pending = roots.iter().collect::<Vec<_>>();
+    while let Some(term) = pending.pop() {
+        match term {
+            CharacterClassTerm::Range { .. }
+            | CharacterClassTerm::Pair { .. }
+            | CharacterClassTerm::StaticRanges { .. } => {}
+            CharacterClassTerm::Union(terms) => {
+                total = total
+                    .checked_add(
+                        terms
+                            .len()
+                            .checked_mul(size_of::<CharacterClassTerm>())
+                            .ok_or(SizeOverflow)?,
+                    )
+                    .ok_or(SizeOverflow)?;
+                pending.extend(terms);
+            }
+            CharacterClassTerm::Intersection { left, right }
+            | CharacterClassTerm::Subtraction { left, right } => {
+                total = total
+                    .checked_add(
+                        2_usize
+                            .checked_mul(size_of::<CharacterClassTerm>())
+                            .ok_or(SizeOverflow)?,
+                    )
+                    .ok_or(SizeOverflow)?;
+                pending.push(left);
+                pending.push(right);
+            }
+            CharacterClassTerm::Complement(term) => {
+                total = total
+                    .checked_add(size_of::<CharacterClassTerm>())
+                    .ok_or(SizeOverflow)?;
+                pending.push(term);
+            }
+        }
+    }
+    Ok(total)
 }
 
 #[must_use]
