@@ -19,6 +19,20 @@ pub fn property_ranges(
     requested_property: &str,
 ) -> Result<Vec<CodePointRange>, GeneratorError> {
     let mut ranges = Vec::new();
+    collect_property_ranges(contents, requested_property, &mut ranges)?;
+    if ranges.is_empty() {
+        return Err(GeneratorError::new(format!(
+            "UCD property {requested_property} has no ranges"
+        )));
+    }
+    Ok(normalize_ranges(ranges))
+}
+
+pub fn collect_property_ranges(
+    contents: &str,
+    requested_property: &str,
+    ranges: &mut Vec<CodePointRange>,
+) -> Result<(), GeneratorError> {
     for (line_index, raw_line) in contents.lines().enumerate() {
         let line_number = line_index
             .checked_add(1)
@@ -37,13 +51,37 @@ pub fn property_ranges(
         }
         ranges.push(parse_range(range_text.trim(), line_number)?);
     }
-    if ranges.is_empty() {
-        return Err(GeneratorError::new(format!(
-            "UCD property {requested_property} has no ranges"
-        )));
-    }
+    Ok(())
+}
+
+pub fn normalize_ranges(mut ranges: Vec<CodePointRange>) -> Vec<CodePointRange> {
     ranges.sort_unstable_by_key(|range| (range.start, range.end));
-    Ok(merge_ranges(ranges))
+    merge_ranges(ranges)
+}
+
+pub fn complement_ranges(ranges: Vec<CodePointRange>) -> Vec<CodePointRange> {
+    let ranges = normalize_ranges(ranges);
+    let mut complement = Vec::new();
+    let mut next = 0_u32;
+    for range in ranges {
+        if next < range.start {
+            complement.push(CodePointRange {
+                start: next,
+                end: range.start.saturating_sub(1),
+            });
+        }
+        let Some(after) = range.end.checked_add(1) else {
+            return complement;
+        };
+        next = after;
+    }
+    if next <= MAX_CODE_POINT {
+        complement.push(CodePointRange {
+            start: next,
+            end: MAX_CODE_POINT,
+        });
+    }
+    complement
 }
 
 fn parse_range(text: &str, line_number: usize) -> Result<CodePointRange, GeneratorError> {

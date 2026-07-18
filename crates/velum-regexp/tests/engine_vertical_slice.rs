@@ -1,6 +1,7 @@
 use velum_regexp::{
     CompileErrorKind, CompileLimits, ExecutionControl, ExecutionError, ExecutionLimits, Flags,
-    InterruptReason, Regex, is_id_continue, is_id_start, unicode_version,
+    InterruptReason, Regex, binary_property_contains, binary_property_ranges, is_id_continue,
+    is_id_start, unicode_version,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -41,6 +42,20 @@ fn generated_unicode_identifier_tables_are_available() -> TestResult {
         return Ok(());
     }
     Err("generated Unicode identifier membership was incorrect".into())
+}
+
+#[test]
+fn unicode_binary_property_names_follow_ecmascript_exact_matching() -> TestResult {
+    if binary_property_contains("Alphabetic", u32::from('λ'))
+        && binary_property_contains("Alpha", u32::from('A'))
+        && binary_property_contains("Emoji", 0x1F600)
+        && binary_property_contains("White_Space", u32::from(' '))
+        && binary_property_ranges("alphabetic").is_none()
+        && binary_property_ranges("Unsupported_Property").is_none()
+    {
+        return Ok(());
+    }
+    Err("binary Unicode property lookup did not use exact ECMAScript names".into())
 }
 
 #[test]

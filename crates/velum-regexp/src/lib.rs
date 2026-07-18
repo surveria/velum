@@ -18,7 +18,9 @@ pub use error::{CompileError, CompileErrorKind, ExecutionError, SizeOverflow};
 pub use flags::Flags;
 pub use limits::{CompileLimits, ExecutionLimits};
 pub use match_result::{Capture, ExecutionStats, Match, SearchOutcome};
-pub use unicode::{is_id_continue, is_id_start, unicode_version};
+pub use unicode::{
+    binary_property_contains, binary_property_ranges, is_id_continue, is_id_start, unicode_version,
+};
 
 use compiler::Compiler;
 use executor::Executor;

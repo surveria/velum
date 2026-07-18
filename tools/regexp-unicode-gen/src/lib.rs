@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod binary;
 mod emit;
 mod error;
 mod manifest;
@@ -15,6 +16,14 @@ use std::{
 };
 
 const DERIVED_CORE_PROPERTIES: &str = "DerivedCoreProperties.txt";
+const GENERAL_CATEGORIES: &str = "extracted/DerivedGeneralCategory.txt";
+const BINARY_PROPERTY_SOURCES: &[&str] = &[
+    DERIVED_CORE_PROPERTIES,
+    "PropList.txt",
+    "extracted/DerivedBinaryProperties.txt",
+    "DerivedNormalizationProps.txt",
+    "emoji/emoji-data.txt",
+];
 const OUTPUT_FORMAT_VERSION: u32 = 1;
 const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -23,7 +32,7 @@ const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct GenerationConfig {
     pub input_directory: PathBuf,
     pub source_manifest: PathBuf,
-    pub output: PathBuf,
+    pub output_directory: PathBuf,
     pub max_input_bytes: usize,
 }
 
@@ -32,12 +41,12 @@ impl GenerationConfig {
     pub fn new(
         input_directory: impl Into<PathBuf>,
         source_manifest: impl Into<PathBuf>,
-        output: impl Into<PathBuf>,
+        output_directory: impl Into<PathBuf>,
     ) -> Self {
         Self {
             input_directory: input_directory.into(),
             source_manifest: source_manifest.into(),
-            output: output.into(),
+            output_directory: output_directory.into(),
             max_input_bytes: 64 * 1_024 * 1_024,
         }
     }
@@ -49,6 +58,7 @@ pub struct GenerationSummary {
     pub unicode_version: String,
     pub id_start_ranges: usize,
     pub id_continue_ranges: usize,
+    pub binary_properties: usize,
     pub output_bytes: usize,
 }
 
@@ -61,25 +71,69 @@ pub struct GenerationSummary {
 pub fn generate(config: &GenerationConfig) -> Result<GenerationSummary, GeneratorError> {
     let manifest = SourceManifest::read(&config.source_manifest)?;
     manifest.verify(&config.input_directory, config.max_input_bytes)?;
-    manifest.require_source(DERIVED_CORE_PROPERTIES)?;
-    let source_path = config.input_directory.join(DERIVED_CORE_PROPERTIES);
-    let source = read_bounded(&source_path, config.max_input_bytes)?;
-    let id_start = ucd::property_ranges(&source, "ID_Start")?;
-    let id_continue = ucd::property_ranges(&source, "ID_Continue")?;
-    let output = emit::core_properties(
+    let mut binary_sources = Vec::with_capacity(BINARY_PROPERTY_SOURCES.len());
+    for relative_path in BINARY_PROPERTY_SOURCES {
+        binary_sources.push(read_source(config, &manifest, relative_path)?);
+    }
+    let general_categories = read_source(config, &manifest, GENERAL_CATEGORIES)?;
+    let binary_source_refs = binary_sources
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let properties = binary::generate(&binary_source_refs, &general_categories)?;
+    let id_start_ranges = property_range_count(&properties, "ID_Start")?;
+    let id_continue_ranges = property_range_count(&properties, "ID_Continue")?;
+    let core_output = emit::core_properties(&manifest, GENERATOR_VERSION, OUTPUT_FORMAT_VERSION)?;
+    let binary_output = emit::binary_properties(
         &manifest,
         GENERATOR_VERSION,
         OUTPUT_FORMAT_VERSION,
-        &id_start,
-        &id_continue,
+        &properties,
     )?;
-    write_output(&config.output, output.as_bytes())?;
+    write_generated_output(config, "generated_core.rs", core_output.as_bytes())?;
+    write_generated_output(config, "generated_binary.rs", binary_output.as_bytes())?;
+    let output_bytes = core_output
+        .len()
+        .checked_add(binary_output.len())
+        .ok_or_else(|| GeneratorError::new("generated output byte count overflowed"))?;
     Ok(GenerationSummary {
         unicode_version: manifest.unicode_version,
-        id_start_ranges: id_start.len(),
-        id_continue_ranges: id_continue.len(),
-        output_bytes: output.len(),
+        id_start_ranges,
+        id_continue_ranges,
+        binary_properties: properties.len(),
+        output_bytes,
     })
+}
+
+fn read_source(
+    config: &GenerationConfig,
+    manifest: &SourceManifest,
+    relative_path: &str,
+) -> Result<String, GeneratorError> {
+    manifest.require_source(relative_path)?;
+    read_bounded(
+        &config.input_directory.join(relative_path),
+        config.max_input_bytes,
+    )
+}
+
+fn property_range_count(
+    properties: &[binary::GeneratedProperty],
+    name: &str,
+) -> Result<usize, GeneratorError> {
+    properties
+        .iter()
+        .find(|property| property.spec.canonical == name)
+        .map(|property| property.ranges.len())
+        .ok_or_else(|| GeneratorError::new(format!("generated property {name} is missing")))
+}
+
+fn write_generated_output(
+    config: &GenerationConfig,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<(), GeneratorError> {
+    write_output(&config.output_directory.join(file_name), bytes)
 }
 
 fn read_bounded(path: &Path, limit: usize) -> Result<String, GeneratorError> {

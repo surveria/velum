@@ -1,1 +1,2 @@
-eb6376cf44a30a62686b2acae2e2d50e5a94c984a7c10d197fe63322d594401f  crates/velum-regexp/src/unicode/generated_core.rs
+d57d3ed7ea75f1dc4ab27e30340b96fc8a02b1b9210f02f3ae72dd249c3e3831  crates/velum-regexp/src/unicode/generated_core.rs
+c538e56a8dbcefb682782b43168375ced0cc21996d80da04a1d0fa4ea0cecddf  crates/velum-regexp/src/unicode/generated_binary.rs
