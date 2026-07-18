@@ -31,6 +31,10 @@ pub enum CharacterClassTerm {
         start: u32,
         end: u32,
     },
+    Pair {
+        first: u32,
+        second: u32,
+    },
     StaticRanges {
         ranges: &'static [(u32, u32)],
         inverted: bool,
@@ -47,6 +51,14 @@ impl CharacterClassTerm {
                     case_closure_contains(&ranges, value, flags.has_unicode_mode())
                 } else {
                     (*start..=*end).contains(&value)
+                }
+            }
+            Self::Pair { first, second } => {
+                let ranges = [(*first, *first), (*second, *second)];
+                if flags.ignore_case() {
+                    case_closure_contains(&ranges, value, flags.has_unicode_mode())
+                } else {
+                    value == *first || value == *second
                 }
             }
             Self::StaticRanges {

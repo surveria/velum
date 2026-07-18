@@ -21,9 +21,12 @@ and backreference semantics, while retaining UTF-16 coordinates. Capture names
 use generated Unicode identifier data and are retained as bounded program
 metadata. Legacy and Unicode-aware ignore-case modes use separately generated
 canonicalization tables and preserve the distinct `u`/`v` property complement
-order. Unicode 17.0.0 generation currently emits all 53 ECMAScript binary
-properties, 38 General Category values, and 176 Script values. This is an
-in-progress compatibility surface, not yet a runtime replacement.
+order. Decimal, octal, control, identity, hexadecimal, and Unicode escapes use
+separate legacy and Unicode-mode validation, including forward capture counts
+and escaped surrogate-pair composition. Unicode 17.0.0 generation currently
+emits all 53 ECMAScript binary properties, 38 General Category values, and 176
+Script values. This is an in-progress compatibility surface, not yet a runtime
+replacement.
 
 ## Crate Boundary
 

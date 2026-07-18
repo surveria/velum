@@ -1,12 +1,11 @@
 mod class_parser;
+mod escape_parser;
 mod name_parser;
 
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
     ast::{Node, ParsedPattern},
-    character_class::{
-        CharacterClass, CharacterClassTerm, DIGIT_RANGES, SPACE_RANGES, WORD_RANGES,
-    },
+    character_class::{CharacterClassTerm, DIGIT_RANGES, SPACE_RANGES, WORD_RANGES},
 };
 
 pub struct Parser<'a> {
@@ -17,6 +16,8 @@ pub struct Parser<'a> {
     depth: usize,
     node_count: usize,
     capture_count: usize,
+    total_capture_count: usize,
+    has_named_capture: bool,
     capture_names: Vec<Option<String>>,
 }
 
@@ -40,6 +41,7 @@ impl<'a> Parser<'a> {
                 limits.max_pattern_units,
             ));
         }
+        let capture_scan = scan_capturing_groups(pattern)?;
         let mut parser = Self {
             pattern,
             flags,
@@ -48,6 +50,8 @@ impl<'a> Parser<'a> {
             depth: 0,
             node_count: 0,
             capture_count: 0,
+            total_capture_count: capture_scan.count,
+            has_named_capture: capture_scan.has_named,
             capture_names: Vec::new(),
         };
         let mut root = parser.parse_disjunction(false)?;
@@ -261,141 +265,6 @@ impl<'a> Parser<'a> {
         } else {
             Ok(body)
         }
-    }
-
-    fn parse_escape(&mut self) -> Result<Node, CompileError> {
-        self.advance_one()?;
-        let escape_offset = self.position;
-        let Some(unit) = self.peek() else {
-            return Err(self.error(CompileErrorKind::InvalidEscape));
-        };
-        self.advance_one()?;
-        match unit {
-            0x0062 => return self.node(Node::WordBoundary(false)),
-            0x0042 => return self.node(Node::WordBoundary(true)),
-            0x0064 | 0x0044 | 0x0073 | 0x0053 | 0x0077 | 0x0057 => {
-                return self.node(Node::Class(CharacterClass {
-                    inverted: false,
-                    terms: vec![predefined_class_term(unit)?],
-                }));
-            }
-            0x0070 | 0x0050 if self.flags.has_unicode_mode() => {
-                let term = self.parse_property_term(unit == 0x0050, escape_offset)?;
-                return self.node(Node::Class(CharacterClass {
-                    inverted: false,
-                    terms: vec![term],
-                }));
-            }
-            value if (u16::from(b'1')..=u16::from(b'9')).contains(&value) => {
-                return self.parse_decimal_backreference(value, escape_offset);
-            }
-            0x006B => return self.parse_named_backreference(escape_offset),
-            _ => {}
-        }
-        let value = match unit {
-            0x006E => 0x000A,
-            0x0072 => 0x000D,
-            0x0074 => 0x0009,
-            0x0076 => 0x000B,
-            0x0066 => 0x000C,
-            0x0078 => self.parse_fixed_hex(2)?,
-            0x0075 if self.peek() == Some(u16::from(b'{')) => {
-                if !self.flags.has_unicode_mode() {
-                    return Err(CompileError::new(
-                        CompileErrorKind::InvalidEscape,
-                        escape_offset,
-                    ));
-                }
-                self.parse_braced_hex()?
-            }
-            0x0075 => self.parse_fixed_hex(4)?,
-            0x0030 => 0,
-            value if self.flags.has_unicode_mode() && !is_syntax_character(value) => {
-                return Err(CompileError::new(
-                    CompileErrorKind::InvalidEscape,
-                    escape_offset,
-                ));
-            }
-            value => u32::from(value),
-        };
-        self.node(Node::Literal(value))
-    }
-
-    fn parse_decimal_backreference(
-        &mut self,
-        first: u16,
-        pattern_offset: usize,
-    ) -> Result<Node, CompileError> {
-        let mut number = usize::from(first - u16::from(b'0'));
-        while let Some(unit) = self.peek() {
-            if !(u16::from(b'0')..=u16::from(b'9')).contains(&unit) {
-                break;
-            }
-            number = number
-                .checked_mul(10)
-                .and_then(|value| value.checked_add(usize::from(unit - u16::from(b'0'))))
-                .ok_or_else(|| {
-                    CompileError::new(CompileErrorKind::InvalidBackreference, pattern_offset)
-                })?;
-            self.advance_one()?;
-        }
-        let id = number.checked_sub(1).ok_or_else(|| {
-            CompileError::new(CompileErrorKind::InvalidBackreference, pattern_offset)
-        })?;
-        self.node(Node::Backreference { id, pattern_offset })
-    }
-
-    fn parse_fixed_hex(&mut self, digits: usize) -> Result<u32, CompileError> {
-        let start = self.position;
-        let mut value = 0_u32;
-        for _ in 0..digits {
-            let Some(unit) = self.peek() else {
-                return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-            };
-            let Some(digit) = hex_value(unit) else {
-                return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-            };
-            value = value
-                .checked_mul(16)
-                .and_then(|current| current.checked_add(digit))
-                .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, start))?;
-            self.advance_one()?;
-        }
-        Ok(value)
-    }
-
-    fn parse_braced_hex(&mut self) -> Result<u32, CompileError> {
-        let start = self.position;
-        self.advance_one()?;
-        let mut value = 0_u32;
-        let mut digits = 0_usize;
-        loop {
-            let Some(unit) = self.peek() else {
-                return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-            };
-            if unit == u16::from(b'}') {
-                break;
-            }
-            let Some(digit) = hex_value(unit) else {
-                return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-            };
-            value = value
-                .checked_mul(16)
-                .and_then(|current| current.checked_add(digit))
-                .ok_or_else(|| CompileError::new(CompileErrorKind::InvalidEscape, start))?;
-            if value > 0x10_FFFF {
-                return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-            }
-            digits = digits
-                .checked_add(1)
-                .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, start))?;
-            self.advance_one()?;
-        }
-        if digits == 0 {
-            return Err(CompileError::new(CompileErrorKind::InvalidEscape, start));
-        }
-        self.advance_one()?;
-        Ok(value)
     }
 
     fn parse_quantifier_bounds(&mut self) -> Result<Option<(u32, Option<u32>)>, CompileError> {
@@ -613,6 +482,63 @@ const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, Compile
     })
 }
 
+struct CaptureScan {
+    count: usize,
+    has_named: bool,
+}
+
+fn scan_capturing_groups(pattern: &[u16]) -> Result<CaptureScan, CompileError> {
+    let mut index = 0_usize;
+    let mut in_class = false;
+    let mut scan = CaptureScan {
+        count: 0,
+        has_named: false,
+    };
+    while let Some(unit) = pattern.get(index).copied() {
+        index = index
+            .checked_add(1)
+            .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, index))?;
+        if unit == u16::from(b'\\') {
+            if index < pattern.len() {
+                index = index
+                    .checked_add(1)
+                    .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, index))?;
+            }
+            continue;
+        }
+        if unit == u16::from(b'[') && !in_class {
+            in_class = true;
+            continue;
+        }
+        if unit == u16::from(b']') && in_class {
+            in_class = false;
+            continue;
+        }
+        if unit != u16::from(b'(') || in_class {
+            continue;
+        }
+        let question = pattern.get(index).copied() == Some(u16::from(b'?'));
+        let angle_index = index
+            .checked_add(1)
+            .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, index))?;
+        let marker_index = angle_index
+            .checked_add(1)
+            .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, index))?;
+        let named = question
+            && pattern.get(angle_index).copied() == Some(u16::from(b'<'))
+            && !matches!(pattern.get(marker_index).copied(), Some(marker) if marker == u16::from(b'=') || marker == u16::from(b'!'));
+        if question && !named {
+            continue;
+        }
+        scan.count = scan
+            .count
+            .checked_add(1)
+            .ok_or_else(|| CompileError::new(CompileErrorKind::SizeOverflow, index))?;
+        scan.has_named |= named;
+    }
+    Ok(scan)
+}
+
 fn resolve_backreferences(
     node: &mut Node,
     capture_count: usize,
@@ -658,14 +584,5 @@ fn resolve_backreferences(
         | Node::WordBoundary(_)
         | Node::AssertStart
         | Node::AssertEnd => Ok(()),
-    }
-}
-
-const fn hex_value(value: u16) -> Option<u32> {
-    match value {
-        0x0030..=0x0039 => Some((value - 0x0030) as u32),
-        0x0041..=0x0046 => Some((value - 0x0041 + 10) as u32),
-        0x0061..=0x0066 => Some((value - 0x0061 + 10) as u32),
-        _ => None,
     }
 }

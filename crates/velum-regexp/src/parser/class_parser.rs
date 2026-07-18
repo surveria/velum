@@ -5,7 +5,11 @@ use crate::{
     unicode_property_ranges,
 };
 
-use super::{Parser, is_syntax_character, predefined_class_term};
+use super::{
+    Parser,
+    escape_parser::{control_letter_value, is_decimal_digit},
+    is_syntax_character, predefined_class_term,
+};
 
 enum ClassAtom {
     Single(u32),
@@ -81,28 +85,81 @@ impl Parser<'_> {
             0x0070 | 0x0050 if self.flags.has_unicode_mode() => self
                 .parse_property_term(escaped == 0x0050, escape_offset)
                 .map(ClassAtom::Term),
+            0x0063 => self.parse_class_control_escape(escape_offset),
             0x006E => Ok(ClassAtom::Single(0x000A)),
             0x0072 => Ok(ClassAtom::Single(0x000D)),
             0x0074 => Ok(ClassAtom::Single(0x0009)),
             0x0076 => Ok(ClassAtom::Single(0x000B)),
             0x0066 => Ok(ClassAtom::Single(0x000C)),
-            0x0078 => self.parse_fixed_hex(2).map(ClassAtom::Single),
+            0x0078 => self
+                .parse_fixed_hex_or_identity(2, escaped, escape_offset)
+                .map(ClassAtom::Single),
             0x0075 if self.peek() == Some(u16::from(b'{')) => {
                 if !self.flags.has_unicode_mode() {
+                    return Ok(ClassAtom::Single(u32::from(b'u')));
+                }
+                self.parse_braced_hex().map(ClassAtom::Single)
+            }
+            0x0075 => self
+                .parse_unicode_escape_value(escape_offset)
+                .map(ClassAtom::Single),
+            value if (0x0030..=0x0037).contains(&value) => {
+                if self.flags.has_unicode_mode() {
+                    if value == 0x0030 && !self.peek().is_some_and(is_decimal_digit) {
+                        return Ok(ClassAtom::Single(0));
+                    }
                     return Err(CompileError::new(
                         CompileErrorKind::InvalidEscape,
                         escape_offset,
                     ));
                 }
-                self.parse_braced_hex().map(ClassAtom::Single)
+                self.parse_legacy_octal_value(value, escape_offset)
+                    .map(ClassAtom::Single)
             }
-            0x0075 => self.parse_fixed_hex(4).map(ClassAtom::Single),
-            0x0030 => Ok(ClassAtom::Single(0)),
+            value if (0x0038..=0x0039).contains(&value) => {
+                if self.flags.has_unicode_mode() {
+                    return Err(CompileError::new(
+                        CompileErrorKind::InvalidEscape,
+                        escape_offset,
+                    ));
+                }
+                Ok(ClassAtom::Single(u32::from(value)))
+            }
             value if self.flags.has_unicode_mode() && !is_class_escape_character(value) => Err(
                 CompileError::new(CompileErrorKind::InvalidEscape, escape_offset),
             ),
             value => Ok(ClassAtom::Single(u32::from(value))),
         }
+    }
+
+    fn parse_class_control_escape(
+        &mut self,
+        escape_offset: usize,
+    ) -> Result<ClassAtom, CompileError> {
+        if let Some(unit) = self.peek()
+            && let Some(value) = control_letter_value(unit)
+        {
+            self.advance_one()?;
+            return Ok(ClassAtom::Single(value));
+        }
+        if !self.flags.has_unicode_mode()
+            && let Some(unit) = self
+                .peek()
+                .filter(|unit| is_decimal_digit(*unit) || *unit == u16::from(b'_'))
+        {
+            self.advance_one()?;
+            return Ok(ClassAtom::Single(u32::from(unit) % 32));
+        }
+        if self.flags.has_unicode_mode() {
+            return Err(CompileError::new(
+                CompileErrorKind::InvalidEscape,
+                escape_offset,
+            ));
+        }
+        Ok(ClassAtom::Term(CharacterClassTerm::Pair {
+            first: u32::from(b'\\'),
+            second: u32::from(b'c'),
+        }))
     }
 
     pub(super) fn parse_property_term(
