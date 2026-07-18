@@ -137,6 +137,81 @@ fn matches_general_categories_scripts_and_script_extensions() -> TestResult {
 }
 
 #[test]
+fn ignore_case_uses_distinct_legacy_and_unicode_canonicalization() -> TestResult {
+    let legacy_flags = Flags::default().with_ignore_case(true);
+    let unicode_flags = legacy_flags.with_unicode(true);
+
+    let ascii_range = compile_with_flags("^[A-Z]+$", legacy_flags)?;
+    let lowercase = "velum".encode_utf16().collect::<Vec<_>>();
+    if ascii_range
+        .find(&lowercase, 0, ExecutionLimits::default())?
+        .matched
+        .is_none()
+    {
+        return Err("legacy ignore-case range did not match ASCII lowercase".into());
+    }
+
+    let unicode_word = compile_with_flags(r"^\w$", unicode_flags)?;
+    let kelvin = "\u{212A}".encode_utf16().collect::<Vec<_>>();
+    if unicode_word
+        .find(&kelvin, 0, ExecutionLimits::default())?
+        .matched
+        .is_none()
+    {
+        return Err("Unicode simple folding did not include Kelvin sign in word characters".into());
+    }
+
+    let legacy_s = compile_with_flags("^s$", legacy_flags)?;
+    let unicode_s = compile_with_flags("^s$", unicode_flags)?;
+    let long_s = "ſ".encode_utf16().collect::<Vec<_>>();
+    if legacy_s
+        .find(&long_s, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Err("legacy canonicalization incorrectly folded non-ASCII to ASCII".into());
+    }
+    if unicode_s
+        .find(&long_s, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err("Unicode canonicalization did not apply simple case folding".into())
+}
+
+#[test]
+fn property_complements_follow_unicode_and_unicode_sets_fold_order() -> TestResult {
+    let unicode = compile_with_flags(
+        r"^\P{Lowercase_Letter}$",
+        Flags::default().with_ignore_case(true).with_unicode(true),
+    )?;
+    let unicode_sets = compile_with_flags(
+        r"^\P{Lowercase_Letter}$",
+        Flags::default()
+            .with_ignore_case(true)
+            .with_unicode_sets(true),
+    )?;
+    let lowercase = "a".encode_utf16().collect::<Vec<_>>();
+    if unicode
+        .find(&lowercase, 0, ExecutionLimits::default())?
+        .matched
+        .is_none()
+    {
+        return Err("Unicode mode complemented after folding instead of before it".into());
+    }
+    if unicode_sets
+        .find(&lowercase, 0, ExecutionLimits::default())?
+        .matched
+        .is_none()
+    {
+        return Ok(());
+    }
+    Err("Unicode Sets mode complemented before folding instead of after it".into())
+}
+
+#[test]
 fn supports_word_boundaries_and_any_character_classes() -> TestResult {
     let boundary = compile(r"\bcat\B")?;
     let input = "cats".encode_utf16().collect::<Vec<_>>();

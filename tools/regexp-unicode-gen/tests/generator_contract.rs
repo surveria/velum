@@ -1,6 +1,6 @@
 use velum_regexp_unicode_gen::{
-    CodePointRange, SourceManifest, all_data_ranges, property_ranges, property_value_ranges,
-    subtract_ranges,
+    CodePointRange, SourceManifest, all_data_ranges, legacy_reverse_mappings, legacy_uppercase,
+    property_ranges, property_value_ranges, simple_case_folding, subtract_ranges,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -102,4 +102,64 @@ fn multi_value_parser_and_range_subtraction_preserve_boundaries() -> TestResult 
         return Ok(());
     }
     Err(format!("unexpected multi-value or subtraction result: {greek:?} {remainder:?}").into())
+}
+
+#[test]
+fn case_mapping_parsers_keep_only_ecmascript_simple_mappings() -> TestResult {
+    let folding = simple_case_folding(
+        "0041; C; 0061; # common\n0130; F; 0069 0307; # full\n0130; T; 0069; # Turkic\n1E9E; S; 00DF; # simple\n",
+    )?;
+    if folding.len() != 2
+        || folding
+            .first()
+            .is_none_or(|mapping| mapping.source != 0x0041)
+        || folding
+            .get(1)
+            .is_none_or(|mapping| mapping.target != 0x00DF)
+    {
+        return Err(format!("unexpected simple case-folding mappings: {folding:?}").into());
+    }
+
+    let unicode_data = [
+        "0061",
+        "LATIN SMALL LETTER A",
+        "Ll",
+        "0",
+        "L",
+        "",
+        "",
+        "",
+        "",
+        "N",
+        "",
+        "",
+        "0041",
+        "",
+        "0041",
+    ]
+    .join(";");
+    let long_s = [
+        "017F",
+        "LATIN SMALL LETTER LONG S",
+        "Ll",
+        "0",
+        "L",
+        "",
+        "",
+        "",
+        "",
+        "N",
+        "",
+        "",
+        "0053",
+        "",
+        "0053",
+    ]
+    .join(";");
+    let uppercase = legacy_uppercase(&format!("{unicode_data}\n{long_s}"))?;
+    let reverse = legacy_reverse_mappings(&uppercase);
+    if uppercase.len() == 2 && reverse.len() == 1 {
+        return Ok(());
+    }
+    Err(format!("unexpected legacy mappings: {uppercase:?} {reverse:?}").into())
 }

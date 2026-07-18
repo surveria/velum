@@ -240,7 +240,9 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
     ) -> Result<StepOutcome, ExecutionError> {
         let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
         Ok(match decoded {
-            Some((actual, next)) if actual == expected => next_step(instruction, next),
+            Some((actual, next)) if self.characters_equal(actual, expected) => {
+                next_step(instruction, next)
+            }
             Some(_) | None => StepOutcome::Failed,
         })
     }
@@ -273,19 +275,31 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         };
         let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
         Ok(match decoded {
-            Some((actual, next)) if class.matches(actual) => next_step(instruction, next),
+            Some((actual, next)) if class.matches(actual, self.program.flags) => {
+                next_step(instruction, next)
+            }
             Some(_) | None => StepOutcome::Failed,
         })
     }
 
     fn at_word_boundary(&self, position: usize) -> Result<bool, ExecutionError> {
         let unicode = self.program.flags.has_unicode_mode();
-        let previous =
-            decode_backward(self.input, position, unicode)?.is_some_and(is_word_character);
+        let previous = decode_backward(self.input, position, unicode)?
+            .is_some_and(|value| is_word_character(value, self.program.flags));
         let next = decode_forward(self.input, position, unicode)?
             .map(|(value, _)| value)
-            .is_some_and(is_word_character);
+            .is_some_and(|value| is_word_character(value, self.program.flags));
         Ok(previous != next)
+    }
+
+    fn characters_equal(&self, actual: u32, expected: u32) -> bool {
+        if self.program.flags.ignore_case() {
+            let unicode = self.program.flags.has_unicode_mode();
+            crate::unicode::canonicalize(actual, unicode)
+                == crate::unicode::canonicalize(expected, unicode)
+        } else {
+            actual == expected
+        }
     }
 
     fn at_start(&self, position: usize) -> bool {

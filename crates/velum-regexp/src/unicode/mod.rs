@@ -1,4 +1,5 @@
 mod generated_binary;
+mod generated_case;
 mod generated_core;
 mod generated_general_category;
 mod generated_script;
@@ -63,6 +64,38 @@ pub fn unicode_property_ranges(
         }
         Some(_) => None,
     }
+}
+
+#[must_use]
+pub fn canonicalize(value: u32, unicode: bool) -> u32 {
+    if unicode {
+        generated_case::simple_case_fold(value)
+    } else {
+        let uppercase = generated_case::legacy_uppercase(value);
+        if value >= 0x80 && uppercase < 0x80 {
+            value
+        } else {
+            uppercase
+        }
+    }
+}
+
+#[must_use]
+pub fn case_closure_contains(ranges: &[(u32, u32)], value: u32, unicode: bool) -> bool {
+    let canonical = canonicalize(value, unicode);
+    contains(ranges, canonical)
+        || if unicode {
+            generated_case::simple_fold_source_in_ranges(canonical, ranges)
+        } else {
+            generated_case::legacy_uppercase_source_in_ranges(canonical, ranges)
+        }
+}
+
+#[must_use]
+pub fn case_closure_all_in_ranges(ranges: &[(u32, u32)], value: u32) -> bool {
+    let canonical = canonicalize(value, true);
+    contains(ranges, canonical)
+        && generated_case::simple_fold_sources_all_in_ranges(canonical, ranges)
 }
 
 fn contains(ranges: &[(u32, u32)], value: u32) -> bool {

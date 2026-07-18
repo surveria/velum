@@ -164,7 +164,11 @@ impl Parser<'_> {
         let ranges = unicode_property_ranges(property_name, property_value).ok_or_else(|| {
             CompileError::new(CompileErrorKind::InvalidUnicodeProperty, escape_offset)
         })?;
-        Ok(CharacterClassTerm::StaticRanges { ranges, inverted })
+        Ok(CharacterClassTerm::StaticRanges {
+            ranges,
+            inverted,
+            complement_before_case_fold: inverted,
+        })
     }
 
     fn class_range_follows(&self) -> Result<bool, CompileError> {

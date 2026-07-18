@@ -1,6 +1,9 @@
 use core::{cmp::Ordering, mem::size_of};
 
-use crate::SizeOverflow;
+use crate::{
+    Flags, SizeOverflow,
+    unicode::{case_closure_all_in_ranges, case_closure_contains},
+};
 
 pub const DIGIT_RANGES: &[(u32, u32)] = &[(0x0030, 0x0039)];
 pub const WORD_RANGES: &[(u32, u32)] = &[
@@ -31,14 +34,41 @@ pub enum CharacterClassTerm {
     StaticRanges {
         ranges: &'static [(u32, u32)],
         inverted: bool,
+        complement_before_case_fold: bool,
     },
 }
 
 impl CharacterClassTerm {
-    fn matches(&self, value: u32) -> bool {
+    fn matches(&self, value: u32, flags: Flags) -> bool {
         match self {
-            Self::Range { start, end } => (*start..=*end).contains(&value),
-            Self::StaticRanges { ranges, inverted } => contains(ranges, value) != *inverted,
+            Self::Range { start, end } => {
+                let ranges = [(*start, *end)];
+                if flags.ignore_case() {
+                    case_closure_contains(&ranges, value, flags.has_unicode_mode())
+                } else {
+                    (*start..=*end).contains(&value)
+                }
+            }
+            Self::StaticRanges {
+                ranges,
+                inverted,
+                complement_before_case_fold,
+            } => {
+                let matched = if flags.ignore_case() {
+                    case_closure_contains(ranges, value, flags.has_unicode_mode())
+                } else {
+                    contains(ranges, value)
+                };
+                if *inverted
+                    && *complement_before_case_fold
+                    && flags.ignore_case()
+                    && flags.unicode()
+                {
+                    !case_closure_all_in_ranges(ranges, value)
+                } else {
+                    matched != *inverted
+                }
+            }
         }
     }
 }
@@ -51,8 +81,8 @@ pub struct CharacterClass {
 
 impl CharacterClass {
     #[must_use]
-    pub fn matches(&self, value: u32) -> bool {
-        self.terms.iter().any(|term| term.matches(value)) != self.inverted
+    pub fn matches(&self, value: u32, flags: Flags) -> bool {
+        self.terms.iter().any(|term| term.matches(value, flags)) != self.inverted
     }
 
     pub fn retained_payload_bytes(&self) -> Result<usize, SizeOverflow> {
@@ -64,8 +94,12 @@ impl CharacterClass {
 }
 
 #[must_use]
-pub fn is_word_character(value: u32) -> bool {
-    contains(WORD_RANGES, value)
+pub fn is_word_character(value: u32, flags: Flags) -> bool {
+    if flags.ignore_case() {
+        case_closure_contains(WORD_RANGES, value, flags.has_unicode_mode())
+    } else {
+        contains(WORD_RANGES, value)
+    }
 }
 
 fn contains(ranges: &[(u32, u32)], value: u32) -> bool {

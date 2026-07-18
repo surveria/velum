@@ -14,7 +14,9 @@ the design source for this subsystem.
 The current native slice implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
 classes, and Unicode binary, General Category, Script, and Script Extensions
-property escapes. Unicode 17.0.0 generation currently emits all 53 ECMAScript
+property escapes. Legacy and Unicode-aware ignore-case modes use separately
+generated canonicalization tables and preserve the distinct `u`/`v` property
+complement order. Unicode 17.0.0 generation currently emits all 53 ECMAScript
 binary properties, 38 General Category values, and 176 Script values. This is
 an in-progress compatibility surface, not yet a runtime replacement.
 

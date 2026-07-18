@@ -38,9 +38,6 @@ impl<'a> Parser<'a> {
                 limits.max_pattern_units,
             ));
         }
-        if flags.ignore_case() {
-            return Err(CompileError::new(CompileErrorKind::UnsupportedSyntax, 0));
-        }
         let mut parser = Self {
             pattern,
             flags,
@@ -540,7 +537,11 @@ const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, Compile
             ));
         }
     };
-    Ok(CharacterClassTerm::StaticRanges { ranges, inverted })
+    Ok(CharacterClassTerm::StaticRanges {
+        ranges,
+        inverted,
+        complement_before_case_fold: false,
+    })
 }
 
 const fn hex_value(value: u16) -> Option<u32> {
