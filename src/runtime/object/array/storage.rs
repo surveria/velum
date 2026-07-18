@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use crate::value::Value;
 use crate::{
@@ -236,10 +236,10 @@ impl ArrayStorage {
         }
         elements.sort_by(|left, right| {
             let Some(left) = Self::default_number_property_value(left) else {
-                return std::cmp::Ordering::Equal;
+                return core::cmp::Ordering::Equal;
             };
             let Some(right) = Self::default_number_property_value(right) else {
-                return std::cmp::Ordering::Equal;
+                return core::cmp::Ordering::Equal;
             };
             Self::numeric_sort_ordering(left, right, descending)
         });
@@ -256,19 +256,19 @@ impl ArrayStorage {
         Some(*number)
     }
 
-    fn numeric_sort_ordering(left: f64, right: f64, descending: bool) -> std::cmp::Ordering {
+    fn numeric_sort_ordering(left: f64, right: f64, descending: bool) -> core::cmp::Ordering {
         let result = if descending {
             right - left
         } else {
             left - right
         };
         if result.is_nan() || result == 0.0 {
-            return std::cmp::Ordering::Equal;
+            return core::cmp::Ordering::Equal;
         }
         if result < 0.0 {
-            std::cmp::Ordering::Less
+            core::cmp::Ordering::Less
         } else {
-            std::cmp::Ordering::Greater
+            core::cmp::Ordering::Greater
         }
     }
 
@@ -470,7 +470,7 @@ impl ArrayStorage {
         match &mut self.elements {
             ArrayElements::Packed(elements) => {
                 if let Some(existing) = elements.get_mut(position) {
-                    return Ok(Some(std::mem::replace(existing, property)));
+                    return Ok(Some(core::mem::replace(existing, property)));
                 }
                 if position == elements.len() {
                     elements.push(property);

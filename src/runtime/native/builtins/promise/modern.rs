@@ -29,7 +29,7 @@ impl Context {
             capability
                 .root_values()
                 .into_iter()
-                .chain(std::iter::once(&callback))
+                .chain(core::iter::once(&callback))
                 .chain(callback_args.iter()),
         )?;
         match self.call_value(&callback, callback_args, Value::Undefined) {

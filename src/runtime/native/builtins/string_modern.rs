@@ -196,20 +196,20 @@ impl Context {
             if let Some(matcher) =
                 self.string_well_known_method(&regexp, SYMBOL_MATCH_ALL_PROPERTY)?
             {
-                return self.call_value(&matcher, std::slice::from_ref(this_value), regexp);
+                return self.call_value(&matcher, core::slice::from_ref(this_value), regexp);
             }
         }
 
         let string = self.string_receiver_utf16(this_value)?;
         let string = self.heap_utf16_string_value(&string)?;
         let _string_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&string))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&string))?;
         let flags = self.heap_string_value("g")?;
         let constructor = self.regexp_constructor_value()?;
         let matcher =
             self.semantic_construct(&constructor, &[regexp, flags], constructor.clone())?;
         let _matcher_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&matcher))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&matcher))?;
         let method = self
             .string_well_known_method(&matcher, SYMBOL_MATCH_ALL_PROPERTY)?
             .ok_or_else(|| Error::type_error("RegExp Symbol.matchAll method is not callable"))?;

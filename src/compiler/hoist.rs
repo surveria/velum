@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     ast::{BindingPattern, DeclKind, ForInTarget, Statement, StaticBinding, Stmt},
@@ -94,7 +94,7 @@ impl<'a> HoistCollector<'a> {
 
     fn collect_pattern_lexical_declarations(&mut self, pattern: &BindingPattern, kind: DeclKind) {
         let mut visit =
-            |binding: &StaticBinding| -> std::result::Result<(), std::convert::Infallible> {
+            |binding: &StaticBinding| -> core::result::Result<(), core::convert::Infallible> {
                 self.lexical_declarations.push((binding.clone(), kind));
                 Ok(())
             };
@@ -114,8 +114,8 @@ impl<'a> HoistCollector<'a> {
         &mut self,
         bindings: (&StaticBinding, Option<&StaticBinding>),
         id: crate::syntax::StaticFunctionId,
-        params: &std::rc::Rc<[crate::ast::FunctionParam]>,
-        body: &std::rc::Rc<[Statement]>,
+        params: &alloc::rc::Rc<[crate::ast::FunctionParam]>,
+        body: &alloc::rc::Rc<[Statement]>,
         mode: FunctionCompileMode,
         span: SourceSpan,
     ) -> Result<()> {
@@ -145,7 +145,7 @@ impl<'a> HoistCollector<'a> {
 
     fn collect_pattern_var_declarations(&mut self, pattern: &BindingPattern) {
         let mut visit =
-            |binding: &StaticBinding| -> std::result::Result<(), std::convert::Infallible> {
+            |binding: &StaticBinding| -> core::result::Result<(), core::convert::Infallible> {
                 self.var_declarations.push(binding.clone());
                 Ok(())
             };

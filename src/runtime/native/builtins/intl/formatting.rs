@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use num_traits::ToPrimitive;

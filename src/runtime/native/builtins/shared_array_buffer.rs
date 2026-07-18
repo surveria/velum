@@ -151,7 +151,7 @@ impl Context {
         let length_value = Self::shared_buffer_usize_value(new_length)?;
         let result = self.semantic_construct(
             &constructor,
-            std::slice::from_ref(&length_value),
+            core::slice::from_ref(&length_value),
             constructor.clone(),
         )?;
         let (_, target) = self.shared_array_buffer_receiver(&result)?;

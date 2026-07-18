@@ -1,4 +1,6 @@
-use std::{fmt, rc::Rc, time::Duration, time::Instant};
+use alloc::rc::Rc;
+use core::{fmt, time::Duration};
+use std::time::Instant;
 
 use crate::runtime::Context;
 

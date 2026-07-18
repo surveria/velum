@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use num_traits::ToPrimitive;
 use temporal_rs::{Instant, TimeZone, options::ToStringRoundingOptions};

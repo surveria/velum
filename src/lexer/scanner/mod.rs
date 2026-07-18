@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use super::{
     LexicalGoal, NumberToken, SourceText, StringToken, Token, TokenKind,

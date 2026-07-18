@@ -1,7 +1,5 @@
-use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
-};
+use core::hash::{Hash, Hasher};
+use std::collections::{HashMap, hash_map::DefaultHasher};
 
 use crate::{
     error::{Error, Result},

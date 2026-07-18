@@ -230,16 +230,16 @@ impl Context {
     ) -> Result<ArrayFromAsyncDrive> {
         let _state_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&continuation.result)
+            core::iter::once(&continuation.result)
                 .chain(continuation.map_function.iter())
-                .chain(std::iter::once(&continuation.this_argument)),
+                .chain(core::iter::once(&continuation.this_argument)),
         )?;
         let _source_scope = match &continuation.source {
             ArrayFromAsyncSource::Iterator(iterator) => Some(
                 self.transient_root_scope(VmRootKind::TransientTemporary, iterator.root_values())?,
             ),
             ArrayFromAsyncSource::ArrayLike { items, .. } => Some(
-                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(items))?,
+                self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(items))?,
             ),
         };
         match (continuation.pending.take(), resume) {

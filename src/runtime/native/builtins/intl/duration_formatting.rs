@@ -207,7 +207,10 @@ fn resize_fraction(value: &str, digits: usize) -> Result<String> {
             .ok_or_else(|| Error::runtime("DurationFormat fraction boundary is invalid"));
     }
     let mut result = value.to_owned();
-    result.extend(std::iter::repeat_n('0', digits.saturating_sub(value.len())));
+    result.extend(core::iter::repeat_n(
+        '0',
+        digits.saturating_sub(value.len()),
+    ));
     Ok(result)
 }
 

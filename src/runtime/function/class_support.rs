@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::runtime::private::{PrivateEnvironment, PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
@@ -16,8 +16,8 @@ pub(in crate::runtime) struct FunctionSuperBinding {
     pub(in crate::runtime) constructor: Option<Value>,
     pub(in crate::runtime) home_object: Value,
     pub(in crate::runtime) own_constructor: Option<FunctionId>,
-    pub(in crate::runtime) this_value: std::cell::RefCell<Option<Value>>,
-    pub(in crate::runtime) allow_direct_eval_super_call: std::cell::Cell<bool>,
+    pub(in crate::runtime) this_value: core::cell::RefCell<Option<Value>>,
+    pub(in crate::runtime) allow_direct_eval_super_call: core::cell::Cell<bool>,
 }
 
 pub(super) fn activation_super_bindings(
@@ -47,8 +47,8 @@ impl FunctionSuperBinding {
             constructor: self.constructor.clone(),
             home_object: self.home_object.clone(),
             own_constructor: self.own_constructor,
-            this_value: std::cell::RefCell::new(None),
-            allow_direct_eval_super_call: std::cell::Cell::new(
+            this_value: core::cell::RefCell::new(None),
+            allow_direct_eval_super_call: core::cell::Cell::new(
                 self.allow_direct_eval_super_call.get(),
             ),
         })
@@ -392,8 +392,8 @@ impl Context {
             constructor: None,
             home_object: constructor_super_binding.home_object.clone(),
             own_constructor: None,
-            this_value: std::cell::RefCell::new(None),
-            allow_direct_eval_super_call: std::cell::Cell::new(false),
+            this_value: core::cell::RefCell::new(None),
+            allow_direct_eval_super_call: core::cell::Cell::new(false),
         });
         for field in fields.iter() {
             self.initialize_class_field(

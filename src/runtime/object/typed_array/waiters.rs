@@ -1,8 +1,8 @@
-use std::{
+use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
-    time::Duration,
 };
+use core::time::Duration;
 
 use parking_lot::{Condvar, Mutex, RwLock};
 

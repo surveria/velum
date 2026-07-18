@@ -93,7 +93,7 @@ impl LayoutBuilder {
             params,
             body,
             (parent_scope, parent_function),
-            std::iter::empty(),
+            core::iter::empty(),
         )
     }
 

@@ -70,7 +70,7 @@ impl Context {
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         let result = self.array_species_create(this_value, length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let mode = Self::array_callback_visit_mode(visit_every_index);
         self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {
             let mapped = context.call_array_callback(
@@ -104,7 +104,7 @@ impl Context {
         let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         let result = self.array_species_create(this_value, 0)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let mut next_index = 0_usize;
         let mode = Self::array_callback_visit_mode(visit_every_index);
         self.visit_array_like_with_length(this_value, length, mode, |context, index, value| {

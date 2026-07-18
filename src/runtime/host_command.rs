@@ -1,4 +1,5 @@
-use std::{collections::VecDeque, fmt, rc::Rc, task::Waker};
+use alloc::{collections::VecDeque, rc::Rc};
+use core::{fmt, task::Waker};
 
 use parking_lot::Mutex;
 
@@ -298,31 +299,31 @@ impl HostCommandState {
     fn poll_response(
         &mut self,
         id: HostCommandId,
-        context: &std::task::Context<'_>,
-    ) -> std::task::Poll<crate::HostTaskResult<QueuedCallResult>> {
+        context: &core::task::Context<'_>,
+    ) -> core::task::Poll<crate::HostTaskResult<QueuedCallResult>> {
         let Some(entry) = self.matching_entry_mut(id) else {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 HOST_COMMAND_STALE_MESSAGE,
             ))));
         };
         if !matches!(entry.status, Some(HostCommandStatus::Ready(_))) {
             if entry.status.is_none() {
-                return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+                return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                     HOST_COMMAND_STALE_MESSAGE,
                 ))));
             }
             entry.waker = Some(context.waker().clone());
-            return std::task::Poll::Pending;
+            return core::task::Poll::Pending;
         }
         let payload_bytes = entry.payload_bytes;
         let Some(active_count) = self.active_count.checked_sub(1) else {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command count accounting underflowed",
             ))));
         };
         let Some(active_payload_bytes) = self.active_payload_bytes.checked_sub(payload_bytes)
         else {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command payload accounting underflowed",
             ))));
         };
@@ -330,15 +331,15 @@ impl HostCommandState {
             self.storage_ledger
                 .release(VmStorageKind::HostCommand, 1, payload_bytes)
         {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(error)));
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(error)));
         }
         let Some(entry) = self.matching_entry_mut(id) else {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "ready host command slot disappeared",
             ))));
         };
         let Some(HostCommandStatus::Ready(response)) = entry.status.take() else {
-            return std::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
+            return core::task::Poll::Ready(Err(crate::HostFutureError::from(Error::runtime(
                 "host command response disappeared",
             ))));
         };
@@ -346,7 +347,7 @@ impl HostCommandState {
         entry.waker = None;
         self.active_count = active_count;
         self.active_payload_bytes = active_payload_bytes;
-        std::task::Poll::Ready(response.into_result())
+        core::task::Poll::Ready(response.into_result())
     }
 
     fn complete(
@@ -582,7 +583,7 @@ impl Context {
                 Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
             }
         }
-        let roots = std::iter::once(&receiver).chain(args.iter());
+        let roots = core::iter::once(&receiver).chain(args.iter());
         let _roots = match self.transient_root_scope(VmRootKind::TransientCall, roots) {
             Ok(roots) => roots,
             Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
@@ -594,7 +595,7 @@ impl Context {
             }
         };
         let _result_root =
-            match self.transient_root_scope(VmRootKind::TransientCall, std::iter::once(&value)) {
+            match self.transient_root_scope(VmRootKind::TransientCall, core::iter::once(&value)) {
                 Ok(root) => root,
                 Err(error) => return completion.complete(HostCommandResponse::Failed(error)),
             };

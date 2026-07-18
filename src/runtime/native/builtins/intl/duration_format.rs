@@ -163,7 +163,7 @@ impl Context {
         self.duration_receiver(value)?;
         let formatter = self.construct_intl_duration_format(args)?;
         self.eval_intl_duration_format(
-            RuntimeCallArgs::values(std::slice::from_ref(value)),
+            RuntimeCallArgs::values(core::slice::from_ref(value)),
             &formatter,
             false,
         )

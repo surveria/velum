@@ -1,7 +1,7 @@
-use std::{
+use alloc::rc::Rc;
+use core::{
     fmt,
     hash::{Hash, Hasher},
-    rc::Rc,
 };
 
 const INITIAL_VM_GENERATION: u64 = 1;

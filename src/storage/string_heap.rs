@@ -1,10 +1,6 @@
-use std::{
-    cell::OnceCell,
-    collections::{BTreeSet, HashMap},
-    fmt,
-    mem::size_of,
-    rc::Rc,
-};
+use alloc::{collections::BTreeSet, rc::Rc};
+use core::{cell::OnceCell, fmt, mem::size_of};
+use std::collections::HashMap;
 
 use crate::{
     error::{Error, Result},

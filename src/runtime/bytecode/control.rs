@@ -455,7 +455,7 @@ impl Context {
             *control.loop_state_mut(BytecodeLoopKind::While)?.0 = BytecodeLoopPhase::Condition;
         }
         let (_, last) = control.loop_state_mut(BytecodeLoopKind::While)?;
-        state.last = std::mem::replace(last, Value::Undefined);
+        state.last = core::mem::replace(last, Value::Undefined);
         state.pc = next;
         self.finish_bytecode_control_result(handle, Ok(None))
     }
@@ -601,7 +601,7 @@ impl Context {
             }
         }
         let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
-        state.last = std::mem::replace(last, Value::Undefined);
+        state.last = core::mem::replace(last, Value::Undefined);
         state.pc = next;
         self.finish_bytecode_control_result(handle, Ok(None))
     }

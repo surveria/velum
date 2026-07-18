@@ -405,7 +405,7 @@ impl Context {
         let resources = {
             let source_data = self.disposable_stack_data_mut(source)?;
             source_data.disposed = true;
-            std::mem::take(&mut source_data.resources)
+            core::mem::take(&mut source_data.resources)
         };
         self.disposable_stack_data_mut(target)?.resources = resources;
         Ok(moved)
@@ -428,7 +428,7 @@ impl Context {
                 return Ok(completion);
             }
             data.disposed = true;
-            std::mem::take(&mut data.resources)
+            core::mem::take(&mut data.resources)
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, resources.len())?;

@@ -484,7 +484,7 @@ fn finish_partial_base64(
 fn decode_complete_base64_chunk(
     chunk: &[Base64Token],
     handling: LastChunkHandling,
-) -> std::result::Result<DecodedChunk, ()> {
+) -> core::result::Result<DecodedChunk, ()> {
     match chunk {
         [
             Base64Token::Value(first),
@@ -536,7 +536,7 @@ fn append_decoded_chunk(
     output: &mut Vec<u8>,
     decoded: &DecodedChunk,
     hard_limit: usize,
-) -> std::result::Result<(), ()> {
+) -> core::result::Result<(), ()> {
     let length = output.len().checked_add(decoded.length).ok_or(())?;
     if length > hard_limit {
         return Err(());

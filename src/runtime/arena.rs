@@ -164,8 +164,8 @@ impl<T> Default for SlotArena<T> {
 
 impl<'arena, T> IntoIterator for &'arena SlotArena<T> {
     type Item = &'arena T;
-    type IntoIter = std::iter::FilterMap<
-        std::slice::Iter<'arena, Option<T>>,
+    type IntoIter = core::iter::FilterMap<
+        core::slice::Iter<'arena, Option<T>>,
         fn(&'arena Option<T>) -> Option<&'arena T>,
     >;
 
@@ -176,8 +176,8 @@ impl<'arena, T> IntoIterator for &'arena SlotArena<T> {
 
 impl<'arena, T> IntoIterator for &'arena mut SlotArena<T> {
     type Item = &'arena mut T;
-    type IntoIter = std::iter::FilterMap<
-        std::slice::IterMut<'arena, Option<T>>,
+    type IntoIter = core::iter::FilterMap<
+        core::slice::IterMut<'arena, Option<T>>,
         fn(&'arena mut Option<T>) -> Option<&'arena mut T>,
     >;
 

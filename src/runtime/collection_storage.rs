@@ -1,4 +1,5 @@
-use std::{collections::HashMap, rc::Rc};
+use alloc::rc::Rc;
+use std::collections::HashMap;
 
 use crate::{
     error::{Error, Result},

@@ -1,10 +1,10 @@
-use std::fmt;
+use core::fmt;
 
 use crate::ownership::VmIdentity;
 use crate::value::{ErrorName, Value};
 use crate::{SourceId, SourceSpan};
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Stable diagnostic metadata for a built-in JavaScript Error instance.
 ///

@@ -189,7 +189,7 @@ impl Context {
             )));
         }
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(result))?;
         let done = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
         if to_boolean(self, &done)? {
             set_protocol_done(&mut continuation.source);
@@ -210,7 +210,7 @@ impl Context {
             )));
         }
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(result))?;
         let done_value = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
         let done = to_boolean(self, &done_value)?;
         let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
@@ -384,8 +384,8 @@ impl Context {
                     "iterator return method must return an object",
                 ));
             }
-            let _result_scope =
-                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+            let _result_scope = self
+                .transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(result))?;
             let _done = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
             self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)
         })();

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::{
     ast::{BindingPattern, DeclKind, ForInTarget, Statement, Stmt},

@@ -20,16 +20,16 @@ pub enum TemporalValue {
 impl TemporalValue {
     pub(super) fn storage_payload_bytes(&self) -> usize {
         let active_payload = match self {
-            Self::Duration(value) => std::mem::size_of_val(value),
-            Self::Instant(value) => std::mem::size_of_val(value),
-            Self::PlainDate(value) => std::mem::size_of_val(value),
-            Self::PlainDateTime(value) => std::mem::size_of_val(value),
-            Self::PlainMonthDay(value) => std::mem::size_of_val(value),
-            Self::PlainTime(value) => std::mem::size_of_val(value),
-            Self::PlainYearMonth(value) => std::mem::size_of_val(value),
-            Self::ZonedDateTime(value) => std::mem::size_of_val(value),
+            Self::Duration(value) => core::mem::size_of_val(value),
+            Self::Instant(value) => core::mem::size_of_val(value),
+            Self::PlainDate(value) => core::mem::size_of_val(value),
+            Self::PlainDateTime(value) => core::mem::size_of_val(value),
+            Self::PlainMonthDay(value) => core::mem::size_of_val(value),
+            Self::PlainTime(value) => core::mem::size_of_val(value),
+            Self::PlainYearMonth(value) => core::mem::size_of_val(value),
+            Self::ZonedDateTime(value) => core::mem::size_of_val(value),
         };
-        std::cmp::max(std::mem::size_of::<Self>(), active_payload)
+        core::cmp::max(core::mem::size_of::<Self>(), active_payload)
     }
 }
 

@@ -1,4 +1,5 @@
-use std::{fmt, rc::Rc};
+use alloc::rc::Rc;
+use core::fmt;
 
 use crate::{
     api::{
@@ -627,7 +628,7 @@ impl Context {
         let values = args.to_owned_values();
         let _root_scope = self.transient_root_scope(
             crate::runtime::VmRootKind::TransientCall,
-            std::iter::once(this_value).chain(values.iter()),
+            core::iter::once(this_value).chain(values.iter()),
         )?;
         let function = self.host_function(id)?.clone();
         if function.is_constructor() {

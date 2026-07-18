@@ -285,7 +285,7 @@ impl Context {
             }
         };
         if outcome.is_suspended() {
-            let parked = std::mem::replace(state, BytecodeState::new());
+            let parked = core::mem::replace(state, BytecodeState::new());
             self.park_bytecode_continuation_state(frame, parked)?;
             return Ok(outcome);
         }

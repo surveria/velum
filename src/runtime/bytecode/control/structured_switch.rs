@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     bytecode::{
@@ -400,7 +400,7 @@ impl Context {
             }
         }
         let (_, last) = control.switch_state_mut()?;
-        let value = std::mem::replace(last, Value::Undefined);
+        let value = core::mem::replace(last, Value::Undefined);
         Ok((control, Completion::Normal(value)))
     }
 }

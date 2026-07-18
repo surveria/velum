@@ -109,7 +109,7 @@ impl Context {
         let length = self.array_like_length(items)?;
         let result = self.array_from_result(constructor, Some(length))?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for index in 0..length {
             self.step()?;
             let value = self.get_array_like_index(items, index)?;
@@ -174,7 +174,7 @@ impl Context {
             self.create_property_descriptor_object(&OwnPropertyDescriptor::Data(descriptor))?;
         let _descriptor_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&descriptor_value),
+            core::iter::once(&descriptor_value),
         )?;
         let update = PropertyUpdate::Data(DataPropertyUpdate::new(
             Some(value),

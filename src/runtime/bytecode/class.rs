@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::runtime::private::{PrivateSlot, PrivateSlotValue};
 use crate::{
@@ -43,7 +43,7 @@ impl Context {
         let _heritage_roots = self.transient_root_scope(
             VmRootKind::TransientTemporary,
             heritage.iter().flat_map(|heritage| {
-                std::iter::once(&heritage.constructor).chain(heritage.prototype.iter())
+                core::iter::once(&heritage.constructor).chain(heritage.prototype.iter())
             }),
         )?;
         let constructor = self.create_bytecode_function(&BytecodeFunctionInit {
@@ -72,8 +72,8 @@ impl Context {
             constructor: None,
             home_object: constructor.clone(),
             own_constructor: None,
-            this_value: std::cell::RefCell::new(None),
-            allow_direct_eval_super_call: std::cell::Cell::new(false),
+            this_value: core::cell::RefCell::new(None),
+            allow_direct_eval_super_call: core::cell::Cell::new(false),
         });
         let targets = ClassInstallationTargets {
             constructor: constructor.clone(),
@@ -171,8 +171,8 @@ impl Context {
                 constructor: heritage.map(|heritage| heritage.constructor.clone()),
                 home_object: Value::Object(prototype_id),
                 own_constructor: Some(constructor_id),
-                this_value: std::cell::RefCell::new(None),
-                allow_direct_eval_super_call: std::cell::Cell::new(heritage.is_some()),
+                this_value: core::cell::RefCell::new(None),
+                allow_direct_eval_super_call: core::cell::Cell::new(heritage.is_some()),
             }),
         )
     }
@@ -252,7 +252,7 @@ impl Context {
         class: &BytecodeClass,
         member: &BytecodeClassMember,
         targets: &ClassInstallationTargets,
-        inputs: &mut std::vec::IntoIter<Value>,
+        inputs: &mut alloc::vec::IntoIter<Value>,
         instance_private_slots: &mut Vec<PrivateSlot>,
     ) -> Result<()> {
         let decorators =
@@ -294,8 +294,8 @@ impl Context {
                 constructor: None,
                 home_object,
                 own_constructor: None,
-                this_value: std::cell::RefCell::new(None),
-                allow_direct_eval_super_call: std::cell::Cell::new(false),
+                this_value: core::cell::RefCell::new(None),
+                allow_direct_eval_super_call: core::cell::Cell::new(false),
             }),
         )
     }

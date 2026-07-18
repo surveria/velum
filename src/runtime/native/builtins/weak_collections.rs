@@ -398,7 +398,7 @@ impl Context {
         if let Some(value) = self.collection_get(collection, &key)? {
             return Ok(value);
         }
-        let value = self.call_value(&callback, std::slice::from_ref(&key), Value::Undefined)?;
+        let value = self.call_value(&callback, core::slice::from_ref(&key), Value::Undefined)?;
         self.collection_set(collection, key, value.clone())?;
         Ok(value)
     }

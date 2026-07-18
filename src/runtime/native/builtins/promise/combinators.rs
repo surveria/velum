@@ -46,7 +46,7 @@ impl Context {
             capability
                 .root_values()
                 .into_iter()
-                .chain(std::iter::once(&iterable)),
+                .chain(core::iter::once(&iterable)),
         )?;
         if let Err(error) =
             self.setup_settlement_combinator(kind, &capability, constructor, &iterable)
@@ -156,7 +156,7 @@ impl Context {
             };
             let next_promise = self.call_value(
                 promise_resolve,
-                std::slice::from_ref(&input),
+                core::slice::from_ref(&input),
                 constructor.clone(),
             )?;
             let then = self.get_named(&next_promise, PROMISE_THEN_NAME)?;
@@ -213,7 +213,7 @@ impl Context {
             self.set_promise_all_value(&values, index, Value::Undefined)?;
             let next_promise = self.call_value(
                 promise_resolve,
-                std::slice::from_ref(&input),
+                core::slice::from_ref(&input),
                 constructor.clone(),
             )?;
             let (on_fulfilled, on_rejected) =
@@ -255,7 +255,7 @@ impl Context {
             self.set_promise_all_value(&values, index, Value::Undefined)?;
             let next_promise = self.call_value(
                 promise_resolve,
-                std::slice::from_ref(&input),
+                core::slice::from_ref(&input),
                 constructor.clone(),
             )?;
             let (on_fulfilled, on_rejected) = self.create_all_settled_elements(state, index)?;
@@ -292,7 +292,7 @@ impl Context {
             self.set_promise_all_value(&errors, index, Value::Undefined)?;
             let next_promise = self.call_value(
                 promise_resolve,
-                std::slice::from_ref(&input),
+                core::slice::from_ref(&input),
                 constructor.clone(),
             )?;
             let on_rejected = self.create_promise_any_reject_element(state, index)?;
@@ -355,7 +355,7 @@ impl Context {
         )?;
         let _fulfilled_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&on_fulfilled),
+            core::iter::once(&on_fulfilled),
         )?;
         let on_rejected = self.create_combinator_element_function(
             state,
@@ -389,7 +389,7 @@ impl Context {
         )?;
         let _fulfilled_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&on_fulfilled),
+            core::iter::once(&on_fulfilled),
         )?;
         let on_rejected = self.create_combinator_element_function(
             state,
@@ -532,7 +532,7 @@ impl Context {
             .objects
             .create_with_exact_prototype(None, self.limits.max_objects)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for index in 0..length {
             let index_name = index.to_string();
             let key = self.get_named(keys, &index_name)?;

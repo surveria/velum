@@ -101,7 +101,7 @@ impl Context {
         let result =
             self.create_typed_array_with_length(record.view.element_kind(), record.length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let (result_id, _) = self.typed_array_receiver(&result)?;
         for current in 0..record.length {
             self.step()?;
@@ -150,7 +150,7 @@ impl Context {
             return Err(Error::type_error("ArrayBuffer is immutable"));
         }
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         if count == 0 {
             return Ok(result);
         }

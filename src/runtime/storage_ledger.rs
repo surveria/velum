@@ -1,4 +1,5 @@
-use std::{cell::Cell, rc::Rc};
+use alloc::rc::Rc;
+use core::cell::Cell;
 
 use crate::error::{Error, Result};
 
@@ -32,8 +33,8 @@ impl VmStorageLedger {
         Self {
             state: Rc::new(VmStorageLedgerState {
                 limits,
-                counts: std::array::from_fn(|_| Cell::new(0)),
-                payload_bytes: std::array::from_fn(|_| Cell::new(0)),
+                counts: core::array::from_fn(|_| Cell::new(0)),
+                payload_bytes: core::array::from_fn(|_| Cell::new(0)),
             }),
         }
     }

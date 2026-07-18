@@ -51,7 +51,7 @@ impl Context {
     #[must_use]
     pub fn take_output(&mut self) -> Vec<String> {
         self.output_payload_bytes = 0;
-        std::mem::take(&mut self.output)
+        core::mem::take(&mut self.output)
     }
 
     /// Returns the current raw binding value without retaining it.

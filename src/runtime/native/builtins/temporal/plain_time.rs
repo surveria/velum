@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use temporal_rs::{PlainTime, options::ToStringRoundingOptions, partial::PartialTime};
 

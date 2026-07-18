@@ -186,7 +186,7 @@ impl Context {
             *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, _, last) = control.for_in_state_mut()?;
-        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        let completion = Completion::Normal(core::mem::replace(last, Value::Undefined));
         Self::finish_for_in_control(self, handle, completion)
     }
 
@@ -230,7 +230,7 @@ impl Context {
             *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, _, last) = control.for_in_state_mut()?;
-        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        let completion = Completion::Normal(core::mem::replace(last, Value::Undefined));
         Self::finish_for_in_control(self, handle, completion)
     }
 

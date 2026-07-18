@@ -22,7 +22,7 @@ pub(super) fn class_element_input_count(
 }
 
 pub(super) fn take_class_input_values(
-    inputs: &mut std::vec::IntoIter<Value>,
+    inputs: &mut alloc::vec::IntoIter<Value>,
     count: usize,
     description: &str,
 ) -> Result<Vec<Value>> {
@@ -34,7 +34,7 @@ pub(super) fn take_class_input_values(
 }
 
 pub(super) fn take_class_computed_key(
-    inputs: &mut std::vec::IntoIter<Value>,
+    inputs: &mut alloc::vec::IntoIter<Value>,
     key: &BytecodeClassMemberKey,
     missing_message: &str,
 ) -> Result<Option<Value>> {

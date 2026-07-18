@@ -87,7 +87,7 @@ impl Context {
             self.transient_root_scope(VmRootKind::TransientTemporary, [&stack, value])?;
         self.eval_disposable_stack_function(
             DisposableStackFunctionKind::Use,
-            RuntimeCallArgs::values(std::slice::from_ref(value)),
+            RuntimeCallArgs::values(core::slice::from_ref(value)),
             &stack,
         )?;
         self.active_binding_scope_mut()?
@@ -104,7 +104,7 @@ impl Context {
             self.transient_root_scope(VmRootKind::TransientTemporary, [&stack, value])?;
         self.eval_async_disposable_stack_function(
             AsyncDisposableStackFunctionKind::Use,
-            RuntimeCallArgs::values(std::slice::from_ref(value)),
+            RuntimeCallArgs::values(core::slice::from_ref(value)),
             &stack,
         )?;
         self.active_binding_scope_mut()?
@@ -186,7 +186,7 @@ impl Context {
         let (result_promise, promise_object) = self.create_pending_promise()?;
         let _root_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&promise_object),
+            core::iter::once(&promise_object),
         )?;
         let continuation = ResourceScopeContinuation::new(result_promise, resources, &completion);
         self.continue_resource_scope_disposal(continuation, None)?;

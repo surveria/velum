@@ -170,7 +170,7 @@ impl Context {
                 crate::compiled_script::EvalSuperContext::None,
                 crate::compiled_script::EvalClassFieldContext::None,
                 false,
-                std::rc::Rc::from([]),
+                alloc::rc::Rc::from([]),
             ),
         )
         .map_err(dynamic_compilation_error)?;

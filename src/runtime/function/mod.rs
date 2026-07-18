@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
@@ -263,7 +263,7 @@ impl Context {
             private_environment: self.current_private_environment(),
             class_field_initializer_context,
             private_slots: Vec::new(),
-            params_remembered: std::cell::Cell::new(false),
+            params_remembered: core::cell::Cell::new(false),
             scope_template,
             lexical_this,
             new_target,

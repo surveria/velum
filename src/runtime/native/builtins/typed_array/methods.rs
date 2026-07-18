@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use crate::{
     error::{Error, Result},
@@ -315,7 +315,7 @@ impl Context {
         }
         let source = self.object_to_object(&source)?;
         let _source_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&source))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&source))?;
         let length_value = self.get_named(&source, "length")?;
         let source_length =
             Self::length_to_usize(self.to_length(&length_value)?, TYPED_ARRAY_LENGTH_ERROR)?;
@@ -652,7 +652,7 @@ impl Context {
             true,
         )?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for (index, value) in values.into_iter().enumerate() {
             let value = if let Some(callback) = mapping {
                 let call_args = [value, Self::typed_array_usize_value(index)?];
@@ -676,7 +676,7 @@ impl Context {
         let length_value = Self::typed_array_usize_value(length)?;
         let result = self.semantic_construct(
             constructor,
-            std::slice::from_ref(&length_value),
+            core::slice::from_ref(&length_value),
             constructor.clone(),
         )?;
         let (id, view) = self

@@ -243,7 +243,7 @@ impl Context {
         };
         self.require_static_iterator_object(&iterator)?;
         let scope = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        scope.add_values(std::iter::once(&iterator))?;
+        scope.add_values(core::iter::once(&iterator))?;
         let next = self.iterator_direct_next(&iterator)?;
         Ok(IteratorRecordState { iterator, next })
     }
@@ -467,14 +467,14 @@ impl Context {
             let record = self.zip_record(id, index)?;
             let Some(record) = record else {
                 let padding = self.zip_padding_value(id, index)?;
-                roots.add_values(std::iter::once(&padding))?;
+                roots.add_values(core::iter::once(&padding))?;
                 results.push(padding);
                 continue;
             };
             let mut source = Self::record_source(record);
             match self.iterator_step(&mut source) {
                 Ok(IteratorStep::Value(value)) => {
-                    roots.add_values(std::iter::once(&value))?;
+                    roots.add_values(core::iter::once(&value))?;
                     results.push(value);
                 }
                 Ok(IteratorStep::Done) => {
@@ -483,7 +483,7 @@ impl Context {
                         return Ok(result);
                     }
                     let padding = self.zip_padding_value(id, index)?;
-                    roots.add_values(std::iter::once(&padding))?;
+                    roots.add_values(core::iter::once(&padding))?;
                     results.push(padding);
                 }
                 Ok(IteratorStep::Abrupt(completion)) => {
@@ -538,7 +538,7 @@ impl Context {
                     match self.iterator_step_result(&mut source) {
                         Ok(IteratorResultStep::Done) => self.clear_zip_record(id, remaining)?,
                         Ok(IteratorResultStep::Result(result)) => {
-                            roots.add_values(std::iter::once(&result))?;
+                            roots.add_values(core::iter::once(&result))?;
                             let error = Error::type_error(
                                 "Iterator.zip strict inputs have different lengths",
                             );

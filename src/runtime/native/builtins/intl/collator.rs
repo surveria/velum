@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
 
@@ -581,7 +581,7 @@ fn compare_numeric_text(left: &str, right: &str) -> Ordering {
     }
 }
 
-fn take_ascii_digits<I>(chars: &mut std::iter::Peekable<I>) -> String
+fn take_ascii_digits<I>(chars: &mut core::iter::Peekable<I>) -> String
 where
     I: Iterator<Item = char>,
 {

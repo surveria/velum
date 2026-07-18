@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use alloc::collections::VecDeque;
 
 mod async_generator;
 
@@ -422,7 +422,7 @@ impl Context {
         }
         let state = {
             let generator = self.generator_mut(id)?;
-            std::mem::replace(&mut generator.state, GeneratorState::Executing)
+            core::mem::replace(&mut generator.state, GeneratorState::Executing)
         };
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let result = self.resume_generator_state(state, kind, value);

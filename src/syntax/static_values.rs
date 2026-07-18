@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use super::{StaticBindingId, StaticNameId};
 
@@ -30,13 +30,13 @@ impl StaticName {
     }
 }
 
-impl std::fmt::Display for StaticName {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for StaticName {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
 
-impl std::ops::Deref for StaticName {
+impl core::ops::Deref for StaticName {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -72,13 +72,13 @@ impl StaticString {
     }
 }
 
-impl std::fmt::Display for StaticString {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for StaticString {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
 
-impl std::ops::Deref for StaticString {
+impl core::ops::Deref for StaticString {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -110,13 +110,13 @@ impl StaticBinding {
     }
 }
 
-impl std::fmt::Display for StaticBinding {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for StaticBinding {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
 
-impl std::ops::Deref for StaticBinding {
+impl core::ops::Deref for StaticBinding {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {

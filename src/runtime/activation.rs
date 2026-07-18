@@ -1,7 +1,5 @@
-use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
-};
+use alloc::rc::{Rc, Weak};
+use core::cell::RefCell;
 
 use crate::{
     error::{Error, Result as EngineResult},

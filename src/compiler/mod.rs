@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     api::native_call::NativeCallTarget,
@@ -169,7 +169,7 @@ impl<'a> BytecodeCompiler<'a> {
         span: SourceSpan,
         compile: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
-        let previous = std::mem::replace(&mut self.current_span, span);
+        let previous = core::mem::replace(&mut self.current_span, span);
         let result = compile(self);
         self.current_span = previous;
         result

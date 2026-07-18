@@ -36,7 +36,7 @@ impl Context {
     ) -> Result<Value> {
         let target = self.object_assign_target(Self::argument_or_undefined(args.first()))?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&target))?;
+        roots.add_values(core::iter::once(&target))?;
         for source in args.iter().skip(1) {
             self.copy_enumerable_properties(&target, source)?;
         }
@@ -59,7 +59,7 @@ impl Context {
             .objects
             .create_with_exact_prototype(prototype, self.limits.max_objects)?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&object).chain(args.get(1)))?;
+        roots.add_values(core::iter::once(&object).chain(args.get(1)))?;
         if let Some(properties) = args.get(1)
             && !matches!(properties, Value::Undefined)
         {
@@ -391,7 +391,7 @@ impl Context {
             let descriptor_value = self.get(properties, property.lookup())?;
             let update = self.property_update_from_value(&descriptor_value)?;
             roots.add_values(
-                std::iter::once(&descriptor_value)
+                core::iter::once(&descriptor_value)
                     .chain(update.trace_values().into_iter().flatten()),
             )?;
             updates.push(PendingPropertyUpdate {
@@ -423,8 +423,8 @@ impl Context {
                 continue;
             }
             let value = self.get(source, property.lookup())?;
-            let _value_scope =
-                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&value))?;
+            let _value_scope = self
+                .transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&value))?;
             let updated = self
                 .semantic_reflect_property_write(target, &mut property, value, target)?
                 .unwrap_or(false);

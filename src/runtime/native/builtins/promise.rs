@@ -183,7 +183,7 @@ impl Context {
         }
         let intrinsic = self.promise_constructor_value()?;
         if constructor == &intrinsic {
-            return self.eval_direct_promise_resolve(std::slice::from_ref(&value));
+            return self.eval_direct_promise_resolve(core::slice::from_ref(&value));
         }
         let capability = self.new_promise_capability(constructor)?;
         let _root_scope = self.transient_root_scope(
@@ -191,7 +191,7 @@ impl Context {
             capability
                 .root_values()
                 .into_iter()
-                .chain(std::iter::once(&value)),
+                .chain(core::iter::once(&value)),
         )?;
         self.call_value(&capability.resolve, &[value], Value::Undefined)?;
         Ok(capability.promise)
@@ -221,7 +221,7 @@ impl Context {
         let reason = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let intrinsic = self.promise_constructor_value()?;
         if constructor == &intrinsic {
-            return self.eval_direct_promise_reject(std::slice::from_ref(&reason));
+            return self.eval_direct_promise_reject(core::slice::from_ref(&reason));
         }
         let capability = self.new_promise_capability(constructor)?;
         let _root_scope = self.transient_root_scope(
@@ -229,7 +229,7 @@ impl Context {
             capability
                 .root_values()
                 .into_iter()
-                .chain(std::iter::once(&reason)),
+                .chain(core::iter::once(&reason)),
         )?;
         self.call_value(&capability.reject, &[reason], Value::Undefined)?;
         Ok(capability.promise)
@@ -389,7 +389,7 @@ impl Context {
             capability
                 .root_values()
                 .into_iter()
-                .chain(std::iter::once(&iterable)),
+                .chain(core::iter::once(&iterable)),
         )?;
         let setup = self.setup_promise_all(&capability, this_value, &iterable);
         if let Err(error) = setup {
@@ -427,7 +427,7 @@ impl Context {
         )?;
         let promise = self.semantic_construct(
             constructor,
-            std::slice::from_ref(&executor),
+            core::slice::from_ref(&executor),
             constructor.clone(),
         )?;
         let state = Value::Object(state);
@@ -534,7 +534,7 @@ impl Context {
         let state_value = Value::Object(state);
         let _state_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&state_value),
+            core::iter::once(&state_value),
         )?;
         self.define_non_enumerable_object_property(
             state,
@@ -574,7 +574,7 @@ impl Context {
             self.set_promise_all_value(&values, index, Value::Undefined)?;
             let next_promise = self.call_value(
                 promise_resolve,
-                std::slice::from_ref(&input),
+                core::slice::from_ref(&input),
                 constructor.clone(),
             )?;
             let resolve_element = self.create_promise_all_resolve_element(state, index)?;

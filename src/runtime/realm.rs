@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::{
     error::{Error, Result},
@@ -259,7 +259,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn realm_states(&self) -> impl Iterator<Item = &RealmState> {
-        std::iter::once(&self.realm).chain(self.inactive_realms.iter().filter_map(Option::as_ref))
+        core::iter::once(&self.realm).chain(self.inactive_realms.iter().filter_map(Option::as_ref))
     }
 
     pub(in crate::runtime) fn global_object_realm(&self, id: ObjectId) -> Option<RealmIndex> {
@@ -518,26 +518,26 @@ impl Context {
             .ok_or_else(|| Error::runtime("realm is not defined"))?
             .take()
             .ok_or_else(|| Error::runtime("realm is already active"))?;
-        std::mem::swap(
+        core::mem::swap(
             &mut self.realm.object_prototype,
             &mut self.objects.object_prototype,
         );
-        std::mem::swap(
+        core::mem::swap(
             &mut self.realm.array_prototype,
             &mut self.objects.array_prototype,
         );
-        let previous_state = std::mem::replace(&mut self.realm, target_state);
+        let previous_state = core::mem::replace(&mut self.realm, target_state);
         let previous_slot = self
             .inactive_realms
             .get_mut(previous.index())
             .ok_or_else(|| Error::runtime("active realm slot is not defined"))?;
         *previous_slot = Some(previous_state);
         self.active_realm = target;
-        std::mem::swap(
+        core::mem::swap(
             &mut self.realm.object_prototype,
             &mut self.objects.object_prototype,
         );
-        std::mem::swap(
+        core::mem::swap(
             &mut self.realm.array_prototype,
             &mut self.objects.array_prototype,
         );

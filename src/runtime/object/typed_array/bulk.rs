@@ -44,10 +44,10 @@ impl ByteBuffer {
     pub(in crate::runtime) fn shares_storage(&self, other: &Self) -> bool {
         match (&self.storage, &other.storage) {
             (super::ByteBufferStorage::Local(left), super::ByteBufferStorage::Local(right)) => {
-                std::rc::Rc::ptr_eq(left, right)
+                alloc::rc::Rc::ptr_eq(left, right)
             }
             (super::ByteBufferStorage::Shared(left), super::ByteBufferStorage::Shared(right)) => {
-                std::sync::Arc::ptr_eq(left, right)
+                alloc::sync::Arc::ptr_eq(left, right)
             }
             (super::ByteBufferStorage::Local(_), super::ByteBufferStorage::Shared(_))
             | (super::ByteBufferStorage::Shared(_), super::ByteBufferStorage::Local(_)) => false,

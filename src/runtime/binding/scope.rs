@@ -1,7 +1,5 @@
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    rc::Rc,
-};
+use alloc::rc::Rc;
+use core::cell::{Ref, RefCell, RefMut};
 
 use crate::{
     binding_metadata::ScopeId,
@@ -255,7 +253,7 @@ impl BindingScope {
     }
 
     pub(in crate::runtime) fn take_resource_stacks(&mut self) -> Vec<BindingResourceStack> {
-        std::mem::take(&mut self.resource_stacks)
+        core::mem::take(&mut self.resource_stacks)
     }
 
     pub(crate) const fn compiled_scope(&self) -> Option<ScopeId> {
@@ -508,7 +506,7 @@ impl BindingScope {
         Ok(())
     }
 
-    fn binding_position(&self, atom: AtomId) -> std::result::Result<usize, usize> {
+    fn binding_position(&self, atom: AtomId) -> core::result::Result<usize, usize> {
         self.index
             .bindings()
             .binary_search_by(|entry| entry.atom().cmp(&atom))

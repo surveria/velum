@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     bytecode::{BytecodeAddress, BytecodeCompletion},
@@ -103,7 +103,7 @@ impl BytecodeState {
         &mut self,
         environment: Option<Rc<PrivateEnvironment>>,
     ) -> Option<Rc<PrivateEnvironment>> {
-        std::mem::replace(&mut self.private_environment, environment)
+        core::mem::replace(&mut self.private_environment, environment)
     }
 
     pub(super) const fn for_in_of_head_scope_active(&self) -> bool {
@@ -462,7 +462,7 @@ impl BytecodeState {
         self.stack
             .values()
             .iter()
-            .chain(std::iter::once(&self.last))
+            .chain(core::iter::once(&self.last))
             .chain(
                 self.resolved_bindings
                     .iter()
@@ -479,7 +479,7 @@ impl BytecodeState {
                 .stack
                 .values()
                 .iter()
-                .chain(std::iter::once(&self.last)),
+                .chain(core::iter::once(&self.last)),
             cold: if cold.is_empty() {
                 None
             } else {
@@ -508,8 +508,8 @@ impl BytecodeState {
 }
 
 pub(in crate::runtime) struct BytecodeStateRootValues<'state> {
-    hot: std::iter::Chain<std::slice::Iter<'state, Value>, std::iter::Once<&'state Value>>,
-    cold: Option<std::vec::IntoIter<&'state Value>>,
+    hot: core::iter::Chain<core::slice::Iter<'state, Value>, core::iter::Once<&'state Value>>,
+    cold: Option<alloc::vec::IntoIter<&'state Value>>,
 }
 
 impl<'state> Iterator for BytecodeStateRootValues<'state> {
@@ -600,7 +600,7 @@ impl BytecodeStack {
         Ok(self.values.split_off(start))
     }
 
-    pub(super) fn drain_tail(&mut self, count: usize) -> Result<std::vec::Drain<'_, Value>> {
+    pub(super) fn drain_tail(&mut self, count: usize) -> Result<alloc::vec::Drain<'_, Value>> {
         let start = self.tail_start(count)?;
         Ok(self.values.drain(start..))
     }

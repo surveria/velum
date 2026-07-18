@@ -1,5 +1,5 @@
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use alloc::rc::Rc;
+use core::cell::{Cell, RefCell};
 
 use crate::{
     error::{Error, Result},

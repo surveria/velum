@@ -56,10 +56,10 @@ impl Context {
         Self::ensure_array_like_object(this_value)?;
         let result = self.array_species_create(this_value, 0)?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&result))?;
+        roots.add_values(core::iter::once(&result))?;
         let spreadable_key = self.array_concat_spreadable_key()?;
         let mut next_index = 0_usize;
-        for item in std::iter::once(this_value).chain(args.iter()) {
+        for item in core::iter::once(this_value).chain(args.iter()) {
             if self.array_concat_is_spreadable(item, spreadable_key)? {
                 let length = self.array_like_length(item)?;
                 let end = concat_checked_length(next_index, length)?;
@@ -98,7 +98,7 @@ impl Context {
 
         let mut constructor = self.get_named(original, ARRAY_CONSTRUCTOR_PROPERTY)?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&constructor))?;
+        roots.add_values(core::iter::once(&constructor))?;
         if self.semantic_is_constructor(&constructor)?
             && self.is_foreign_intrinsic_array_constructor(&constructor)?
         {
@@ -110,7 +110,7 @@ impl Context {
                 &constructor,
                 PropertyLookup::from_key(SPECIES_DISPLAY, species_key),
             )?;
-            roots.add_values(std::iter::once(&constructor))?;
+            roots.add_values(core::iter::once(&constructor))?;
             if matches!(constructor, Value::Null) {
                 constructor = Value::Undefined;
             }
@@ -124,7 +124,7 @@ impl Context {
         let length = Self::array_like_length_value(length)?;
         self.semantic_construct(
             &constructor,
-            std::slice::from_ref(&length),
+            core::slice::from_ref(&length),
             constructor.clone(),
         )
     }
@@ -287,7 +287,7 @@ impl Context {
             .ok_or_else(|| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
         let result = self.array_species_create(this_value, count)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for offset in 0..count {
             self.step()?;
             let source = start

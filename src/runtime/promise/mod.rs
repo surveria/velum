@@ -376,7 +376,7 @@ impl Context {
             let PromiseState::Pending { reactions } = &mut promise.state else {
                 continue;
             };
-            let removed = std::mem::take(reactions);
+            let removed = core::mem::take(reactions);
             reaction_count = reaction_count
                 .checked_add(removed.len())
                 .ok_or_else(|| Error::limit("Promise cancellation count overflowed"))?;
@@ -386,7 +386,7 @@ impl Context {
                     .filter_map(PromiseReaction::into_cancellation),
             );
         }
-        let jobs = std::mem::take(&mut self.promise_jobs);
+        let jobs = core::mem::take(&mut self.promise_jobs);
         let job_count = jobs.len();
         cancellations.extend(jobs.into_iter().filter_map(PromiseJob::into_cancellation));
 
@@ -539,7 +539,7 @@ impl Context {
                     .release_count(VmStorageKind::PromiseJob, reaction_count)?;
                 return Ok(());
             };
-            let reactions = std::mem::take(reactions);
+            let reactions = core::mem::take(reactions);
             promise.state = match state.status {
                 PromiseStatus::Fulfilled => PromiseState::Fulfilled(state.value.clone()),
                 PromiseStatus::Rejected => PromiseState::Rejected(state.value.clone()),

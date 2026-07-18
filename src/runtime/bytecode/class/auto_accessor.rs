@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     bytecode::{
@@ -193,8 +193,8 @@ impl Context {
                 constructor: None,
                 home_object: home_object.clone(),
                 own_constructor: None,
-                this_value: std::cell::RefCell::new(None),
-                allow_direct_eval_super_call: std::cell::Cell::new(false),
+                this_value: core::cell::RefCell::new(None),
+                allow_direct_eval_super_call: core::cell::Cell::new(false),
             }),
         )
     }

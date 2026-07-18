@@ -105,4 +105,4 @@ impl Lexer {
         self.unicode_escape(escape_offset)
     }
 }
-use std::rc::Rc;
+use alloc::rc::Rc;

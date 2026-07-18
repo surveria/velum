@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc::Rc};
+use alloc::{collections::VecDeque, rc::Rc};
 
 use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
@@ -194,7 +194,7 @@ struct Function {
     private_environment: Option<Rc<private::PrivateEnvironment>>,
     class_field_initializer_context: bool,
     private_slots: Vec<private::PrivateSlot>,
-    params_remembered: std::cell::Cell<bool>,
+    params_remembered: core::cell::Cell<bool>,
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,
     lexical_this: Option<Value>,
     new_target: FunctionNewTarget,
@@ -375,7 +375,7 @@ impl Context {
     #[must_use]
     pub fn with_monotonic_clock<F>(limits: RuntimeLimits, read: F) -> Self
     where
-        F: Fn() -> std::time::Duration + 'static,
+        F: Fn() -> core::time::Duration + 'static,
     {
         Self::with_optimization_and_monotonic_clock(limits, OptimizationMode::Enabled, read)
     }
@@ -388,7 +388,7 @@ impl Context {
         read: F,
     ) -> Self
     where
-        F: Fn() -> std::time::Duration + 'static,
+        F: Fn() -> core::time::Duration + 'static,
     {
         Self::with_performance_clock(limits, mode, clock::PerformanceClock::from_reader(read))
     }

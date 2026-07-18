@@ -19,7 +19,7 @@ use crate::{
     },
     value::Value,
 };
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 mod binding;
 pub use binding::BytecodeBinding;

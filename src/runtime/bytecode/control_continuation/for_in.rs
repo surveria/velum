@@ -20,7 +20,7 @@ impl BytecodeControlRecord {
         &mut self,
     ) -> Result<(
         &mut BytecodeLoopPhase,
-        &mut std::vec::IntoIter<String>,
+        &mut alloc::vec::IntoIter<String>,
         &mut Value,
     )> {
         let Self::ForIn {

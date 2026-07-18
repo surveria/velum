@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, VecDeque};
+use alloc::collections::{BTreeSet, VecDeque};
 
 use crate::{
     error::{Error, Result},

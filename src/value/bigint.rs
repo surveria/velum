@@ -1,4 +1,5 @@
-use std::{cmp::Ordering, fmt, rc::Rc};
+use alloc::rc::Rc;
+use core::{cmp::Ordering, fmt};
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
