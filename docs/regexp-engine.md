@@ -22,6 +22,13 @@ properties, captures, lookarounds, named backreferences, scoped modifiers,
 search starts, sticky matching, and exact UTF-16 lone-surrogate and
 mid-surrogate positions.
 
+The standalone suite also adapts 41 matcher-level cases from the pinned
+Test262 lookbehind corpus under its BSD license. Exact expected UTF-16 spans
+and captures cover reverse capture order, alternation priority, atomicity,
+nested assertions, greedy and variable-length bodies, backreferences, negative
+capture rollback, and word boundaries without using the current backend as the
+expected-result source.
+
 The current native slice implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
 classes, numeric and named backreferences, atomic positive and negative
