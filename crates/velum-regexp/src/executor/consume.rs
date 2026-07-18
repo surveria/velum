@@ -1,5 +1,5 @@
 use crate::{
-    ExecutionControl, ExecutionError,
+    ExecutionControl, ExecutionError, Flags,
     input::{decode_backward_with_position, decode_forward, is_line_terminator},
     program::InstructionIndex,
 };
@@ -12,10 +12,11 @@ impl<C: ExecutionControl> Executor<'_, C> {
         expected: u32,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        let decoded = decode_forward(self.input, position, flags.has_unicode_mode())?;
         Ok(match decoded {
-            Some((actual, next)) if self.characters_equal(actual, expected) => {
+            Some((actual, next)) if Self::characters_equal(actual, expected, flags) => {
                 next_step(instruction, next)
             }
             Some(_) | None => StepOutcome::Failed,
@@ -27,14 +28,12 @@ impl<C: ExecutionControl> Executor<'_, C> {
         expected: u32,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_backward_with_position(
-            self.input,
-            position,
-            self.program.flags.has_unicode_mode(),
-        )?;
+        let decoded =
+            decode_backward_with_position(self.input, position, flags.has_unicode_mode())?;
         Ok(match decoded {
-            Some((actual, previous)) if self.characters_equal(actual, expected) => {
+            Some((actual, previous)) if Self::characters_equal(actual, expected, flags) => {
                 next_step(instruction, previous)
             }
             Some(_) | None => StepOutcome::Failed,
@@ -45,13 +44,14 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &self,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        let decoded = decode_forward(self.input, position, flags.has_unicode_mode())?;
         let Some((actual, next)) = decoded else {
             return Ok(StepOutcome::Failed);
         };
         let line_terminator = u16::try_from(actual).is_ok_and(is_line_terminator);
-        if line_terminator && !self.program.flags.dot_all() {
+        if line_terminator && !flags.dot_all() {
             Ok(StepOutcome::Failed)
         } else {
             Ok(next_step(instruction, next))
@@ -62,17 +62,15 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &self,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_backward_with_position(
-            self.input,
-            position,
-            self.program.flags.has_unicode_mode(),
-        )?;
+        let decoded =
+            decode_backward_with_position(self.input, position, flags.has_unicode_mode())?;
         let Some((actual, previous)) = decoded else {
             return Ok(StepOutcome::Failed);
         };
         let line_terminator = u16::try_from(actual).is_ok_and(is_line_terminator);
-        if line_terminator && !self.program.flags.dot_all() {
+        if line_terminator && !flags.dot_all() {
             Ok(StepOutcome::Failed)
         } else {
             Ok(next_step(instruction, previous))
@@ -85,6 +83,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
         let Some(slot) = state.captures.get(id).copied() else {
             return Err(ExecutionError::InvalidProgram);
@@ -96,26 +95,20 @@ impl<C: ExecutionControl> Executor<'_, C> {
         let mut input_position = position;
         while capture_position < span.end {
             self.charge_step()?;
-            let Some((expected, next_capture)) = decode_forward(
-                self.input,
-                capture_position,
-                self.program.flags.has_unicode_mode(),
-            )?
+            let Some((expected, next_capture)) =
+                decode_forward(self.input, capture_position, flags.has_unicode_mode())?
             else {
                 return Err(ExecutionError::InvalidProgram);
             };
             if next_capture > span.end {
                 return Err(ExecutionError::InvalidProgram);
             }
-            let Some((actual, next_input)) = decode_forward(
-                self.input,
-                input_position,
-                self.program.flags.has_unicode_mode(),
-            )?
+            let Some((actual, next_input)) =
+                decode_forward(self.input, input_position, flags.has_unicode_mode())?
             else {
                 return Ok(StepOutcome::Failed);
             };
-            if !self.characters_equal(actual, expected) {
+            if !Self::characters_equal(actual, expected, flags) {
                 return Ok(StepOutcome::Failed);
             }
             capture_position = next_capture;
@@ -130,6 +123,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
         let Some(slot) = state.captures.get(id).copied() else {
             return Err(ExecutionError::InvalidProgram);
@@ -144,7 +138,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
             let Some((expected, previous_capture)) = decode_backward_with_position(
                 self.input,
                 capture_position,
-                self.program.flags.has_unicode_mode(),
+                flags.has_unicode_mode(),
             )?
             else {
                 return Err(ExecutionError::InvalidProgram);
@@ -155,12 +149,12 @@ impl<C: ExecutionControl> Executor<'_, C> {
             let Some((actual, previous_input)) = decode_backward_with_position(
                 self.input,
                 input_position,
-                self.program.flags.has_unicode_mode(),
+                flags.has_unicode_mode(),
             )?
             else {
                 return Ok(StepOutcome::Failed);
             };
-            if !self.characters_equal(actual, expected) {
+            if !Self::characters_equal(actual, expected, flags) {
                 return Ok(StepOutcome::Failed);
             }
             capture_position = previous_capture;
@@ -175,14 +169,15 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
         let Some(class) = self.program.classes.get(id) else {
             return Err(ExecutionError::InvalidProgram);
         };
         if class.strings.is_empty() {
-            return self.consume_codepoint_class(id, instruction, position);
+            return self.consume_codepoint_class(id, instruction, position, flags);
         }
-        let positions = self.class_positions_forward(id, position)?;
+        let positions = self.class_positions_forward(id, position, flags)?;
         let Some(selected) = positions.first().copied() else {
             return Ok(StepOutcome::Failed);
         };
@@ -198,14 +193,15 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
         let Some(class) = self.program.classes.get(id) else {
             return Err(ExecutionError::InvalidProgram);
         };
         if class.strings.is_empty() {
-            return self.consume_codepoint_class_reverse(id, instruction, position);
+            return self.consume_codepoint_class_reverse(id, instruction, position, flags);
         }
-        let positions = self.class_positions_reverse(id, position)?;
+        let positions = self.class_positions_reverse(id, position, flags)?;
         let Some(selected) = positions.first().copied() else {
             return Ok(StepOutcome::Failed);
         };
@@ -220,8 +216,9 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        let decoded = decode_forward(self.input, position, flags.has_unicode_mode())?;
         let Some((actual, next)) = decoded else {
             return Ok(StepOutcome::Failed);
         };
@@ -229,7 +226,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
         let Some(class) = self.program.classes.get(id) else {
             return Err(ExecutionError::InvalidProgram);
         };
-        Ok(if class.matches(actual, self.program.flags) {
+        Ok(if class.matches(actual, flags) {
             next_step(instruction, next)
         } else {
             StepOutcome::Failed
@@ -241,12 +238,10 @@ impl<C: ExecutionControl> Executor<'_, C> {
         id: usize,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        let decoded = decode_backward_with_position(
-            self.input,
-            position,
-            self.program.flags.has_unicode_mode(),
-        )?;
+        let decoded =
+            decode_backward_with_position(self.input, position, flags.has_unicode_mode())?;
         let Some((actual, previous)) = decoded else {
             return Ok(StepOutcome::Failed);
         };
@@ -254,7 +249,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
         let Some(class) = self.program.classes.get(id) else {
             return Err(ExecutionError::InvalidProgram);
         };
-        Ok(if class.matches(actual, self.program.flags) {
+        Ok(if class.matches(actual, flags) {
             next_step(instruction, previous)
         } else {
             StepOutcome::Failed
@@ -265,10 +260,11 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &mut self,
         id: usize,
         position: usize,
+        flags: Flags,
     ) -> Result<Vec<usize>, ExecutionError> {
-        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        let decoded = decode_forward(self.input, position, flags.has_unicode_mode())?;
         let actual = decoded.map(|(value, _)| value);
-        let (start, end, work) = self.class_string_candidates(id, actual)?;
+        let (start, end, work) = self.class_string_candidates(id, actual, flags)?;
         self.charge_steps(work)?;
         let mut positions = Vec::new();
         if let Some((actual, next)) = decoded {
@@ -276,7 +272,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
             let Some(class) = self.program.classes.get(id) else {
                 return Err(ExecutionError::InvalidProgram);
             };
-            if class.matches(actual, self.program.flags) {
+            if class.matches(actual, flags) {
                 positions.push(next);
             }
         }
@@ -287,7 +283,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
             return Err(ExecutionError::InvalidProgram);
         };
         for string in strings {
-            if let Some(end_position) = self.string_end_forward(string, position)? {
+            if let Some(end_position) = self.string_end_forward(string, position, flags)? {
                 positions.push(end_position);
             }
         }
@@ -300,12 +296,10 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &mut self,
         id: usize,
         position: usize,
+        flags: Flags,
     ) -> Result<Vec<usize>, ExecutionError> {
-        let decoded = decode_backward_with_position(
-            self.input,
-            position,
-            self.program.flags.has_unicode_mode(),
-        )?;
+        let decoded =
+            decode_backward_with_position(self.input, position, flags.has_unicode_mode())?;
         let work = {
             let Some(class) = self.program.classes.get(id) else {
                 return Err(ExecutionError::InvalidProgram);
@@ -326,7 +320,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
             let Some(class) = self.program.classes.get(id) else {
                 return Err(ExecutionError::InvalidProgram);
             };
-            if class.matches(actual, self.program.flags) {
+            if class.matches(actual, flags) {
                 positions.push(previous);
             }
         }
@@ -334,7 +328,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
             return Err(ExecutionError::InvalidProgram);
         };
         for string in &class.strings {
-            if let Some(start_position) = self.string_end_reverse(string, position)? {
+            if let Some(start_position) = self.string_end_reverse(string, position, flags)? {
                 positions.push(start_position);
             }
         }
@@ -347,11 +341,12 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &self,
         id: usize,
         actual: Option<u32>,
+        flags: Flags,
     ) -> Result<(usize, usize, usize), ExecutionError> {
         let Some(class) = self.program.classes.get(id) else {
             return Err(ExecutionError::InvalidProgram);
         };
-        if self.program.flags.ignore_case()
+        if flags.ignore_case()
             || actual.is_none()
             || class
                 .strings
@@ -417,15 +412,16 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &self,
         string: &[u32],
         position: usize,
+        flags: Flags,
     ) -> Result<Option<usize>, ExecutionError> {
         let mut current = position;
         for expected in string {
             let Some((actual, next)) =
-                decode_forward(self.input, current, self.program.flags.has_unicode_mode())?
+                decode_forward(self.input, current, flags.has_unicode_mode())?
             else {
                 return Ok(None);
             };
-            if !self.characters_equal(actual, *expected) {
+            if !Self::characters_equal(actual, *expected, flags) {
                 return Ok(None);
             }
             current = next;
@@ -437,18 +433,16 @@ impl<C: ExecutionControl> Executor<'_, C> {
         &self,
         string: &[u32],
         position: usize,
+        flags: Flags,
     ) -> Result<Option<usize>, ExecutionError> {
         let mut current = position;
         for expected in string.iter().rev() {
-            let Some((actual, previous)) = decode_backward_with_position(
-                self.input,
-                current,
-                self.program.flags.has_unicode_mode(),
-            )?
+            let Some((actual, previous)) =
+                decode_backward_with_position(self.input, current, flags.has_unicode_mode())?
             else {
                 return Ok(None);
             };
-            if !self.characters_equal(actual, *expected) {
+            if !Self::characters_equal(actual, *expected, flags) {
                 return Ok(None);
             }
             current = previous;

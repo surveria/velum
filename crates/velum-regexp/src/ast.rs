@@ -1,4 +1,4 @@
-use crate::character_class::CharacterClass;
+use crate::{Flags, character_class::CharacterClass};
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -22,6 +22,11 @@ pub enum Node {
     Lookbehind {
         body: Box<Self>,
         positive: bool,
+    },
+    Modifier {
+        body: Box<Self>,
+        set: Flags,
+        unset: Flags,
     },
     AssertStart,
     AssertEnd,

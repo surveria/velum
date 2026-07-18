@@ -1,5 +1,5 @@
 use crate::{
-    Capture, ExecutionControl, ExecutionError, ExecutionLimits, ExecutionStats, Match,
+    Capture, ExecutionControl, ExecutionError, ExecutionLimits, ExecutionStats, Flags, Match,
     SearchOutcome,
     character_class::is_word_character,
     input::{advance_candidate, decode_backward, decode_forward, is_line_terminator},
@@ -169,22 +169,28 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         let sequential = next_instruction(instruction)?;
         match current {
             Instruction::Accept => Ok(StepOutcome::Accept),
-            Instruction::Char(expected) => self.consume_char(expected, sequential, position),
-            Instruction::CharReverse(expected) => {
-                self.consume_char_reverse(expected, sequential, position)
+            Instruction::Char { expected, flags } => {
+                self.consume_char(expected, sequential, position, flags)
             }
-            Instruction::Backreference(id) => {
-                self.consume_backreference(state, id, sequential, position)
+            Instruction::CharReverse { expected, flags } => {
+                self.consume_char_reverse(expected, sequential, position, flags)
             }
-            Instruction::BackreferenceReverse(id) => {
-                self.consume_backreference_reverse(state, id, sequential, position)
+            Instruction::Backreference { id, flags } => {
+                self.consume_backreference(state, id, sequential, position, flags)
             }
-            Instruction::Class(id) => self.consume_class(state, id, sequential, position),
-            Instruction::ClassReverse(id) => {
-                self.consume_class_reverse(state, id, sequential, position)
+            Instruction::BackreferenceReverse { id, flags } => {
+                self.consume_backreference_reverse(state, id, sequential, position, flags)
             }
-            Instruction::Any => self.consume_any(sequential, position),
-            Instruction::AnyReverse => self.consume_any_reverse(sequential, position),
+            Instruction::Class { id, flags } => {
+                self.consume_class(state, id, sequential, position, flags)
+            }
+            Instruction::ClassReverse { id, flags } => {
+                self.consume_class_reverse(state, id, sequential, position, flags)
+            }
+            Instruction::Any { flags } => self.consume_any(sequential, position, flags),
+            Instruction::AnyReverse { flags } => {
+                self.consume_any_reverse(sequential, position, flags)
+            }
             _ => self.execute_assertion_instruction(current, state, sequential, position),
         }
     }
@@ -197,8 +203,8 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         position: usize,
     ) -> Result<StepOutcome, ExecutionError> {
         match current {
-            Instruction::WordBoundary(inverted) => {
-                self.assert_word_boundary(inverted, sequential, position)
+            Instruction::WordBoundary { inverted, flags } => {
+                self.assert_word_boundary(inverted, sequential, position, flags)
             }
             Instruction::PositiveLookaheadStart { failure } => {
                 self.push_backtrack_frame(
@@ -227,12 +233,12 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                 Ok(StepOutcome::Failed)
             }
             Instruction::Fail => Ok(StepOutcome::Failed),
-            Instruction::AssertStart => Ok(if self.at_start(position) {
+            Instruction::AssertStart { flags } => Ok(if self.at_start(position, flags) {
                 next_step(sequential, position)
             } else {
                 StepOutcome::Failed
             }),
-            Instruction::AssertEnd => Ok(if self.at_end(position) {
+            Instruction::AssertEnd { flags } => Ok(if self.at_end(position, flags) {
                 next_step(sequential, position)
             } else {
                 StepOutcome::Failed
@@ -327,13 +333,13 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         }
     }
 
-    fn at_word_boundary(&self, position: usize) -> Result<bool, ExecutionError> {
-        let unicode = self.program.flags.has_unicode_mode();
+    fn at_word_boundary(&self, position: usize, flags: Flags) -> Result<bool, ExecutionError> {
+        let unicode = flags.has_unicode_mode();
         let previous = decode_backward(self.input, position, unicode)?
-            .is_some_and(|value| is_word_character(value, self.program.flags));
+            .is_some_and(|value| is_word_character(value, flags));
         let next = decode_forward(self.input, position, unicode)?
             .map(|(value, _)| value)
-            .is_some_and(|value| is_word_character(value, self.program.flags));
+            .is_some_and(|value| is_word_character(value, flags));
         Ok(previous != next)
     }
 
@@ -342,17 +348,18 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         inverted: bool,
         instruction: InstructionIndex,
         position: usize,
+        flags: Flags,
     ) -> Result<StepOutcome, ExecutionError> {
-        Ok(if self.at_word_boundary(position)? == inverted {
+        Ok(if self.at_word_boundary(position, flags)? == inverted {
             StepOutcome::Failed
         } else {
             next_step(instruction, position)
         })
     }
 
-    fn characters_equal(&self, actual: u32, expected: u32) -> bool {
-        if self.program.flags.ignore_case() {
-            let unicode = self.program.flags.has_unicode_mode();
+    fn characters_equal(actual: u32, expected: u32, flags: Flags) -> bool {
+        if flags.ignore_case() {
+            let unicode = flags.has_unicode_mode();
             crate::unicode::canonicalize(actual, unicode)
                 == crate::unicode::canonicalize(expected, unicode)
         } else {
@@ -360,18 +367,18 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         }
     }
 
-    fn at_start(&self, position: usize) -> bool {
+    fn at_start(&self, position: usize, flags: Flags) -> bool {
         position == 0
-            || (self.program.flags.multiline()
+            || (flags.multiline()
                 && position
                     .checked_sub(1)
                     .and_then(|index| self.input.get(index))
                     .is_some_and(|unit| is_line_terminator(*unit)))
     }
 
-    fn at_end(&self, position: usize) -> bool {
+    fn at_end(&self, position: usize, flags: Flags) -> bool {
         position == self.input.len()
-            || (self.program.flags.multiline()
+            || (flags.multiline()
                 && self
                     .input
                     .get(position)

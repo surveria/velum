@@ -27,6 +27,14 @@ enum PropertyEscape {
     Strings(Vec<Box<[u32]>>),
 }
 
+enum GroupKind {
+    Capturing(Option<String>),
+    NonCapturing,
+    Lookahead(bool),
+    Lookbehind(bool),
+    Modifier { set: Flags, unset: Flags },
+}
+
 impl<'a> Parser<'a> {
     pub(super) fn parse(
         pattern: &'a [u16],
@@ -185,42 +193,15 @@ impl<'a> Parser<'a> {
     fn parse_group(&mut self) -> Result<Node, CompileError> {
         self.advance_one()?;
         self.enter_depth()?;
-        let (capturing, lookahead, lookbehind, capture_name) =
-            if self.peek() == Some(u16::from(b'?')) {
-                self.advance_one()?;
-                match self.peek() {
-                    Some(value) if value == u16::from(b':') => {
-                        self.advance_one()?;
-                        (false, None, None, None)
-                    }
-                    Some(value) if value == u16::from(b'=') => {
-                        self.advance_one()?;
-                        (false, Some(true), None, None)
-                    }
-                    Some(value) if value == u16::from(b'!') => {
-                        self.advance_one()?;
-                        (false, Some(false), None, None)
-                    }
-                    Some(value) if value == u16::from(b'<') => {
-                        self.advance_one()?;
-                        match self.peek() {
-                            Some(marker) if marker == u16::from(b'=') => {
-                                self.advance_one()?;
-                                (false, None, Some(true), None)
-                            }
-                            Some(marker) if marker == u16::from(b'!') => {
-                                self.advance_one()?;
-                                (false, None, Some(false), None)
-                            }
-                            _ => (true, None, None, Some(self.parse_capture_name()?)),
-                        }
-                    }
-                    _ => return Err(self.error(CompileErrorKind::UnsupportedSyntax)),
-                }
-            } else {
-                (true, None, None, None)
-            };
-        let capture_id = if capturing {
+        let mut kind = self.parse_group_kind()?;
+        let capture_name = match &mut kind {
+            GroupKind::Capturing(name) => name.take(),
+            GroupKind::NonCapturing
+            | GroupKind::Lookahead(_)
+            | GroupKind::Lookbehind(_)
+            | GroupKind::Modifier { .. } => None,
+        };
+        let capture_id = if matches!(&kind, GroupKind::Capturing(_)) {
             let id = self.capture_count;
             self.capture_count = self
                 .capture_count
@@ -244,7 +225,20 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let body = self.parse_disjunction(true)?;
+        let modifiers = match &kind {
+            GroupKind::Modifier { set, unset } => Some((*set, *unset)),
+            GroupKind::Capturing(_)
+            | GroupKind::NonCapturing
+            | GroupKind::Lookahead(_)
+            | GroupKind::Lookbehind(_) => None,
+        };
+        let outer_flags = self.flags;
+        if let Some((set, unset)) = modifiers {
+            self.flags = self.flags.apply_modifiers(set, unset);
+        }
+        let body_result = self.parse_disjunction(true);
+        self.flags = outer_flags;
+        let body = body_result?;
         if self.peek() != Some(u16::from(b')')) {
             return Err(self.error(CompileErrorKind::UnterminatedGroup));
         }
@@ -253,23 +247,116 @@ impl<'a> Parser<'a> {
             .depth
             .checked_sub(1)
             .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
-        if let Some(positive) = lookahead {
-            self.node(Node::Lookahead {
+        match kind {
+            GroupKind::Lookahead(positive) => self.node(Node::Lookahead {
                 body: Box::new(body),
                 positive,
-            })
-        } else if let Some(positive) = lookbehind {
-            self.node(Node::Lookbehind {
+            }),
+            GroupKind::Lookbehind(positive) => self.node(Node::Lookbehind {
                 body: Box::new(body),
                 positive,
-            })
-        } else if let Some(id) = capture_id {
-            self.node(Node::Capture {
-                id,
+            }),
+            GroupKind::Capturing(_) => {
+                let id = capture_id.ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
+                self.node(Node::Capture {
+                    id,
+                    body: Box::new(body),
+                })
+            }
+            GroupKind::Modifier { set, unset } => self.node(Node::Modifier {
                 body: Box::new(body),
-            })
-        } else {
-            Ok(body)
+                set,
+                unset,
+            }),
+            GroupKind::NonCapturing => Ok(body),
+        }
+    }
+
+    fn parse_group_kind(&mut self) -> Result<GroupKind, CompileError> {
+        if self.peek() != Some(u16::from(b'?')) {
+            return Ok(GroupKind::Capturing(None));
+        }
+        self.advance_one()?;
+        match self.peek() {
+            Some(value) if value == u16::from(b':') => {
+                self.advance_one()?;
+                Ok(GroupKind::NonCapturing)
+            }
+            Some(value) if value == u16::from(b'=') => {
+                self.advance_one()?;
+                Ok(GroupKind::Lookahead(true))
+            }
+            Some(value) if value == u16::from(b'!') => {
+                self.advance_one()?;
+                Ok(GroupKind::Lookahead(false))
+            }
+            Some(value) if value == u16::from(b'<') => {
+                self.advance_one()?;
+                match self.peek() {
+                    Some(marker) if marker == u16::from(b'=') => {
+                        self.advance_one()?;
+                        Ok(GroupKind::Lookbehind(true))
+                    }
+                    Some(marker) if marker == u16::from(b'!') => {
+                        self.advance_one()?;
+                        Ok(GroupKind::Lookbehind(false))
+                    }
+                    _ => Ok(GroupKind::Capturing(Some(self.parse_capture_name()?))),
+                }
+            }
+            Some(0x0069 | 0x006D | 0x0073 | 0x002D) => {
+                let (set, unset) = self.parse_modifier_flags()?;
+                Ok(GroupKind::Modifier { set, unset })
+            }
+            Some(_) | None => Err(self.error(CompileErrorKind::UnsupportedSyntax)),
+        }
+    }
+
+    fn parse_modifier_flags(&mut self) -> Result<(Flags, Flags), CompileError> {
+        let offset = self.position;
+        let mut set = Flags::default();
+        let mut unset = Flags::default();
+        let mut removing = false;
+        let mut saw_set = false;
+        let mut saw_unset = false;
+        loop {
+            let Some(unit) = self.peek() else {
+                return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
+            };
+            if unit == u16::from(b':') {
+                if (removing || !saw_set) && !saw_unset {
+                    return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
+                }
+                self.advance_one()?;
+                return Ok((set, unset));
+            }
+            if unit == u16::from(b'-') {
+                if removing {
+                    return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
+                }
+                removing = true;
+                self.advance_one()?;
+                continue;
+            }
+            let (already_set, already_unset) = match unit {
+                value if value == u16::from(b'i') => (set.ignore_case(), unset.ignore_case()),
+                value if value == u16::from(b'm') => (set.multiline(), unset.multiline()),
+                value if value == u16::from(b's') => (set.dot_all(), unset.dot_all()),
+                _ => {
+                    return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
+                }
+            };
+            if already_set || already_unset {
+                return Err(CompileError::new(CompileErrorKind::InvalidModifier, offset));
+            }
+            if removing {
+                unset = with_modifier_flag(unset, unit, true);
+                saw_unset = true;
+            } else {
+                set = with_modifier_flag(set, unit, true);
+                saw_set = true;
+            }
+            self.advance_one()?;
         }
     }
 
@@ -466,6 +553,15 @@ const fn is_syntax_character(value: u16) -> bool {
     )
 }
 
+const fn with_modifier_flag(flags: Flags, unit: u16, enabled: bool) -> Flags {
+    match unit {
+        0x0069 => flags.with_ignore_case(enabled),
+        0x006D => flags.with_multiline(enabled),
+        0x0073 => flags.with_dot_all(enabled),
+        _ => flags,
+    }
+}
+
 const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, CompileError> {
     let (ranges, inverted) = match value {
         0x0064 => (DIGIT_RANGES, false),
@@ -579,9 +675,8 @@ fn resolve_backreferences(
         Node::Capture { body, .. }
         | Node::Repeat { body, .. }
         | Node::Lookahead { body, .. }
-        | Node::Lookbehind { body, .. } => {
-            resolve_backreferences(body, capture_count, capture_names)
-        }
+        | Node::Lookbehind { body, .. }
+        | Node::Modifier { body, .. } => resolve_backreferences(body, capture_count, capture_names),
         Node::Empty
         | Node::Literal(_)
         | Node::Backreference { .. }

@@ -7,15 +7,40 @@ pub type InstructionIndex = usize;
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     Accept,
-    Char(u32),
-    CharReverse(u32),
-    Backreference(usize),
-    BackreferenceReverse(usize),
-    Class(usize),
-    ClassReverse(usize),
-    Any,
-    AnyReverse,
-    WordBoundary(bool),
+    Char {
+        expected: u32,
+        flags: Flags,
+    },
+    CharReverse {
+        expected: u32,
+        flags: Flags,
+    },
+    Backreference {
+        id: usize,
+        flags: Flags,
+    },
+    BackreferenceReverse {
+        id: usize,
+        flags: Flags,
+    },
+    Class {
+        id: usize,
+        flags: Flags,
+    },
+    ClassReverse {
+        id: usize,
+        flags: Flags,
+    },
+    Any {
+        flags: Flags,
+    },
+    AnyReverse {
+        flags: Flags,
+    },
+    WordBoundary {
+        inverted: bool,
+        flags: Flags,
+    },
     PositiveLookaheadStart {
         failure: InstructionIndex,
     },
@@ -27,8 +52,12 @@ pub enum Instruction {
     },
     NegativeLookaheadMatched,
     Fail,
-    AssertStart,
-    AssertEnd,
+    AssertStart {
+        flags: Flags,
+    },
+    AssertEnd {
+        flags: Flags,
+    },
     SaveStart(usize),
     SaveEnd(usize),
     SaveStartReverse(usize),

@@ -25,6 +25,7 @@ pub enum CompileErrorKind {
     UnknownCaptureName,
     InvalidEscape,
     InvalidQuantifier,
+    InvalidModifier,
     IncompatibleUnicodeFlags,
     UnsupportedSyntax,
     SizeOverflow,

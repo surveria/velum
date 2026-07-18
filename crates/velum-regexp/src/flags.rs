@@ -65,6 +65,10 @@ impl Flags {
         self.0 & UNICODE_SETS != 0
     }
 
+    pub(crate) const fn apply_modifiers(self, set: Self, unset: Self) -> Self {
+        Self((self.0 | set.0) & !unset.0)
+    }
+
     const fn with_bit(self, bit: u8, enabled: bool) -> Self {
         if enabled {
             Self(self.0 | bit)

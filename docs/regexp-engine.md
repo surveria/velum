@@ -33,7 +33,10 @@ disjunctions, and properties of strings. One-code-point strings are normalized
 into the code-point domain before set algebra; remaining strings use
 longest-first matching with explicit backtracking alternatives in both forward
 and reverse execution. This is an in-progress compatibility surface, not yet a
-runtime replacement.
+runtime replacement. Scoped `(?ims-ims:...)` modifiers are represented in the
+semantic IR and baked into affected VM instructions; they do not mutate shared
+executor state. Parser-sensitive Unicode Set algebra observes the same scoped
+ignore-case mode before lowering.
 
 ## Crate Boundary
 
