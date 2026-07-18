@@ -84,6 +84,13 @@ checked arithmetic, explicit error propagation, and bounded nesting. No input
 may cause a process abort, intentional panic, native-stack exhaustion, silent
 integer wrap, or unbounded retained allocation.
 
+`CompileLimits::MAXIMUM` and `ExecutionLimits::MAXIMUM` are immutable engine
+ceilings. Caller-provided values are constrained to those ceilings at the
+public API boundary, so embedders may reduce resource budgets but cannot raise
+the native parser depth or allocation bounds. Wide disjunction compilation is
+iterative rather than recursive; structural recursion remains protected by the
+enforced nesting ceiling.
+
 Compilation limits cover at least:
 
 - pattern UTF-16 units;

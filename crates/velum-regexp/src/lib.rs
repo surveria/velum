@@ -47,6 +47,7 @@ impl Regex {
         flags: Flags,
         limits: CompileLimits,
     ) -> Result<Self, CompileError> {
+        let limits = limits.constrained();
         let parsed = Parser::parse(pattern, flags, limits)?;
         let program = Compiler::compile(&parsed, flags, limits)?;
         Ok(Self { program })
@@ -80,6 +81,7 @@ impl Regex {
         limits: ExecutionLimits,
         control: &mut C,
     ) -> Result<SearchOutcome, ExecutionError> {
+        let limits = limits.constrained();
         Executor::new(&self.program, input, limits, control).search(start, anchored)
     }
 

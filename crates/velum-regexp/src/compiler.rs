@@ -202,18 +202,26 @@ impl Compiler {
         if rest.is_empty() {
             return self.compile_node_in(first, direction, flags);
         }
-        let split = self.emit(Instruction::Split {
-            first: 0,
-            second: 0,
-        })?;
-        let first_target = self.next_index();
-        self.compile_node_in(first, direction, flags)?;
-        let jump = self.emit(Instruction::Jump(0))?;
-        let second_target = self.next_index();
-        self.compile_alternatives(rest, direction, flags)?;
+        let mut jumps = Vec::new();
+        let mut current = first;
+        for next in rest {
+            let split = self.emit(Instruction::Split {
+                first: 0,
+                second: 0,
+            })?;
+            let first_target = self.next_index();
+            self.compile_node_in(current, direction, flags)?;
+            jumps.push(self.emit(Instruction::Jump(0))?);
+            let second_target = self.next_index();
+            self.patch_split(split, first_target, second_target)?;
+            current = next;
+        }
+        self.compile_node_in(current, direction, flags)?;
         let end = self.next_index();
-        self.patch_split(split, first_target, second_target)?;
-        self.patch_jump(jump, end)
+        for jump in jumps {
+            self.patch_jump(jump, end)?;
+        }
+        Ok(())
     }
 
     fn compile_repeat(
