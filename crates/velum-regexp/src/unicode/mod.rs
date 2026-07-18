@@ -1,5 +1,8 @@
 mod generated_binary;
 mod generated_core;
+mod generated_general_category;
+mod generated_script;
+mod generated_script_extensions;
 
 use core::cmp::Ordering;
 
@@ -36,6 +39,30 @@ pub fn binary_property_ranges(name: &str) -> Option<&'static [(u32, u32)]> {
 #[must_use]
 pub fn binary_property_contains(name: &str, value: u32) -> bool {
     binary_property_ranges(name).is_some_and(|ranges| contains(ranges, value))
+}
+
+/// Resolves an exact ECMAScript Unicode property expression.
+///
+/// A missing property name accepts a binary property or a General Category
+/// value. Named expressions accept only the property names and aliases listed
+/// by ECMAScript.
+#[must_use]
+pub fn unicode_property_ranges(
+    property_name: Option<&str>,
+    property_value: &str,
+) -> Option<&'static [(u32, u32)]> {
+    match property_name {
+        None => binary_property_ranges(property_value)
+            .or_else(|| generated_general_category::general_category_ranges(property_value)),
+        Some("General_Category" | "gc") => {
+            generated_general_category::general_category_ranges(property_value)
+        }
+        Some("Script" | "sc") => generated_script::script_ranges(property_value),
+        Some("Script_Extensions" | "scx") => {
+            generated_script_extensions::script_extension_ranges(property_value)
+        }
+        Some(_) => None,
+    }
 }
 
 fn contains(ranges: &[(u32, u32)], value: u32) -> bool {

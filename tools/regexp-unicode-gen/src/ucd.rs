@@ -84,6 +84,109 @@ pub fn complement_ranges(ranges: Vec<CodePointRange>) -> Vec<CodePointRange> {
     complement
 }
 
+/// Collects every data range whose property field contains one exact
+/// whitespace-separated value.
+///
+/// # Errors
+///
+/// Returns an error for malformed UCD data or invalid code point ranges.
+pub fn property_value_ranges(
+    contents: &str,
+    requested_value: &str,
+) -> Result<Vec<CodePointRange>, GeneratorError> {
+    let mut ranges = Vec::new();
+    for_each_data_line(contents, |range, property| {
+        if property
+            .split_ascii_whitespace()
+            .any(|value| value == requested_value)
+        {
+            ranges.push(range);
+        }
+        Ok(())
+    })?;
+    Ok(normalize_ranges(ranges))
+}
+
+/// Collects all explicit ranges in one semicolon-delimited UCD file.
+///
+/// # Errors
+///
+/// Returns an error for malformed UCD data or invalid code point ranges.
+pub fn all_data_ranges(contents: &str) -> Result<Vec<CodePointRange>, GeneratorError> {
+    let mut ranges = Vec::new();
+    for_each_data_line(contents, |range, _| {
+        ranges.push(range);
+        Ok(())
+    })?;
+    Ok(normalize_ranges(ranges))
+}
+
+#[must_use]
+pub fn subtract_ranges(
+    source: Vec<CodePointRange>,
+    removed: &[CodePointRange],
+) -> Vec<CodePointRange> {
+    let mut result = Vec::new();
+    for source_range in normalize_ranges(source) {
+        let mut pending_start = source_range.start;
+        let mut exhausted = false;
+        for removal in removed {
+            if removal.end < pending_start {
+                continue;
+            }
+            if removal.start > source_range.end {
+                break;
+            }
+            if removal.start > pending_start {
+                result.push(CodePointRange {
+                    start: pending_start,
+                    end: removal.start.saturating_sub(1),
+                });
+            }
+            let Some(after_removal) = removal.end.checked_add(1) else {
+                exhausted = true;
+                break;
+            };
+            pending_start = pending_start.max(after_removal);
+            if pending_start > source_range.end {
+                break;
+            }
+        }
+        if !exhausted && pending_start <= source_range.end {
+            result.push(CodePointRange {
+                start: pending_start,
+                end: source_range.end,
+            });
+        }
+    }
+    normalize_ranges(result)
+}
+
+fn for_each_data_line(
+    contents: &str,
+    mut visitor: impl FnMut(CodePointRange, &str) -> Result<(), GeneratorError>,
+) -> Result<(), GeneratorError> {
+    for (line_index, raw_line) in contents.lines().enumerate() {
+        let line_number = line_index
+            .checked_add(1)
+            .ok_or_else(|| GeneratorError::new("UCD line number overflowed"))?;
+        let data = raw_line.split('#').next().unwrap_or_default().trim();
+        if data.is_empty() {
+            continue;
+        }
+        let Some((range_text, property_text)) = data.split_once(';') else {
+            return Err(GeneratorError::new(format!(
+                "UCD line {line_number}: missing property separator"
+            )));
+        };
+        visitor(
+            parse_range(range_text.trim(), line_number)?,
+            property_text.trim(),
+        )?;
+    }
+    Ok(())
+}
+
 fn parse_range(text: &str, line_number: usize) -> Result<CodePointRange, GeneratorError> {
     let (start, end) = if let Some((start, end)) = text.split_once("..") {
         (

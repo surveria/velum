@@ -11,6 +11,13 @@ The implementation is specification-led. Existing engines may be queried as
 behavioral or performance oracles, but their implementation structure is not
 the design source for this subsystem.
 
+The current native slice implements literals, alternation, captures, greedy
+and lazy repetition, anchors, word boundaries, character classes, predefined
+classes, and Unicode binary, General Category, Script, and Script Extensions
+property escapes. Unicode 17.0.0 generation currently emits all 53 ECMAScript
+binary properties, 38 General Category values, and 176 Script values. This is
+an in-progress compatibility surface, not yet a runtime replacement.
+
 ## Crate Boundary
 
 `velum-regexp` is a dependency-light library. It owns pattern parsing, semantic

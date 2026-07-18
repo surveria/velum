@@ -3,9 +3,11 @@ use core::fmt::Write;
 use crate::{
     CodePointRange, GeneratorError, SourceManifest,
     binary::{GeneratedProperty, PropertySpec},
+    values::GeneratedValue,
 };
 
-const RANGES_PER_LINE: usize = 32;
+const RANGES_PER_LINE: usize = 128;
+const VALUES_PER_LOOKUP: usize = 64;
 
 pub fn core_properties(
     manifest: &SourceManifest,
@@ -41,6 +43,72 @@ pub fn binary_properties(
     }
     emit_binary_lookup(&mut output, properties)?;
     Ok(output)
+}
+
+pub fn value_properties(
+    manifest: &SourceManifest,
+    generator_version: &str,
+    format_version: u32,
+    values: &[GeneratedValue],
+    constant_prefix: &str,
+    function_name: &str,
+) -> Result<String, GeneratorError> {
+    let mut output = String::new();
+    emit_header(&mut output, manifest, generator_version, format_version)?;
+    for value in values {
+        let name = format!("{constant_prefix}_{}", rust_name(&value.spec.short));
+        emit_compact_ranges(&mut output, &name, &value.ranges)?;
+    }
+    emit_value_lookup(&mut output, values, constant_prefix, function_name)?;
+    Ok(output)
+}
+
+fn emit_value_lookup(
+    output: &mut String,
+    values: &[GeneratedValue],
+    constant_prefix: &str,
+    function_name: &str,
+) -> Result<(), GeneratorError> {
+    for (chunk_index, chunk) in values.chunks(VALUES_PER_LOOKUP).enumerate() {
+        writeln!(output).map_err(format_error)?;
+        writeln!(output, "#[rustfmt::skip]").map_err(format_error)?;
+        writeln!(
+            output,
+            "fn {function_name}_{chunk_index}(name: &str) -> Option<&'static [(u32, u32)]> {{"
+        )
+        .map_err(format_error)?;
+        writeln!(output, "    match name {{").map_err(format_error)?;
+        for value in chunk {
+            output.push_str("        ");
+            emit_owned_alias_pattern(output, &value.spec.aliases)?;
+            writeln!(
+                output,
+                " => Some({constant_prefix}_{}),",
+                rust_name(&value.spec.short)
+            )
+            .map_err(format_error)?;
+        }
+        writeln!(output, "        _ => None,").map_err(format_error)?;
+        writeln!(output, "    }}").map_err(format_error)?;
+        writeln!(output, "}}").map_err(format_error)?;
+    }
+    writeln!(output).map_err(format_error)?;
+    writeln!(
+        output,
+        "pub fn {function_name}(name: &str) -> Option<&'static [(u32, u32)]> {{"
+    )
+    .map_err(format_error)?;
+    for chunk_index in 0..values.chunks(VALUES_PER_LOOKUP).len() {
+        writeln!(
+            output,
+            "    if let Some(ranges) = {function_name}_{chunk_index}(name) {{"
+        )
+        .map_err(format_error)?;
+        writeln!(output, "        return Some(ranges);").map_err(format_error)?;
+        writeln!(output, "    }}").map_err(format_error)?;
+    }
+    writeln!(output, "    None").map_err(format_error)?;
+    writeln!(output, "}}").map_err(format_error)
 }
 
 fn emit_header(
@@ -95,6 +163,15 @@ fn emit_alias_pattern(output: &mut String, spec: &PropertySpec) -> Result<(), Ge
     Ok(())
 }
 
+fn emit_owned_alias_pattern(output: &mut String, aliases: &[String]) -> Result<(), GeneratorError> {
+    let mut separator = "";
+    for alias in aliases {
+        write!(output, "{separator}{alias:?}").map_err(format_error)?;
+        separator = " | ";
+    }
+    Ok(())
+}
+
 fn emit_ranges(
     output: &mut String,
     name: &str,
@@ -103,6 +180,34 @@ fn emit_ranges(
     writeln!(output).map_err(format_error)?;
     writeln!(output, "#[rustfmt::skip]").map_err(format_error)?;
     writeln!(output, "pub const {name}: &[(u32, u32)] = &[").map_err(format_error)?;
+    for chunk in ranges.chunks(RANGES_PER_LINE) {
+        output.push_str("    ");
+        for (index, range) in chunk.iter().enumerate() {
+            if index > 0 {
+                output.push(' ');
+            }
+            output.push('(');
+            emit_code_point(output, range.start)?;
+            output.push_str(", ");
+            emit_code_point(output, range.end)?;
+            output.push_str("),");
+        }
+        output.push('\n');
+    }
+    output.push_str("];\n");
+    Ok(())
+}
+
+fn emit_compact_ranges(
+    output: &mut String,
+    name: &str,
+    ranges: &[CodePointRange],
+) -> Result<(), GeneratorError> {
+    writeln!(
+        output,
+        "#[rustfmt::skip] pub const {name}: &[(u32, u32)] = &["
+    )
+    .map_err(format_error)?;
     for chunk in ranges.chunks(RANGES_PER_LINE) {
         output.push_str("    ");
         for (index, range) in chunk.iter().enumerate() {

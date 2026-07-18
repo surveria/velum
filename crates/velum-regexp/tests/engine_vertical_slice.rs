@@ -105,6 +105,38 @@ fn matches_unicode_property_escapes_using_utf16_positions() -> TestResult {
 }
 
 #[test]
+fn matches_general_categories_scripts_and_script_extensions() -> TestResult {
+    let letters = compile_with_flags(r"\p{Letter}+", Flags::default().with_unicode(true))?;
+    let greek = "42λΩ!".encode_utf16().collect::<Vec<_>>();
+    let matched = letters
+        .find(&greek, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a General_Category match")?;
+    if matched.span != (2..4) {
+        return Err(format!("unexpected category span: {:?}", matched.span).into());
+    }
+
+    let script = compile_with_flags(r"\p{Script=Greek}", Flags::default().with_unicode(true))?;
+    let extensions = compile_with_flags(r"\p{scx=Grek}", Flags::default().with_unicode(true))?;
+    let middle_dot = "·".encode_utf16().collect::<Vec<_>>();
+    if script
+        .find(&middle_dot, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Err("Script=Greek incorrectly included a Common character".into());
+    }
+    if extensions
+        .find(&middle_dot, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err("Script_Extensions=Greek omitted the shared middle dot".into())
+}
+
+#[test]
 fn supports_word_boundaries_and_any_character_classes() -> TestResult {
     let boundary = compile(r"\bcat\B")?;
     let input = "cats".encode_utf16().collect::<Vec<_>>();

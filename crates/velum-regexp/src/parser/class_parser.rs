@@ -1,8 +1,8 @@
 use crate::{
     CompileError, CompileErrorKind,
     ast::Node,
-    binary_property_ranges,
     character_class::{CharacterClass, CharacterClassTerm},
+    unicode_property_ranges,
 };
 
 use super::{Parser, is_syntax_character, predefined_class_term};
@@ -130,6 +130,7 @@ impl Parser<'_> {
             }
             if !u8::try_from(unit).is_ok_and(|byte| byte.is_ascii_alphanumeric())
                 && unit != u16::from(b'_')
+                && unit != u16::from(b'=')
             {
                 return Err(CompileError::new(
                     CompileErrorKind::InvalidUnicodeProperty,
@@ -149,7 +150,18 @@ impl Parser<'_> {
             ));
         }
         self.advance_one()?;
-        let ranges = binary_property_ranges(&name).ok_or_else(|| {
+        let (property_name, property_value) = name
+            .split_once('=')
+            .map_or((None, name.as_str()), |(property, value)| {
+                (Some(property), value)
+            });
+        if property_name.is_some_and(str::is_empty) || property_value.is_empty() {
+            return Err(CompileError::new(
+                CompileErrorKind::InvalidUnicodeProperty,
+                escape_offset,
+            ));
+        }
+        let ranges = unicode_property_ranges(property_name, property_value).ok_or_else(|| {
             CompileError::new(CompileErrorKind::InvalidUnicodeProperty, escape_offset)
         })?;
         Ok(CharacterClassTerm::StaticRanges { ranges, inverted })

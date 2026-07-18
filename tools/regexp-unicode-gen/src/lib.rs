@@ -5,10 +5,13 @@ mod emit;
 mod error;
 mod manifest;
 mod ucd;
+mod values;
 
 pub use error::GeneratorError;
 pub use manifest::{SourceEntry, SourceManifest};
-pub use ucd::{CodePointRange, property_ranges};
+pub use ucd::{
+    CodePointRange, all_data_ranges, property_ranges, property_value_ranges, subtract_ranges,
+};
 
 use std::{
     fs,
@@ -17,6 +20,9 @@ use std::{
 
 const DERIVED_CORE_PROPERTIES: &str = "DerivedCoreProperties.txt";
 const GENERAL_CATEGORIES: &str = "extracted/DerivedGeneralCategory.txt";
+const PROPERTY_VALUE_ALIASES: &str = "PropertyValueAliases.txt";
+const SCRIPTS: &str = "Scripts.txt";
+const SCRIPT_EXTENSIONS: &str = "ScriptExtensions.txt";
 const BINARY_PROPERTY_SOURCES: &[&str] = &[
     DERIVED_CORE_PROPERTIES,
     "PropList.txt",
@@ -59,6 +65,8 @@ pub struct GenerationSummary {
     pub id_start_ranges: usize,
     pub id_continue_ranges: usize,
     pub binary_properties: usize,
+    pub general_categories: usize,
+    pub scripts: usize,
     pub output_bytes: usize,
 }
 
@@ -76,11 +84,17 @@ pub fn generate(config: &GenerationConfig) -> Result<GenerationSummary, Generato
         binary_sources.push(read_source(config, &manifest, relative_path)?);
     }
     let general_categories = read_source(config, &manifest, GENERAL_CATEGORIES)?;
+    let value_aliases = read_source(config, &manifest, PROPERTY_VALUE_ALIASES)?;
+    let scripts = read_source(config, &manifest, SCRIPTS)?;
+    let script_extensions = read_source(config, &manifest, SCRIPT_EXTENSIONS)?;
     let binary_source_refs = binary_sources
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
     let properties = binary::generate(&binary_source_refs, &general_categories)?;
+    let category_values = values::generate_general_categories(&value_aliases, &general_categories)?;
+    let (script_values, script_extension_values) =
+        values::generate_scripts(&value_aliases, &scripts, &script_extensions)?;
     let id_start_ranges = property_range_count(&properties, "ID_Start")?;
     let id_continue_ranges = property_range_count(&properties, "ID_Continue")?;
     let core_output = emit::core_properties(&manifest, GENERATOR_VERSION, OUTPUT_FORMAT_VERSION)?;
@@ -90,17 +104,60 @@ pub fn generate(config: &GenerationConfig) -> Result<GenerationSummary, Generato
         OUTPUT_FORMAT_VERSION,
         &properties,
     )?;
+    let category_output = emit::value_properties(
+        &manifest,
+        GENERATOR_VERSION,
+        OUTPUT_FORMAT_VERSION,
+        &category_values,
+        "GC",
+        "general_category_ranges",
+    )?;
+    let script_output = emit::value_properties(
+        &manifest,
+        GENERATOR_VERSION,
+        OUTPUT_FORMAT_VERSION,
+        &script_values,
+        "SC",
+        "script_ranges",
+    )?;
+    let script_extension_output = emit::value_properties(
+        &manifest,
+        GENERATOR_VERSION,
+        OUTPUT_FORMAT_VERSION,
+        &script_extension_values,
+        "SCX",
+        "script_extension_ranges",
+    )?;
     write_generated_output(config, "generated_core.rs", core_output.as_bytes())?;
     write_generated_output(config, "generated_binary.rs", binary_output.as_bytes())?;
-    let output_bytes = core_output
-        .len()
-        .checked_add(binary_output.len())
-        .ok_or_else(|| GeneratorError::new("generated output byte count overflowed"))?;
+    write_generated_output(
+        config,
+        "generated_general_category.rs",
+        category_output.as_bytes(),
+    )?;
+    write_generated_output(config, "generated_script.rs", script_output.as_bytes())?;
+    write_generated_output(
+        config,
+        "generated_script_extensions.rs",
+        script_extension_output.as_bytes(),
+    )?;
+    let output_bytes = [
+        core_output.len(),
+        binary_output.len(),
+        category_output.len(),
+        script_output.len(),
+        script_extension_output.len(),
+    ]
+    .into_iter()
+    .try_fold(0_usize, usize::checked_add)
+    .ok_or_else(|| GeneratorError::new("generated output byte count overflowed"))?;
     Ok(GenerationSummary {
         unicode_version: manifest.unicode_version,
         id_start_ranges,
         id_continue_ranges,
         binary_properties: properties.len(),
+        general_categories: category_values.len(),
+        scripts: script_values.len(),
         output_bytes,
     })
 }
