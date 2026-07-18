@@ -295,13 +295,15 @@ impl Compiler {
             no_progress: 0,
         })?;
         self.emit(Instruction::Jump(loop_start))?;
+        let no_progress = self.next_index();
+        self.emit(Instruction::Fail)?;
         let end = self.next_index();
         if greedy {
             self.patch_split(split, body_target, end)?;
         } else {
             self.patch_split(split, end, body_target)?;
         }
-        self.patch_progress(check, end)
+        self.patch_progress(check, no_progress)
     }
 
     fn emit_capture_clears(&mut self, node: &Node) -> Result<(), CompileError> {

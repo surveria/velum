@@ -246,6 +246,45 @@ fn exact_utf16_surrogate_cases_match_the_current_backend() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn nested_repetition_capture_rollback_matches_the_current_backend() -> TestResult {
+    let patterns = [
+        "(a|b)*",
+        "((a)|(b))*",
+        "((a)?b)*",
+        "(a*)*",
+        "(?:a?)*",
+        "(a|aa)*b",
+        r"(a+)?b\1",
+        r"(a|(b))*\2",
+        r"(?=(a*))\1",
+        r"(?!(a))b\1",
+        "((a|b)+?)c",
+        "(a(b)?)+",
+        "(a|ab)+b",
+        "((ab)*)*",
+        "(?:(a)|b)+",
+        r"(a*)(b*)\2\1",
+        r"(?=(a+))a*b\1",
+        "(?<=(a|ab))b",
+    ];
+    let inputs = [
+        "", "a", "b", "c", "aa", "ab", "ba", "bb", "aaa", "aab", "aba", "abb", "bab", "bba", "abc",
+    ];
+    for pattern in patterns {
+        for flags in ["", "i"] {
+            for input in inputs {
+                let input_length = input.encode_utf16().count();
+                for start in 0..=input_length {
+                    compare_owned_case(pattern, flags, input, start, false)?;
+                    compare_owned_case(pattern, flags, input, start, true)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn compare_case(case: Case) -> TestResult {
     compare_owned_case(
         case.pattern,

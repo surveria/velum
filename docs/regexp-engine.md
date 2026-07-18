@@ -16,11 +16,14 @@ Runtime storage and built-ins now depend on one project-owned
 confined to that private backend module. A root integration test links
 `velum-regexp` as a development dependency and compares it with the current
 backend without changing the runtime default. The deterministic corpus now
-covers 9,266 syntax and match comparisons: structured short patterns,
+covers 12,650 syntax and match comparisons: structured short patterns,
 seed-reproducible generated expression shapes, Unicode and Unicode Sets
 properties, captures, lookarounds, named backreferences, scoped modifiers,
 search starts, sticky matching, and exact UTF-16 lone-surrogate and
-mid-surrogate positions.
+mid-surrogate positions. Its nested-repetition matrix exposed and now guards a
+zero-progress rollback rule: captures written by an empty final iteration are
+undone, while backtracking inside that iteration may still select a consuming
+alternative.
 
 The standalone suite also adapts 41 matcher-level cases from the pinned
 Test262 lookbehind corpus under its BSD license. Exact expected UTF-16 spans
