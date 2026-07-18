@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod ast;
+mod character_class;
 mod compiler;
 mod control;
 mod error;

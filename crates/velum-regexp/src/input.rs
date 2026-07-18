@@ -51,6 +51,41 @@ pub fn advance_candidate(
         .ok_or(ExecutionError::StartOutOfBounds)
 }
 
+pub fn decode_backward(
+    input: &[u16],
+    position: usize,
+    unicode: bool,
+) -> Result<Option<u32>, ExecutionError> {
+    let Some(previous_position) = position.checked_sub(1) else {
+        return Ok(None);
+    };
+    let Some(last) = input.get(previous_position).copied() else {
+        return Err(ExecutionError::InvalidProgram);
+    };
+    if !unicode || !(LOW_SURROGATE_START..=LOW_SURROGATE_END).contains(&last) {
+        return Ok(Some(u32::from(last)));
+    }
+    let Some(high_position) = previous_position.checked_sub(1) else {
+        return Ok(Some(u32::from(last)));
+    };
+    let Some(first) = input.get(high_position).copied() else {
+        return Err(ExecutionError::InvalidProgram);
+    };
+    if !(HIGH_SURROGATE_START..=HIGH_SURROGATE_END).contains(&first) {
+        return Ok(Some(u32::from(last)));
+    }
+    let high = u32::from(first - HIGH_SURROGATE_START);
+    let low = u32::from(last - LOW_SURROGATE_START);
+    let scalar = SUPPLEMENTARY_OFFSET
+        .checked_add(
+            high.checked_mul(0x400)
+                .ok_or(ExecutionError::SizeOverflow)?,
+        )
+        .and_then(|value| value.checked_add(low))
+        .ok_or(ExecutionError::SizeOverflow)?;
+    Ok(Some(scalar))
+}
+
 pub const fn is_line_terminator(value: u16) -> bool {
     matches!(value, 0x000A | 0x000D | 0x2028 | 0x2029)
 }

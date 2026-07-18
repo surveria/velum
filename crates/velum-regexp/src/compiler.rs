@@ -6,6 +6,7 @@ use crate::{
 
 pub struct Compiler {
     instructions: Vec<Instruction>,
+    classes: Vec<crate::character_class::CharacterClass>,
     limits: CompileLimits,
     progress_count: usize,
 }
@@ -18,6 +19,7 @@ impl Compiler {
     ) -> Result<Program, CompileError> {
         let mut compiler = Self {
             instructions: Vec::new(),
+            classes: Vec::new(),
             limits,
             progress_count: 0,
         };
@@ -25,6 +27,7 @@ impl Compiler {
         compiler.emit(Instruction::Accept)?;
         Ok(Program {
             instructions: compiler.instructions,
+            classes: compiler.classes,
             flags,
             capture_count: parsed.capture_count,
             progress_count: compiler.progress_count,
@@ -35,7 +38,15 @@ impl Compiler {
         match node {
             Node::Empty => Ok(()),
             Node::Literal(value) => self.emit(Instruction::Char(*value)).map(drop),
+            Node::Class(class) => {
+                let id = self.classes.len();
+                self.classes.push(class.clone());
+                self.emit(Instruction::Class(id)).map(drop)
+            }
             Node::Any => self.emit(Instruction::Any).map(drop),
+            Node::WordBoundary(inverted) => {
+                self.emit(Instruction::WordBoundary(*inverted)).map(drop)
+            }
             Node::AssertStart => self.emit(Instruction::AssertStart).map(drop),
             Node::AssertEnd => self.emit(Instruction::AssertEnd).map(drop),
             Node::Concat(nodes) => {
@@ -159,9 +170,13 @@ impl Compiler {
                 Ok(())
             }
             Node::Repeat { body, .. } => self.emit_capture_clears(body),
-            Node::Empty | Node::Literal(_) | Node::Any | Node::AssertStart | Node::AssertEnd => {
-                Ok(())
-            }
+            Node::Empty
+            | Node::Literal(_)
+            | Node::Class(_)
+            | Node::Any
+            | Node::WordBoundary(_)
+            | Node::AssertStart
+            | Node::AssertEnd => Ok(()),
         }
     }
 

@@ -1,6 +1,11 @@
+mod class_parser;
+
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
     ast::{Node, ParsedPattern},
+    character_class::{
+        CharacterClass, CharacterClassTerm, DIGIT_RANGES, SPACE_RANGES, WORD_RANGES,
+    },
 };
 
 pub struct Parser<'a> {
@@ -96,7 +101,10 @@ impl<'a> Parser<'a> {
     fn parse_term(&mut self) -> Result<Node, CompileError> {
         let atom_offset = self.position;
         let atom = self.parse_atom()?;
-        let assertion = matches!(atom, Node::AssertStart | Node::AssertEnd);
+        let assertion = matches!(
+            atom,
+            Node::AssertStart | Node::AssertEnd | Node::WordBoundary(_)
+        );
         let Some((min, max)) = self.parse_quantifier_bounds()? else {
             return Ok(atom);
         };
@@ -141,9 +149,7 @@ impl<'a> Parser<'a> {
                 self.node(Node::AssertEnd)
             }
             value if value == u16::from(b'(') => self.parse_group(),
-            value if value == u16::from(b'[') => {
-                Err(self.error(CompileErrorKind::UnsupportedSyntax))
-            }
+            value if value == u16::from(b'[') => self.parse_character_class(),
             value if value == u16::from(b'\\') => self.parse_escape(),
             value
                 if value == u16::from(b'*')
@@ -214,6 +220,24 @@ impl<'a> Parser<'a> {
             return Err(self.error(CompileErrorKind::InvalidEscape));
         };
         self.advance_one()?;
+        match unit {
+            0x0062 => return self.node(Node::WordBoundary(false)),
+            0x0042 => return self.node(Node::WordBoundary(true)),
+            0x0064 | 0x0044 | 0x0073 | 0x0053 | 0x0077 | 0x0057 => {
+                return self.node(Node::Class(CharacterClass {
+                    inverted: false,
+                    terms: vec![predefined_class_term(unit)?],
+                }));
+            }
+            0x0070 | 0x0050 if self.flags.has_unicode_mode() => {
+                let term = self.parse_property_term(unit == 0x0050, escape_offset)?;
+                return self.node(Node::Class(CharacterClass {
+                    inverted: false,
+                    terms: vec![term],
+                }));
+            }
+            _ => {}
+        }
         let value = match unit {
             0x006E => 0x000A,
             0x0072 => 0x000D,
@@ -231,8 +255,7 @@ impl<'a> Parser<'a> {
                 self.parse_braced_hex()?
             }
             0x0075 => self.parse_fixed_hex(4)?,
-            0x0062 | 0x0042 | 0x0064 | 0x0044 | 0x0073 | 0x0053 | 0x0077 | 0x0057 | 0x0070
-            | 0x0050 | 0x006B => {
+            0x006B => {
                 return Err(CompileError::new(
                     CompileErrorKind::UnsupportedSyntax,
                     escape_offset,
@@ -500,6 +523,24 @@ const fn is_syntax_character(value: u16) -> bool {
             | 0x007C
             | 0x002F
     )
+}
+
+const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, CompileError> {
+    let (ranges, inverted) = match value {
+        0x0064 => (DIGIT_RANGES, false),
+        0x0044 => (DIGIT_RANGES, true),
+        0x0073 => (SPACE_RANGES, false),
+        0x0053 => (SPACE_RANGES, true),
+        0x0077 => (WORD_RANGES, false),
+        0x0057 => (WORD_RANGES, true),
+        _ => {
+            return Err(CompileError::new(
+                CompileErrorKind::InvalidCharacterClass,
+                0,
+            ));
+        }
+    };
+    Ok(CharacterClassTerm::StaticRanges { ranges, inverted })
 }
 
 const fn hex_value(value: u16) -> Option<u32> {

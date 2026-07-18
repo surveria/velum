@@ -1,6 +1,6 @@
 use core::mem::size_of;
 
-use crate::{Flags, SizeOverflow};
+use crate::{Flags, SizeOverflow, character_class::CharacterClass};
 
 pub type InstructionIndex = usize;
 
@@ -8,7 +8,9 @@ pub type InstructionIndex = usize;
 pub enum Instruction {
     Accept,
     Char(u32),
+    Class(usize),
     Any,
+    WordBoundary(bool),
     AssertStart,
     AssertEnd,
     SaveStart(usize),
@@ -29,6 +31,7 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub struct Program {
     pub instructions: Vec<Instruction>,
+    pub classes: Vec<CharacterClass>,
     pub flags: Flags,
     pub capture_count: usize,
     pub progress_count: usize,
@@ -36,9 +39,25 @@ pub struct Program {
 
 impl Program {
     pub fn retained_payload_bytes(&self) -> Result<usize, SizeOverflow> {
-        self.instructions
+        let instruction_bytes = self
+            .instructions
             .len()
             .checked_mul(size_of::<Instruction>())
-            .ok_or(SizeOverflow)
+            .ok_or(SizeOverflow)?;
+        let class_headers = self
+            .classes
+            .len()
+            .checked_mul(size_of::<CharacterClass>())
+            .ok_or(SizeOverflow)?;
+        self.classes.iter().try_fold(
+            instruction_bytes
+                .checked_add(class_headers)
+                .ok_or(SizeOverflow)?,
+            |total, class| {
+                total
+                    .checked_add(class.retained_payload_bytes()?)
+                    .ok_or(SizeOverflow)
+            },
+        )
     }
 }

@@ -28,6 +28,14 @@ fn compile(pattern: &str) -> Result<Regex, velum_regexp::CompileError> {
     )
 }
 
+fn compile_with_flags(pattern: &str, flags: Flags) -> Result<Regex, velum_regexp::CompileError> {
+    Regex::compile(
+        &pattern.encode_utf16().collect::<Vec<_>>(),
+        flags,
+        CompileLimits::default(),
+    )
+}
+
 #[test]
 fn generated_unicode_identifier_tables_are_available() -> TestResult {
     if unicode_version() != "17.0.0" {
@@ -56,6 +64,113 @@ fn unicode_binary_property_names_follow_ecmascript_exact_matching() -> TestResul
         return Ok(());
     }
     Err("binary Unicode property lookup did not use exact ECMAScript names".into())
+}
+
+#[test]
+fn matches_character_ranges_predefined_classes_and_negation() -> TestResult {
+    let mixed = compile(r"[a-c\d]+")?;
+    let input = "xxb29!".encode_utf16().collect::<Vec<_>>();
+    let matched = mixed
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a mixed character class match")?;
+    if matched.span != (2..5) {
+        return Err(format!("unexpected mixed class span: {:?}", matched.span).into());
+    }
+
+    let non_space = compile(r"[^\s]+")?;
+    let input = " \tfoo ".encode_utf16().collect::<Vec<_>>();
+    let matched = non_space
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a non-space match")?;
+    if matched.span == (2..5) {
+        return Ok(());
+    }
+    Err(format!("unexpected negated class span: {:?}", matched.span).into())
+}
+
+#[test]
+fn matches_unicode_property_escapes_using_utf16_positions() -> TestResult {
+    let regex = compile_with_flags(r"\p{Emoji}+", Flags::default().with_unicode(true))?;
+    let input = "x😀🐸!".encode_utf16().collect::<Vec<_>>();
+    let matched = regex
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected an emoji property match")?;
+    if matched.span == (1..5) {
+        return Ok(());
+    }
+    Err(format!("unexpected property escape span: {:?}", matched.span).into())
+}
+
+#[test]
+fn supports_word_boundaries_and_any_character_classes() -> TestResult {
+    let boundary = compile(r"\bcat\B")?;
+    let input = "cats".encode_utf16().collect::<Vec<_>>();
+    let matched = boundary
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a word-boundary match")?;
+    if matched.span != (0..3) {
+        return Err(format!("unexpected boundary span: {:?}", matched.span).into());
+    }
+
+    let any = compile("[^]")?;
+    let newline = "\n".encode_utf16().collect::<Vec<_>>();
+    if any
+        .find(&newline, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err("a negated empty class did not match a line terminator".into())
+}
+
+#[test]
+fn rejects_invalid_classes_properties_and_class_resource_exhaustion() -> TestResult {
+    let invalid_range = compile("[z-a]");
+    if !matches!(
+        invalid_range,
+        Err(velum_regexp::CompileError {
+            kind: CompileErrorKind::InvalidCharacterClass,
+            ..
+        })
+    ) {
+        return Err(format!("unexpected invalid range result: {invalid_range:?}").into());
+    }
+
+    let invalid_property =
+        compile_with_flags(r"\p{alphabetic}", Flags::default().with_unicode(true));
+    if !matches!(
+        invalid_property,
+        Err(velum_regexp::CompileError {
+            kind: CompileErrorKind::InvalidUnicodeProperty,
+            ..
+        })
+    ) {
+        return Err(format!("unexpected invalid property result: {invalid_property:?}").into());
+    }
+
+    let limited = Regex::compile(
+        &"[abc]".encode_utf16().collect::<Vec<_>>(),
+        Flags::default(),
+        CompileLimits {
+            max_character_class_terms: 2,
+            ..CompileLimits::default()
+        },
+    );
+    if matches!(
+        limited,
+        Err(velum_regexp::CompileError {
+            kind: CompileErrorKind::NodeLimit { limit: 2 },
+            ..
+        })
+    ) {
+        return Ok(());
+    }
+    Err(format!("unexpected class limit result: {limited:?}").into())
 }
 
 #[test]

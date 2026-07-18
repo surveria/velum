@@ -1,8 +1,12 @@
+use crate::character_class::CharacterClass;
+
 #[derive(Debug, Clone)]
 pub enum Node {
     Empty,
     Literal(u32),
+    Class(CharacterClass),
     Any,
+    WordBoundary(bool),
     AssertStart,
     AssertEnd,
     Concat(Vec<Self>),

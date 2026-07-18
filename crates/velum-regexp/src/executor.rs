@@ -1,7 +1,8 @@
 use crate::{
     Capture, ExecutionControl, ExecutionError, ExecutionLimits, ExecutionStats, Match,
     SearchOutcome,
-    input::{advance_candidate, decode_forward, is_line_terminator},
+    character_class::is_word_character,
+    input::{advance_candidate, decode_backward, decode_forward, is_line_terminator},
     program::{Instruction, InstructionIndex, Program},
 };
 
@@ -159,7 +160,16 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         match current {
             Instruction::Accept => Ok(StepOutcome::Accept),
             Instruction::Char(expected) => self.consume_char(expected, sequential, position),
+            Instruction::Class(id) => self.consume_class(id, sequential, position),
             Instruction::Any => self.consume_any(sequential, position),
+            Instruction::WordBoundary(inverted) => {
+                let boundary = self.at_word_boundary(position)?;
+                Ok(if boundary == inverted {
+                    StepOutcome::Failed
+                } else {
+                    next_step(sequential, position)
+                })
+            }
             Instruction::AssertStart => Ok(if self.at_start(position) {
                 next_step(sequential, position)
             } else {
@@ -250,6 +260,32 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         } else {
             Ok(next_step(instruction, next))
         }
+    }
+
+    fn consume_class(
+        &self,
+        id: usize,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let Some(class) = self.program.classes.get(id) else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        Ok(match decoded {
+            Some((actual, next)) if class.matches(actual) => next_step(instruction, next),
+            Some(_) | None => StepOutcome::Failed,
+        })
+    }
+
+    fn at_word_boundary(&self, position: usize) -> Result<bool, ExecutionError> {
+        let unicode = self.program.flags.has_unicode_mode();
+        let previous =
+            decode_backward(self.input, position, unicode)?.is_some_and(is_word_character);
+        let next = decode_forward(self.input, position, unicode)?
+            .map(|(value, _)| value)
+            .is_some_and(is_word_character);
+        Ok(previous != next)
     }
 
     fn at_start(&self, position: usize) -> bool {

@@ -6,6 +6,7 @@ pub struct CompileLimits {
     pub max_nodes: usize,
     pub max_instructions: usize,
     pub max_captures: usize,
+    pub max_character_class_terms: usize,
     pub max_repeat_count: u32,
 }
 
@@ -17,6 +18,7 @@ impl Default for CompileLimits {
             max_nodes: 65_536,
             max_instructions: 262_144,
             max_captures: 4_096,
+            max_character_class_terms: 65_536,
             max_repeat_count: 1_000_000,
         }
     }
