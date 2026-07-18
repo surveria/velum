@@ -34,7 +34,7 @@ impl Context {
                 Ok(roots) => roots,
                 Err(error) => return Some(Err(error)),
             };
-            if let Err(error) = roots.add_values(std::iter::once(receiver)) {
+            if let Err(error) = roots.add_values(core::iter::once(receiver)) {
                 return Some(Err(error));
             }
             Some(roots)
@@ -121,7 +121,7 @@ impl Context {
                 Ok(roots) => roots,
                 Err(error) => return Some(Err(error)),
             };
-            if let Err(error) = roots.add_values(std::iter::once(receiver)) {
+            if let Err(error) = roots.add_values(core::iter::once(receiver)) {
                 return Some(Err(error));
             }
             Some(roots)

@@ -14,8 +14,8 @@ use crate::{
     source::SourceId,
     syntax::StaticName,
 };
-use std::collections::BTreeMap;
-use std::rc::Rc;
+use alloc::collections::BTreeMap;
+use alloc::rc::Rc;
 
 pub use crate::parser::{EvalClassFieldContext, EvalSuperContext};
 

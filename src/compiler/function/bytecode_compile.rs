@@ -18,7 +18,7 @@ struct FunctionCompileInput<'a> {
     statements: &'a [Statement],
     mode: FunctionCompileMode,
     layout: &'a BindingLayout,
-    source: Option<std::rc::Rc<str>>,
+    source: Option<alloc::rc::Rc<str>>,
 }
 
 impl BytecodeFunction {
@@ -29,7 +29,7 @@ impl BytecodeFunction {
         statements: &[Statement],
         mode: FunctionCompileMode,
         layout: &BindingLayout,
-        source: Option<std::rc::Rc<str>>,
+        source: Option<alloc::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
             FunctionCompileInput {
@@ -41,7 +41,7 @@ impl BytecodeFunction {
                 layout,
                 source,
             },
-            std::iter::empty(),
+            core::iter::empty(),
         )
     }
 
@@ -52,7 +52,7 @@ impl BytecodeFunction {
         fields: &[ClassField],
         mode: FunctionCompileMode,
         layout: &BindingLayout,
-        source: Option<std::rc::Rc<str>>,
+        source: Option<alloc::rc::Rc<str>>,
     ) -> Result<Self> {
         Self::compile_with_additional_captures(
             FunctionCompileInput {

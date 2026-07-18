@@ -733,7 +733,7 @@ impl FunctionProperties {
         Some(self.properties.remove(position).property)
     }
 
-    fn property_position(&self, property: PropertyKey) -> std::result::Result<usize, usize> {
+    fn property_position(&self, property: PropertyKey) -> core::result::Result<usize, usize> {
         self.properties
             .binary_search_by(|entry| entry.key().cmp(&property))
     }

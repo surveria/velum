@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     binding_metadata::{BindingLayout, BindingOperand, ScopeId},
@@ -123,7 +123,7 @@ impl Context {
         }
         Ok(BindingScope::from_shared_template(
             template.scope,
-            std::rc::Rc::clone(&template.index),
+            alloc::rc::Rc::clone(&template.index),
             slots,
         ))
     }
@@ -559,7 +559,7 @@ fn function_param_frame(
 #[derive(Debug)]
 pub(in crate::runtime) struct FunctionScopeTemplate {
     pub(super) scope: ScopeId,
-    pub(super) index: std::rc::Rc<crate::runtime::binding::scope::ScopeIndexData>,
+    pub(super) index: alloc::rc::Rc<crate::runtime::binding::scope::ScopeIndexData>,
     pub(super) param_count: usize,
 }
 
@@ -675,7 +675,7 @@ pub(super) fn function_scope_template(
     params: &[AtomId],
     frames: &[Option<CompiledBindingFrame>],
     requires_parameter_initialization: bool,
-) -> Result<Option<std::rc::Rc<super::FunctionScopeTemplate>>> {
+) -> Result<Option<alloc::rc::Rc<super::FunctionScopeTemplate>>> {
     if requires_parameter_initialization
         || params.len() != frames.len()
         || !params_have_unique_atoms(params)
@@ -686,9 +686,9 @@ pub(super) fn function_scope_template(
         return Ok(None);
     };
     let index = crate::runtime::binding::scope::ScopeIndexData::from_slot_atoms(params)?;
-    Ok(Some(std::rc::Rc::new(FunctionScopeTemplate {
+    Ok(Some(alloc::rc::Rc::new(FunctionScopeTemplate {
         scope,
-        index: std::rc::Rc::new(index),
+        index: alloc::rc::Rc::new(index),
         param_count: params.len(),
     })))
 }

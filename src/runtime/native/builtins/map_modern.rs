@@ -80,13 +80,13 @@ impl Context {
             self.collect_keyed_groups(args, GroupByKeyCoercion::Collection, "Map.groupBy", &roots)?;
 
         let (result, result_id) = self.new_map_object()?;
-        roots.add_values(std::iter::once(&result))?;
+        roots.add_values(core::iter::once(&result))?;
         for group in groups {
             let GroupByKey::Collection(key) = group.key else {
                 return Err(Error::runtime("Map.groupBy produced a property key"));
             };
             let group = self.create_array_from_elements(group.values)?;
-            roots.add_values(std::iter::once(&group))?;
+            roots.add_values(core::iter::once(&group))?;
             self.collection_set(result_id, key, group)?;
         }
         Ok(result)
@@ -125,7 +125,7 @@ impl Context {
         if let Some(value) = self.collection_get(collection, &key)? {
             return Ok(value);
         }
-        let value = self.call_value(&callback, std::slice::from_ref(&key), Value::Undefined)?;
+        let value = self.call_value(&callback, core::slice::from_ref(&key), Value::Undefined)?;
         self.collection_set(collection, key, value.clone())?;
         Ok(value)
     }

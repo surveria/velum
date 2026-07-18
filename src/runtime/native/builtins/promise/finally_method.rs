@@ -82,7 +82,7 @@ impl Context {
         };
         let forwarder = self.create_promise_finally_forwarder(settled_value, forward_kind)?;
         let then = self.get_named(&promise, PROMISE_THEN_NAME)?;
-        self.call_value(&then, std::slice::from_ref(&forwarder), promise)
+        self.call_value(&then, core::slice::from_ref(&forwarder), promise)
     }
 
     fn promise_finally_forward_value(&mut self, state: ObjectId) -> Result<Value> {

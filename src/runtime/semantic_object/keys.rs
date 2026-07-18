@@ -126,7 +126,7 @@ impl Context {
                 continue;
             }
             let value = self.get(target, property.lookup())?;
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             entries.push((property.name().to_owned(), value));
         }
         Ok(entries)

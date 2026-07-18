@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime::limits::RuntimeLimits;
 use crate::{compiled_module::CompiledModule, compiled_script::CompiledScript};
-use std::time::Duration;
+use core::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Runtime {

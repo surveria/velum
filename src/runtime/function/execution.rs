@@ -60,7 +60,7 @@ impl Context {
         if matches!(call_this, Value::Undefined | Value::Null) {
             return self.global_this_value();
         }
-        self.eval_direct_object_constructor(std::slice::from_ref(&call_this))
+        self.eval_direct_object_constructor(core::slice::from_ref(&call_this))
     }
 
     pub(crate) fn eval_function_completion_with_this_and_new_target(
@@ -225,7 +225,7 @@ impl Context {
 #[inline(never)]
 fn native_stack_position() -> usize {
     let marker = 0_u8;
-    std::ptr::from_ref(std::hint::black_box(&marker)).addr()
+    core::ptr::from_ref(core::hint::black_box(&marker)).addr()
 }
 
 fn maximum_call_stack_error() -> Error {

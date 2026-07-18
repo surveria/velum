@@ -54,7 +54,7 @@ impl Context {
             ));
         };
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&collator))?;
+        roots.add_values(core::iter::once(&collator))?;
         let left = self.heap_string_value(&left)?;
         let right = self.heap_string_value(&right)?;
         roots.add_values([&left, &right])?;

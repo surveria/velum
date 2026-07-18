@@ -90,4 +90,4 @@ pub(super) const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
             | TokenKind::RBrace
     )
 }
-use std::rc::Rc;
+use alloc::rc::Rc;

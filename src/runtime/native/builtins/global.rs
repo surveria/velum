@@ -1,4 +1,4 @@
-use std::{iter::Peekable, str::CharIndices};
+use core::{iter::Peekable, str::CharIndices};
 
 use crate::{
     error::{Error, Result},

@@ -334,7 +334,7 @@ impl Parser {
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<(T, bool)> {
-        let outer_reference = std::mem::replace(
+        let outer_reference = core::mem::replace(
             &mut self.arguments_reference,
             ArgumentsReference::Unreferenced,
         );
@@ -616,7 +616,7 @@ impl Parser {
             .new_target_scope_depth
             .checked_add(1)
             .ok_or_else(|| Error::limit("new.target scope depth overflowed"))?;
-        let previous_control_context = std::mem::take(&mut self.control_context);
+        let previous_control_context = core::mem::take(&mut self.control_context);
         let previous_class_arguments = self.class_arguments;
         self.class_arguments = ClassArgumentsContext::Allowed;
         let result = parse(self);
@@ -634,7 +634,7 @@ impl Parser {
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
-        let previous = std::mem::take(&mut self.control_context);
+        let previous = core::mem::take(&mut self.control_context);
         let result = parse(self);
         self.control_context = previous;
         result
@@ -795,5 +795,5 @@ struct LabelContext {
 }
 
 fn token_kind_eq(left: &TokenKind, right: &TokenKind) -> bool {
-    std::mem::discriminant(left) == std::mem::discriminant(right)
+    core::mem::discriminant(left) == core::mem::discriminant(right)
 }

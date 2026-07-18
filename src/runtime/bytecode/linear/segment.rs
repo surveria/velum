@@ -247,8 +247,8 @@ impl<'a> BytecodeLinearPlanBuilder<'a> {
             .checked_sub(start)
             .ok_or_else(|| Error::runtime("bytecode linear segment end escaped start"))?;
         if keep_segment(start, end, self.block_len, instruction_count, ops.len()) {
-            let segment_ops = std::mem::take(ops);
-            let segment_spans = std::mem::take(spans);
+            let segment_ops = core::mem::take(ops);
+            let segment_spans = core::mem::take(spans);
             self.segments.push(BytecodeLinearSegment {
                 start,
                 end,

@@ -315,7 +315,7 @@ impl Context {
             self.typed_array_species_create_with_length(this_value, record.length, true)?;
         let _result_scope = self.transient_root_scope(
             crate::runtime::roots::VmRootKind::TransientTemporary,
-            std::iter::once(&result),
+            core::iter::once(&result),
         )?;
         for index in 0..record.length {
             self.step()?;

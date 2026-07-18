@@ -1,4 +1,4 @@
-use std::{fmt, task::Context as TaskContext, task::Poll};
+use core::{fmt, task::Context as TaskContext, task::Poll};
 
 use crate::{
     HostFuture, HostFutureError, OwnedValue,
@@ -99,7 +99,7 @@ impl Context {
         &mut self,
         task_context: &mut TaskContext<'_>,
     ) -> Result<HostFuturePoll> {
-        let active = std::mem::take(&mut self.host_futures);
+        let active = core::mem::take(&mut self.host_futures);
         let mut pending = Vec::new();
         if pending.try_reserve_exact(active.len()).is_err() {
             self.host_futures = active;
@@ -171,7 +171,7 @@ impl Context {
             JavaScriptErrorMetadata::new(ErrorName::Base, HOST_FUTURE_CANCELLED_MESSAGE),
             true,
         )?;
-        let futures = std::mem::take(&mut self.host_futures);
+        let futures = core::mem::take(&mut self.host_futures);
         let count = futures.len();
         self.storage_ledger
             .release_count(VmStorageKind::HostFuture, count)?;
@@ -217,7 +217,7 @@ impl Context {
     fn settle_host_future(
         &mut self,
         promise: PromiseId,
-        result: std::result::Result<OwnedValue, HostFutureError>,
+        result: core::result::Result<OwnedValue, HostFutureError>,
     ) -> Result<()> {
         match result {
             Ok(value) => match self.runtime_value(value.into()) {

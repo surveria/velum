@@ -255,7 +255,7 @@ impl Context {
         let mut start = self.substring_bound(args.first(), length, 0)?;
         let mut end = self.substring_bound(args.get(1), length, length)?;
         if start > end {
-            std::mem::swap(&mut start, &mut end);
+            core::mem::swap(&mut start, &mut end);
         }
         let output = Self::char_range(&text, start, end)?;
         self.heap_utf16_string_value(&output)

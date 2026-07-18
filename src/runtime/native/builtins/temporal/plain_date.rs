@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, str::FromStr};
+use core::{cmp::Ordering, str::FromStr};
 
 use num_traits::ToPrimitive;
 use temporal_rs::{

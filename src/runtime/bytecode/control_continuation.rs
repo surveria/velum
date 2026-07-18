@@ -77,7 +77,7 @@ pub(super) enum BytecodeControlRecord {
     },
     ForIn {
         phase: BytecodeLoopPhase,
-        keys: std::vec::IntoIter<String>,
+        keys: alloc::vec::IntoIter<String>,
         source: Option<Value>,
         body_state: BytecodeState,
         last: Value,

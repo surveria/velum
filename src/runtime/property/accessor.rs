@@ -70,7 +70,7 @@ impl Context {
         let number_length = self.to_number(value)?;
         if !matches!(
             number_length.partial_cmp(&f64::from(uint32_length)),
-            Some(std::cmp::Ordering::Equal)
+            Some(core::cmp::Ordering::Equal)
         ) {
             return Err(Error::exception(
                 ErrorName::RangeError,

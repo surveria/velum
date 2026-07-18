@@ -178,8 +178,8 @@ impl Context {
     pub(super) fn push_class_evaluation(
         &mut self,
         value: Value,
-        super_binding: std::rc::Rc<FunctionSuperBinding>,
-        private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
+        super_binding: alloc::rc::Rc<FunctionSuperBinding>,
+        private_environment: Option<alloc::rc::Rc<PrivateEnvironment>>,
         class_field_initializer: bool,
     ) -> Result<()> {
         let frame = ActivationFrame::temporary_this(
@@ -352,7 +352,7 @@ impl Context {
 
     pub(in crate::runtime) fn current_activation_super(
         &self,
-    ) -> Option<std::rc::Rc<FunctionSuperBinding>> {
+    ) -> Option<alloc::rc::Rc<FunctionSuperBinding>> {
         for frame in self.activation_frames.iter().rev() {
             if frame.is_eval_boundary() {
                 return None;
@@ -378,7 +378,7 @@ impl Context {
 
     pub(in crate::runtime) fn current_private_environment(
         &self,
-    ) -> Option<std::rc::Rc<PrivateEnvironment>> {
+    ) -> Option<alloc::rc::Rc<PrivateEnvironment>> {
         self.activation_frames
             .last()
             .and_then(ActivationFrame::private_environment)
@@ -387,7 +387,7 @@ impl Context {
 
     pub(in crate::runtime) fn set_current_private_environment(
         &mut self,
-        environment: Option<std::rc::Rc<PrivateEnvironment>>,
+        environment: Option<alloc::rc::Rc<PrivateEnvironment>>,
     ) -> Result<()> {
         let frame = self
             .activation_frames

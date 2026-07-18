@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use crate::{
     ast::{CatchClause, Expr, Expression, ForInTarget, Statement, Stmt, SwitchCase},
@@ -185,7 +185,7 @@ impl BytecodeCompiler<'_> {
             .map(|init| {
                 if scoped {
                     return BytecodeBlock::compile_lexical_statements(
-                        std::slice::from_ref(init),
+                        core::slice::from_ref(init),
                         StatementValue::Discard,
                         self.layout,
                     );
@@ -319,7 +319,7 @@ impl BytecodeCompiler<'_> {
         };
         self.emit(BytecodeInstruction::Switch {
             discriminant: BytecodeBlock::compile_expression(discriminant, self.layout)?,
-            cases: std::rc::Rc::from(bytecode_cases.into_boxed_slice()),
+            cases: alloc::rc::Rc::from(bytecode_cases.into_boxed_slice()),
             scoped,
             scope_init,
         });
@@ -576,5 +576,5 @@ fn switch_statements_update_value(statements: &[Statement]) -> bool {
 }
 
 fn switch_statement_updates_value(statement: &Statement) -> bool {
-    switch_statements_update_value(std::slice::from_ref(statement))
+    switch_statements_update_value(core::slice::from_ref(statement))
 }

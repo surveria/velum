@@ -217,8 +217,8 @@ impl Context {
     fn run_destructure_object_task(
         &mut self,
         continuation: &mut DestructureContinuation,
-        properties: std::rc::Rc<[BytecodePatternProperty]>,
-        rest: Option<std::rc::Rc<BytecodePattern>>,
+        properties: alloc::rc::Rc<[BytecodePatternProperty]>,
+        rest: Option<alloc::rc::Rc<BytecodePattern>>,
         source: Value,
         next: usize,
         consumed: Vec<PropertyKey>,
@@ -384,8 +384,8 @@ impl Context {
     fn run_destructure_array_task(
         &mut self,
         continuation: &mut DestructureContinuation,
-        elements: std::rc::Rc<[Option<BytecodePatternTarget>]>,
-        rest: Option<std::rc::Rc<BytecodePattern>>,
+        elements: alloc::rc::Rc<[Option<BytecodePatternTarget>]>,
+        rest: Option<alloc::rc::Rc<BytecodePattern>>,
         mut source: IteratorSource,
         next: usize,
         mut exhausted: bool,
@@ -653,7 +653,7 @@ impl Context {
             *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, last) = control.for_of_state_mut()?;
-        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        let completion = Completion::Normal(core::mem::replace(last, Value::Undefined));
         Self::finish_for_of_control(self, handle, completion)
     }
 
@@ -746,7 +746,7 @@ impl Context {
             *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, _, last) = control.for_in_state_mut()?;
-        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        let completion = Completion::Normal(core::mem::replace(last, Value::Undefined));
         self.finish_bytecode_control_result(handle, Ok(completion))
     }
 

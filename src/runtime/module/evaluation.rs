@@ -288,7 +288,7 @@ impl Context {
                     let mut asynchronous = Vec::new();
                     self.gather_persisted_async_transitive_dependencies(
                         dependency.index,
-                        &mut std::collections::BTreeSet::new(),
+                        &mut alloc::collections::BTreeSet::new(),
                         &mut asynchronous,
                     )?;
                     for asynchronous_dependency in asynchronous {

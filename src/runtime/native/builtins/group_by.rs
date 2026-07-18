@@ -62,13 +62,13 @@ impl Context {
         let result = self
             .objects
             .create_with_exact_prototype(None, self.limits.max_objects)?;
-        roots.add_values(std::iter::once(&result))?;
+        roots.add_values(core::iter::once(&result))?;
         for group in groups {
             let GroupByKey::Property { name, key } = group.key else {
                 return Err(Error::runtime("Object.groupBy produced a collection key"));
             };
             let values = self.create_array_from_elements(group.values)?;
-            roots.add_values(std::iter::once(&values))?;
+            roots.add_values(core::iter::once(&values))?;
             let mut property = DynamicPropertyKey::new(name, Some(key));
             let defined = self.semantic_define_own_property_update(
                 &result,
@@ -121,19 +121,19 @@ impl Context {
                     return completion.into_result().map(|_| groups);
                 }
             };
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             let callback_args = [value.clone(), Value::Number(index)];
             let raw_key = match self.call_value(&callback, &callback_args, Value::Undefined) {
                 Ok(key) => key,
                 Err(error) => return Err(self.iterator_close_on_error(&mut iterator, error)),
             };
-            roots.add_values(std::iter::once(&raw_key))?;
+            roots.add_values(core::iter::once(&raw_key))?;
             let key = match self.group_by_key(raw_key, coercion) {
                 Ok(key) => key,
                 Err(error) => return Err(self.iterator_close_on_error(&mut iterator, error)),
             };
             if let GroupByKey::Collection(key) = &key {
-                roots.add_values(std::iter::once(key))?;
+                roots.add_values(core::iter::once(key))?;
             }
             self.add_value_to_keyed_group(&mut groups, key, value, &mut iterator)?;
             index += 1.0;

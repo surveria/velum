@@ -1,7 +1,5 @@
-use std::{
-    fmt,
-    rc::{Rc, Weak},
-};
+use alloc::rc::{Rc, Weak};
+use core::fmt;
 
 use parking_lot::Mutex;
 

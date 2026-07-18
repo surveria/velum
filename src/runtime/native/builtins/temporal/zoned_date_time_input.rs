@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr;
 
 use num_traits::ToPrimitive;
 use temporal_rs::{
@@ -322,7 +322,7 @@ impl Context {
         value: &Value,
         name: &str,
         default: T,
-        parse: fn(&str) -> std::result::Result<T, E>,
+        parse: fn(&str) -> core::result::Result<T, E>,
     ) -> Result<T> {
         let option = self.get_named(value, name)?;
         if matches!(option, Value::Undefined) {

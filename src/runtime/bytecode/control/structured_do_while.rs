@@ -116,7 +116,7 @@ impl Context {
             }
         }
         let (_, last) = control.loop_state_mut(BytecodeLoopKind::DoWhile)?;
-        state.last = std::mem::replace(last, Value::Undefined);
+        state.last = core::mem::replace(last, Value::Undefined);
         state.pc = next;
         self.finish_bytecode_control_result(handle, Ok(None))
     }

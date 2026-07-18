@@ -294,7 +294,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .call(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, core::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
@@ -347,7 +347,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .call(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, core::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         let extensible = to_boolean(self, &result)?;
         let target_extensible = self.proxy_target_is_extensible(&target)?;
@@ -364,7 +364,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .call(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, core::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         let prevented = to_boolean(self, &result)?;
         if prevented {
@@ -418,10 +418,10 @@ impl Context {
             return self.semantic_own_property_keys(&target);
         };
         let result = self
-            .call(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, core::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let keys = self.proxy_key_list_from_value(&result)?;
         self.validate_proxy_own_property_keys(&target, &keys)?;
         Ok(keys)
@@ -444,7 +444,7 @@ impl Context {
             .call(&trap, &[target.clone(), key_value], handler)?
             .into_native_value_result()?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let descriptor = match result {
             Value::Undefined => None,
             Value::Object(_) => Some(self.own_property_descriptor_from_object(&result)?),

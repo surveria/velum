@@ -1,6 +1,8 @@
 #![deny(unsafe_code)]
 #![doc = include_str!("../README.md")]
 
+extern crate alloc;
+
 mod api;
 mod ast;
 mod binding_layout;

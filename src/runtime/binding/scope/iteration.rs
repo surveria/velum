@@ -1,4 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use crate::error::Result;
 use crate::storage::atom::AtomId;

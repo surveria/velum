@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorName {

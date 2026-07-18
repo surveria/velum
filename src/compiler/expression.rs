@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 use super::{
     BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCallSite, BytecodeCompiler,
@@ -246,7 +246,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(expr)?;
                 let pattern = self.compile_assignment_pattern(pattern, *strict)?;
                 self.emit(BytecodeInstruction::DestructurePattern {
-                    pattern: std::rc::Rc::new(pattern),
+                    pattern: alloc::rc::Rc::new(pattern),
                     mode: crate::bytecode::BytecodeDestructureMode::Assignment,
                 });
                 Ok(())

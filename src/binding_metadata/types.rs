@@ -126,7 +126,7 @@ impl Scope {
         self.declarations.get(position).copied()
     }
 
-    pub fn declaration_position(&self, name: StaticNameId) -> std::result::Result<usize, usize> {
+    pub fn declaration_position(&self, name: StaticNameId) -> core::result::Result<usize, usize> {
         self.declarations
             .binary_search_by(|declaration| declaration.name.cmp(&name))
     }
@@ -166,7 +166,7 @@ impl FunctionScope {
     pub fn upvalue_position(
         &self,
         declaration: DeclarationRef,
-    ) -> std::result::Result<usize, usize> {
+    ) -> core::result::Result<usize, usize> {
         if let Some(position) = self
             .upvalues
             .iter()

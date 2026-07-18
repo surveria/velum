@@ -29,7 +29,7 @@ impl Context {
         let length = self.array_like_length(this_value)?;
         let result = self.create_intrinsic_array_with_length(length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for offset in 0..length {
             self.step()?;
             let from = length
@@ -67,7 +67,7 @@ impl Context {
         }
         let result = self.create_intrinsic_array_with_length(new_length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let mut write = 0_usize;
         for index in 0..start {
             self.step()?;
@@ -176,7 +176,7 @@ impl Context {
         let value = args.get(1).cloned().unwrap_or(Value::Undefined);
         let result = self.create_intrinsic_array_with_length(length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         for index in 0..length {
             self.step()?;
             let copied = if index == actual {

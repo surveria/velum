@@ -1,4 +1,5 @@
-use std::{collections::BTreeMap, fmt, rc::Rc};
+use alloc::{collections::BTreeMap, rc::Rc};
+use core::fmt;
 
 use parking_lot::Mutex;
 

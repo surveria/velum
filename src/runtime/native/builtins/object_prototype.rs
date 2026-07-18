@@ -186,7 +186,7 @@ impl Context {
             PropertyConfigurable::Yes,
         ));
         let descriptor_value = self.create_legacy_accessor_descriptor_object(&descriptor, kind)?;
-        roots.add_values(std::iter::once(&descriptor_value))?;
+        roots.add_values(core::iter::once(&descriptor_value))?;
         if !self.semantic_define_own_property_update_with_descriptor(
             &object,
             &mut property,
@@ -267,7 +267,7 @@ impl Context {
     ) -> Result<Value> {
         let mut current = self.object_to_object(this_value)?;
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        roots.add_values(std::iter::once(&current))?;
+        roots.add_values(core::iter::once(&current))?;
         let property_value = Self::argument_or_undefined(args.as_slice().first());
         let property = self.dynamic_property_key(&property_value)?;
         loop {
@@ -290,7 +290,7 @@ impl Context {
                 return Ok(Value::Undefined);
             }
             current = prototype;
-            roots.add_values(std::iter::once(&current))?;
+            roots.add_values(core::iter::once(&current))?;
         }
     }
 

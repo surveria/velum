@@ -67,7 +67,11 @@ impl ObjectHeap {
                 .checked_add(object.named_properties.len())
                 .and_then(|count| count.checked_add(object.array_storage.property_count()))
                 .and_then(|count| {
-                    count.checked_add(self.private_slots.get(index).map_or(0, std::vec::Vec::len))
+                    count.checked_add(
+                        self.private_slots
+                            .get(index)
+                            .map_or(0, alloc::vec::Vec::len),
+                    )
                 })
                 .ok_or_else(|| Error::limit("object property count overflowed"))?;
             internal_associations = internal_associations

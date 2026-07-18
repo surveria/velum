@@ -3,7 +3,7 @@ use crate::{
     ownership::VmIdentity,
     storage::string_heap::JsString,
 };
-use std::{collections::BTreeSet, rc::Rc};
+use alloc::{collections::BTreeSet, rc::Rc};
 
 const FOREIGN_SYMBOL_DESCRIPTION_ERROR: &str = "Symbol description belongs to another VM";
 const FOREIGN_SYMBOL_REGISTRY_KEY_ERROR: &str = "Symbol registry key belongs to another VM";

@@ -1,4 +1,5 @@
-use std::{any::Any, fmt, future::Future, rc::Rc};
+use alloc::rc::Rc;
+use core::{any::Any, fmt, future::Future};
 
 use crate::{
     RetainedValue,
@@ -74,7 +75,7 @@ impl<T> fmt::Debug for HostInstance<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("HostInstance")
-            .field("payload_type", &std::any::type_name::<T>())
+            .field("payload_type", &core::any::type_name::<T>())
             .field("logical_payload_bytes", &self.logical_payload_bytes)
             .field("traced_value_count", &self.traced_values.len())
             .finish_non_exhaustive()

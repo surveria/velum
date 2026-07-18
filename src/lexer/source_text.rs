@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, rc::Rc};
+use alloc::{collections::BTreeMap, rc::Rc};
 
 use crate::{Error, Result};
 

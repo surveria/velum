@@ -318,7 +318,7 @@ impl Context {
                 };
                 let kind = request.kind;
                 let value = request.value.clone();
-                let state = std::mem::replace(&mut generator.state, GeneratorState::Executing);
+                let state = core::mem::replace(&mut generator.state, GeneratorState::Executing);
                 (state, kind, value)
             };
             let step = self.resume_async_generator_state(action.0, action.1, action.2);
@@ -442,7 +442,7 @@ impl Context {
     ) -> Result<()> {
         let state = {
             let generator = self.generator_mut(id)?;
-            std::mem::replace(&mut generator.state, GeneratorState::Executing)
+            core::mem::replace(&mut generator.state, GeneratorState::Executing)
         };
         let GeneratorState::Awaiting(awaiting) = state else {
             return Err(Error::runtime("async generator await state disappeared"));
@@ -516,7 +516,7 @@ impl Context {
     ) -> Result<()> {
         let (execution, requests) = {
             let generator = self.generator_mut(id)?;
-            let state = std::mem::replace(&mut generator.state, GeneratorState::Completed);
+            let state = core::mem::replace(&mut generator.state, GeneratorState::Completed);
             let execution = match state {
                 GeneratorState::Awaiting(
                     AsyncGeneratorAwaitState::Body(execution)

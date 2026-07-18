@@ -534,7 +534,7 @@ impl Context {
         let resources = {
             let source_data = self.async_disposable_stack_data_mut(source)?;
             source_data.disposed = true;
-            std::mem::take(&mut source_data.resources)
+            core::mem::take(&mut source_data.resources)
         };
         self.async_disposable_stack_data_mut(target)?.resources = resources;
         Ok(moved)
@@ -544,7 +544,7 @@ impl Context {
         let (result_promise, promise_object) = self.create_pending_promise()?;
         let _root_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            std::iter::once(&promise_object),
+            core::iter::once(&promise_object),
         )?;
         let id = match self.async_disposable_stack_id(this_value) {
             Ok(id) => id,
@@ -560,7 +560,7 @@ impl Context {
                 return Ok(promise_object);
             }
             data.disposed = true;
-            std::mem::take(&mut data.resources)
+            core::mem::take(&mut data.resources)
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, resources.len())?;

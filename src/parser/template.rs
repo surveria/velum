@@ -95,7 +95,7 @@ impl Parser {
         span: crate::SourceSpan,
     ) -> Result<Expression> {
         let quasi = self.template_element(part)?;
-        Self::reject_invalid_untagged_template(std::slice::from_ref(&quasi), span)?;
+        Self::reject_invalid_untagged_template(core::slice::from_ref(&quasi), span)?;
         Ok(Expression::new(
             Expr::TemplateLiteral {
                 quasis: vec![quasi],

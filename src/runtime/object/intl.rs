@@ -3,7 +3,7 @@ use crate::{
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmObjectEdgeKind},
     value::{ObjectId, Value},
 };
-use std::mem::size_of;
+use core::mem::size_of;
 
 use super::{Object, ObjectHeap};
 

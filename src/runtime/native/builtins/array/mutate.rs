@@ -29,7 +29,7 @@ impl Context {
         let new_length = Self::array_spliced_length(length, delete_count, items.len())?;
         let removed = self.array_collect_removed(this_value, start, delete_count)?;
         let _removed_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&removed))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&removed))?;
         self.array_splice_shift(this_value, length, start, delete_count, items.len())?;
         for (offset, item) in items.iter().enumerate() {
             self.step()?;
@@ -51,7 +51,7 @@ impl Context {
     ) -> Result<Value> {
         let removed = self.array_species_create(this_value, delete_count)?;
         let _removed_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&removed))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&removed))?;
         for offset in 0..delete_count {
             self.step()?;
             let from = start

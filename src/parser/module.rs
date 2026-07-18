@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::{
     ast::{DeclKind, Expr, Statement, Stmt},
@@ -586,9 +586,9 @@ impl Parser {
                     alternate,
                     ..
                 } => {
-                    Self::validate_module_statement_list(std::slice::from_ref(consequent))?;
+                    Self::validate_module_statement_list(core::slice::from_ref(consequent))?;
                     if let Some(alternate) = alternate {
-                        Self::validate_module_statement_list(std::slice::from_ref(alternate))?;
+                        Self::validate_module_statement_list(core::slice::from_ref(alternate))?;
                     }
                 }
                 Stmt::While { body, .. }
@@ -597,13 +597,13 @@ impl Parser {
                 | Stmt::Label { body, .. }
                 | Stmt::ForIn { body, .. }
                 | Stmt::ForOf { body, .. } => {
-                    Self::validate_module_statement_list(std::slice::from_ref(body))?;
+                    Self::validate_module_statement_list(core::slice::from_ref(body))?;
                 }
                 Stmt::For { init, body, .. } => {
                     if let Some(init) = init {
-                        Self::validate_module_statement_list(std::slice::from_ref(init))?;
+                        Self::validate_module_statement_list(core::slice::from_ref(init))?;
                     }
-                    Self::validate_module_statement_list(std::slice::from_ref(body))?;
+                    Self::validate_module_statement_list(core::slice::from_ref(body))?;
                 }
                 Stmt::Switch { cases, .. } => {
                     for case in cases {

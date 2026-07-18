@@ -35,7 +35,7 @@ pub(in crate::runtime) enum IteratorSource {
     ArrayIndex { array: Value, index: usize },
     /// Code-point iteration over an immutable string snapshot.
     Utf16CodePoints {
-        units: std::iter::Peekable<std::vec::IntoIter<u16>>,
+        units: core::iter::Peekable<alloc::vec::IntoIter<u16>>,
     },
     /// ECMAScript iterator record with the `next` method cached at acquisition.
     Protocol {
@@ -221,7 +221,7 @@ impl Context {
             )));
         }
         let _root_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&iterator))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&iterator))?;
         let next = self.get_named(&iterator, ITERATOR_NEXT_PROPERTY)?;
         Ok(IteratorSource::Protocol {
             iterator,
@@ -347,7 +347,7 @@ impl Context {
             )));
         }
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let done = self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?;
         if to_boolean(self, &done)? {
             set_protocol_done(source);
@@ -413,7 +413,7 @@ impl Context {
                 }
                 let iterator = iterator.clone();
                 let next = next.clone();
-                let result = match self.call(&next, std::slice::from_ref(value), iterator)? {
+                let result = match self.call(&next, core::slice::from_ref(value), iterator)? {
                     Completion::Normal(result) => result,
                     Completion::Throw(value) => {
                         set_protocol_done(source);
@@ -443,7 +443,7 @@ impl Context {
             set_protocol_done(source);
             return Ok(YieldDelegateStep::Return(value.clone()));
         };
-        let result = match self.call(&return_method, std::slice::from_ref(value), iterator)? {
+        let result = match self.call(&return_method, core::slice::from_ref(value), iterator)? {
             Completion::Normal(result) => result,
             Completion::Throw(value) => {
                 set_protocol_done(source);
@@ -475,7 +475,7 @@ impl Context {
                 completion => completion.into_result().map(YieldDelegateStep::Complete),
             };
         };
-        let result = match self.call(&throw_method, std::slice::from_ref(value), iterator)? {
+        let result = match self.call(&throw_method, core::slice::from_ref(value), iterator)? {
             Completion::Normal(result) => result,
             Completion::Throw(value) => {
                 set_protocol_done(source);
@@ -498,7 +498,7 @@ impl Context {
             )));
         }
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(result))?;
         let done_value = self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?;
         let done = to_boolean(self, &done_value)?;
         if !done {
@@ -655,13 +655,13 @@ impl Context {
     fn iterator_root_scope(&self, source: &IteratorSource) -> Result<TransientRootScope> {
         match source {
             IteratorSource::ArrayIndex { array, .. } => {
-                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(array))
+                self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(array))
             }
             IteratorSource::Protocol { iterator, next, .. } => {
                 self.transient_root_scope(VmRootKind::TransientTemporary, [iterator, next])
             }
             IteratorSource::Utf16CodePoints { .. } => {
-                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::empty())
+                self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::empty())
             }
         }
     }

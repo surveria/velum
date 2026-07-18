@@ -14,7 +14,7 @@ use crate::runtime::{
     VmOptimizationSnapshot, VmStorageSnapshot,
 };
 use crate::value::Value;
-use std::time::Duration;
+use core::time::Duration;
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct EngineConfig {

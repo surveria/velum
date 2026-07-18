@@ -122,7 +122,7 @@ impl Context {
         }
         let (value, record) = self.value_and_record_from_json(parsed)?;
         let _value_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&value))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&value))?;
         let record_roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         record.add_original_object_roots(&record_roots)?;
         let holder = self.create_json_wrapper(value)?;
@@ -180,7 +180,7 @@ impl Context {
         let mut elements = Vec::with_capacity(values.len());
         for value in values {
             let value = self.value_from_json(value)?;
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             elements.push(value);
         }
         self.create_array_from_elements(elements)
@@ -197,7 +197,7 @@ impl Context {
             let property = self.intern_property_key(&key)?;
             names.push(key);
             let value = self.value_from_json(value)?;
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             values.push((property, value));
         }
         let properties = names

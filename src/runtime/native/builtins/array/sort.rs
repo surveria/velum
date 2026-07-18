@@ -86,7 +86,7 @@ impl Context {
         let length = self.array_like_length(this_value)?;
         let result = self.create_intrinsic_array_with_length(length)?;
         let _result_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&result))?;
         let mut items = Vec::new();
         for index in 0..length {
             self.step()?;
@@ -361,17 +361,17 @@ impl Context {
     }
 }
 
-fn numeric_sort_ordering(left: f64, right: f64, order: NumericSortOrder) -> std::cmp::Ordering {
+fn numeric_sort_ordering(left: f64, right: f64, order: NumericSortOrder) -> core::cmp::Ordering {
     let result = match order {
         NumericSortOrder::Ascending => left - right,
         NumericSortOrder::Descending => right - left,
     };
     if result.is_nan() || result == 0.0 {
-        return std::cmp::Ordering::Equal;
+        return core::cmp::Ordering::Equal;
     }
     if result < 0.0 {
-        std::cmp::Ordering::Less
+        core::cmp::Ordering::Less
     } else {
-        std::cmp::Ordering::Greater
+        core::cmp::Ordering::Greater
     }
 }

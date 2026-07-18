@@ -1,8 +1,8 @@
-use std::{
+use alloc::rc::{Rc, Weak};
+use core::{
     fmt,
     future::Future,
     pin::Pin,
-    rc::{Rc, Weak},
     task::{Context as TaskContext, Poll},
 };
 

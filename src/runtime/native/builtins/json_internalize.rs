@@ -72,7 +72,7 @@ impl JsonParseRecord {
 
     pub(super) fn add_original_object_roots(&self, roots: &TransientRootScope) -> Result<()> {
         if matches!(self.original, Value::Object(_)) {
-            roots.add_values(std::iter::once(&self.original))?;
+            roots.add_values(core::iter::once(&self.original))?;
         }
         match &self.children {
             JsonParseChildren::None => Ok(()),
@@ -129,7 +129,7 @@ impl Context {
         let mut records = Vec::with_capacity(parsed.len());
         for child in parsed {
             let (value, record) = self.value_and_record_from_json(child)?;
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             values.push(value);
             records.push(record);
         }
@@ -152,7 +152,7 @@ impl Context {
             self.check_string_len(&name)?;
             let property = self.intern_property_key(&name)?;
             let (value, record) = self.value_and_record_from_json(child)?;
-            roots.add_values(std::iter::once(&value))?;
+            roots.add_values(core::iter::once(&value))?;
             records.push((name.clone(), record));
             names.push(name);
             values.push((property, value));

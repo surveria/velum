@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, rc::Rc};
+use alloc::{collections::BTreeSet, rc::Rc};
 
 use crate::{
     ast::{
@@ -562,7 +562,7 @@ impl CaptureBindingCollector {
     }
 
     fn collect_pattern(&mut self, pattern: &BindingPattern) {
-        let mut visit = |expr: &Expression| -> std::result::Result<(), std::convert::Infallible> {
+        let mut visit = |expr: &Expression| -> core::result::Result<(), core::convert::Infallible> {
             self.collect_expr(expr);
             Ok(())
         };

@@ -1,4 +1,4 @@
-use std::{error::Error as StdError, fmt, future::Future, pin::Pin, task::Context as TaskContext};
+use core::{error::Error as StdError, fmt, future::Future, pin::Pin, task::Context as TaskContext};
 
 use crate::{
     JsBigInt, OwnedValue, RetainedValue,
@@ -65,7 +65,7 @@ impl From<Error> for HostFutureError {
 }
 
 /// Result type for an async host task that can await JavaScript commands.
-pub type HostTaskResult<T> = std::result::Result<T, HostFutureError>;
+pub type HostTaskResult<T> = core::result::Result<T, HostFutureError>;
 
 /// Converts a typed async host-function result into a VM-independent
 /// JavaScript primitive.
@@ -126,7 +126,7 @@ impl HostFunction {
         Self::with_kind(
             name,
             HostFunctionKind::AsyncCallback {
-                callback: std::rc::Rc::new(move |call| {
+                callback: alloc::rc::Rc::new(move |call| {
                     let future = callback(call)?;
                     let future: HostFuture =
                         Box::pin(async move { future.await.map_err(HostFutureError::from) });
@@ -145,7 +145,7 @@ impl HostFunction {
         Self::with_kind(
             name,
             HostFunctionKind::AsyncCallback {
-                callback: std::rc::Rc::new(move |call| {
+                callback: alloc::rc::Rc::new(move |call| {
                     let future = callback(call)?;
                     let converted: HostFuture = Box::pin(async move {
                         future
@@ -179,7 +179,7 @@ impl HostFunction {
         Self::with_kind_and_properties(
             name,
             HostFunctionKind::AsyncCallback {
-                callback: std::rc::Rc::new(move |call| {
+                callback: alloc::rc::Rc::new(move |call| {
                     let future: HostFuture = Box::pin(callback(call)?);
                     Ok(future)
                 }),
@@ -198,7 +198,7 @@ impl HostFunction {
         Self::with_kind(
             name,
             HostFunctionKind::AsyncCallback {
-                callback: std::rc::Rc::new(move |call| {
+                callback: alloc::rc::Rc::new(move |call| {
                     let future = callback(call)?;
                     let converted: HostFuture = Box::pin(async move {
                         future

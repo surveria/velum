@@ -1,4 +1,5 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
+use alloc::{rc::Rc, sync::Arc};
+use core::{cell::RefCell, time::Duration};
 
 use crate::{
     error::{Error, Result},
@@ -159,7 +160,7 @@ impl ByteBuffer {
     }
 
     pub fn byte_length(&self) -> usize {
-        self.with_state(|state| state.bytes.as_ref().map_or(0, std::vec::Vec::len))
+        self.with_state(|state| state.bytes.as_ref().map_or(0, alloc::vec::Vec::len))
     }
 
     pub(in crate::runtime) fn max_byte_length(&self) -> usize {

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr;
 
 use icu_locale::{
     Direction, Locale, LocaleCanonicalizer, LocaleDirectionality, LocaleExpander,
