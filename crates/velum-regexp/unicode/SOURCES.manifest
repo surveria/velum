@@ -1,0 +1,4 @@
+# Inputs for velum-regexp-unicode-gen.
+format=1
+unicode=17.0.0
+sha256 24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08 DerivedCoreProperties.txt https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt

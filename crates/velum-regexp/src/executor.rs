@@ -1,0 +1,423 @@
+use crate::{
+    Capture, ExecutionControl, ExecutionError, ExecutionLimits, ExecutionStats, Match,
+    SearchOutcome,
+    input::{advance_candidate, decode_forward, is_line_terminator},
+    program::{Instruction, InstructionIndex, Program},
+};
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CaptureSlot {
+    start: Option<usize>,
+    end: Option<usize>,
+}
+
+impl CaptureSlot {
+    fn span(self) -> Option<core::ops::Range<usize>> {
+        self.start.zip(self.end).map(|(start, end)| start..end)
+    }
+}
+
+#[derive(Debug)]
+enum UndoRecord {
+    Capture { id: usize, previous: CaptureSlot },
+    Progress { id: usize, previous: Option<usize> },
+}
+
+#[derive(Debug)]
+struct BacktrackFrame {
+    instruction: InstructionIndex,
+    position: usize,
+    undo_depth: usize,
+}
+
+enum StepOutcome {
+    Accept,
+    Next {
+        instruction: InstructionIndex,
+        position: usize,
+    },
+    Failed,
+}
+
+#[derive(Debug)]
+struct AttemptState {
+    captures: Vec<CaptureSlot>,
+    progress: Vec<Option<usize>>,
+    undo: Vec<UndoRecord>,
+    backtrack: Vec<BacktrackFrame>,
+}
+
+impl AttemptState {
+    fn new(program: &Program) -> Self {
+        Self {
+            captures: vec![CaptureSlot::default(); program.capture_count],
+            progress: vec![None; program.progress_count],
+            undo: Vec::new(),
+            backtrack: Vec::new(),
+        }
+    }
+}
+
+pub struct Executor<'a, C> {
+    program: &'a Program,
+    input: &'a [u16],
+    limits: ExecutionLimits,
+    control: &'a mut C,
+    stats: ExecutionStats,
+}
+
+impl<'a, C: ExecutionControl> Executor<'a, C> {
+    pub(super) const fn new(
+        program: &'a Program,
+        input: &'a [u16],
+        limits: ExecutionLimits,
+        control: &'a mut C,
+    ) -> Self {
+        Self {
+            program,
+            input,
+            limits,
+            control,
+            stats: ExecutionStats {
+                steps: 0,
+                candidate_starts: 0,
+                max_backtrack_depth: 0,
+                max_undo_depth: 0,
+            },
+        }
+    }
+
+    pub(super) fn search(
+        mut self,
+        start: usize,
+        anchored: bool,
+    ) -> Result<SearchOutcome, ExecutionError> {
+        if start > self.input.len() {
+            return Err(ExecutionError::StartOutOfBounds);
+        }
+        if self.program.capture_count > self.limits.max_capture_slots {
+            return Err(ExecutionError::CaptureLimit {
+                limit: self.limits.max_capture_slots,
+            });
+        }
+        let mut candidate = start;
+        loop {
+            self.charge_candidate()?;
+            if let Some(matched) = self.run_attempt(candidate)? {
+                return Ok(SearchOutcome {
+                    matched: Some(matched),
+                    stats: self.stats,
+                });
+            }
+            if anchored || candidate == self.input.len() {
+                return Ok(SearchOutcome {
+                    matched: None,
+                    stats: self.stats,
+                });
+            }
+            candidate =
+                advance_candidate(self.input, candidate, self.program.flags.has_unicode_mode())?;
+        }
+    }
+
+    fn run_attempt(&mut self, start: usize) -> Result<Option<Match>, ExecutionError> {
+        let mut state = AttemptState::new(self.program);
+        let mut instruction = 0_usize;
+        let mut position = start;
+        loop {
+            self.charge_step()?;
+            let Some(current) = self.program.instructions.get(instruction).copied() else {
+                return Err(ExecutionError::InvalidProgram);
+            };
+            match self.execute_instruction(current, &mut state, instruction, position)? {
+                StepOutcome::Accept => return Ok(Some(build_match(start, position, &state))),
+                StepOutcome::Next {
+                    instruction: next,
+                    position: next_position,
+                } => {
+                    instruction = next;
+                    position = next_position;
+                }
+                StepOutcome::Failed => {
+                    let Some(restored) = Self::backtrack(&mut state)? else {
+                        return Ok(None);
+                    };
+                    (instruction, position) = restored;
+                }
+            }
+        }
+    }
+
+    fn execute_instruction(
+        &mut self,
+        current: Instruction,
+        state: &mut AttemptState,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let sequential = next_instruction(instruction)?;
+        match current {
+            Instruction::Accept => Ok(StepOutcome::Accept),
+            Instruction::Char(expected) => self.consume_char(expected, sequential, position),
+            Instruction::Any => self.consume_any(sequential, position),
+            Instruction::AssertStart => Ok(if self.at_start(position) {
+                next_step(sequential, position)
+            } else {
+                StepOutcome::Failed
+            }),
+            Instruction::AssertEnd => Ok(if self.at_end(position) {
+                next_step(sequential, position)
+            } else {
+                StepOutcome::Failed
+            }),
+            Instruction::SaveStart(id) => {
+                self.set_capture(
+                    state,
+                    id,
+                    CaptureSlot {
+                        start: Some(position),
+                        end: None,
+                    },
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::SaveEnd(id) => {
+                let Some(previous) = state.captures.get(id).copied() else {
+                    return Err(ExecutionError::InvalidProgram);
+                };
+                self.set_capture(
+                    state,
+                    id,
+                    CaptureSlot {
+                        start: previous.start,
+                        end: Some(position),
+                    },
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::ClearCapture(id) => {
+                self.set_capture(state, id, CaptureSlot::default())?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::Split { first, second } => {
+                self.push_backtrack(state, second, position)?;
+                Ok(next_step(first, position))
+            }
+            Instruction::Jump(target) => Ok(next_step(target, position)),
+            Instruction::ResetProgress(id) => {
+                self.set_progress(state, id, Some(position))?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::CheckProgress { id, no_progress } => {
+                let Some(previous) = state.progress.get(id).copied() else {
+                    return Err(ExecutionError::InvalidProgram);
+                };
+                if previous == Some(position) {
+                    Ok(next_step(no_progress, position))
+                } else {
+                    self.set_progress(state, id, Some(position))?;
+                    Ok(next_step(sequential, position))
+                }
+            }
+        }
+    }
+
+    fn consume_char(
+        &self,
+        expected: u32,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        Ok(match decoded {
+            Some((actual, next)) if actual == expected => next_step(instruction, next),
+            Some(_) | None => StepOutcome::Failed,
+        })
+    }
+
+    fn consume_any(
+        &self,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let decoded = decode_forward(self.input, position, self.program.flags.has_unicode_mode())?;
+        let Some((actual, next)) = decoded else {
+            return Ok(StepOutcome::Failed);
+        };
+        let line_terminator = u16::try_from(actual).is_ok_and(is_line_terminator);
+        if line_terminator && !self.program.flags.dot_all() {
+            Ok(StepOutcome::Failed)
+        } else {
+            Ok(next_step(instruction, next))
+        }
+    }
+
+    fn at_start(&self, position: usize) -> bool {
+        position == 0
+            || (self.program.flags.multiline()
+                && position
+                    .checked_sub(1)
+                    .and_then(|index| self.input.get(index))
+                    .is_some_and(|unit| is_line_terminator(*unit)))
+    }
+
+    fn at_end(&self, position: usize) -> bool {
+        position == self.input.len()
+            || (self.program.flags.multiline()
+                && self
+                    .input
+                    .get(position)
+                    .is_some_and(|unit| is_line_terminator(*unit)))
+    }
+
+    fn set_capture(
+        &mut self,
+        state: &mut AttemptState,
+        id: usize,
+        value: CaptureSlot,
+    ) -> Result<(), ExecutionError> {
+        let Some(previous) = state.captures.get(id).copied() else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        self.push_undo(state, UndoRecord::Capture { id, previous })?;
+        let Some(slot) = state.captures.get_mut(id) else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        *slot = value;
+        Ok(())
+    }
+
+    fn set_progress(
+        &mut self,
+        state: &mut AttemptState,
+        id: usize,
+        value: Option<usize>,
+    ) -> Result<(), ExecutionError> {
+        let Some(previous) = state.progress.get(id).copied() else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        self.push_undo(state, UndoRecord::Progress { id, previous })?;
+        let Some(slot) = state.progress.get_mut(id) else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        *slot = value;
+        Ok(())
+    }
+
+    fn push_undo(
+        &mut self,
+        state: &mut AttemptState,
+        record: UndoRecord,
+    ) -> Result<(), ExecutionError> {
+        if state.undo.len() >= self.limits.max_undo_records {
+            return Err(ExecutionError::UndoLimit {
+                limit: self.limits.max_undo_records,
+            });
+        }
+        state.undo.push(record);
+        self.stats.max_undo_depth = self.stats.max_undo_depth.max(state.undo.len());
+        Ok(())
+    }
+
+    fn push_backtrack(
+        &mut self,
+        state: &mut AttemptState,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<(), ExecutionError> {
+        if state.backtrack.len() >= self.limits.max_backtrack_frames {
+            return Err(ExecutionError::BacktrackLimit {
+                limit: self.limits.max_backtrack_frames,
+            });
+        }
+        state.backtrack.push(BacktrackFrame {
+            instruction,
+            position,
+            undo_depth: state.undo.len(),
+        });
+        self.stats.max_backtrack_depth = self.stats.max_backtrack_depth.max(state.backtrack.len());
+        Ok(())
+    }
+
+    fn backtrack(
+        state: &mut AttemptState,
+    ) -> Result<Option<(InstructionIndex, usize)>, ExecutionError> {
+        let Some(frame) = state.backtrack.pop() else {
+            return Ok(None);
+        };
+        while state.undo.len() > frame.undo_depth {
+            let Some(record) = state.undo.pop() else {
+                return Err(ExecutionError::InvalidProgram);
+            };
+            match record {
+                UndoRecord::Capture { id, previous } => {
+                    let Some(slot) = state.captures.get_mut(id) else {
+                        return Err(ExecutionError::InvalidProgram);
+                    };
+                    *slot = previous;
+                }
+                UndoRecord::Progress { id, previous } => {
+                    let Some(slot) = state.progress.get_mut(id) else {
+                        return Err(ExecutionError::InvalidProgram);
+                    };
+                    *slot = previous;
+                }
+            }
+        }
+        Ok(Some((frame.instruction, frame.position)))
+    }
+
+    fn charge_step(&mut self) -> Result<(), ExecutionError> {
+        self.stats.steps = self
+            .stats
+            .steps
+            .checked_add(1)
+            .ok_or(ExecutionError::SizeOverflow)?;
+        if self.stats.steps > self.limits.max_steps {
+            return Err(ExecutionError::StepLimit {
+                limit: self.limits.max_steps,
+            });
+        }
+        self.control
+            .charge_steps(1)
+            .map_err(ExecutionError::Interrupted)
+    }
+
+    fn charge_candidate(&mut self) -> Result<(), ExecutionError> {
+        self.stats.candidate_starts = self
+            .stats
+            .candidate_starts
+            .checked_add(1)
+            .ok_or(ExecutionError::SizeOverflow)?;
+        if self.stats.candidate_starts > self.limits.max_candidate_starts {
+            return Err(ExecutionError::CandidateStartLimit {
+                limit: self.limits.max_candidate_starts,
+            });
+        }
+        Ok(())
+    }
+}
+
+const fn next_step(instruction: InstructionIndex, position: usize) -> StepOutcome {
+    StepOutcome::Next {
+        instruction,
+        position,
+    }
+}
+
+fn build_match(start: usize, end: usize, state: &AttemptState) -> Match {
+    let captures = state
+        .captures
+        .iter()
+        .copied()
+        .map(|slot| Capture { span: slot.span() })
+        .collect();
+    Match {
+        span: start..end,
+        captures,
+    }
+}
+
+fn next_instruction(index: InstructionIndex) -> Result<InstructionIndex, ExecutionError> {
+    index.checked_add(1).ok_or(ExecutionError::SizeOverflow)
+}

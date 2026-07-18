@@ -30,6 +30,27 @@
 !/docs/
 !/docs/*.md
 
+!/crates/
+!/crates/velum-regexp/
+!/crates/velum-regexp/Cargo.toml
+!/crates/velum-regexp/src/
+!/crates/velum-regexp/src/**/
+!/crates/velum-regexp/src/**/*.rs
+!/crates/velum-regexp/unicode/
+!/crates/velum-regexp/unicode/SOURCES.manifest
+!/crates/velum-regexp/unicode/GENERATED-SHA256SUMS
+!/crates/velum-regexp/tests/
+!/crates/velum-regexp/tests/**/*.rs
+
+!/tools/
+!/tools/regexp-unicode-gen/
+!/tools/regexp-unicode-gen/Cargo.toml
+!/tools/regexp-unicode-gen/src/
+!/tools/regexp-unicode-gen/src/**/
+!/tools/regexp-unicode-gen/src/**/*.rs
+!/tools/regexp-unicode-gen/tests/
+!/tools/regexp-unicode-gen/tests/**/*.rs
+
 !/examples/
 !/examples/*.md
 !/examples/**/
