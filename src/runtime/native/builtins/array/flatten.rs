@@ -3,7 +3,7 @@ use crate::{
     bytecode::{BytecodeBinding, BytecodeInstruction, BytecodeNumericBinaryOp},
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs},
-    value::{FunctionId, Value},
+    value::{FunctionId, ObjectId, Value},
 };
 
 const ARRAY_FLATTEN_INDEX_LIMIT_ERROR: &str = "array flatten index exceeded supported range";
@@ -165,17 +165,22 @@ impl Context {
         if let Some(next_depth) = depth.descend()
             && self.is_flattenable_array(&value)?
         {
-            if self.flatten_packed_array_into(&value, result, target_index, next_depth)? {
-                return Ok(());
-            }
-            let nested_length = self.array_like_length(&value)?;
-            return self.flatten_array_like_into(
-                &value,
-                nested_length,
-                result,
-                target_index,
-                next_depth,
-            );
+            self.enter_native_stack_frame()?;
+            let outcome = (|| {
+                if self.flatten_packed_array_into(&value, result, target_index, next_depth)? {
+                    return Ok(());
+                }
+                let nested_length = self.array_like_length(&value)?;
+                self.flatten_array_like_into(
+                    &value,
+                    nested_length,
+                    result,
+                    target_index,
+                    next_depth,
+                )
+            })();
+            self.leave_native_stack_frame();
+            return outcome;
         }
         self.append_flattened_value(result, target_index, value)
     }
@@ -188,7 +193,10 @@ impl Context {
         depth: FlattenDepth,
     ) -> Result<bool> {
         let mut values = Vec::new();
-        let Some(steps) = self.collect_packed_flat_values(source, depth, &mut values)? else {
+        let mut visited = Vec::new();
+        let Some(steps) =
+            self.collect_packed_flat_values(source, depth, &mut values, &mut visited)?
+        else {
             return Ok(false);
         };
         self.charge_runtime_steps(steps)?;
@@ -203,31 +211,42 @@ impl Context {
         source: &Value,
         depth: FlattenDepth,
         values: &mut Vec<Value>,
+        visited: &mut Vec<ObjectId>,
     ) -> Result<Option<usize>> {
         let Value::Object(id) = source else {
             return Ok(None);
         };
+        if visited.contains(id) {
+            return Ok(None);
+        }
         let Some(source_values) = self.objects.packed_array_values_if_array(*id)? else {
             return Ok(None);
         };
-        let mut steps = source_values.len();
-        for value in source_values {
-            if let Some(next_depth) = depth.descend()
-                && self.packed_value_is_flattenable_array(&value)?
-            {
-                let Some(nested_steps) =
-                    self.collect_packed_flat_values(&value, next_depth, values)?
-                else {
-                    return Ok(None);
-                };
-                steps = steps
-                    .checked_add(nested_steps)
-                    .ok_or_else(|| Error::limit(ARRAY_FLATTEN_INDEX_LIMIT_ERROR))?;
-            } else {
-                values.push(value);
+        visited.push(*id);
+        let outcome = (|| {
+            let mut steps = source_values.len();
+            for value in source_values {
+                if let Some(next_depth) = depth.descend()
+                    && self.packed_value_is_flattenable_array(&value)?
+                {
+                    let Some(nested_steps) =
+                        self.collect_packed_flat_values(&value, next_depth, values, visited)?
+                    else {
+                        return Ok(None);
+                    };
+                    steps = steps
+                        .checked_add(nested_steps)
+                        .ok_or_else(|| Error::limit(ARRAY_FLATTEN_INDEX_LIMIT_ERROR))?;
+                } else {
+                    values.push(value);
+                }
             }
+            Ok(Some(steps))
+        })();
+        if visited.pop().is_none() {
+            return Err(Error::runtime("array flatten visit stack underflow"));
         }
-        Ok(Some(steps))
+        outcome
     }
 
     fn append_flattened_value(
