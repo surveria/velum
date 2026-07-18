@@ -43,6 +43,10 @@ disjunction paths are mutually exclusive. Named backreferences lower to the
 bounded set of capture slots sharing that name and select the single slot that
 participated in the current path or repetition. Slot selection is charged to
 the same execution and host-control budgets as ordinary backreference work.
+Legacy mode also accepts Annex B quantifiers on lookaheads. Because assertions
+are zero width, lowering retains only the required iterations: a zero minimum
+does not leak captures, while a positive minimum executes exactly that bounded
+count. Unicode modes and all other assertion kinds reject quantifiers.
 
 ## Crate Boundary
 
