@@ -41,6 +41,9 @@ unicode-ident = "1"
 unicode-normalization = "0.1"
 unicode-segmentation = "1.13"
 
+[dev-dependencies]
+velum-regexp = { path = "crates/velum-regexp" }
+
 [lints.rust]
 unsafe_code = "deny"
 

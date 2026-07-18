@@ -1,4 +1,45 @@
+use std::ops::Range;
+
 use regress::{Flags, Regex};
+
+#[derive(Debug)]
+pub struct CompiledRegExp {
+    backend: Regex,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CompiledRegExpMatch {
+    pub span: Range<usize>,
+    pub captures: Vec<Option<Range<usize>>>,
+    pub named_captures: Vec<(String, Option<Range<usize>>)>,
+}
+
+impl CompiledRegExp {
+    pub fn retained_payload_bytes(&self) -> Option<usize> {
+        self.backend.retained_payload_bytes()
+    }
+
+    pub fn find_utf16(
+        &self,
+        flags: RegExpFlags,
+        input: &[u16],
+        start: usize,
+    ) -> Option<CompiledRegExpMatch> {
+        let matched = if flags.unicode() || flags.unicode_sets() {
+            self.backend.find_from_utf16(input, start).next()
+        } else {
+            self.backend.find_from_ucs2(input, start).next()
+        }?;
+        Some(CompiledRegExpMatch {
+            span: matched.range(),
+            named_captures: matched
+                .named_groups()
+                .map(|(name, range)| (name.to_owned(), range))
+                .collect(),
+            captures: matched.captures,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct RegExpFlags {
@@ -85,7 +126,7 @@ impl RegExpFlags {
 pub fn compile_regexp_utf16(
     pattern: &[u16],
     flags: RegExpFlags,
-) -> Result<Regex, RegExpSyntaxError> {
+) -> Result<CompiledRegExp, RegExpSyntaxError> {
     let pattern_units = if flags.unicode() || flags.unicode_sets() {
         char::decode_utf16(pattern.iter().copied())
             .map(|value| {
@@ -95,8 +136,9 @@ pub fn compile_regexp_utf16(
     } else {
         pattern.iter().copied().map(u32::from).collect::<Vec<_>>()
     };
-    Regex::from_unicode(pattern_units.into_iter(), flags.regress_flags())
-        .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))
+    let backend = Regex::from_unicode(pattern_units.into_iter(), flags.regress_flags())
+        .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))?;
+    Ok(CompiledRegExp { backend })
 }
 
 pub fn validate_regexp_literal_utf16(

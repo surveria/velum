@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::{
     error::{Error, Result},
-    regexp_syntax::compile_regexp_utf16 as compile_regexp_syntax,
+    regexp_syntax::{CompiledRegExp, compile_regexp_utf16 as compile_regexp_syntax},
     value::ErrorName,
 };
 
@@ -15,12 +15,12 @@ pub(super) fn parse_regexp_flags(flags: &str) -> Result<RegExpFlags> {
 pub(super) fn compile_regexp_pattern_utf16(
     pattern: &[u16],
     flags: RegExpFlags,
-) -> Result<regress::Regex> {
+) -> Result<CompiledRegExp> {
     compile_regexp_syntax(pattern, flags).map_err(|error| regexp_syntax_error(&error))
 }
 
 pub(super) fn regexp_find_utf16(
-    compiled: &regress::Regex,
+    compiled: &CompiledRegExp,
     flags: RegExpFlags,
     input: &[u16],
     start: usize,
@@ -28,25 +28,21 @@ pub(super) fn regexp_find_utf16(
     if start > input.len() {
         return None;
     }
-    let matched = if flags.unicode() || flags.unicode_sets() {
-        compiled.find_from_utf16(input, start).next()
-    } else {
-        compiled.find_from_ucs2(input, start).next()
-    };
-    let matched = matched?;
-    if flags.sticky() && matched.start() != start {
+    let matched = compiled.find_utf16(flags, input, start)?;
+    if flags.sticky() && matched.span.start != start {
         return None;
     }
-    let span = regexp_span(matched.range());
+    let span = regexp_span(matched.span);
     let named_captures = matched
-        .named_groups()
-        .map(|(name, range)| (name.to_owned(), regexp_optional_span(range)))
-        .collect::<Vec<_>>();
+        .named_captures
+        .into_iter()
+        .map(|(name, range)| (name, regexp_optional_span(range)))
+        .collect();
     let captures = matched
         .captures
         .into_iter()
         .map(regexp_optional_span)
-        .collect::<Vec<_>>();
+        .collect();
     Some(RegExpMatch {
         span,
         captures,

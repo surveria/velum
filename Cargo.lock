@@ -639,6 +639,7 @@ dependencies = [
  "unicode-ident",
  "unicode-normalization",
  "unicode-segmentation",
+ "velum-regexp",
 ]
 
 [[package]]

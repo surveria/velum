@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     error::{Error, Result},
-    regexp_syntax::RegExpFlags,
+    regexp_syntax::{CompiledRegExp, RegExpFlags},
 };
 
 #[derive(Debug, Clone)]
@@ -14,7 +14,7 @@ pub struct RegExpValue {
 struct RegExpState {
     pattern_units: Box<[u16]>,
     parsed_flags: RegExpFlags,
-    compiled: regress::Regex,
+    compiled: CompiledRegExp,
     storage_payload_bytes: usize,
 }
 
@@ -22,7 +22,7 @@ impl RegExpValue {
     pub(in crate::runtime) fn new_utf16(
         pattern_units: Vec<u16>,
         parsed_flags: RegExpFlags,
-        compiled: regress::Regex,
+        compiled: CompiledRegExp,
     ) -> Result<Self> {
         let pattern_payload_bytes = pattern_units
             .len()
@@ -52,7 +52,7 @@ impl RegExpValue {
         self.state.parsed_flags
     }
 
-    pub(in crate::runtime) fn compiled(&self) -> &regress::Regex {
+    pub(in crate::runtime) fn compiled(&self) -> &CompiledRegExp {
         &self.state.compiled
     }
 

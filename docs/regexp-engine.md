@@ -11,6 +11,15 @@ The implementation is specification-led. Existing engines may be queried as
 behavioral or performance oracles, but their implementation structure is not
 the design source for this subsystem.
 
+Runtime storage and built-ins now depend on one project-owned
+`CompiledRegExp` seam in `regexp_syntax`; direct `regress` types and calls are
+confined to that private backend module. A root integration test links
+`velum-regexp` as a development dependency and compares it with the current
+backend without changing the runtime default. The initial deterministic corpus
+covers 2,259 syntax and match comparisons, including 2,240 structured short
+pattern/input/flag/sticky combinations plus curated captures, lookarounds,
+named backreferences, scoped modifiers, Unicode, and Unicode Sets cases.
+
 The current native slice implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
 classes, numeric and named backreferences, atomic positive and negative
