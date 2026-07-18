@@ -13,8 +13,10 @@ the design source for this subsystem.
 
 The current native slice implements literals, alternation, captures, greedy
 and lazy repetition, anchors, word boundaries, character classes, predefined
-classes, and Unicode binary, General Category, Script, and Script Extensions
-property escapes. Legacy and Unicode-aware ignore-case modes use separately
+classes, numeric and named backreferences, atomic positive and negative
+lookaheads, and Unicode binary, General Category, Script, and Script Extensions
+property escapes. Capture names use generated Unicode identifier data and are
+retained as bounded program metadata. Legacy and Unicode-aware ignore-case modes use separately
 generated canonicalization tables and preserve the distinct `u`/`v` property
 complement order. Unicode 17.0.0 generation currently emits all 53 ECMAScript
 binary properties, 38 General Category values, and 176 Script values. This is

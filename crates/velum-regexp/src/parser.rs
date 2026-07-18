@@ -1,4 +1,5 @@
 mod class_parser;
+mod name_parser;
 
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
@@ -16,6 +17,7 @@ pub struct Parser<'a> {
     depth: usize,
     node_count: usize,
     capture_count: usize,
+    capture_names: Vec<Option<String>>,
 }
 
 impl<'a> Parser<'a> {
@@ -46,14 +48,17 @@ impl<'a> Parser<'a> {
             depth: 0,
             node_count: 0,
             capture_count: 0,
+            capture_names: Vec::new(),
         };
-        let root = parser.parse_disjunction(false)?;
+        let mut root = parser.parse_disjunction(false)?;
         if parser.position != pattern.len() {
             return Err(parser.error(CompileErrorKind::UnexpectedToken));
         }
+        resolve_backreferences(&mut root, parser.capture_count, &parser.capture_names)?;
         Ok(ParsedPattern {
             root,
             capture_count: parser.capture_count,
+            capture_names: parser.capture_names,
         })
     }
 
@@ -100,7 +105,7 @@ impl<'a> Parser<'a> {
         let atom = self.parse_atom()?;
         let assertion = matches!(
             atom,
-            Node::AssertStart | Node::AssertEnd | Node::WordBoundary(_)
+            Node::AssertStart | Node::AssertEnd | Node::WordBoundary(_) | Node::Lookahead { .. }
         );
         let Some((min, max)) = self.parse_quantifier_bounds()? else {
             return Ok(atom);
@@ -166,15 +171,33 @@ impl<'a> Parser<'a> {
     fn parse_group(&mut self) -> Result<Node, CompileError> {
         self.advance_one()?;
         self.enter_depth()?;
-        let capturing = if self.peek() == Some(u16::from(b'?')) {
+        let (capturing, lookahead, capture_name) = if self.peek() == Some(u16::from(b'?')) {
             self.advance_one()?;
-            if self.peek() != Some(u16::from(b':')) {
-                return Err(self.error(CompileErrorKind::UnsupportedSyntax));
+            match self.peek() {
+                Some(value) if value == u16::from(b':') => {
+                    self.advance_one()?;
+                    (false, None, None)
+                }
+                Some(value) if value == u16::from(b'=') => {
+                    self.advance_one()?;
+                    (false, Some(true), None)
+                }
+                Some(value) if value == u16::from(b'!') => {
+                    self.advance_one()?;
+                    (false, Some(false), None)
+                }
+                Some(value) if value == u16::from(b'<') => {
+                    self.advance_one()?;
+                    if matches!(self.peek(), Some(marker) if marker == u16::from(b'=') || marker == u16::from(b'!'))
+                    {
+                        return Err(self.error(CompileErrorKind::UnsupportedSyntax));
+                    }
+                    (true, None, Some(self.parse_capture_name()?))
+                }
+                _ => return Err(self.error(CompileErrorKind::UnsupportedSyntax)),
             }
-            self.advance_one()?;
-            false
         } else {
-            true
+            (true, None, None)
         };
         let capture_id = if capturing {
             let id = self.capture_count;
@@ -187,6 +210,15 @@ impl<'a> Parser<'a> {
                     limit: self.limits.max_captures,
                 }));
             }
+            if let Some(name) = capture_name.as_ref()
+                && self
+                    .capture_names
+                    .iter()
+                    .any(|existing| existing.as_ref() == Some(name))
+            {
+                return Err(self.error(CompileErrorKind::DuplicateCaptureName));
+            }
+            self.capture_names.push(capture_name);
             Some(id)
         } else {
             None
@@ -200,7 +232,12 @@ impl<'a> Parser<'a> {
             .depth
             .checked_sub(1)
             .ok_or_else(|| self.error(CompileErrorKind::SizeOverflow))?;
-        if let Some(id) = capture_id {
+        if let Some(positive) = lookahead {
+            self.node(Node::Lookahead {
+                body: Box::new(body),
+                positive,
+            })
+        } else if let Some(id) = capture_id {
             self.node(Node::Capture {
                 id,
                 body: Box::new(body),
@@ -233,6 +270,10 @@ impl<'a> Parser<'a> {
                     terms: vec![term],
                 }));
             }
+            value if (u16::from(b'1')..=u16::from(b'9')).contains(&value) => {
+                return self.parse_decimal_backreference(value, escape_offset);
+            }
+            0x006B => return self.parse_named_backreference(escape_offset),
             _ => {}
         }
         let value = match unit {
@@ -252,18 +293,6 @@ impl<'a> Parser<'a> {
                 self.parse_braced_hex()?
             }
             0x0075 => self.parse_fixed_hex(4)?,
-            0x006B => {
-                return Err(CompileError::new(
-                    CompileErrorKind::UnsupportedSyntax,
-                    escape_offset,
-                ));
-            }
-            value if (u16::from(b'1')..=u16::from(b'9')).contains(&value) => {
-                return Err(CompileError::new(
-                    CompileErrorKind::UnsupportedSyntax,
-                    escape_offset,
-                ));
-            }
             0x0030 => 0,
             value if self.flags.has_unicode_mode() && !is_syntax_character(value) => {
                 return Err(CompileError::new(
@@ -274,6 +303,30 @@ impl<'a> Parser<'a> {
             value => u32::from(value),
         };
         self.node(Node::Literal(value))
+    }
+
+    fn parse_decimal_backreference(
+        &mut self,
+        first: u16,
+        pattern_offset: usize,
+    ) -> Result<Node, CompileError> {
+        let mut number = usize::from(first - u16::from(b'0'));
+        while let Some(unit) = self.peek() {
+            if !(u16::from(b'0')..=u16::from(b'9')).contains(&unit) {
+                break;
+            }
+            number = number
+                .checked_mul(10)
+                .and_then(|value| value.checked_add(usize::from(unit - u16::from(b'0'))))
+                .ok_or_else(|| {
+                    CompileError::new(CompileErrorKind::InvalidBackreference, pattern_offset)
+                })?;
+            self.advance_one()?;
+        }
+        let id = number.checked_sub(1).ok_or_else(|| {
+            CompileError::new(CompileErrorKind::InvalidBackreference, pattern_offset)
+        })?;
+        self.node(Node::Backreference { id, pattern_offset })
     }
 
     fn parse_fixed_hex(&mut self, digits: usize) -> Result<u32, CompileError> {
@@ -542,6 +595,51 @@ const fn predefined_class_term(value: u16) -> Result<CharacterClassTerm, Compile
         inverted,
         complement_before_case_fold: false,
     })
+}
+
+fn resolve_backreferences(
+    node: &mut Node,
+    capture_count: usize,
+    capture_names: &[Option<String>],
+) -> Result<(), CompileError> {
+    match node {
+        Node::Backreference { id, pattern_offset } if *id >= capture_count => Err(
+            CompileError::new(CompileErrorKind::InvalidBackreference, *pattern_offset),
+        ),
+        Node::NamedBackreference {
+            name,
+            pattern_offset,
+        } => {
+            let id = capture_names
+                .iter()
+                .position(|candidate| candidate.as_ref() == Some(name))
+                .ok_or_else(|| {
+                    CompileError::new(CompileErrorKind::UnknownCaptureName, *pattern_offset)
+                })?;
+            *node = Node::Backreference {
+                id,
+                pattern_offset: *pattern_offset,
+            };
+            Ok(())
+        }
+        Node::Concat(nodes) | Node::Alternation(nodes) => {
+            for child in nodes {
+                resolve_backreferences(child, capture_count, capture_names)?;
+            }
+            Ok(())
+        }
+        Node::Capture { body, .. } | Node::Repeat { body, .. } | Node::Lookahead { body, .. } => {
+            resolve_backreferences(body, capture_count, capture_names)
+        }
+        Node::Empty
+        | Node::Literal(_)
+        | Node::Backreference { .. }
+        | Node::Class(_)
+        | Node::Any
+        | Node::WordBoundary(_)
+        | Node::AssertStart
+        | Node::AssertEnd => Ok(()),
+    }
 }
 
 const fn hex_value(value: u16) -> Option<u32> {

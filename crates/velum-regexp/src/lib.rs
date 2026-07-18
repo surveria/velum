@@ -98,4 +98,22 @@ impl Regex {
     pub const fn capture_count(&self) -> usize {
         self.program.capture_count
     }
+
+    /// Returns the optional name assigned to one zero-based capture index.
+    #[must_use]
+    pub fn capture_name(&self, index: usize) -> Option<&str> {
+        self.program
+            .capture_names
+            .get(index)
+            .and_then(|name| name.as_deref())
+    }
+
+    /// Returns the zero-based capture index assigned to an exact group name.
+    #[must_use]
+    pub fn capture_index(&self, name: &str) -> Option<usize> {
+        self.program
+            .capture_names
+            .iter()
+            .position(|candidate| candidate.as_deref() == Some(name))
+    }
 }

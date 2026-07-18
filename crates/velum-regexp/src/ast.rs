@@ -4,9 +4,21 @@ use crate::character_class::CharacterClass;
 pub enum Node {
     Empty,
     Literal(u32),
+    Backreference {
+        id: usize,
+        pattern_offset: usize,
+    },
+    NamedBackreference {
+        name: String,
+        pattern_offset: usize,
+    },
     Class(CharacterClass),
     Any,
     WordBoundary(bool),
+    Lookahead {
+        body: Box<Self>,
+        positive: bool,
+    },
     AssertStart,
     AssertEnd,
     Concat(Vec<Self>),
@@ -27,4 +39,5 @@ pub enum Node {
 pub struct ParsedPattern {
     pub root: Node,
     pub capture_count: usize,
+    pub capture_names: Vec<Option<String>>,
 }

@@ -30,6 +30,7 @@ impl Compiler {
             classes: compiler.classes,
             flags,
             capture_count: parsed.capture_count,
+            capture_names: parsed.capture_names.clone(),
             progress_count: compiler.progress_count,
         })
     }
@@ -38,6 +39,10 @@ impl Compiler {
         match node {
             Node::Empty => Ok(()),
             Node::Literal(value) => self.emit(Instruction::Char(*value)).map(drop),
+            Node::Backreference { id, .. } => self.emit(Instruction::Backreference(*id)).map(drop),
+            Node::NamedBackreference { .. } => {
+                Err(CompileError::new(CompileErrorKind::UnknownCaptureName, 0))
+            }
             Node::Class(class) => {
                 let id = self.classes.len();
                 self.classes.push(class.clone());
@@ -47,6 +52,7 @@ impl Compiler {
             Node::WordBoundary(inverted) => {
                 self.emit(Instruction::WordBoundary(*inverted)).map(drop)
             }
+            Node::Lookahead { body, positive } => self.compile_lookahead(body, *positive),
             Node::AssertStart => self.emit(Instruction::AssertStart).map(drop),
             Node::AssertEnd => self.emit(Instruction::AssertEnd).map(drop),
             Node::Concat(nodes) => {
@@ -169,15 +175,36 @@ impl Compiler {
                 }
                 Ok(())
             }
-            Node::Repeat { body, .. } => self.emit_capture_clears(body),
+            Node::Repeat { body, .. } | Node::Lookahead { body, .. } => {
+                self.emit_capture_clears(body)
+            }
             Node::Empty
             | Node::Literal(_)
+            | Node::Backreference { .. }
+            | Node::NamedBackreference { .. }
             | Node::Class(_)
             | Node::Any
             | Node::WordBoundary(_)
             | Node::AssertStart
             | Node::AssertEnd => Ok(()),
         }
+    }
+
+    fn compile_lookahead(&mut self, body: &Node, positive: bool) -> Result<(), CompileError> {
+        if positive {
+            let start = self.emit(Instruction::PositiveLookaheadStart { failure: 0 })?;
+            self.compile_node(body)?;
+            let matched = self.emit(Instruction::PositiveLookaheadMatched { success: 0 })?;
+            let failure = self.next_index();
+            self.emit(Instruction::Fail)?;
+            let success = self.next_index();
+            return self.patch_positive_lookahead(start, matched, failure, success);
+        }
+        let start = self.emit(Instruction::NegativeLookaheadStart { success: 0 })?;
+        self.compile_node(body)?;
+        self.emit(Instruction::NegativeLookaheadMatched)?;
+        let success = self.next_index();
+        self.patch_negative_lookahead(start, success)
     }
 
     fn allocate_progress(&mut self) -> Result<usize, CompileError> {
@@ -247,6 +274,36 @@ impl Compiler {
             id: *id,
             no_progress: target,
         };
+        Ok(())
+    }
+
+    fn patch_negative_lookahead(
+        &mut self,
+        index: InstructionIndex,
+        success: InstructionIndex,
+    ) -> Result<(), CompileError> {
+        let Some(instruction) = self.instructions.get_mut(index) else {
+            return Err(CompileError::new(CompileErrorKind::SizeOverflow, 0));
+        };
+        *instruction = Instruction::NegativeLookaheadStart { success };
+        Ok(())
+    }
+
+    fn patch_positive_lookahead(
+        &mut self,
+        start: InstructionIndex,
+        matched: InstructionIndex,
+        failure: InstructionIndex,
+        success: InstructionIndex,
+    ) -> Result<(), CompileError> {
+        let Some(start_instruction) = self.instructions.get_mut(start) else {
+            return Err(CompileError::new(CompileErrorKind::SizeOverflow, 0));
+        };
+        *start_instruction = Instruction::PositiveLookaheadStart { failure };
+        let Some(matched_instruction) = self.instructions.get_mut(matched) else {
+            return Err(CompileError::new(CompileErrorKind::SizeOverflow, 0));
+        };
+        *matched_instruction = Instruction::PositiveLookaheadMatched { success };
         Ok(())
     }
 }

@@ -24,11 +24,19 @@ enum UndoRecord {
     Progress { id: usize, previous: Option<usize> },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum BacktrackFrameKind {
+    Branch,
+    PositiveLookahead,
+    NegativeLookahead,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct BacktrackFrame {
     instruction: InstructionIndex,
     position: usize,
     undo_depth: usize,
+    kind: BacktrackFrameKind,
 }
 
 enum StepOutcome {
@@ -160,16 +168,41 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         match current {
             Instruction::Accept => Ok(StepOutcome::Accept),
             Instruction::Char(expected) => self.consume_char(expected, sequential, position),
+            Instruction::Backreference(id) => {
+                self.consume_backreference(state, id, sequential, position)
+            }
             Instruction::Class(id) => self.consume_class(id, sequential, position),
             Instruction::Any => self.consume_any(sequential, position),
             Instruction::WordBoundary(inverted) => {
-                let boundary = self.at_word_boundary(position)?;
-                Ok(if boundary == inverted {
-                    StepOutcome::Failed
-                } else {
-                    next_step(sequential, position)
-                })
+                self.assert_word_boundary(inverted, sequential, position)
             }
+            Instruction::PositiveLookaheadStart { failure } => {
+                self.push_backtrack_frame(
+                    state,
+                    failure,
+                    position,
+                    BacktrackFrameKind::PositiveLookahead,
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::PositiveLookaheadMatched { success } => {
+                let saved = Self::complete_positive_lookahead(state)?;
+                Ok(next_step(success, saved))
+            }
+            Instruction::NegativeLookaheadStart { success } => {
+                self.push_backtrack_frame(
+                    state,
+                    success,
+                    position,
+                    BacktrackFrameKind::NegativeLookahead,
+                )?;
+                Ok(next_step(sequential, position))
+            }
+            Instruction::NegativeLookaheadMatched => {
+                Self::fail_negative_lookahead(state)?;
+                Ok(StepOutcome::Failed)
+            }
+            Instruction::Fail => Ok(StepOutcome::Failed),
             Instruction::AssertStart => Ok(if self.at_start(position) {
                 next_step(sequential, position)
             } else {
@@ -264,6 +297,51 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         }
     }
 
+    fn consume_backreference(
+        &mut self,
+        state: &AttemptState,
+        id: usize,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        let Some(slot) = state.captures.get(id).copied() else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        let Some(span) = slot.span() else {
+            return Ok(next_step(instruction, position));
+        };
+        let mut capture_position = span.start;
+        let mut input_position = position;
+        while capture_position < span.end {
+            self.charge_step()?;
+            let Some((expected, next_capture)) = decode_forward(
+                self.input,
+                capture_position,
+                self.program.flags.has_unicode_mode(),
+            )?
+            else {
+                return Err(ExecutionError::InvalidProgram);
+            };
+            if next_capture > span.end {
+                return Err(ExecutionError::InvalidProgram);
+            }
+            let Some((actual, next_input)) = decode_forward(
+                self.input,
+                input_position,
+                self.program.flags.has_unicode_mode(),
+            )?
+            else {
+                return Ok(StepOutcome::Failed);
+            };
+            if !self.characters_equal(actual, expected) {
+                return Ok(StepOutcome::Failed);
+            }
+            capture_position = next_capture;
+            input_position = next_input;
+        }
+        Ok(next_step(instruction, input_position))
+    }
+
     fn consume_class(
         &self,
         id: usize,
@@ -290,6 +368,19 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             .map(|(value, _)| value)
             .is_some_and(|value| is_word_character(value, self.program.flags));
         Ok(previous != next)
+    }
+
+    fn assert_word_boundary(
+        &self,
+        inverted: bool,
+        instruction: InstructionIndex,
+        position: usize,
+    ) -> Result<StepOutcome, ExecutionError> {
+        Ok(if self.at_word_boundary(position)? == inverted {
+            StepOutcome::Failed
+        } else {
+            next_step(instruction, position)
+        })
     }
 
     fn characters_equal(&self, actual: u32, expected: u32) -> bool {
@@ -375,6 +466,16 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         instruction: InstructionIndex,
         position: usize,
     ) -> Result<(), ExecutionError> {
+        self.push_backtrack_frame(state, instruction, position, BacktrackFrameKind::Branch)
+    }
+
+    fn push_backtrack_frame(
+        &mut self,
+        state: &mut AttemptState,
+        instruction: InstructionIndex,
+        position: usize,
+        kind: BacktrackFrameKind,
+    ) -> Result<(), ExecutionError> {
         if state.backtrack.len() >= self.limits.max_backtrack_frames {
             return Err(ExecutionError::BacktrackLimit {
                 limit: self.limits.max_backtrack_frames,
@@ -384,6 +485,7 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             instruction,
             position,
             undo_depth: state.undo.len(),
+            kind,
         });
         self.stats.max_backtrack_depth = self.stats.max_backtrack_depth.max(state.backtrack.len());
         Ok(())
@@ -395,7 +497,42 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         let Some(frame) = state.backtrack.pop() else {
             return Ok(None);
         };
-        while state.undo.len() > frame.undo_depth {
+        Self::restore_undo(state, frame.undo_depth)?;
+        Ok(Some((frame.instruction, frame.position)))
+    }
+
+    fn fail_negative_lookahead(state: &mut AttemptState) -> Result<(), ExecutionError> {
+        let Some(index) = state
+            .backtrack
+            .iter()
+            .rposition(|frame| frame.kind == BacktrackFrameKind::NegativeLookahead)
+        else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        let Some(sentinel) = state.backtrack.get(index).copied() else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        state.backtrack.truncate(index);
+        Self::restore_undo(state, sentinel.undo_depth)
+    }
+
+    fn complete_positive_lookahead(state: &mut AttemptState) -> Result<usize, ExecutionError> {
+        let Some(index) = state
+            .backtrack
+            .iter()
+            .rposition(|frame| frame.kind == BacktrackFrameKind::PositiveLookahead)
+        else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        let Some(sentinel) = state.backtrack.get(index).copied() else {
+            return Err(ExecutionError::InvalidProgram);
+        };
+        state.backtrack.truncate(index);
+        Ok(sentinel.position)
+    }
+
+    fn restore_undo(state: &mut AttemptState, undo_depth: usize) -> Result<(), ExecutionError> {
+        while state.undo.len() > undo_depth {
             let Some(record) = state.undo.pop() else {
                 return Err(ExecutionError::InvalidProgram);
             };
@@ -414,7 +551,7 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                 }
             }
         }
-        Ok(Some((frame.instruction, frame.position)))
+        Ok(())
     }
 
     fn charge_step(&mut self) -> Result<(), ExecutionError> {

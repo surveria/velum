@@ -212,6 +212,203 @@ fn property_complements_follow_unicode_and_unicode_sets_fold_order() -> TestResu
 }
 
 #[test]
+fn backreferences_observe_capture_rollback_and_ignore_case() -> TestResult {
+    let repeated = compile(r"^(a|b)\1$")?;
+    for input in ["aa", "bb"] {
+        let units = input.encode_utf16().collect::<Vec<_>>();
+        if repeated
+            .find(&units, 0, ExecutionLimits::default())?
+            .matched
+            .is_none()
+        {
+            return Err(format!("backreference did not match {input}").into());
+        }
+    }
+    let mismatch = "ab".encode_utf16().collect::<Vec<_>>();
+    if repeated
+        .find(&mismatch, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Err("backreference ignored a capture mismatch".into());
+    }
+
+    let unmatched = compile(r"^(a)?b\1$")?;
+    let input = "b".encode_utf16().collect::<Vec<_>>();
+    if unmatched
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .is_none()
+    {
+        return Err("an unmatched capture did not backreference as an empty string".into());
+    }
+
+    let folded = compile_with_flags(r"^(a)\1$", Flags::default().with_ignore_case(true))?;
+    let input = "aA".encode_utf16().collect::<Vec<_>>();
+    if folded
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err("ignore-case backreference did not use canonicalized characters".into())
+}
+
+#[test]
+fn lookaheads_are_zero_width_and_negative_captures_roll_back() -> TestResult {
+    let positive = compile(r"^(?=(a+))a+$")?;
+    let input = "aaa".encode_utf16().collect::<Vec<_>>();
+    let matched = positive
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected positive lookahead match")?;
+    let capture = matched
+        .captures
+        .first()
+        .and_then(|capture| capture.span.clone())
+        .ok_or("positive lookahead capture was not retained")?;
+    if matched.span != (0..3) || capture != (0..3) {
+        return Err(format!("unexpected lookahead match: {matched:?}").into());
+    }
+
+    let negative = compile(r"^(?!a|bc)b.$")?;
+    for (input, expected) in [("bc", false), ("bd", true)] {
+        let units = input.encode_utf16().collect::<Vec<_>>();
+        let actual = negative
+            .find(&units, 0, ExecutionLimits::default())?
+            .matched
+            .is_some();
+        if actual != expected {
+            return Err(format!("negative lookahead result for {input}: {actual}").into());
+        }
+    }
+
+    let rollback = compile(r"^(?!(a))b\1$")?;
+    let input = "b".encode_utf16().collect::<Vec<_>>();
+    let matched = rollback
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected negative lookahead rollback match")?;
+    if matched
+        .captures
+        .first()
+        .is_some_and(|capture| capture.span.is_none())
+    {
+        return Ok(());
+    }
+    Err(format!("negative lookahead leaked a capture: {matched:?}").into())
+}
+
+#[test]
+fn positive_lookahead_is_atomic_when_later_matching_fails() -> TestResult {
+    let regex = compile(r"(?=(a+))a*b\1")?;
+    let input = "baabac".encode_utf16().collect::<Vec<_>>();
+    let matched = regex
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected an atomic lookahead match at the later candidate")?;
+    let capture = matched
+        .captures
+        .first()
+        .and_then(|capture| capture.span.clone())
+        .ok_or("expected the lookahead capture")?;
+    if matched.span == (2..5) && capture == (2..3) {
+        return Ok(());
+    }
+    Err(format!("positive lookahead was not atomic: {matched:?}").into())
+}
+
+#[test]
+fn invalid_backreferences_and_lookahead_frames_are_bounded() -> TestResult {
+    let invalid = compile_with_flags(r"(a)\2", Flags::default().with_unicode(true));
+    if !matches!(
+        invalid,
+        Err(velum_regexp::CompileError {
+            kind: CompileErrorKind::InvalidBackreference,
+            ..
+        })
+    ) {
+        return Err(format!("unexpected invalid backreference result: {invalid:?}").into());
+    }
+
+    let negative = compile(r"(?!a)b")?;
+    let input = "b".encode_utf16().collect::<Vec<_>>();
+    let limited = negative.find(
+        &input,
+        0,
+        ExecutionLimits {
+            max_backtrack_frames: 0,
+            ..ExecutionLimits::default()
+        },
+    );
+    if matches!(limited, Err(ExecutionError::BacktrackLimit { limit: 0 })) {
+        return Ok(());
+    }
+    Err(format!("unexpected lookahead frame limit result: {limited:?}").into())
+}
+
+#[test]
+fn named_captures_use_unicode_names_and_resolve_backreferences() -> TestResult {
+    let regex = compile(r"^(?<λ>a+)-\k<λ>$")?;
+    if regex.capture_name(0) != Some("λ") || regex.capture_index("λ") != Some(0) {
+        return Err("named capture metadata was not retained".into());
+    }
+    let input = "aaa-aaa".encode_utf16().collect::<Vec<_>>();
+    let matched = regex
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .ok_or("expected a named backreference match")?;
+    if matched.span != (0..7) {
+        return Err(format!("unexpected named backreference span: {:?}", matched.span).into());
+    }
+
+    let escaped = compile(r"^(?<\u0061>x)\k<a>$")?;
+    let input = "xx".encode_utf16().collect::<Vec<_>>();
+    if escaped
+        .find(&input, 0, ExecutionLimits::default())?
+        .matched
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err("escaped and literal capture names did not resolve identically".into())
+}
+
+#[test]
+fn named_capture_validation_is_structured_and_bounded() -> TestResult {
+    for (pattern, expected) in [
+        (r"(?<a>x)(?<a>y)", CompileErrorKind::DuplicateCaptureName),
+        (r"(?<1a>x)", CompileErrorKind::InvalidCaptureName),
+        (r"(?<a>x)\k<missing>", CompileErrorKind::UnknownCaptureName),
+    ] {
+        let result = compile(pattern);
+        if !matches!(result, Err(ref error) if error.kind == expected) {
+            return Err(format!("unexpected named capture error for {pattern}: {result:?}").into());
+        }
+    }
+
+    let limited = Regex::compile(
+        &"(?<long>x)".encode_utf16().collect::<Vec<_>>(),
+        Flags::default(),
+        CompileLimits {
+            max_capture_name_units: 2,
+            ..CompileLimits::default()
+        },
+    );
+    if matches!(
+        limited,
+        Err(velum_regexp::CompileError {
+            kind: CompileErrorKind::CaptureNameLimit { limit: 2 },
+            ..
+        })
+    ) {
+        return Ok(());
+    }
+    Err(format!("unexpected capture name limit result: {limited:?}").into())
+}
+
+#[test]
 fn supports_word_boundaries_and_any_character_classes() -> TestResult {
     let boundary = compile(r"\bcat\B")?;
     let input = "cats".encode_utf16().collect::<Vec<_>>();

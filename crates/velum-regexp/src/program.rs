@@ -8,9 +8,21 @@ pub type InstructionIndex = usize;
 pub enum Instruction {
     Accept,
     Char(u32),
+    Backreference(usize),
     Class(usize),
     Any,
     WordBoundary(bool),
+    PositiveLookaheadStart {
+        failure: InstructionIndex,
+    },
+    PositiveLookaheadMatched {
+        success: InstructionIndex,
+    },
+    NegativeLookaheadStart {
+        success: InstructionIndex,
+    },
+    NegativeLookaheadMatched,
+    Fail,
     AssertStart,
     AssertEnd,
     SaveStart(usize),
@@ -34,6 +46,7 @@ pub struct Program {
     pub classes: Vec<CharacterClass>,
     pub flags: Flags,
     pub capture_count: usize,
+    pub capture_names: Vec<Option<String>>,
     pub progress_count: usize,
 }
 
@@ -49,13 +62,26 @@ impl Program {
             .len()
             .checked_mul(size_of::<CharacterClass>())
             .ok_or(SizeOverflow)?;
-        self.classes.iter().try_fold(
+        let class_bytes = self.classes.iter().try_fold(
             instruction_bytes
                 .checked_add(class_headers)
                 .ok_or(SizeOverflow)?,
             |total, class| {
                 total
                     .checked_add(class.retained_payload_bytes()?)
+                    .ok_or(SizeOverflow)
+            },
+        )?;
+        let name_headers = self
+            .capture_names
+            .len()
+            .checked_mul(size_of::<Option<String>>())
+            .ok_or(SizeOverflow)?;
+        self.capture_names.iter().try_fold(
+            class_bytes.checked_add(name_headers).ok_or(SizeOverflow)?,
+            |total, name| {
+                total
+                    .checked_add(name.as_ref().map_or(0, String::len))
                     .ok_or(SizeOverflow)
             },
         )
