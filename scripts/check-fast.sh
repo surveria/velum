@@ -8,6 +8,7 @@ cd "${repo_root}"
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
 "${script_dir}/check-vendored-regress.sh"
+"${script_dir}/check-regexp-unicode.sh"
 "${script_dir}/check-touched-file-sizes.sh" "${VELUM_BASE_REF:-origin/main}"
 "${script_dir}/check-architecture-boundaries.sh" --self-test
 "${script_dir}/test-report-artifact-metadata.sh"
@@ -18,6 +19,10 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 "${script_dir}/check-examples.sh"
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+
+cargo clippy -p velum-regexp-unicode-gen --all-targets --all-features -- -D warnings
+cargo test -p velum-regexp-unicode-gen --all-targets --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc -p velum-regexp-unicode-gen --no-deps --all-features
 
 if [[ "${VELUM_FAST_CLI:-0}" == "1" ]]; then
   cargo fmt --manifest-path cli/Cargo.toml --all -- --check

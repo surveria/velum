@@ -23,20 +23,26 @@ interpreter paths.
 
 ### In-tree RegExp engine
 
-`src/regress` contains the complete source of the ECMAScript-oriented RegExp
-compiler and executor used by the root engine. It is a non-publishable local
-crate and the root `Cargo.toml` references it only through a relative `path`, so
-RegExp compilation never depends on downloading a `regress` package from a
-registry. Keeping the upstream crate boundary preserves its compiler,
-optimizer, bytecode, Unicode tables, and executor namespace while making every
-source file versioned and editable with the JavaScript engine.
+`crates/velum-regexp` contains the safe project-owned RegExp parser, semantic
+IR, compiler, explicit backtracking VM, and generated immutable Unicode data
+used by the root engine. The production dependency is a relative path and does
+not require a registry package, build-time download, or generated host cache.
+The runtime supplies host execution control so matcher work participates in the
+same VM-owned step budget and non-catchable resource-error boundary as other
+engine work.
 
-The vendored component retains its upstream dual MIT/Apache-2.0 licenses and a
+`src/regress` retains the previous ECMAScript-oriented implementation only as a
+non-publishable development oracle for deterministic differential tests. It is
+not present in the normal engine dependency graph. Keeping it allows exact
+behavioral comparisons for future native-backend changes without placing its
+implementation inside the production safety boundary.
+
+The retained oracle keeps its upstream dual MIT/Apache-2.0 licenses and a
 source checksum manifest. Its large generated Unicode tables and upstream
 source layout use a dedicated provenance gate instead of the 800-line gate for
 project-authored Rust files. Changes under `src/regress/src` must update that
-manifest and carry focused engine behavior tests so an intentional fork stays
-distinguishable from accidental vendor drift.
+manifest so an intentional oracle change stays distinguishable from accidental
+vendor drift.
 
 ### ECMAScript string representation
 

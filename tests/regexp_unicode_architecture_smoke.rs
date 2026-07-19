@@ -1,4 +1,4 @@
-use velum::{Runtime, RuntimeLimits, Value};
+use velum::{Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -135,6 +135,40 @@ fn braced_unicode_escape_accepts_long_leading_zero_runs_boundedly() -> TestResul
         "#,
     )?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn regexp_backtracking_uses_the_shared_non_catchable_runtime_budget() -> TestResult {
+    const STEP_BUDGET: usize = 20_000;
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_runtime_steps: STEP_BUDGET,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        globalThis.resourceLimitedMatcher = /^(?:a|aa)*b$/;
+        globalThis.resourceLimitedInput = "a".repeat(30);
+        "#,
+    )?;
+    context.begin_runtime_step_budget();
+    let result = context.eval(
+        r"
+        try {
+            resourceLimitedMatcher.test(resourceLimitedInput);
+            0;
+        } catch (error) {
+            42;
+        }
+        ",
+    );
+    let Err(error) = result else {
+        return Err("expected native RegExp backtracking to exhaust the shared budget".into());
+    };
+    if matches!(error, Error::ResourceLimit { .. }) && error.to_string().contains("runtime steps") {
+        return Ok(());
+    }
+    Err(format!("expected a shared runtime-step limit, got {error:?}").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

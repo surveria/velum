@@ -1,7 +1,9 @@
-# Explicit single-crate workspace root: keeps the engine self-contained and
-# excludes the nested CLI and runner workspaces, which carry terminal,
-# reporting, and benchmark dependencies.
+# The root engine and its dependency-light RegExp library share one workspace.
+# Maintenance tooling is a workspace member so formatting and explicit tool
+# checks remain reproducible, but it is not a default build member.
 [workspace]
+members = ["crates/velum-regexp", "tools/regexp-unicode-gen"]
+default-members = [".", "crates/velum-regexp"]
 exclude = ["cli", "runner", "src/regress"]
 
 [package]
@@ -32,12 +34,15 @@ jiff-tzdb = "0.1.8"
 num-bigint = "0.4"
 num-traits = "0.2"
 parking_lot = "0.12"
-regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 temporal_rs = { version = "0.2.4", default-features = false, features = ["compiled_data", "float64_representable_durations", "std"] }
 thiserror = "2"
 unicode-ident = "1"
 unicode-normalization = "0.1"
 unicode-segmentation = "1.13"
+velum-regexp = { path = "crates/velum-regexp" }
+
+[dev-dependencies]
+regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 
 [lints.rust]
 unsafe_code = "deny"

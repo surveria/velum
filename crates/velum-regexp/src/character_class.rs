@@ -1,0 +1,240 @@
+use core::{cmp::Ordering, mem::size_of};
+
+use crate::{
+    Flags, SizeOverflow,
+    unicode::{case_closure_all_in_ranges, case_closure_contains},
+};
+
+pub const DIGIT_RANGES: &[(u32, u32)] = &[(0x0030, 0x0039)];
+pub const WORD_RANGES: &[(u32, u32)] = &[
+    (0x0030, 0x0039),
+    (0x0041, 0x005A),
+    (0x005F, 0x005F),
+    (0x0061, 0x007A),
+];
+pub const SPACE_RANGES: &[(u32, u32)] = &[
+    (0x0009, 0x000D),
+    (0x0020, 0x0020),
+    (0x00A0, 0x00A0),
+    (0x1680, 0x1680),
+    (0x2000, 0x200A),
+    (0x2028, 0x2029),
+    (0x202F, 0x202F),
+    (0x205F, 0x205F),
+    (0x3000, 0x3000),
+    (0xFEFF, 0xFEFF),
+];
+
+#[derive(Debug, Clone)]
+pub enum CharacterClassTerm {
+    Range {
+        start: u32,
+        end: u32,
+    },
+    Pair {
+        first: u32,
+        second: u32,
+    },
+    StaticRanges {
+        ranges: &'static [(u32, u32)],
+        inverted: bool,
+        complement_before_case_fold: bool,
+    },
+    Union(Vec<Self>),
+    Intersection {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    Subtraction {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    Complement(Box<Self>),
+}
+
+impl CharacterClassTerm {
+    fn matches(&self, value: u32, flags: Flags) -> bool {
+        match self {
+            Self::Range { start, end } => {
+                let ranges = [(*start, *end)];
+                if flags.ignore_case() {
+                    case_closure_contains(&ranges, value, flags.has_unicode_mode())
+                } else {
+                    (*start..=*end).contains(&value)
+                }
+            }
+            Self::Pair { first, second } => {
+                let ranges = [(*first, *first), (*second, *second)];
+                if flags.ignore_case() {
+                    case_closure_contains(&ranges, value, flags.has_unicode_mode())
+                } else {
+                    value == *first || value == *second
+                }
+            }
+            Self::StaticRanges {
+                ranges,
+                inverted,
+                complement_before_case_fold,
+            } => {
+                let matched = if flags.ignore_case() {
+                    case_closure_contains(ranges, value, flags.has_unicode_mode())
+                } else {
+                    contains(ranges, value)
+                };
+                if *inverted
+                    && *complement_before_case_fold
+                    && flags.ignore_case()
+                    && flags.unicode()
+                {
+                    !case_closure_all_in_ranges(ranges, value)
+                } else {
+                    matched != *inverted
+                }
+            }
+            Self::Union(terms) => terms.iter().any(|term| term.matches(value, flags)),
+            Self::Intersection { left, right } => {
+                left.matches(value, flags) && right.matches(value, flags)
+            }
+            Self::Subtraction { left, right } => {
+                left.matches(value, flags) && !right.matches(value, flags)
+            }
+            Self::Complement(term) => !term.matches(value, flags),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CharacterClass {
+    pub inverted: bool,
+    pub terms: Vec<CharacterClassTerm>,
+    pub strings: Vec<Box<[u32]>>,
+    pub codepoint_work: usize,
+}
+
+impl CharacterClass {
+    #[must_use]
+    pub fn matches(&self, value: u32, flags: Flags) -> bool {
+        self.terms.iter().any(|term| term.matches(value, flags)) != self.inverted
+    }
+
+    pub fn retained_payload_bytes(&self) -> Result<usize, SizeOverflow> {
+        let term_bytes = self
+            .terms
+            .len()
+            .checked_mul(size_of::<CharacterClassTerm>())
+            .ok_or(SizeOverflow)?;
+        let nested_term_bytes = retained_nested_term_bytes(&self.terms)?;
+        let string_headers = self
+            .strings
+            .len()
+            .checked_mul(size_of::<Box<[u32]>>())
+            .ok_or(SizeOverflow)?;
+        self.strings.iter().try_fold(
+            term_bytes
+                .checked_add(nested_term_bytes)
+                .and_then(|total| total.checked_add(string_headers))
+                .ok_or(SizeOverflow)?,
+            |total, string| {
+                let bytes = string
+                    .len()
+                    .checked_mul(size_of::<u32>())
+                    .ok_or(SizeOverflow)?;
+                total.checked_add(bytes).ok_or(SizeOverflow)
+            },
+        )
+    }
+}
+
+pub fn normalize_range_terms(terms: Vec<CharacterClassTerm>) -> Vec<CharacterClassTerm> {
+    let mut ranges = Vec::new();
+    let mut retained = Vec::new();
+    for term in terms {
+        if let CharacterClassTerm::Range { start, end } = term {
+            ranges.push((start, end));
+        } else {
+            retained.push(term);
+        }
+    }
+    ranges.sort_unstable();
+    let mut merged = Vec::<(u32, u32)>::new();
+    for (start, end) in ranges {
+        if let Some((_, previous_end)) = merged.last_mut()
+            && start <= previous_end.saturating_add(1)
+        {
+            *previous_end = (*previous_end).max(end);
+            continue;
+        }
+        merged.push((start, end));
+    }
+    retained.extend(
+        merged
+            .into_iter()
+            .map(|(start, end)| CharacterClassTerm::Range { start, end }),
+    );
+    retained
+}
+
+fn retained_nested_term_bytes(roots: &[CharacterClassTerm]) -> Result<usize, SizeOverflow> {
+    let mut total = 0_usize;
+    let mut pending = roots.iter().collect::<Vec<_>>();
+    while let Some(term) = pending.pop() {
+        match term {
+            CharacterClassTerm::Range { .. }
+            | CharacterClassTerm::Pair { .. }
+            | CharacterClassTerm::StaticRanges { .. } => {}
+            CharacterClassTerm::Union(terms) => {
+                total = total
+                    .checked_add(
+                        terms
+                            .len()
+                            .checked_mul(size_of::<CharacterClassTerm>())
+                            .ok_or(SizeOverflow)?,
+                    )
+                    .ok_or(SizeOverflow)?;
+                pending.extend(terms);
+            }
+            CharacterClassTerm::Intersection { left, right }
+            | CharacterClassTerm::Subtraction { left, right } => {
+                total = total
+                    .checked_add(
+                        2_usize
+                            .checked_mul(size_of::<CharacterClassTerm>())
+                            .ok_or(SizeOverflow)?,
+                    )
+                    .ok_or(SizeOverflow)?;
+                pending.push(left);
+                pending.push(right);
+            }
+            CharacterClassTerm::Complement(term) => {
+                total = total
+                    .checked_add(size_of::<CharacterClassTerm>())
+                    .ok_or(SizeOverflow)?;
+                pending.push(term);
+            }
+        }
+    }
+    Ok(total)
+}
+
+#[must_use]
+pub fn is_word_character(value: u32, flags: Flags) -> bool {
+    if flags.ignore_case() {
+        case_closure_contains(WORD_RANGES, value, flags.has_unicode_mode())
+    } else {
+        contains(WORD_RANGES, value)
+    }
+}
+
+fn contains(ranges: &[(u32, u32)], value: u32) -> bool {
+    ranges
+        .binary_search_by(|(start, end)| {
+            if value < *start {
+                Ordering::Greater
+            } else if value > *end {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        })
+        .is_ok()
+}

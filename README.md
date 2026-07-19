@@ -293,14 +293,13 @@ denies panic-oriented APIs such as `unwrap`, `expect`, `panic!`, unchecked
 indexing patterns, and dangerous numeric casts through a combination of strict
 project rules and rustc/Clippy configuration.
 
-`RegExp` is the current exception to the broader all-source story. The engine
-vendors the Rust `regress` implementation as a separate local crate and enables
-its checked `prohibit-unsafe` execution paths. The preserved upstream source
-still contains feature-dependent `unsafe` implementations, so the repository
-does not claim that every vendored source line is `unsafe`-free. A native
-A native Velum `RegExp` compiler and executor is planned to remove this
-exception and bring regular expressions under the same engine-owned safety
-rules.
+The production `RegExp` parser, compiler, Unicode tables, and explicit
+backtracking VM live in the project-owned `velum-regexp` crate and forbid
+`unsafe` code. The previous vendored `regress` source remains in-tree as a
+development-only differential oracle; it is not part of the normal engine
+dependency graph. Its upstream feature-dependent implementations are therefore
+excluded from the production safety boundary. The oracle remains useful for
+future deterministic differential tests after the native backend is integrated.
 
 ## Testing and reproducibility
 

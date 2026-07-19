@@ -1,4 +1,98 @@
-use regress::{Flags, Regex};
+use std::ops::Range;
+
+use velum_regexp::{
+    CompileLimits, ExecutionControl, ExecutionError, ExecutionLimits, Flags, Regex,
+};
+
+type NamedCaptureResults = Vec<(String, Option<Range<usize>>)>;
+
+#[derive(Debug)]
+pub struct CompiledRegExp {
+    backend: Regex,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CompiledRegExpMatch {
+    pub span: Range<usize>,
+    pub captures: Vec<Option<Range<usize>>>,
+    pub named_captures: NamedCaptureResults,
+}
+
+impl CompiledRegExp {
+    pub fn retained_payload_bytes(&self) -> Option<usize> {
+        self.backend.retained_payload_bytes().ok()
+    }
+
+    pub fn find_utf16<C: ExecutionControl>(
+        &self,
+        flags: RegExpFlags,
+        input: &[u16],
+        start: usize,
+        control: &mut C,
+    ) -> Result<Option<CompiledRegExpMatch>, ExecutionError> {
+        let limits = ExecutionLimits {
+            max_steps: ExecutionLimits::MAXIMUM.max_steps,
+            max_candidate_starts: ExecutionLimits::MAXIMUM.max_candidate_starts,
+            ..ExecutionLimits::default()
+        };
+        let matched = self
+            .backend
+            .find_with_control(input, start, flags.sticky(), limits, control)?
+            .matched;
+        let Some(matched) = matched else {
+            return Ok(None);
+        };
+        let captures = matched
+            .captures
+            .into_iter()
+            .map(|capture| capture.span)
+            .collect::<Vec<_>>();
+        let named_captures = self.named_capture_results(&captures, control)?;
+        Ok(Some(CompiledRegExpMatch {
+            span: matched.span,
+            captures,
+            named_captures,
+        }))
+    }
+
+    fn named_capture_results<C: ExecutionControl>(
+        &self,
+        captures: &[Option<Range<usize>>],
+        control: &mut C,
+    ) -> Result<NamedCaptureResults, ExecutionError> {
+        let mut named = NamedCaptureResults::new();
+        for index in 0..self.backend.capture_count() {
+            let Some(name) = self.backend.capture_name(index) else {
+                continue;
+            };
+            control
+                .charge_steps(1)
+                .map_err(ExecutionError::Interrupted)?;
+            let span = captures.get(index).cloned().flatten();
+            let mut existing = None;
+            for (position, (candidate, _)) in named.iter().enumerate() {
+                control
+                    .charge_steps(1)
+                    .map_err(ExecutionError::Interrupted)?;
+                if candidate == name {
+                    existing = Some(position);
+                    break;
+                }
+            }
+            if let Some(position) = existing {
+                if span.is_some() {
+                    let Some((_, current)) = named.get_mut(position) else {
+                        return Err(ExecutionError::InvalidProgram);
+                    };
+                    *current = span;
+                }
+            } else {
+                named.push((name.to_owned(), span));
+            }
+        }
+        Ok(named)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct RegExpFlags {
@@ -38,15 +132,13 @@ impl RegExpFlags {
         Ok(())
     }
 
-    pub(super) const fn regress_flags(self) -> Flags {
-        Flags {
-            icase: self.ignore_case(),
-            multiline: self.multiline(),
-            dot_all: self.dot_all(),
-            no_opt: false,
-            unicode: self.unicode(),
-            unicode_sets: self.unicode_sets(),
-        }
+    pub(super) fn native_flags(self) -> Flags {
+        Flags::default()
+            .with_ignore_case(self.ignore_case())
+            .with_multiline(self.multiline())
+            .with_dot_all(self.dot_all())
+            .with_unicode(self.unicode())
+            .with_unicode_sets(self.unicode_sets())
     }
 
     pub(super) const fn ignore_case(self) -> bool {
@@ -85,18 +177,15 @@ impl RegExpFlags {
 pub fn compile_regexp_utf16(
     pattern: &[u16],
     flags: RegExpFlags,
-) -> Result<Regex, RegExpSyntaxError> {
-    let pattern_units = if flags.unicode() || flags.unicode_sets() {
-        char::decode_utf16(pattern.iter().copied())
-            .map(|value| {
-                value.map_or_else(|error| u32::from(error.unpaired_surrogate()), u32::from)
-            })
-            .collect::<Vec<_>>()
-    } else {
-        pattern.iter().copied().map(u32::from).collect::<Vec<_>>()
+) -> Result<CompiledRegExp, RegExpSyntaxError> {
+    let limits = CompileLimits {
+        max_pattern_units: CompileLimits::MAXIMUM.max_pattern_units,
+        max_repeat_count: CompileLimits::MAXIMUM.max_repeat_count,
+        ..CompileLimits::default()
     };
-    Regex::from_unicode(pattern_units.into_iter(), flags.regress_flags())
-        .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))
+    let backend = Regex::compile(pattern, flags.native_flags(), limits)
+        .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))?;
+    Ok(CompiledRegExp { backend })
 }
 
 pub fn validate_regexp_literal_utf16(
