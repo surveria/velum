@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260718T204352Z.md`
-- Task: PR #671: architecture: clarify core alloc and std import boundaries
-- Performance: 6.84x (4/5 >1.00x) (from `velum-test-report-20260718T204352Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260718T204352Z.md`)
+- `velum-test-report-20260719T052431Z.md`
+- Task: PR #672: architecture: add no_std plus alloc engine profile
+- Performance: 6.81x (4/5 >1.00x) (from `velum-test-report-20260719T052431Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260719T052431Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260718T204352Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260719T052431Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -598,3 +598,4 @@ Latest report:
 | `20260717T132158Z` `f88ce02` PR #668: docs: add complete runnable embedding examples | 6.89x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260718T201549Z` `5f5bc33` PR #670: runtime: guard Array.prototype.flat recursion | 6.95x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260718T204352Z` `e5416d7` PR #671: architecture: clarify core alloc and std import boundaries | 6.84x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260719T052431Z` `844d18f` PR #672: architecture: add no_std plus alloc engine profile | 6.81x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
