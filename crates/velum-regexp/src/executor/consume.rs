@@ -274,7 +274,7 @@ impl<C: ExecutionControl> Executor<'_, C> {
         Ok(next_step(instruction, selected))
     }
 
-    fn consume_codepoint_class(
+    pub(super) fn consume_codepoint_class(
         &mut self,
         id: usize,
         instruction: InstructionIndex,

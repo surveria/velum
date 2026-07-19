@@ -3,7 +3,7 @@ use crate::{
     SearchOutcome,
     character_class::is_word_character,
     input::{advance_candidate, decode_backward, decode_forward, is_line_terminator},
-    program::{Instruction, InstructionIndex, Program},
+    program::{Instruction, InstructionIndex, Program, SimpleAtom, SimplePattern},
 };
 
 mod consume;
@@ -111,6 +111,9 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
                 limit: self.limits.max_capture_slots,
             });
         }
+        if let Some(simple_pattern) = self.program.simple_pattern {
+            return self.search_simple(start, anchored, simple_pattern);
+        }
         let mut candidate = start;
         loop {
             self.charge_candidate()?;
@@ -128,6 +131,85 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             }
             candidate =
                 advance_candidate(self.input, candidate, self.program.flags.has_unicode_mode())?;
+        }
+    }
+
+    fn search_simple(
+        &mut self,
+        start: usize,
+        anchored: bool,
+        pattern: SimplePattern,
+    ) -> Result<SearchOutcome, ExecutionError> {
+        let mut candidate = start;
+        loop {
+            self.charge_candidate()?;
+            if let Some(end) = self.match_simple_at(candidate, pattern)? {
+                return Ok(SearchOutcome {
+                    matched: Some(Match {
+                        span: candidate..end,
+                        captures: Vec::new(),
+                    }),
+                    stats: self.stats,
+                });
+            }
+            if anchored || candidate == self.input.len() {
+                return Ok(SearchOutcome {
+                    matched: None,
+                    stats: self.stats,
+                });
+            }
+            candidate =
+                advance_candidate(self.input, candidate, self.program.flags.has_unicode_mode())?;
+        }
+    }
+
+    fn match_simple_at(
+        &mut self,
+        start: usize,
+        pattern: SimplePattern,
+    ) -> Result<Option<usize>, ExecutionError> {
+        let mut position = start;
+        let mut count = 0_u64;
+        while count < pattern.min {
+            self.charge_step()?;
+            let Some(next) = self.consume_simple_atom(pattern.atom, position)? else {
+                return Ok(None);
+            };
+            position = next;
+            count = count.checked_add(1).ok_or(ExecutionError::SizeOverflow)?;
+        }
+        if !pattern.greedy {
+            return Ok(Some(position));
+        }
+        while pattern.max.is_none_or(|maximum| count < maximum) {
+            self.charge_step()?;
+            let Some(next) = self.consume_simple_atom(pattern.atom, position)? else {
+                break;
+            };
+            position = next;
+            count = count.checked_add(1).ok_or(ExecutionError::SizeOverflow)?;
+        }
+        Ok(Some(position))
+    }
+
+    fn consume_simple_atom(
+        &mut self,
+        atom: SimpleAtom,
+        position: usize,
+    ) -> Result<Option<usize>, ExecutionError> {
+        let outcome = match atom {
+            SimpleAtom::Char { expected, flags } => {
+                self.consume_char(expected, 0, position, flags)?
+            }
+            SimpleAtom::Class { id, flags } => {
+                self.consume_codepoint_class(id, 0, position, flags)?
+            }
+            SimpleAtom::Any { flags } => self.consume_any(0, position, flags)?,
+        };
+        match outcome {
+            StepOutcome::Next { position, .. } => Ok(Some(position)),
+            StepOutcome::Failed => Ok(None),
+            StepOutcome::Accept => Err(ExecutionError::InvalidProgram),
         }
     }
 

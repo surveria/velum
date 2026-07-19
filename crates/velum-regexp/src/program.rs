@@ -5,6 +5,21 @@ use crate::{Flags, SizeOverflow, character_class::CharacterClass};
 pub type InstructionIndex = usize;
 
 #[derive(Debug, Clone, Copy)]
+pub enum SimpleAtom {
+    Char { expected: u32, flags: Flags },
+    Class { id: usize, flags: Flags },
+    Any { flags: Flags },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SimplePattern {
+    pub atom: SimpleAtom,
+    pub min: u64,
+    pub max: Option<u64>,
+    pub greedy: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     Accept,
     Char {
@@ -97,6 +112,7 @@ pub struct Program {
     pub capture_count: usize,
     pub capture_names: Vec<Option<String>>,
     pub progress_count: usize,
+    pub simple_pattern: Option<SimplePattern>,
 }
 
 impl Program {

@@ -1,7 +1,7 @@
 use crate::{
     CompileError, CompileErrorKind, CompileLimits, Flags,
     ast::{Node, ParsedPattern},
-    program::{Instruction, InstructionIndex, Program},
+    program::{Instruction, InstructionIndex, Program, SimpleAtom, SimplePattern},
 };
 
 pub struct Compiler {
@@ -33,6 +33,7 @@ impl Compiler {
         };
         compiler.compile_node(&parsed.root, flags)?;
         compiler.emit(Instruction::Accept)?;
+        let simple_pattern = simple_pattern(&parsed.root, &compiler.instructions);
         Ok(Program {
             instructions: compiler.instructions,
             classes: compiler.classes,
@@ -41,6 +42,7 @@ impl Compiler {
             capture_count: parsed.capture_count,
             capture_names: parsed.capture_names.clone(),
             progress_count: compiler.progress_count,
+            simple_pattern,
         })
     }
 
@@ -472,6 +474,54 @@ impl Compiler {
         };
         *matched_instruction = Instruction::PositiveLookaheadMatched { success };
         Ok(())
+    }
+}
+
+fn simple_pattern(node: &Node, instructions: &[Instruction]) -> Option<SimplePattern> {
+    let (min, max, greedy) = simple_repetition(node)?;
+    let atom = instructions
+        .iter()
+        .find_map(|instruction| match *instruction {
+            Instruction::Char { expected, flags } => Some(SimpleAtom::Char { expected, flags }),
+            Instruction::Class { id, flags } => Some(SimpleAtom::Class { id, flags }),
+            Instruction::Any { flags } => Some(SimpleAtom::Any { flags }),
+            _ => None,
+        })?;
+    Some(SimplePattern {
+        atom,
+        min,
+        max,
+        greedy,
+    })
+}
+
+fn simple_repetition(node: &Node) -> Option<(u64, Option<u64>, bool)> {
+    match node {
+        Node::Literal(_) | Node::Any => Some((1, Some(1), true)),
+        Node::Class(class) if class.strings.is_empty() => Some((1, Some(1), true)),
+        Node::Modifier { body, .. } => simple_repetition(body),
+        Node::Concat(nodes) | Node::LegacySequence(nodes) => {
+            let [only] = nodes.as_slice() else {
+                return None;
+            };
+            simple_repetition(only)
+        }
+        Node::Repeat {
+            body,
+            min,
+            max,
+            greedy,
+        } if simple_atom(body) => Some((*min, *max, *greedy)),
+        _ => None,
+    }
+}
+
+fn simple_atom(node: &Node) -> bool {
+    match node {
+        Node::Literal(_) | Node::Any => true,
+        Node::Class(class) => class.strings.is_empty(),
+        Node::Modifier { body, .. } => simple_atom(body),
+        _ => false,
     }
 }
 

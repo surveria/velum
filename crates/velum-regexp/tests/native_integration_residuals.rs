@@ -168,6 +168,29 @@ fn anchored_terminal_repetition_does_not_retain_linear_backtracking_state() -> T
 }
 
 #[test]
+fn simple_root_repetition_uses_constant_backtracking_storage() -> TestResult {
+    let regex = Regex::compile(
+        &"a*".encode_utf16().collect::<Vec<_>>(),
+        Flags::default(),
+        CompileLimits::default(),
+    )?;
+    let input = vec![u16::from(b'a'); 4_096];
+    let outcome = regex.find(&input, 0, ExecutionLimits::default())?;
+    let expected = 0..input.len();
+    if outcome.matched.as_ref().map(|matched| &matched.span) != Some(&expected) {
+        return Err(format!("simple repetition returned an unexpected match: {outcome:?}").into());
+    }
+    if outcome.stats.max_backtrack_depth == 0 && outcome.stats.max_undo_depth == 0 {
+        return Ok(());
+    }
+    Err(format!(
+        "simple repetition retained backtrack depth {} and undo depth {}",
+        outcome.stats.max_backtrack_depth, outcome.stats.max_undo_depth
+    )
+    .into())
+}
+
+#[test]
 fn max_safe_integer_repetitions_compile_without_instruction_expansion() -> TestResult {
     let limits = CompileLimits {
         max_repeat_count: CompileLimits::MAXIMUM.max_repeat_count,

@@ -89,7 +89,7 @@ fn callers_cannot_raise_the_ecmascript_repeat_ceiling() -> TestResult {
 #[test]
 fn callers_cannot_raise_the_backtrack_storage_ceiling() -> TestResult {
     let regex = Regex::compile(
-        &"a*".encode_utf16().collect::<Vec<_>>(),
+        &"(?:a|aa)*b".encode_utf16().collect::<Vec<_>>(),
         Flags::default(),
         CompileLimits::default(),
     )?;
