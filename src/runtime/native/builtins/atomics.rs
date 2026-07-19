@@ -209,13 +209,13 @@ impl Context {
             return self.heap_string_value("not-equal");
         }
         let timeout = self.atomic_wait_timeout(args.as_slice().get(3))?;
+        if !self.agent_can_block() {
+            return Err(Error::type_error("the current agent cannot suspend"));
+        }
         if timeout.is_some_and(|duration| duration.is_zero()) {
             return self.heap_string_value("timed-out");
         }
         Self::ensure_blocking_atomics_available()?;
-        if !self.agent_can_block() {
-            return Err(Error::type_error("the current agent cannot suspend"));
-        }
         let outcome = location.buffer.wait_at(location.offset, timeout)?;
         self.heap_string_value(match outcome {
             AtomicWaitOutcome::Notified => "ok",

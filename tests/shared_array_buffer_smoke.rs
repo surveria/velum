@@ -82,6 +82,27 @@ fn exposes_metadata_and_rejects_non_shared_or_float_views() -> TestResult {
     )
 }
 
+#[test]
+fn atomics_wait_checks_agent_suspension_before_zero_timeout() -> TestResult {
+    ensure_eval(
+        r"
+        let failures = 0;
+        try {
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 0);
+        } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        try {
+            Atomics.wait(new BigInt64Array(new SharedArrayBuffer(8)), 0, 0n, 0);
+        } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        failures === 2 ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
