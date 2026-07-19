@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{Context, control::Completion, object::PropertyLookup, property::get_property},

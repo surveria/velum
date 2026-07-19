@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::value::Value;
 
 #[derive(Debug, Clone, Copy)]

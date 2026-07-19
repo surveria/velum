@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::error::{Error, Result};
 
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";

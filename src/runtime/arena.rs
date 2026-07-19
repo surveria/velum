@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{Error, Result};
 
 /// Non-moving indexed storage with explicit vacant slots.

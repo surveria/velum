@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::Result,
     runtime::{Context, object::PropertyKey, property::DynamicPropertyKey},

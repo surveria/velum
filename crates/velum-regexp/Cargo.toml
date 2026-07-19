@@ -7,6 +7,10 @@ repository = "https://github.com/surveria/velum"
 description = "A safe, bounded ECMAScript regular expression engine for Velum."
 publish = false
 
+[features]
+default = ["std"]
+std = []
+
 [lib]
 name = "velum_regexp"
 path = "src/lib.rs"

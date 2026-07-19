@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::collections::BTreeMap;
 
 use crate::value::Value;

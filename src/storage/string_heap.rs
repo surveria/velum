@@ -1,6 +1,9 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::{collections::BTreeSet, rc::Rc};
 use core::{cell::OnceCell, fmt, mem::size_of};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::{
     error::{Error, Result},

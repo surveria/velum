@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     compiled_script::{CompiledScript, CompiledScriptUsage},
     error::Result,

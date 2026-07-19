@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     ast::ClassAutoAccessor,
     bytecode::{BytecodeBlock, BytecodeClassAutoAccessor, BytecodeClassField, BytecodeFunction},

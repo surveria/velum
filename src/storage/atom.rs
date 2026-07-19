@@ -1,5 +1,8 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::rc::Rc;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::error::{Error, Result};
 
@@ -74,10 +77,10 @@ impl AtomTable {
         }
         self.names
             .try_reserve(1)
-            .map_err(|error| Error::limit(format!("atom name allocation failed: {error}")))?;
+            .map_err(|error| Error::limit(format!("atom name allocation failed: {error:?}")))?;
         self.index
             .try_reserve(1)
-            .map_err(|error| Error::limit(format!("atom index allocation failed: {error}")))?;
+            .map_err(|error| Error::limit(format!("atom index allocation failed: {error:?}")))?;
         let name: Rc<str> = Rc::from(name);
         self.names.push(Rc::clone(&name));
         self.index.insert(name, id);

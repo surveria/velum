@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -146,7 +149,7 @@ impl Context {
     ) -> Result<Option<Value>> {
         let exec = self.get_named(splitter, REGEXP_EXEC_PROPERTY)?;
         let result = if self.semantic_is_callable(&exec)? {
-            self.call_value(&exec, std::slice::from_ref(input_value), splitter.clone())?
+            self.call_value(&exec, core::slice::from_ref(input_value), splitter.clone())?
         } else if let Value::Object(id) = splitter
             && self.objects.regexp_value(*id)?.is_some()
         {

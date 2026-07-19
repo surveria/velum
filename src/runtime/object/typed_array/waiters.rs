@@ -4,7 +4,10 @@ use alloc::{
 };
 use core::time::Duration;
 
-use parking_lot::{Condvar, Mutex, RwLock};
+#[cfg(feature = "std")]
+use parking_lot::Condvar;
+
+use crate::sync::{Mutex, RwLock};
 
 use crate::error::{Error, Result};
 
@@ -19,6 +22,7 @@ pub struct SharedByteBuffer {
 #[derive(Debug)]
 struct AtomicWaiter {
     notified: Mutex<bool>,
+    #[cfg(feature = "std")]
     signal: Condvar,
 }
 
@@ -49,6 +53,7 @@ impl SharedByteBuffer {
     ) -> AtomicWaitRegistration {
         let waiter = Arc::new(AtomicWaiter {
             notified: Mutex::new(false),
+            #[cfg(feature = "std")]
             signal: Condvar::new(),
         });
         shared
@@ -86,6 +91,7 @@ impl SharedByteBuffer {
                 return Err(Error::runtime("Atomics waiter queue changed unexpectedly"));
             };
             *waiter.notified.lock() = true;
+            #[cfg(feature = "std")]
             waiter.signal.notify_one();
         }
         if queue.is_empty() {
@@ -97,6 +103,7 @@ impl SharedByteBuffer {
 }
 
 impl AtomicWaitRegistration {
+    #[cfg(feature = "std")]
     pub(in crate::runtime) fn wait(&self, timeout: Option<Duration>) -> AtomicWaitOutcome {
         let mut notified = self.waiter.notified.lock();
         if let Some(duration) = timeout {
@@ -123,6 +130,15 @@ impl AtomicWaitRegistration {
         }
         drop(waiters);
         AtomicWaitOutcome::TimedOut
+    }
+
+    #[cfg(not(feature = "std"))]
+    pub(in crate::runtime) fn wait(&self, _timeout: Option<Duration>) -> AtomicWaitOutcome {
+        if *self.waiter.notified.lock() {
+            AtomicWaitOutcome::Notified
+        } else {
+            AtomicWaitOutcome::TimedOut
+        }
     }
 }
 

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::{rc::Rc, sync::Arc};
 use core::{cell::RefCell, time::Duration};
 

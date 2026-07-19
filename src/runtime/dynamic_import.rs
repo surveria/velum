@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     compiled_module::DynamicModuleRequest,
     error::{Error, JavaScriptErrorMetadata, Result},

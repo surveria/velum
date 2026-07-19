@@ -142,3 +142,4 @@ impl Parser<'_> {
             .ok_or_else(|| CompileError::new(CompileErrorKind::InvalidCaptureName, start))
     }
 }
+use alloc::string::String;

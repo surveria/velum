@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::error::{Error, Result};
 use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
 use crate::storage::atom::AtomTable;

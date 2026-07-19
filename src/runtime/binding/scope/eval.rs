@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::storage::atom::AtomId;
 
 use super::{BindingScope, ScopeIndex};

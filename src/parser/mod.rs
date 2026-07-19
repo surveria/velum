@@ -4,9 +4,10 @@ use crate::ast::{
 };
 use crate::error::{Error, Result};
 use crate::lexer::{LexicalGoal, Token, TokenKind, TokenStream};
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 use crate::runtime::limits::RuntimeLimits;
 use crate::source::{SourceId, SourceSpan};
-
 mod assignment;
 mod assignment_target;
 mod await_context;
@@ -33,7 +34,6 @@ mod strict;
 mod super_context;
 mod template;
 mod yield_context;
-
 use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
 use class_private::ClassPrivateScope;
 use in_context::InOperatorContext;

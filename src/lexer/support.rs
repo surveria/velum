@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::error::{Error, Result};
 
 pub const HEX_ESCAPE_DIGITS: usize = 2;

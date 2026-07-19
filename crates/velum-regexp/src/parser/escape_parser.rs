@@ -369,3 +369,4 @@ const fn hex_value(value: u16) -> Option<u32> {
         _ => None,
     }
 }
+use alloc::vec::Vec;

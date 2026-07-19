@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{cmp::Ordering, str::FromStr};
 
 use num_traits::ToPrimitive;
@@ -14,6 +17,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, native::TemporalFunctionKind, object::TemporalValue,
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, Value},
 };
@@ -494,14 +498,15 @@ impl Context {
         let Some(zone_text) = zone_value.string_text() else {
             return Err(Error::type_error("Temporal time zone must be a string"));
         };
-        let zone = TimeZone::try_from_str(zone_text).map_err(temporal_error)?;
+        let zone = TimeZone::try_from_str_with_provider(zone_text, time_zone_provider())
+            .map_err(temporal_error)?;
         let time = if matches!(time_value, Value::Undefined) {
             None
         } else {
             Some(self.plain_time_from_value(&time_value)?)
         };
         let result = date
-            .to_zoned_date_time(zone, time)
+            .to_zoned_date_time_with_provider(zone, time, time_zone_provider())
             .map_err(temporal_error)?;
         self.create_temporal_calendar_value(
             TemporalValue::ZonedDateTime(result),

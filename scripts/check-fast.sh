@@ -16,6 +16,7 @@ cd "${repo_root}"
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --workspace --lib --no-default-features -- -D warnings
 cargo test --all-targets --all-features
 "${script_dir}/check-examples.sh"
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features

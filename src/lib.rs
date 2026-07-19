@@ -1,6 +1,8 @@
 #![deny(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 
+#[macro_use]
 extern crate alloc;
 
 mod api;
@@ -16,10 +18,13 @@ mod error;
 mod lexer;
 mod ownership;
 mod parser;
+#[cfg(not(feature = "std"))]
+mod prelude;
 mod regexp_syntax;
 mod runtime;
 mod source;
 mod storage;
+mod sync;
 mod syntax;
 mod value;
 

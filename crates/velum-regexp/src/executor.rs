@@ -774,3 +774,4 @@ fn build_match(start: usize, end: usize, state: &AttemptState) -> Match {
 fn next_instruction(index: InstructionIndex) -> Result<InstructionIndex, ExecutionError> {
     index.checked_add(1).ok_or(ExecutionError::SizeOverflow)
 }
+use alloc::vec::Vec;

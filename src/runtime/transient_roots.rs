@@ -1,6 +1,9 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::rc::Rc;
 
-use parking_lot::Mutex;
+use crate::sync::Mutex;
 
 use crate::{error::Result, value::Value};
 

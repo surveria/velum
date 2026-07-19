@@ -212,6 +212,10 @@ impl Context {
         if !self.agent_can_block() {
             return Err(Error::type_error("the current agent cannot suspend"));
         }
+        if timeout.is_some_and(|duration| duration.is_zero()) {
+            return self.heap_string_value("timed-out");
+        }
+        Self::ensure_blocking_atomics_available()?;
         let outcome = location.buffer.wait_at(location.offset, timeout)?;
         self.heap_string_value(match outcome {
             AtomicWaitOutcome::Notified => "ok",
@@ -238,6 +242,7 @@ impl Context {
         } else if timeout.is_some_and(|duration| duration.is_zero()) {
             self.heap_string_value("timed-out")?
         } else {
+            Self::ensure_blocking_atomics_available()?;
             let registration = location.buffer.register_waiter_at(location.offset)?;
             let (promise, promise_value) = self.create_pending_promise()?;
             let object = self.create_atomics_result_object()?;
@@ -254,6 +259,15 @@ impl Context {
         self.define_enumerable_data_property(object, "async", Value::Bool(false))?;
         self.define_enumerable_data_property(object, "value", result)?;
         Ok(Value::Object(object))
+    }
+
+    fn ensure_blocking_atomics_available() -> Result<()> {
+        if cfg!(feature = "std") {
+            return Ok(());
+        }
+        Err(Error::type_error(
+            "blocking Atomics.wait is unavailable without the std feature",
+        ))
     }
 
     fn eval_atomic_pause(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {

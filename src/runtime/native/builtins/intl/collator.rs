@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::cmp::Ordering;
 
 use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};

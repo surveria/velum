@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     api::native_call::NativeCallTarget,
     bytecode::{BytecodeAddress, BytecodeBinding, BytecodeDynamicProperty, BytecodeProperty},

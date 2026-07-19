@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::collections::{BTreeSet, VecDeque};
 
 use crate::{

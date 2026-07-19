@@ -1,3 +1,9 @@
+use super::number_range::{format_range_text, range_separator};
+use super::number_rounding::{
+    NumberInput, RoundedNumber, parse_number_input, round_fraction, round_standard,
+};
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -6,12 +12,6 @@ use crate::{
     },
     value::{ErrorName, ObjectId, Value},
 };
-
-use super::number_range::{format_range_text, range_separator};
-use super::number_rounding::{
-    NumberInput, RoundedNumber, parse_number_input, round_fraction, round_standard,
-};
-
 #[derive(Clone, Debug)]
 struct NumberPart {
     kind: &'static str,

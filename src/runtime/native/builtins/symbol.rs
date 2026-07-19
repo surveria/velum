@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::runtime::native::function::SYMBOL_PROTOTYPE_TO_PRIMITIVE_NAME;
 use crate::{
     error::{Error, Result},

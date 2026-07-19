@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{fmt, task::Context as TaskContext, task::Poll};
 
 use crate::{

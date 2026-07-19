@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     bytecode::{BytecodeClassMemberKey, BytecodeClassMemberKind},
     error::{Error, Result},

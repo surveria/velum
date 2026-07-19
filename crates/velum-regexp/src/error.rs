@@ -57,6 +57,7 @@ impl fmt::Display for CompileError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for CompileError {}
 
 /// A bounded execution failure distinct from an ordinary no-match result.
@@ -80,6 +81,7 @@ impl fmt::Display for ExecutionError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for ExecutionError {}
 
 /// Logical retained-size arithmetic exceeded the platform size type.
@@ -92,4 +94,5 @@ impl fmt::Display for SizeOverflow {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for SizeOverflow {}

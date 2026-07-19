@@ -17,6 +17,7 @@ use crate::{
             AccessorPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
             TemporalValue,
         },
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
@@ -306,9 +307,13 @@ impl Context {
         let zone_text = zone_value
             .string_text()
             .ok_or_else(|| Error::type_error("ZonedDateTime timeZone must be a string"))?;
-        let time_zone = TimeZone::try_from_identifier_str(zone_text).map_err(temporal_error)?;
+        let time_zone =
+            TimeZone::try_from_identifier_str_with_provider(zone_text, time_zone_provider())
+                .map_err(temporal_error)?;
         let calendar = Self::temporal_calendar_identifier(values.get(2))?;
-        let zoned = ZonedDateTime::try_new(nanos, time_zone, calendar).map_err(temporal_error)?;
+        let zoned =
+            ZonedDateTime::try_new_with_provider(nanos, time_zone, calendar, time_zone_provider())
+                .map_err(temporal_error)?;
         self.create_zoned_date_time_value(zoned)
     }
 
@@ -721,3 +726,5 @@ impl Context {
         Ok(Value::Number(number))
     }
 }
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     JsBigInt, JsString, RetainedValue, Value,
     api::{embedding::Vm, owned_value::OwnedValue},

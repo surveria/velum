@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::runtime::object::RelativeTimeFormatValue;
 
 use super::plural_rules::plural_category;

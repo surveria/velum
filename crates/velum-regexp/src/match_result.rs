@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::ops::Range;
 
 /// One optional explicit capture using UTF-16 code-unit offsets.

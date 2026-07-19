@@ -1,3 +1,4 @@
+use alloc::{boxed::Box, string::String};
 use core::cmp::Ordering;
 
 use crate::{CompileError, CompileErrorKind, Flags, ast::Node};

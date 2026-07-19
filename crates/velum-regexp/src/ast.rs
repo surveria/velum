@@ -54,3 +54,4 @@ pub struct ParsedPattern {
     pub capture_count: usize,
     pub capture_names: Vec<Option<String>>,
 }
+use alloc::{boxed::Box, string::String, vec::Vec};

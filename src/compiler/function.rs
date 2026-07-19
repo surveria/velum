@@ -1,5 +1,10 @@
-use alloc::{collections::BTreeSet, rc::Rc};
-
+use super::{
+    BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam,
+    BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
+    FunctionCompileMode,
+};
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 use crate::{
     ast::{
         AssignmentPattern, BindingPattern, CatchClause, Expr, Expression, ForInTarget,
@@ -10,12 +15,7 @@ use crate::{
     error::{Error, Result},
     syntax::{FunctionKind, StaticFunctionId, StaticName},
 };
-
-use super::{
-    BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam,
-    BytecodeFunctionParamTarget, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
-    FunctionCompileMode,
-};
+use alloc::{collections::BTreeSet, rc::Rc};
 
 mod bytecode_compile;
 mod expression_collector;

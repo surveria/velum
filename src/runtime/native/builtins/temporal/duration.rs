@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{cmp::Ordering, str::FromStr};
 
 use num_traits::ToPrimitive;
@@ -16,6 +19,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, native::TemporalFunctionKind, object::TemporalValue,
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, Value},
 };
@@ -194,7 +198,9 @@ impl Context {
         let one = self.duration_from_value(values.first())?;
         let two = self.duration_from_value(values.get(1))?;
         let relative_to = self.duration_relative_to_option(values.get(2))?;
-        let ordering = one.compare(&two, relative_to).map_err(temporal_error)?;
+        let ordering = one
+            .compare_with_provider(&two, relative_to, time_zone_provider())
+            .map_err(temporal_error)?;
         let result = match ordering {
             Ordering::Less => -1.0,
             Ordering::Equal => 0.0,
@@ -359,7 +365,7 @@ impl Context {
         let duration = self.duration_receiver(receiver)?;
         let (options, relative_to) = self.duration_rounding_options(args.as_slice().first())?;
         let rounded = duration
-            .round(options, relative_to)
+            .round_with_provider(options, relative_to, time_zone_provider())
             .map_err(temporal_error)?;
         self.create_duration_value(rounded)
     }
@@ -371,7 +377,9 @@ impl Context {
     ) -> Result<Value> {
         let duration = self.duration_receiver(receiver)?;
         let (unit, relative_to) = self.duration_total_options(args.as_slice().first())?;
-        let total = duration.total(unit, relative_to).map_err(temporal_error)?;
+        let total = duration
+            .total_with_provider(unit, relative_to, time_zone_provider())
+            .map_err(temporal_error)?;
         Ok(Value::Number(total.as_inner()))
     }
 
@@ -474,7 +482,7 @@ impl Context {
                 "Temporal.Duration relativeTo must be a string or Temporal object",
             ));
         };
-        RelativeTo::try_from_str(text)
+        RelativeTo::try_from_str_with_provider(text, time_zone_provider())
             .map(Some)
             .map_err(temporal_error)
     }
@@ -557,16 +565,17 @@ impl Context {
         let millisecond = Self::relative_subsecond_component(millisecond, "millisecond")?;
         let microsecond = Self::relative_subsecond_component(microsecond, "microsecond")?;
         let nanosecond = Self::relative_subsecond_component(nanosecond, "nanosecond")?;
-        let time_zone = temporal_rs::TimeZone::try_from_str(&time_zone)
-            .and_then(|zone| zone.identifier())
-            .map_err(temporal_error)?;
+        let time_zone =
+            temporal_rs::TimeZone::try_from_str_with_provider(&time_zone, time_zone_provider())
+                .and_then(|zone| zone.identifier_with_provider(time_zone_provider()))
+                .map_err(temporal_error)?;
         let date_text = date.to_ixdtf_string(DisplayCalendar::Never);
         let offset = offset.map_or_else(String::new, Self::exact_relative_offset);
         let calendar = date.calendar().identifier();
         let text = format!(
             "{date_text}T{hour:02}:{minute:02}:{second:02}.{millisecond:03}{microsecond:03}{nanosecond:03}{offset}[{time_zone}][u-ca={calendar}]"
         );
-        RelativeTo::try_from_str(&text).map_err(temporal_error)
+        RelativeTo::try_from_str_with_provider(&text, time_zone_provider()).map_err(temporal_error)
     }
 
     fn duration_relative_calendar(&self, value: &Value) -> Result<Calendar> {

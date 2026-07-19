@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{arena::SlotArena, limits::VmStorageLimits, storage_ledger::VmStorageLedger},

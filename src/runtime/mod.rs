@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::{collections::VecDeque, rc::Rc};
 
 use crate::api::host::HostFunction;
@@ -61,6 +64,7 @@ mod roots;
 mod script_execution;
 mod semantic_object;
 mod storage_ledger;
+mod temporal_provider;
 mod trace;
 mod transient_roots;
 pub mod values;
@@ -155,6 +159,7 @@ pub struct Context {
     output: Vec<String>,
     output_payload_bytes: usize,
     performance_clock: clock::PerformanceClock,
+    wall_clock: clock::WallClock,
     random_state: u64,
     runtime_steps: usize,
     runtime_step_budget_origin: usize,
@@ -365,32 +370,12 @@ impl Context {
     /// Creates a context with an explicit optional-optimization policy.
     #[must_use]
     pub fn with_optimization(limits: RuntimeLimits, mode: OptimizationMode) -> Self {
-        Self::with_performance_clock(limits, mode, clock::PerformanceClock::system())
-    }
-
-    /// Creates a context whose VM-local `performance.now()` uses `read` as its
-    /// monotonic source. The first reading becomes this context's zero point.
-    /// Later source regressions are clamped so JavaScript observes a
-    /// non-decreasing value.
-    #[must_use]
-    pub fn with_monotonic_clock<F>(limits: RuntimeLimits, read: F) -> Self
-    where
-        F: Fn() -> core::time::Duration + 'static,
-    {
-        Self::with_optimization_and_monotonic_clock(limits, OptimizationMode::Enabled, read)
-    }
-
-    /// Creates a configured context with an embedder-provided monotonic clock.
-    #[must_use]
-    pub fn with_optimization_and_monotonic_clock<F>(
-        limits: RuntimeLimits,
-        mode: OptimizationMode,
-        read: F,
-    ) -> Self
-    where
-        F: Fn() -> core::time::Duration + 'static,
-    {
-        Self::with_performance_clock(limits, mode, clock::PerformanceClock::from_reader(read))
+        Self::with_clocks(
+            limits,
+            mode,
+            clock::PerformanceClock::system(),
+            clock::WallClock::system(),
+        )
     }
 
     /// Returns the optimizer-owned policy and profiling counters.
@@ -403,10 +388,11 @@ impl Context {
         self.optimizer.optional_paths_enabled() && self.inactive_realms.len() == 1
     }
 
-    fn with_performance_clock(
+    fn with_clocks(
         limits: RuntimeLimits,
         optimization_mode: OptimizationMode,
         performance_clock: clock::PerformanceClock,
+        wall_clock: clock::WallClock,
     ) -> Self {
         let identity = VmIdentity::new();
         let storage_limits = limits.storage.clone();
@@ -474,6 +460,7 @@ impl Context {
             output: Vec::new(),
             output_payload_bytes: 0,
             performance_clock,
+            wall_clock,
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
             runtime_step_budget_origin: 0,

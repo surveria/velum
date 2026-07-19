@@ -796,3 +796,5 @@ pub enum BytecodeInstruction {
     JumpIfNullishKeep(BytecodeAddress),
     Complete(BytecodeCompletion),
 }
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;

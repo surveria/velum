@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use super::{Expression, StaticBinding, StaticName};
 
 /// A destructuring binding target used by declarations, function parameters,

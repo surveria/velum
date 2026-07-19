@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -61,7 +64,7 @@ impl Context {
         &mut self,
         _args: &[Value],
     ) -> Result<Value> {
-        let now = current_time_value()?;
+        let now = current_time_value(self.wall_time_unix_nanos()?)?;
         let text = Self::format_date_string_value(now)?;
         self.heap_string_value(&text)
     }
@@ -104,7 +107,7 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             DateFunctionKind::Constructor => Some(self.eval_date_constructor(args)),
-            DateFunctionKind::Now => Some(Self::eval_date_now(args)),
+            DateFunctionKind::Now => Some(self.eval_date_now(args)),
             DateFunctionKind::Parse => Some(self.eval_date_parse(args)),
             DateFunctionKind::Utc => Some(self.eval_date_utc(args)),
             _ => None,
@@ -266,8 +269,11 @@ impl Context {
         }
     }
 
-    pub(in crate::runtime::native) fn eval_date_now(_args: RuntimeCallArgs<'_>) -> Result<Value> {
-        date_value_to_number(current_time_value()?).map(Value::Number)
+    pub(in crate::runtime::native) fn eval_date_now(
+        &self,
+        _args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        date_value_to_number(current_time_value(self.wall_time_unix_nanos()?)?).map(Value::Number)
     }
 
     pub(in crate::runtime::native) fn eval_date_parse(
@@ -601,7 +607,7 @@ impl Context {
 
     fn date_value_from_constructor_args(&mut self, args: &[Value]) -> Result<DateValue> {
         match args.len() {
-            0 => current_time_value(),
+            0 => current_time_value(self.wall_time_unix_nanos()?),
             1 => self.date_value_from_single_argument(args.first()),
             _ => self.date_value_from_components(args),
         }
@@ -609,7 +615,7 @@ impl Context {
 
     fn date_value_from_single_argument(&mut self, value: Option<&Value>) -> Result<DateValue> {
         let Some(value) = value else {
-            return current_time_value();
+            return current_time_value(self.wall_time_unix_nanos()?);
         };
         // A Date argument copies its time value directly.
         if let Value::Object(id) = value

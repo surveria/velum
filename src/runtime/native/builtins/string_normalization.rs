@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{

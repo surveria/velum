@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -73,17 +76,17 @@ impl Context {
             && let Some(method) =
                 self.string_regexp_protocol_method(&pattern, symbol_property, symbol_display)?
         {
-            return self.call_value(&method, std::slice::from_ref(this_value), pattern);
+            return self.call_value(&method, core::slice::from_ref(this_value), pattern);
         }
 
         let string = self.string_receiver_utf16(this_value)?;
         let string = self.heap_utf16_string_value(&string)?;
         let _string_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&string))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&string))?;
         let constructor = self.regexp_constructor_value()?;
         let regexp = self.semantic_construct(&constructor, &[pattern], constructor.clone())?;
         let _regexp_scope =
-            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&regexp))?;
+            self.transient_root_scope(VmRootKind::TransientTemporary, core::iter::once(&regexp))?;
         let method = self
             .string_regexp_protocol_method(&regexp, symbol_property, symbol_display)?
             .ok_or_else(|| {

@@ -1,5 +1,5 @@
-use core::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 
 use crate::{
     error::{Error, Result},
@@ -85,25 +85,11 @@ pub(super) fn component_value(parts: DateParts, component: DateComponent) -> Res
     integer_to_number(value)
 }
 
-pub(super) fn current_time_value() -> Result<DateValue> {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration_to_date_value(duration),
-        Err(error) => {
-            let millis = duration_to_millis(error.duration())?;
-            let value = millis
-                .checked_neg()
-                .ok_or_else(|| Error::limit("system time value overflowed"))?;
-            Ok(DateValue::from_millis(value))
-        }
-    }
-}
-
-fn duration_to_date_value(duration: Duration) -> Result<DateValue> {
-    duration_to_millis(duration).map(DateValue::from_millis)
-}
-
-fn duration_to_millis(duration: Duration) -> Result<i64> {
-    i64::try_from(duration.as_millis()).map_err(|_| Error::limit("system time value overflowed"))
+pub(super) fn current_time_value(unix_nanos: i128) -> Result<DateValue> {
+    let millis = unix_nanos / 1_000_000;
+    i64::try_from(millis)
+        .map(DateValue::from_millis)
+        .map_err(|_| Error::limit("system time value overflowed"))
 }
 
 pub(super) fn date_value_to_number(value: DateValue) -> Result<f64> {

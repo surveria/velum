@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{Context, native::TypedArrayFunctionKind, object::TypedArrayView, roots::VmRootKind},

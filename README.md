@@ -154,6 +154,30 @@ This separation is intentional. The engine provides language semantics; the
 embedder decides which clocks, I/O, networking, storage, and scheduling
 capabilities a VM receives.
 
+## `no_std` embedding
+
+The embeddable engine supports `no_std` with an `alloc` implementation:
+
+```console
+cargo check -p velum --lib --no-default-features
+```
+
+The default feature set still enables `std`, the smoke binary, operating-system
+clocks, blocking atomics, and the compiled IANA time-zone provider. Without
+`std`, the engine uses allocation-backed collections and spin locks. The
+embedder should construct a VM with `Engine::create_vm_with_clock_sources`,
+`Vm::with_config_and_clock_sources`, or `Runtime::context_with_clock_sources`
+to supply a monotonic duration and Unix time in nanoseconds. Until a wall clock
+is supplied, wall-clock JavaScript operations return a runtime error; the
+default monotonic source remains fixed at zero.
+
+The `no_std` time-zone provider accepts UTC names and numeric fixed offsets;
+other named IANA zones require the default `std` feature. Non-blocking atomics
+and shared buffers remain available, while a blocking `Atomics.wait` or
+`Atomics.waitAsync` operation returns a `TypeError`. The target must provide a
+global allocator and pointer-width atomics for allocation and shared-buffer
+support.
+
 ## Quick start
 
 Build and start the interactive shell:
