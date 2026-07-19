@@ -288,6 +288,10 @@ Each `Vm` also owns the origin and last observed value for its monotonic
 the embedding API accepts a duration reader for deterministic execution. A
 shared reader does not create shared JavaScript clock state: each VM captures
 its own origin and clamps regressions against its own last observation.
+The `no_std` profile has no implicit wall-clock authority: embedders provide
+both monotonic duration and Unix nanoseconds through the clock-source
+constructors. Its built-in named-time-zone provider is intentionally limited
+to UTC, and blocking atomics remain an explicit `std` capability.
 
 Embedding API invariants:
 
