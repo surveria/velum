@@ -295,11 +295,11 @@ project rules and rustc/Clippy configuration.
 
 The production `RegExp` parser, compiler, Unicode tables, and explicit
 backtracking VM live in the project-owned `velum-regexp` crate and forbid
-`unsafe` code. The previous vendored `regress` source remains temporarily as a
+`unsafe` code. The previous vendored `regress` source remains in-tree as a
 development-only differential oracle; it is not part of the normal engine
 dependency graph. Its upstream feature-dependent implementations are therefore
-excluded from the production safety boundary while replacement fuzzing and
-performance gates are completed.
+excluded from the production safety boundary. The oracle remains useful for
+future deterministic differential tests after the native backend is integrated.
 
 ## Testing and reproducibility
 

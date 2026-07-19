@@ -33,9 +33,9 @@ engine work.
 
 `src/regress` retains the previous ECMAScript-oriented implementation only as a
 non-publishable development oracle for deterministic differential tests. It is
-not present in the normal engine dependency graph. Keeping it temporarily
-allows exact behavioral comparisons while the native backend completes fuzzing
-and performance gates.
+not present in the normal engine dependency graph. Keeping it allows exact
+behavioral comparisons for future native-backend changes without placing its
+implementation inside the production safety boundary.
 
 The retained oracle keeps its upstream dual MIT/Apache-2.0 licenses and a
 source checksum manifest. Its large generated Unicode tables and upstream

@@ -11,8 +11,9 @@ The native backend is still a draft integration candidate. On pinned Test262
 commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`, the focused RegExp profile
 passes all 3,922 selected variants: 3,756 `built-ins/RegExp` variants, 124
 Annex B variants, 34 RegExp iterator variants, and eight staging variants.
-Removal of the retained oracle still requires the complete ready-PR
-correctness gate, fuzzing, and comparative performance evidence.
+The complete ready-PR correctness gate remains the final integration gate. The
+retained oracle stays development-only after integration so future changes can
+continue to use an implementation-independent differential check.
 
 The implementation is specification-led. Existing engines may be queried as
 behavioral or performance oracles, but their implementation structure is not
@@ -31,6 +32,32 @@ mid-surrogate positions. Its nested-repetition matrix exposed and now guards a
 zero-progress rollback rule: captures written by an empty final iteration are
 undone, while backtracking inside that iteration may still select a consuming
 alternative.
+
+Two deterministic property-fuzz tests add 20,000 seed-reproducible raw and
+structure-aware cases directly at the crate boundary. They cover arbitrary
+UTF-16 patterns and inputs, including lone surrogates, all supported matching
+modes, valid and invalid start positions, sticky execution, constrained compile
+and execution limits, exact error and match coordinates, repeated-execution
+determinism, retained-size arithmetic, and host cancellation. Every successful
+compilation is executed twice and internal-program or size-overflow failures are
+treated as test failures rather than accepted fuzz outcomes.
+
+A bounded AddressSanitizer and sanitizer-coverage Fuzzilli campaign against the
+same draft tree generated 1,000 JavaScript programs, accepted 721, performed
+28,418 engine executions, and added 469 coverage-corpus samples. It reported
+zero crashes, zero timeouts, and zero sanitizer findings. This smoke campaign
+does not replace longer continuous fuzzing, but verifies that the persistent
+whole-engine target and reproducer pipeline are operational for this backend.
+
+The exact pre-switch parent and native tree were also measured with the same
+host, runner, corpus, and exclusive performance lock. On `regexp_baseline`, the
+native backend measured 530.69 ms with 0.1% coefficient of variation versus
+550.21 ms with 0.3% for the retained backend, about 3.5% lower latency. This
+evidence covers the current representative RegExp workload. A separate run
+with the in-process reference feature measured native evaluation at 523.11 ms
+and QuickJS at 59.47 ms, an 8.79x gap with 0.2% and 0.8% coefficients of
+variation. Broader representative and adversarial performance coverage remains
+follow-up work; the QuickJS result is a baseline, not a parity claim.
 
 The standalone suite also adapts 41 matcher-level cases from the pinned
 Test262 lookbehind corpus under its BSD license. Exact expected UTF-16 spans
@@ -148,12 +175,18 @@ charges the VM runtime-step budget and observes cancellation. Resource failures
 remain non-catchable embedder errors, matching the existing VM architecture.
 Long terminal repetitions avoid retaining one backtrack and undo record per
 consumed code point when the end assertion makes the branch deterministic.
+Whole-pattern literals, code-point classes, dot atoms, and their simple
+quantifiers use a bounded specialized execution plan with constant
+backtracking storage. The same local and host-owned work limits apply to that
+plan.
 
 ## Matching Strategy
 
 The correctness baseline is a bounded backtracking VM because ECMAScript
 backreferences, lookarounds, capture rollback, and legacy behavior are not a
-pure regular-language surface. Initial optimization is representation-neutral:
+pure regular-language surface. A specialized plan handles an entire simple
+literal, code-point class, dot atom, or simple quantifier without allocating
+backtracking state. More general optimization remains representation-neutral:
 literal prefixes, required first sets, anchored starts, compact ASCII classes,
 and allocation-free successful paths.
 
@@ -206,6 +239,6 @@ Replacement requires all of the following:
    and adversarial bounded workloads.
 
 The native path is now the runtime default on the draft integration branch.
-The vendored compatibility oracle remains development-only until every
-remaining gate passes on the exact ready-PR tree; it is not removed merely
-because the focused RegExp profile is green.
+The vendored compatibility oracle remains development-only and intentionally
+available for future differential testing; it is not part of the production
+dependency graph or safety boundary.
