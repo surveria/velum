@@ -191,6 +191,50 @@ fn simple_root_repetition_uses_constant_backtracking_storage() -> TestResult {
 }
 
 #[test]
+fn simple_terminal_repetitions_use_constant_backtracking_storage() -> TestResult {
+    let input = format!("f{}", "a".repeat(131_072));
+    for pattern in ["f.*", "(.+)"] {
+        let regex = Regex::compile(
+            &pattern.encode_utf16().collect::<Vec<_>>(),
+            Flags::default(),
+            CompileLimits::default(),
+        )?;
+        let units = input.encode_utf16().collect::<Vec<_>>();
+        let outcome = regex.find(
+            &units,
+            0,
+            ExecutionLimits {
+                max_steps: ExecutionLimits::MAXIMUM.max_steps,
+                ..ExecutionLimits::default()
+            },
+        )?;
+        let Some(matched) = outcome.matched else {
+            return Err(format!("terminal simple pattern {pattern:?} did not match").into());
+        };
+        if matched.span != (0..units.len()) {
+            return Err(format!("terminal simple pattern {pattern:?} returned {matched:?}").into());
+        }
+        if pattern == "(.+)"
+            && matched
+                .captures
+                .first()
+                .and_then(|capture| capture.span.as_ref())
+                != Some(&(0..units.len()))
+        {
+            return Err(format!("terminal capture did not cover the match: {matched:?}").into());
+        }
+        if outcome.stats.max_backtrack_depth != 0 || outcome.stats.max_undo_depth != 0 {
+            return Err(format!(
+                "terminal simple pattern {pattern:?} retained backtrack state: {:?}",
+                outcome.stats
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn max_safe_integer_repetitions_compile_without_instruction_expansion() -> TestResult {
     let limits = CompileLimits {
         max_repeat_count: CompileLimits::MAXIMUM.max_repeat_count,

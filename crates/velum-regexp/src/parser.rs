@@ -215,6 +215,17 @@ impl<'a> Parser<'a> {
             value if self.flags.has_unicode_mode() && matches!(value, 0x005D | 0x007B | 0x007D) => {
                 Err(self.error(CompileErrorKind::UnexpectedToken))
             }
+            value if value == u16::from(b'{') => {
+                let checkpoint = self.position;
+                if self.parse_braced_quantifier()?.is_some() {
+                    return Err(CompileError::new(
+                        CompileErrorKind::InvalidQuantifier,
+                        checkpoint,
+                    ));
+                }
+                let value = self.decode_pattern_value()?;
+                self.node(Node::Literal(value))
+            }
             _ => {
                 let value = self.decode_pattern_value()?;
                 self.node(Node::Literal(value))

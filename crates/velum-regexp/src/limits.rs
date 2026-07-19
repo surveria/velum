@@ -26,7 +26,7 @@ impl Default for CompileLimits {
 impl CompileLimits {
     /// Engine-enforced ceilings for caller-selected compile limits.
     pub const MAXIMUM: Self = Self {
-        max_pattern_units: 1_048_576,
+        max_pattern_units: 33_554_432,
         max_nesting_depth: 256,
         max_nodes: 65_536,
         max_instructions: 262_144,

@@ -18,6 +18,18 @@ enum Direction {
     Reverse,
 }
 
+struct SimplePatternShape {
+    has_prefix: bool,
+    tail: SimpleTail,
+}
+
+struct SimpleTail {
+    min: u64,
+    max: Option<u64>,
+    greedy: bool,
+    capture: Option<usize>,
+}
+
 impl Compiler {
     pub(super) fn compile(
         parsed: &ParsedPattern,
@@ -33,7 +45,8 @@ impl Compiler {
         };
         compiler.compile_node(&parsed.root, flags)?;
         compiler.emit(Instruction::Accept)?;
-        let simple_pattern = simple_pattern(&parsed.root, &compiler.instructions);
+        let simple_pattern =
+            simple_pattern(&parsed.root, &compiler.instructions, parsed.capture_count);
         Ok(Program {
             instructions: compiler.instructions,
             classes: compiler.classes,
@@ -276,6 +289,13 @@ impl Compiler {
         direction: Direction,
         flags: Flags,
     ) -> Result<(), CompileError> {
+        let progress = if minimum_input_units(body) == 0 {
+            let progress = self.allocate_progress()?;
+            self.emit(Instruction::ResetProgress(progress))?;
+            Some(progress)
+        } else {
+            None
+        };
         let split = self.emit(Instruction::Split {
             first: 0,
             second: 0,
@@ -283,7 +303,18 @@ impl Compiler {
         let body_target = self.next_index();
         self.emit_capture_clears(body)?;
         self.compile_node_in(body, direction, flags)?;
+        let check = progress
+            .map(|id| self.emit(Instruction::CheckProgress { id, no_progress: 0 }))
+            .transpose()?;
+        let progress_exit = check.map(|_| self.emit(Instruction::Jump(0))).transpose()?;
+        let failure = check.map(|_| self.emit(Instruction::Fail)).transpose()?;
         let end = self.next_index();
+        if let (Some(check), Some(failure)) = (check, failure) {
+            self.patch_progress(check, failure)?;
+        }
+        if let Some(progress_exit) = progress_exit {
+            self.patch_jump(progress_exit, end)?;
+        }
         if greedy {
             self.patch_split(split, body_target, end)
         } else {
@@ -477,21 +508,70 @@ impl Compiler {
     }
 }
 
-fn simple_pattern(node: &Node, instructions: &[Instruction]) -> Option<SimplePattern> {
-    let (min, max, greedy) = simple_repetition(node)?;
-    let atom = instructions
+fn simple_pattern(
+    node: &Node,
+    instructions: &[Instruction],
+    capture_count: usize,
+) -> Option<SimplePattern> {
+    let shape = simple_pattern_shape(node)?;
+    if capture_count != usize::from(shape.tail.capture.is_some()) {
+        return None;
+    }
+    let mut atoms = instructions
         .iter()
-        .find_map(|instruction| match *instruction {
+        .filter_map(|instruction| match *instruction {
             Instruction::Char { expected, flags } => Some(SimpleAtom::Char { expected, flags }),
             Instruction::Class { id, flags } => Some(SimpleAtom::Class { id, flags }),
             Instruction::Any { flags } => Some(SimpleAtom::Any { flags }),
             _ => None,
-        })?;
+        });
+    let prefix = shape.has_prefix.then(|| atoms.next()).flatten();
+    if shape.has_prefix && prefix.is_none() {
+        return None;
+    }
+    let atom = atoms.next()?;
     Some(SimplePattern {
+        prefix,
         atom,
+        min: shape.tail.min,
+        max: shape.tail.max,
+        greedy: shape.tail.greedy,
+        tail_capture: shape.tail.capture,
+    })
+}
+
+fn simple_pattern_shape(node: &Node) -> Option<SimplePatternShape> {
+    if let Node::Concat(nodes) | Node::LegacySequence(nodes) = node
+        && let [prefix, tail] = nodes.as_slice()
+        && simple_atom(prefix)
+    {
+        return Some(SimplePatternShape {
+            has_prefix: true,
+            tail: simple_tail(tail)?,
+        });
+    }
+    Some(SimplePatternShape {
+        has_prefix: false,
+        tail: simple_tail(node)?,
+    })
+}
+
+fn simple_tail(node: &Node) -> Option<SimpleTail> {
+    if let Node::Capture { id, body } = node {
+        let (min, max, greedy) = simple_repetition(body)?;
+        return Some(SimpleTail {
+            min,
+            max,
+            greedy,
+            capture: Some(*id),
+        });
+    }
+    let (min, max, greedy) = simple_repetition(node)?;
+    Some(SimpleTail {
         min,
         max,
         greedy,
+        capture: None,
     })
 }
 

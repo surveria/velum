@@ -13,10 +13,12 @@ pub enum SimpleAtom {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SimplePattern {
+    pub prefix: Option<SimpleAtom>,
     pub atom: SimpleAtom,
     pub min: u64,
     pub max: Option<u64>,
     pub greedy: bool,
+    pub tail_capture: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]

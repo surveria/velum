@@ -143,11 +143,18 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         let mut candidate = start;
         loop {
             self.charge_candidate()?;
-            if let Some(end) = self.match_simple_at(candidate, pattern)? {
+            if let Some((tail_start, end)) = self.match_simple_at(candidate, pattern)? {
+                let mut captures = vec![Capture { span: None }; self.program.capture_count];
+                if let Some(id) = pattern.tail_capture {
+                    let Some(capture) = captures.get_mut(id) else {
+                        return Err(ExecutionError::InvalidProgram);
+                    };
+                    capture.span = Some(tail_start..end);
+                }
                 return Ok(SearchOutcome {
                     matched: Some(Match {
                         span: candidate..end,
-                        captures: Vec::new(),
+                        captures,
                     }),
                     stats: self.stats,
                 });
@@ -167,8 +174,16 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
         &mut self,
         start: usize,
         pattern: SimplePattern,
-    ) -> Result<Option<usize>, ExecutionError> {
+    ) -> Result<Option<(usize, usize)>, ExecutionError> {
         let mut position = start;
+        if let Some(prefix) = pattern.prefix {
+            self.charge_step()?;
+            let Some(next) = self.consume_simple_atom(prefix, position)? else {
+                return Ok(None);
+            };
+            position = next;
+        }
+        let tail_start = position;
         let mut count = 0_u64;
         while count < pattern.min {
             self.charge_step()?;
@@ -179,7 +194,7 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             count = count.checked_add(1).ok_or(ExecutionError::SizeOverflow)?;
         }
         if !pattern.greedy {
-            return Ok(Some(position));
+            return Ok(Some((tail_start, position)));
         }
         while pattern.max.is_none_or(|maximum| count < maximum) {
             self.charge_step()?;
@@ -189,7 +204,7 @@ impl<'a, C: ExecutionControl> Executor<'a, C> {
             position = next;
             count = count.checked_add(1).ok_or(ExecutionError::SizeOverflow)?;
         }
-        Ok(Some(position))
+        Ok(Some((tail_start, position)))
     }
 
     fn consume_simple_atom(

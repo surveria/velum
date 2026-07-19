@@ -20,6 +20,19 @@ fn zero_length_alternatives_can_backtrack_to_consuming_paths() -> TestResult {
     assert_match(r"(?:a*|b)*", "b", 0..1, &[])
 }
 
+#[test]
+fn optional_zero_length_iterations_leave_captures_unmatched() -> TestResult {
+    for pattern in [r"()?", r"(){0,1}", r"(){0,2}", r"(?=(a))?a"] {
+        assert_match(
+            pattern,
+            "a",
+            0..usize::from(pattern.ends_with('a')),
+            &[None],
+        )?;
+    }
+    assert_match(r"(){1,2}", "a", 0..0, &[Some(0..0)])
+}
+
 fn assert_match(
     pattern: &str,
     input: &str,

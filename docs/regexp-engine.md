@@ -7,13 +7,15 @@ Velum now executes ECMAScript regular expressions through the project-owned
 keeps the vendored `regress` crate only as a development-time behavioral
 oracle. `velum-regexp-unicode-gen` remains maintenance-only tooling.
 
-The native backend is still a draft integration candidate. On pinned Test262
-commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`, the focused RegExp profile
-passes all 3,922 selected variants: 3,756 `built-ins/RegExp` variants, 124
-Annex B variants, 34 RegExp iterator variants, and eight staging variants.
-The complete ready-PR correctness gate remains the final integration gate. The
-retained oracle stays development-only after integration so future changes can
-continue to use an implementation-independent differential check.
+The native backend is a ready integration candidate. On pinned Test262 commit
+`64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`, the expanded RegExp profile passes
+all 4,618 selected variants. That includes all 3,756 `built-ins/RegExp`
+variants, 476 regular-expression literal variants, 188 SpiderMonkey staging
+variants, 140 Annex B variants, 34 RegExp iterator variants, and 24 related
+String, statement, and expression variants. The complete ready-PR correctness
+gate remains the final integration gate. The retained oracle stays
+development-only after integration so future changes can continue to use an
+implementation-independent differential check.
 
 The implementation is specification-led. Existing engines may be queried as
 behavioral or performance oracles, but their implementation structure is not
@@ -142,10 +144,12 @@ integer wrap, or unbounded retained allocation.
 ceilings. Caller-provided values are constrained to those ceilings at the
 public API boundary. Conservative standalone defaults leave bounded headroom
 for an embedding to select larger pattern and search budgets without exceeding
-the hard ceilings. Velum uses that headroom only behind the VM-owned source,
-string, storage, and runtime-step limits. Wide disjunction compilation is
-iterative rather than recursive; structural recursion remains protected by the
-enforced nesting ceiling.
+the hard ceilings. The standalone pattern default is 65,536 UTF-16 units; the
+33,554,432-unit hard ceiling matches the existing maximum VM source and string
+profiles needed by official conformance stress cases. Velum uses that headroom
+only behind the VM-owned source, string, storage, and runtime-step limits. Wide
+disjunction compilation is iterative rather than recursive; structural
+recursion remains protected by the enforced nesting ceiling.
 
 Compilation limits cover at least:
 
@@ -238,7 +242,6 @@ Replacement requires all of the following:
    alternation, classes, captures, lookarounds, backreferences, Unicode, failure,
    and adversarial bounded workloads.
 
-The native path is now the runtime default on the draft integration branch.
-The vendored compatibility oracle remains development-only and intentionally
-available for future differential testing; it is not part of the production
-dependency graph or safety boundary.
+The native path is now the runtime default. The vendored compatibility oracle
+remains development-only and intentionally available for future differential
+testing; it is not part of the production dependency graph or safety boundary.

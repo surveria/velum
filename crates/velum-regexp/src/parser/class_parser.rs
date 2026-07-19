@@ -54,22 +54,21 @@ impl Parser<'_> {
             }
             let first = self.parse_class_atom()?;
             let range_follows = self.class_range_follows()?;
-            if range_follows
-                && !matches!(&first, ClassAtom::Single(_))
-                && self.flags.has_unicode_mode()
-            {
-                return Err(self.error(CompileErrorKind::InvalidCharacterClass));
-            }
-            if range_follows && matches!(&first, ClassAtom::Single(_)) {
+            if range_follows {
                 self.advance_one()?;
                 let second = self.parse_class_atom()?;
-                let (ClassAtom::Single(start), ClassAtom::Single(end)) = (first, second) else {
-                    return Err(self.error(CompileErrorKind::InvalidCharacterClass));
-                };
-                if start > end {
-                    return Err(self.error(CompileErrorKind::InvalidCharacterClass));
+                match (first, second) {
+                    (ClassAtom::Single(start), ClassAtom::Single(end)) => {
+                        if start > end {
+                            return Err(self.error(CompileErrorKind::InvalidCharacterClass));
+                        }
+                        self.push_class_term(&mut terms, CharacterClassTerm::Range { start, end })?;
+                    }
+                    (first, second) if !self.flags.has_unicode_mode() => {
+                        self.push_legacy_range_union(&mut terms, first, second)?;
+                    }
+                    _ => return Err(self.error(CompileErrorKind::InvalidCharacterClass)),
                 }
-                self.push_class_term(&mut terms, CharacterClassTerm::Range { start, end })?;
             } else if let ClassAtom::Strings(values) = first {
                 strings.extend(values);
             } else {
@@ -358,6 +357,21 @@ impl Parser<'_> {
             }));
         }
         terms.push(term);
+        Ok(())
+    }
+
+    fn push_legacy_range_union(
+        &self,
+        terms: &mut Vec<CharacterClassTerm>,
+        first: ClassAtom,
+        second: ClassAtom,
+    ) -> Result<(), CompileError> {
+        for atom in [first, ClassAtom::Single(u32::from(b'-')), second] {
+            let term = atom
+                .into_term()
+                .ok_or_else(|| self.error(CompileErrorKind::InvalidCharacterClass))?;
+            self.push_class_term(terms, term)?;
+        }
         Ok(())
     }
 }

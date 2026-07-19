@@ -40,6 +40,36 @@ fn legacy_mode_treats_malformed_quantifiers_and_brackets_as_literals() -> TestRe
 }
 
 #[test]
+fn legacy_mode_rejects_complete_braced_quantifiers_in_atom_position() -> TestResult {
+    for pattern in ["{2}", "{2,}", "{2,3}"] {
+        let result = compile(pattern, Flags::default());
+        if !matches!(
+            result,
+            Err(ref error) if error.kind == CompileErrorKind::InvalidQuantifier
+        ) {
+            return Err(format!(
+                "unexpected leading quantifier result for {pattern:?}: {result:?}"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn legacy_class_escape_ranges_are_unions_with_a_literal_hyphen() -> TestResult {
+    for (pattern, input) in [
+        (r"^[\d-a]+$", "a0123456789-"),
+        (r"^[%-\d]+$", "%0123456789-"),
+        (r"^[\s-\d]+$", " \t0123456789-"),
+        (r"^[--\d]+$", "-0123456789-"),
+    ] {
+        full_match(pattern, input, Flags::default())?;
+    }
+    Ok(())
+}
+
+#[test]
 fn unicode_modes_reject_malformed_quantifiers_and_bare_syntax_characters() -> TestResult {
     for flags in [
         Flags::default().with_unicode(true),
