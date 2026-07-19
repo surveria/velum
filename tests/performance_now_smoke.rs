@@ -94,13 +94,13 @@ fn embedder_sources_drive_monotonic_and_wall_clocks() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm_with_clock_sources(|| Duration::from_secs(7), || UNIX_NANOS);
     let value = vm.eval(
-        r#"
+        r"
         performance.now() === 0 &&
             Date.now() === 1735213600321 &&
             Temporal.Now.instant().epochNanoseconds === 1735213600321000000n
             ? 42
             : 0
-        "#,
+        ",
     )?;
     ensure_number(&value, 42.0)
 }
