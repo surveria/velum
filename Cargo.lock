@@ -633,6 +633,7 @@ name = "velum"
 version = "0.2.130"
 dependencies = [
  "anyhow",
+ "foldhash",
  "hashbrown",
  "icu_casemap",
  "icu_locale",
