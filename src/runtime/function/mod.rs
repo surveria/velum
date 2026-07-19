@@ -1,5 +1,5 @@
-use alloc::rc::Rc;
-
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
@@ -14,7 +14,7 @@ use crate::{
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
-
+use alloc::rc::Rc;
 mod activation_setup;
 mod arguments;
 mod callback_fast_path;

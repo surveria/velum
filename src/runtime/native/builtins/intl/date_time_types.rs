@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum DateTimeInputKind {
     Instant,

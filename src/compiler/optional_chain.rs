@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     ast::{Expr, Expression, StaticCallSiteId},
     bytecode::{BytecodeBlock, BytecodeCallSite, BytecodePrivateName},

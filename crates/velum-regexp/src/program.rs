@@ -1,3 +1,4 @@
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::mem::size_of;
 
 use crate::{Flags, SizeOverflow, character_class::CharacterClass};

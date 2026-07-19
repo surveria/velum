@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::rc::{Rc, Weak};
 use core::cell::RefCell;
 

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     RetainedValue,
     api::host::HostFunction,

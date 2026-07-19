@@ -1,5 +1,7 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::str::FromStr;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use num_traits::ToPrimitive;
 
@@ -9,6 +11,7 @@ use crate::{
         Context,
         call::RuntimeCallArgs,
         object::{DateTimeFormatValue, TemporalValue},
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, Value},
 };
@@ -86,7 +89,10 @@ impl Context {
             }
         }
         if matches!(value, Value::Undefined) {
-            return legacy_millis_input(formatter, current_time_millis()?);
+            return legacy_millis_input(
+                formatter,
+                current_time_millis(self.wall_time_unix_nanos()?),
+            );
         }
         let number = self.to_number(value)?;
         date_time_number_input(formatter, number)
@@ -266,7 +272,7 @@ fn zoned_date_time_input(
     };
     let time_zone = zoned
         .time_zone()
-        .identifier()
+        .identifier_with_provider(time_zone_provider())
         .map_err(intl_temporal_error)?;
     let month_code = zoned.month_code();
     Ok(DateTimeInput {
@@ -292,15 +298,16 @@ fn instant_input(
     kind: DateTimeInputKind,
 ) -> Result<DateTimeInput> {
     let time_zone =
-        TimeZone::try_from_identifier_str(&formatter.time_zone).map_err(intl_temporal_error)?;
+        TimeZone::try_from_identifier_str_with_provider(&formatter.time_zone, time_zone_provider())
+            .map_err(intl_temporal_error)?;
     let calendar = Calendar::from_str(&formatter.calendar).map_err(intl_temporal_error)?;
     let zoned = instant
-        .to_zoned_date_time_iso(time_zone)
+        .to_zoned_date_time_iso_with_provider(time_zone, time_zone_provider())
         .map_err(intl_temporal_error)?
         .with_calendar(calendar);
     let time_zone = zoned
         .time_zone()
-        .identifier()
+        .identifier_with_provider(time_zone_provider())
         .map_err(intl_temporal_error)?;
     let month_code = zoned.month_code();
     Ok(DateTimeInput {
@@ -368,12 +375,8 @@ fn legacy_millis_input(formatter: &DateTimeFormatValue, millis: i128) -> Result<
     instant_input(formatter, instant, DateTimeInputKind::LegacyDate)
 }
 
-fn current_time_millis() -> Result<i128> {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| Error::runtime(error.to_string()))?;
-    i128::try_from(duration.as_millis())
-        .map_err(|error| Error::limit(format!("current time milliseconds overflowed: {error}")))
+const fn current_time_millis(unix_nanos: i128) -> i128 {
+    unix_nanos / 1_000_000
 }
 
 fn check_calendar(actual: &Calendar, requested: &Calendar) -> Result<()> {

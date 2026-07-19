@@ -1,4 +1,7 @@
-use std::ops::Range;
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
+use core::ops::Range;
 
 use velum_regexp::{
     CompileLimits, ExecutionControl, ExecutionError, ExecutionLimits, Flags, Regex,

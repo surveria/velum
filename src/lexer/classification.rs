@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::lexer::TokenKind;
 use crate::lexer::support::{is_identifier_part, is_identifier_start};
 

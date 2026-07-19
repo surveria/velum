@@ -1,7 +1,10 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::rc::{Rc, Weak};
 use core::fmt;
 
-use parking_lot::Mutex;
+use crate::sync::Mutex;
 
 use crate::{
     api::owned_value::OwnedValue,

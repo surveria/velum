@@ -1,4 +1,7 @@
-use std::ops::Range;
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
+use core::ops::Range;
 
 use crate::{
     error::{Error, Result},
@@ -27,7 +30,7 @@ pub(super) fn regexp_find_utf16<C: ExecutionControl>(
     input: &[u16],
     start: usize,
     control: &mut C,
-) -> std::result::Result<Option<RegExpMatch>, ExecutionError> {
+) -> core::result::Result<Option<RegExpMatch>, ExecutionError> {
     if start > input.len() {
         return Ok(None);
     }
@@ -65,7 +68,7 @@ impl<'a> RuntimeRegExpControl<'a> {
         }
     }
 
-    pub(super) fn complete<T>(self, result: std::result::Result<T, ExecutionError>) -> Result<T> {
+    pub(super) fn complete<T>(self, result: core::result::Result<T, ExecutionError>) -> Result<T> {
         match result {
             Ok(value) => Ok(value),
             Err(error) => self.error.map_or_else(
@@ -77,7 +80,7 @@ impl<'a> RuntimeRegExpControl<'a> {
 }
 
 impl ExecutionControl for RuntimeRegExpControl<'_> {
-    fn charge_steps(&mut self, steps: usize) -> std::result::Result<(), InterruptReason> {
+    fn charge_steps(&mut self, steps: usize) -> core::result::Result<(), InterruptReason> {
         if let Err(error) = self.context.charge_runtime_steps(steps) {
             self.error = Some(error);
             return Err(InterruptReason::HostStepLimit);

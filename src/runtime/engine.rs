@@ -43,6 +43,17 @@ impl Runtime {
         Context::with_monotonic_clock(self.limits.clone(), read)
     }
 
+    /// Creates a context with embedder-provided monotonic and Unix wall clocks.
+    /// The wall source returns nanoseconds since the Unix epoch.
+    #[must_use]
+    pub fn context_with_clock_sources<M, W>(&self, monotonic: M, unix_nanos: W) -> Context
+    where
+        M: Fn() -> Duration + 'static,
+        W: Fn() -> i128 + 'static,
+    {
+        Context::with_clock_sources(self.limits.clone(), monotonic, unix_nanos)
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {

@@ -628,3 +628,4 @@ fn minimum_input_units(node: &Node) -> u64 {
         | Node::AssertEnd => 0,
     }
 }
+use alloc::{boxed::Box, vec::Vec};

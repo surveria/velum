@@ -74,3 +74,5 @@ impl ArrayIndex {
         ArrayLength(self.0)
     }
 }
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;

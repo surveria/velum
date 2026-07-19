@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::cmp::Ordering;
 
 use num_traits::ToPrimitive;
@@ -7,6 +10,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, native::TemporalFunctionKind, object::TemporalValue,
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, JsBigInt, Value},
 };
@@ -232,9 +236,10 @@ impl Context {
         let text = value
             .string_text()
             .ok_or_else(|| Error::type_error("Temporal time zone must be a string"))?;
-        let zone = TimeZone::try_from_str(text).map_err(temporal_error)?;
+        let zone = TimeZone::try_from_str_with_provider(text, time_zone_provider())
+            .map_err(temporal_error)?;
         let zoned = instant
-            .to_zoned_date_time_iso(zone)
+            .to_zoned_date_time_iso_with_provider(zone, time_zone_provider())
             .map_err(temporal_error)?;
         self.create_temporal_calendar_value(
             TemporalValue::ZonedDateTime(zoned),
@@ -252,7 +257,7 @@ impl Context {
         let time_zone = self.instant_time_zone_option(value)?;
         let instant = self.instant_receiver(receiver)?;
         let text = instant
-            .to_ixdtf_string(time_zone, options)
+            .to_ixdtf_string_with_provider(time_zone, options, time_zone_provider())
             .map_err(temporal_error)?;
         self.heap_string_value(&text)
     }
@@ -268,7 +273,7 @@ impl Context {
         let text = zone
             .string_text()
             .ok_or_else(|| Error::type_error("Temporal time zone must be a string"))?;
-        TimeZone::try_from_str(text)
+        TimeZone::try_from_str_with_provider(text, time_zone_provider())
             .map(Some)
             .map_err(temporal_error)
     }
@@ -276,7 +281,11 @@ impl Context {
     fn instant_default_string(&mut self, receiver: &Value) -> Result<Value> {
         let instant = self.instant_receiver(receiver)?;
         let text = instant
-            .to_ixdtf_string(None, ToStringRoundingOptions::default())
+            .to_ixdtf_string_with_provider(
+                None,
+                ToStringRoundingOptions::default(),
+                time_zone_provider(),
+            )
             .map_err(temporal_error)?;
         self.heap_string_value(&text)
     }

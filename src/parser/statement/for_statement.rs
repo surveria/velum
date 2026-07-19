@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     ast::{DeclKind, Expression, ForInTarget, Statement, Stmt},
     error::Result,

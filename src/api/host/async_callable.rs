@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{error::Error as StdError, fmt, future::Future, pin::Pin, task::Context as TaskContext};
 
 use crate::{

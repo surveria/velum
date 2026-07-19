@@ -379,3 +379,4 @@ impl Parser<'_> {
 const fn is_class_escape_character(value: u16) -> bool {
     is_syntax_character(value) || value == 0x002D
 }
+use alloc::{boxed::Box, string::String, vec::Vec};

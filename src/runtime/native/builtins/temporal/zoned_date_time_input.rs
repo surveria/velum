@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::str::FromStr;
 
 use num_traits::ToPrimitive;
@@ -11,7 +14,10 @@ use temporal_rs::{
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, object::TemporalValue},
+    runtime::{
+        Context, call::RuntimeCallArgs, object::TemporalValue,
+        temporal_provider::time_zone_provider,
+    },
     value::{ErrorName, Value},
 };
 
@@ -70,10 +76,13 @@ impl Context {
         let options = self.zoned_options(options, default_offset)?;
         match input {
             ZonedInput::Resolved(zoned) => Ok(zoned),
-            ZonedInput::Parsed(parsed) => {
-                ZonedDateTime::from_parsed(parsed, options.disambiguation, options.offset)
-                    .map_err(temporal_error)
-            }
+            ZonedInput::Parsed(parsed) => ZonedDateTime::from_parsed_with_provider(
+                parsed,
+                options.disambiguation,
+                options.offset,
+                time_zone_provider(),
+            )
+            .map_err(temporal_error),
             ZonedInput::Fields(fields) => Self::resolve_zoned_fields(*fields, options),
         }
     }
@@ -111,11 +120,12 @@ impl Context {
         Self::resolve_zoned_update_fields(&fields, Overflow::Constrain)?;
         let options = self.zoned_options(values.get(1), OffsetDisambiguation::Prefer)?;
         let result = zoned
-            .with(
+            .with_with_provider(
                 Self::resolve_zoned_update_fields(&fields, options.overflow)?,
                 Some(options.disambiguation),
                 Some(options.offset),
                 Some(options.overflow),
+                time_zone_provider(),
             )
             .map_err(temporal_error)?;
         self.create_zoned_date_time_value(result)
@@ -130,9 +140,12 @@ impl Context {
             return Ok(ZonedInput::Resolved(zoned.clone()));
         }
         if let Some(text) = value.string_text() {
-            return ParsedZonedDateTime::from_utf8(text.as_bytes())
-                .map(ZonedInput::Parsed)
-                .map_err(temporal_error);
+            return ParsedZonedDateTime::from_utf8_with_provider(
+                text.as_bytes(),
+                time_zone_provider(),
+            )
+            .map(ZonedInput::Parsed)
+            .map_err(temporal_error);
         }
         if !Self::zoned_input_object(value) {
             return Err(Error::type_error(
@@ -210,7 +223,8 @@ impl Context {
             nanosecond,
             offset,
             second,
-            time_zone: TimeZone::try_from_str("UTC").map_err(temporal_error)?,
+            time_zone: TimeZone::try_from_str_with_provider("UTC", time_zone_provider())
+                .map_err(temporal_error)?,
             year,
         })
     }
@@ -229,11 +243,12 @@ impl Context {
         if let Some(offset) = fields.offset {
             partial = partial.with_offset(offset);
         }
-        ZonedDateTime::from_partial(
+        ZonedDateTime::from_partial_with_provider(
             partial,
             Some(options.overflow),
             Some(options.disambiguation),
             Some(options.offset),
+            time_zone_provider(),
         )
         .map_err(temporal_error)
     }
@@ -410,7 +425,7 @@ impl Context {
         let text = field.string_text().ok_or_else(|| {
             Error::type_error("ZonedDateTime property bag requires a string timeZone")
         })?;
-        TimeZone::try_from_str(text).map_err(temporal_error)
+        TimeZone::try_from_str_with_provider(text, time_zone_provider()).map_err(temporal_error)
     }
 
     fn zoned_i32(value: Option<i64>, name: &str) -> Result<Option<i32>> {

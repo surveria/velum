@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     api::host_class::{ErasedHostInstance, HostMethodResult},
     error::{Error, Result},

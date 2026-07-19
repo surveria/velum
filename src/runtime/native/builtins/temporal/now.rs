@@ -1,11 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use temporal_rs::{Instant, TimeZone, ZonedDateTime};
 
 use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, native::TemporalFunctionKind, object::TemporalValue,
+        temporal_provider::time_zone_provider,
     },
     value::Value,
 };
@@ -59,7 +58,7 @@ impl Context {
     ) -> Result<Value> {
         match kind {
             TemporalFunctionKind::NowInstant => {
-                let instant = Self::temporal_now_instant()?;
+                let instant = self.temporal_now_instant()?;
                 self.create_temporal_calendar_value(
                     TemporalValue::Instant(instant),
                     TemporalFunctionKind::InstantConstructor,
@@ -67,20 +66,25 @@ impl Context {
             }
             TemporalFunctionKind::NowTimeZoneId => self.heap_string_value(UTC_TIME_ZONE),
             TemporalFunctionKind::NowZonedDateTimeIso => {
-                let zoned = Self::temporal_now_zoned(args.as_slice().first())?;
+                let zoned = self.temporal_now_zoned(args.as_slice().first())?;
                 self.create_zoned_date_time_value(zoned)
             }
             TemporalFunctionKind::NowPlainDateTimeIso => {
-                let date_time =
-                    Self::temporal_now_zoned(args.as_slice().first())?.to_plain_date_time();
+                let date_time = self
+                    .temporal_now_zoned(args.as_slice().first())?
+                    .to_plain_date_time();
                 self.create_plain_date_time_value(date_time)
             }
             TemporalFunctionKind::NowPlainDateIso => {
-                let date = Self::temporal_now_zoned(args.as_slice().first())?.to_plain_date();
+                let date = self
+                    .temporal_now_zoned(args.as_slice().first())?
+                    .to_plain_date();
                 self.create_plain_date_value(date)
             }
             TemporalFunctionKind::NowPlainTimeIso => {
-                let time = Self::temporal_now_zoned(args.as_slice().first())?.to_plain_time();
+                let time = self
+                    .temporal_now_zoned(args.as_slice().first())?
+                    .to_plain_time();
                 self.create_temporal_calendar_value(
                     TemporalValue::PlainTime(time),
                     TemporalFunctionKind::PlainTimeConstructor,
@@ -90,11 +94,11 @@ impl Context {
         }
     }
 
-    fn temporal_now_zoned(value: Option<&Value>) -> Result<ZonedDateTime> {
+    fn temporal_now_zoned(&self, value: Option<&Value>) -> Result<ZonedDateTime> {
         let time_zone = Self::temporal_now_time_zone(value)?;
-        let instant = Self::temporal_now_instant()?;
+        let instant = self.temporal_now_instant()?;
         instant
-            .to_zoned_date_time_iso(time_zone)
+            .to_zoned_date_time_iso_with_provider(time_zone, time_zone_provider())
             .map_err(temporal_error)
     }
 
@@ -105,21 +109,10 @@ impl Context {
                 .string_text()
                 .ok_or_else(|| Error::type_error("Temporal.Now time zone must be a string"))?,
         };
-        TimeZone::try_from_str(text).map_err(temporal_error)
+        TimeZone::try_from_str_with_provider(text, time_zone_provider()).map_err(temporal_error)
     }
 
-    fn temporal_now_instant() -> Result<Instant> {
-        let nanos = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(duration) => i128::try_from(duration.as_nanos())
-                .map_err(|_| Error::limit("system time nanoseconds overflowed"))?,
-            Err(error) => {
-                let magnitude = i128::try_from(error.duration().as_nanos())
-                    .map_err(|_| Error::limit("system time nanoseconds overflowed"))?;
-                magnitude
-                    .checked_neg()
-                    .ok_or_else(|| Error::limit("system time nanoseconds overflowed"))?
-            }
-        };
-        Instant::try_new(nanos).map_err(temporal_error)
+    fn temporal_now_instant(&self) -> Result<Instant> {
+        Instant::try_new(self.wall_time_unix_nanos()?).map_err(temporal_error)
     }
 }

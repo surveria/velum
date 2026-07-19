@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::runtime::object::NumberFormatValue;
 
 pub(super) fn range_separator(formatter: &NumberFormatValue) -> &'static str {

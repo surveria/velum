@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::{Context, abstract_operations::same_value, call::RuntimeCallArgs},

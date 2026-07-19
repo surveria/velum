@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{cmp::Ordering, str::FromStr};
 
 use num_traits::ToPrimitive;
@@ -14,6 +17,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, native::TemporalFunctionKind, object::TemporalValue,
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, JsBigInt, Value},
 };
@@ -218,7 +222,7 @@ impl Context {
             TemporalFunctionKind::ZonedDateTimePrototypeStartOfDay => {
                 let result = self
                     .zoned_date_time_receiver(receiver)?
-                    .start_of_day()
+                    .start_of_day_with_provider(time_zone_provider())
                     .map_err(temporal_error)?;
                 self.create_zoned_date_time_value(result)
             }
@@ -298,7 +302,7 @@ impl Context {
             }
             TemporalFunctionKind::ZonedDateTimePrototypeTimeZoneId => zoned
                 .time_zone()
-                .identifier()
+                .identifier_with_provider(time_zone_provider())
                 .map_err(temporal_error)
                 .and_then(|text| self.heap_string_value(&text)),
             TemporalFunctionKind::ZonedDateTimePrototypeCalendarId => {
@@ -346,7 +350,7 @@ impl Context {
                 Self::zoned_optional_number(zoned.year_of_week())
             }
             TemporalFunctionKind::ZonedDateTimePrototypeHoursInDay => zoned
-                .hours_in_day()
+                .hours_in_day_with_provider(time_zone_provider())
                 .map(Value::Number)
                 .map_err(temporal_error),
             TemporalFunctionKind::ZonedDateTimePrototypeDaysInWeek => {
@@ -408,9 +412,9 @@ impl Context {
         let duration = self.duration_from_value(values.first())?;
         let overflow = self.plain_date_overflow_option(values.get(1))?;
         let result = if subtract {
-            zoned.subtract(&duration, Some(overflow))
+            zoned.subtract_with_provider(&duration, Some(overflow), time_zone_provider())
         } else {
-            zoned.add(&duration, Some(overflow))
+            zoned.add_with_provider(&duration, Some(overflow), time_zone_provider())
         }
         .map_err(temporal_error)?;
         self.create_zoned_date_time_value(result)
@@ -427,9 +431,9 @@ impl Context {
         let other = self.zoned_date_time_argument(values.first())?;
         let settings = self.plain_date_difference_settings(values.get(1))?;
         let result = if since {
-            zoned.since(&other, settings)
+            zoned.since_with_provider(&other, settings, time_zone_provider())
         } else {
-            zoned.until(&other, settings)
+            zoned.until_with_provider(&other, settings, time_zone_provider())
         }
         .map_err(temporal_error)?;
         self.create_duration_value(result)
@@ -442,7 +446,9 @@ impl Context {
     ) -> Result<Value> {
         let zoned = self.zoned_date_time_receiver(receiver)?;
         let options = self.plain_date_time_rounding_options(args.as_slice().first())?;
-        let result = zoned.round(options).map_err(temporal_error)?;
+        let result = zoned
+            .round_with_provider(options, time_zone_provider())
+            .map_err(temporal_error)?;
         self.create_zoned_date_time_value(result)
     }
 
@@ -453,7 +459,11 @@ impl Context {
     ) -> Result<Value> {
         let zoned = self.zoned_date_time_receiver(receiver)?;
         let other = self.zoned_date_time_argument(args.as_slice().first())?;
-        Ok(Value::Bool(zoned.equals(&other).map_err(temporal_error)?))
+        Ok(Value::Bool(
+            zoned
+                .equals_with_provider(&other, time_zone_provider())
+                .map_err(temporal_error)?,
+        ))
     }
 
     fn eval_zoned_date_time_transition(
@@ -484,7 +494,7 @@ impl Context {
         })?;
         let result = self
             .zoned_date_time_receiver(receiver)?
-            .get_time_zone_transition(direction)
+            .get_time_zone_transition_with_provider(direction, time_zone_provider())
             .map_err(temporal_error)?;
         result.map_or(Ok(Value::Null), |value| {
             self.create_zoned_date_time_value(value)
@@ -503,7 +513,7 @@ impl Context {
         };
         let result = self
             .zoned_date_time_receiver(receiver)?
-            .with_plain_time(time)
+            .with_plain_time_and_provider(time, time_zone_provider())
             .map_err(temporal_error)?;
         self.create_zoned_date_time_value(result)
     }
@@ -516,7 +526,7 @@ impl Context {
         let time_zone = Self::zoned_time_zone(args.as_slice().first())?;
         let result = self
             .zoned_date_time_receiver(receiver)?
-            .with_timezone(time_zone)
+            .with_time_zone_with_provider(time_zone, time_zone_provider())
             .map_err(temporal_error)?;
         self.create_zoned_date_time_value(result)
     }
@@ -547,11 +557,12 @@ impl Context {
         let options = self.zoned_string_options(value)?;
         let text = self
             .zoned_date_time_receiver(receiver)?
-            .to_ixdtf_string(
+            .to_ixdtf_string_with_provider(
                 options.offset,
                 options.time_zone,
                 options.calendar,
                 options.rounding,
+                time_zone_provider(),
             )
             .map_err(temporal_error)?;
         self.heap_string_value(&text)
@@ -560,11 +571,12 @@ impl Context {
     fn zoned_date_time_default_string(&mut self, receiver: &Value) -> Result<Value> {
         let text = self
             .zoned_date_time_receiver(receiver)?
-            .to_ixdtf_string(
+            .to_ixdtf_string_with_provider(
                 DisplayOffset::Auto,
                 DisplayTimeZone::Auto,
                 DisplayCalendar::Auto,
                 ToStringRoundingOptions::default(),
+                time_zone_provider(),
             )
             .map_err(temporal_error)?;
         self.heap_string_value(&text)
@@ -575,7 +587,7 @@ impl Context {
         let text = value
             .string_text()
             .ok_or_else(|| Error::type_error("Temporal time zone must be a string"))?;
-        TimeZone::try_from_str(text).map_err(temporal_error)
+        TimeZone::try_from_str_with_provider(text, time_zone_provider()).map_err(temporal_error)
     }
 
     fn zoned_number<T: ToPrimitive>(value: &T) -> Result<Value> {

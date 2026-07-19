@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::api::host::{HostCall, IntoJsValue};
 use crate::api::owned_value::OwnedValue;
 use crate::api::shared_array_buffer::SharedArrayBufferHandle;
@@ -68,6 +71,17 @@ impl Engine {
         F: Fn() -> Duration + 'static,
     {
         Vm::with_config_and_clock(self.config.default_vm_config(), read)
+    }
+
+    /// Creates a VM with embedder-provided monotonic and Unix wall clocks.
+    /// The wall source returns nanoseconds since the Unix epoch.
+    #[must_use]
+    pub fn create_vm_with_clock_sources<M, W>(&self, monotonic: M, unix_nanos: W) -> Vm
+    where
+        M: Fn() -> Duration + 'static,
+        W: Fn() -> i128 + 'static,
+    {
+        Vm::with_config_and_clock_sources(self.config.default_vm_config(), monotonic, unix_nanos)
     }
 }
 
@@ -149,6 +163,31 @@ impl Vm {
                 limits,
                 optimization_mode,
                 read,
+            ),
+        }
+    }
+
+    /// Creates a configured VM with embedder-provided monotonic and Unix wall
+    /// clocks. The wall source returns nanoseconds since the Unix epoch.
+    #[must_use]
+    pub fn with_config_and_clock_sources<M, W>(
+        config: VmConfig,
+        monotonic: M,
+        unix_nanos: W,
+    ) -> Self
+    where
+        M: Fn() -> Duration + 'static,
+        W: Fn() -> i128 + 'static,
+    {
+        let limits = config.limits();
+        let optimization_mode = config.optimization_mode();
+        Self {
+            config,
+            context: Context::with_optimization_and_clock_sources(
+                limits,
+                optimization_mode,
+                monotonic,
+                unix_nanos,
             ),
         }
     }

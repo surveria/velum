@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{Error, SourceId, SourceSpan};
 
 use super::{

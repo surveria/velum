@@ -1,5 +1,8 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::rc::Rc;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::{
     error::{Error, Result},

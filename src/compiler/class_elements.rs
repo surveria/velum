@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     ast::{ClassElementName, Expression, ObjectPropertyKey},
     error::Result,

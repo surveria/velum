@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     binding_metadata::BindingLayout,
     error::{Error, Result},

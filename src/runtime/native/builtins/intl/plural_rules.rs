@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use num_traits::ToPrimitive;
 
 use crate::{

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use super::Lexer;
 use crate::{
     error::{Error, Result},

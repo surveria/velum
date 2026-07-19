@@ -1,4 +1,7 @@
-use std::ops::Range;
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
+use core::ops::Range;
 
 use crate::{
     error::{Error, Result},

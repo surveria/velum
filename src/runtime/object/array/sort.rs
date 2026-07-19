@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use super::{ObjectHeap, ObjectId, ObjectProperty};
 use crate::error::Result;
 use crate::value::Value;

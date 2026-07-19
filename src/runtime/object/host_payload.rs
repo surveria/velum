@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::{any::Any, fmt};
 
 use crate::{

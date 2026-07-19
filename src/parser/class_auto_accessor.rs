@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     ast::{
         ClassAutoAccessor, ClassAutoAccessorFunction, Expr, Expression, FunctionParam, Statement,

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::error::{Error, JavaScriptErrorMetadata, Result};
 use crate::runtime::binding::scope::BindingCell;
 use crate::storage::symbol::JsSymbol;

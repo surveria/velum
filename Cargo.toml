@@ -22,24 +22,44 @@ path = "src/lib.rs"
 [[bin]]
 name = "velum"
 path = "src/bin/velum.rs"
+required-features = ["std"]
+
+[features]
+default = ["std"]
+std = [
+    "dep:anyhow",
+    "dep:parking_lot",
+    "anyhow/std",
+    "num-bigint/std",
+    "num-traits/std",
+    "temporal_rs/compiled_data",
+    "temporal_rs/std",
+    "thiserror/std",
+    "unicode-normalization/std",
+    "velum-regexp/std",
+]
 
 # The engine is a standalone, dependency-light crate. The interactive CLI and
 # test/benchmark runner live in separate nested workspaces so their heavier
 # dependencies do not become engine dependencies.
 [dependencies]
-anyhow = "1"
-icu_casemap = "2.2"
-icu_locale = "2.2"
+anyhow = { version = "1", default-features = false, optional = true }
+foldhash = { version = "0.2", default-features = false }
+hashbrown = { version = "0.16", default-features = false, features = ["default-hasher"] }
+icu_casemap = { version = "2.2", default-features = false, features = ["compiled_data"] }
+icu_locale = { version = "2.2", default-features = false, features = ["compiled_data"] }
 jiff-tzdb = "0.1.8"
-num-bigint = "0.4"
-num-traits = "0.2"
-parking_lot = "0.12"
-temporal_rs = { version = "0.2.4", default-features = false, features = ["compiled_data", "float64_representable_durations", "std"] }
-thiserror = "2"
+num-bigint = { version = "0.4", default-features = false }
+num-traits = { version = "0.2", default-features = false }
+parking_lot = { version = "0.12", optional = true }
+spin = { version = "0.9", default-features = false, features = ["mutex", "rwlock", "spin_mutex"] }
+temporal_rs = { version = "0.2.4", default-features = false, features = ["float64_representable_durations"] }
+thiserror = { version = "2", default-features = false }
+timezone_provider = { version = "0.2.4", default-features = false }
 unicode-ident = "1"
-unicode-normalization = "0.1"
+unicode-normalization = { version = "0.1", default-features = false }
 unicode-segmentation = "1.13"
-velum-regexp = { path = "crates/velum-regexp" }
+velum-regexp = { path = "crates/velum-regexp", default-features = false }
 
 [dev-dependencies]
 regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }

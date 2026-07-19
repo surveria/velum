@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::{boxed::Box, collections::BTreeSet, vec::Vec};
 
 use crate::{
     CompileError, CompileErrorKind,

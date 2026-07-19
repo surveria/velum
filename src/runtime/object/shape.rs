@@ -1,5 +1,10 @@
-use core::hash::{Hash, Hasher};
-use std::collections::{HashMap, hash_map::DefaultHasher};
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
+use core::hash::BuildHasher;
+
+use foldhash::fast::FixedState;
+use hashbrown::HashMap;
 
 use crate::{
     error::{Error, Result},
@@ -127,9 +132,8 @@ impl ShapeLayoutHash {
     }
 
     fn extended(self, property: ShapePropertyLayout) -> Self {
-        let mut hasher = DefaultHasher::new();
-        property.hash(&mut hasher);
-        Self((self.0 ^ hasher.finish()).wrapping_mul(SHAPE_HASH_PRIME))
+        let property_hash = FixedState::with_seed(SHAPE_HASH_OFFSET).hash_one(property);
+        Self((self.0 ^ property_hash).wrapping_mul(SHAPE_HASH_PRIME))
     }
 }
 
@@ -226,9 +230,9 @@ impl ShapeTable {
             .checked_add(1)
             .ok_or_else(|| Error::limit("shape property count overflowed"))?;
         let mut properties = Vec::new();
-        properties
-            .try_reserve(target_len)
-            .map_err(|error| Error::limit(format!("shape property allocation failed: {error}")))?;
+        properties.try_reserve(target_len).map_err(|error| {
+            Error::limit(format!("shape property allocation failed: {error:?}"))
+        })?;
         properties.extend_from_slice(current_properties);
         properties.push(property);
         self.create_shape_family(&properties, target_hash, Some(transition))
@@ -282,7 +286,9 @@ impl ShapeTable {
         let mut properties = Vec::new();
         properties
             .try_reserve(current_properties.len().saturating_sub(1))
-            .map_err(|error| Error::limit(format!("shape property allocation failed: {error}")))?;
+            .map_err(|error| {
+                Error::limit(format!("shape property allocation failed: {error:?}"))
+            })?;
         for (index, property) in current_properties.iter().copied().enumerate() {
             if index != slot.index() {
                 properties.push(property);
@@ -304,7 +310,9 @@ impl ShapeTable {
         let mut properties = Vec::new();
         properties
             .try_reserve(current_properties.len())
-            .map_err(|error| Error::limit(format!("shape property allocation failed: {error}")))?;
+            .map_err(|error| {
+                Error::limit(format!("shape property allocation failed: {error:?}"))
+            })?;
         let mut changed = false;
         for (index, (key, updated_attributes)) in attributes.into_iter().enumerate() {
             let Some(property) = current_properties.get(index).copied() else {
@@ -372,9 +380,9 @@ impl ShapeTable {
     fn try_clone_properties(&self, id: ShapeId) -> Result<Vec<ShapePropertyLayout>> {
         let properties = self.properties(id)?;
         let mut cloned = Vec::new();
-        cloned
-            .try_reserve(properties.len())
-            .map_err(|error| Error::limit(format!("shape property allocation failed: {error}")))?;
+        cloned.try_reserve(properties.len()).map_err(|error| {
+            Error::limit(format!("shape property allocation failed: {error:?}"))
+        })?;
         cloned.extend_from_slice(properties);
         Ok(cloned)
     }
@@ -411,14 +419,14 @@ impl ShapeTable {
         let shape_id = ShapeId::from_storage_index(self.shapes.len())?;
         self.families
             .try_reserve(1)
-            .map_err(|error| Error::limit(format!("shape family allocation failed: {error}")))?;
+            .map_err(|error| Error::limit(format!("shape family allocation failed: {error:?}")))?;
         self.shapes
             .try_reserve(1)
-            .map_err(|error| Error::limit(format!("shape allocation failed: {error}")))?;
+            .map_err(|error| Error::limit(format!("shape allocation failed: {error:?}")))?;
         let new_bucket = self.prepare_layout_index(hash)?;
         if transition.is_some() {
             self.transitions.try_reserve(1).map_err(|error| {
-                Error::limit(format!("shape transition allocation failed: {error}"))
+                Error::limit(format!("shape transition allocation failed: {error:?}"))
             })?;
         }
 
@@ -453,9 +461,9 @@ impl ShapeTable {
         let shape_id = ShapeId::from_storage_index(self.shapes.len())?;
         self.shapes
             .try_reserve(1)
-            .map_err(|error| Error::limit(format!("shape allocation failed: {error}")))?;
+            .map_err(|error| Error::limit(format!("shape allocation failed: {error:?}")))?;
         self.transitions.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape transition allocation failed: {error}"))
+            Error::limit(format!("shape transition allocation failed: {error:?}"))
         })?;
         let new_bucket = self.prepare_layout_index(hash)?;
         self.family_mut(family_id)?.prepare_append(property.key())?;
@@ -478,7 +486,7 @@ impl ShapeTable {
             return Ok(());
         }
         self.transitions.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape transition allocation failed: {error}"))
+            Error::limit(format!("shape transition allocation failed: {error:?}"))
         })?;
         let reservation = self
             .storage_ledger
@@ -491,16 +499,16 @@ impl ShapeTable {
     fn prepare_layout_index(&mut self, hash: ShapeLayoutHash) -> Result<Option<Vec<ShapeId>>> {
         if let Some(ids) = self.layout_index.get_mut(&hash) {
             ids.try_reserve(1).map_err(|error| {
-                Error::limit(format!("shape layout index allocation failed: {error}"))
+                Error::limit(format!("shape layout index allocation failed: {error:?}"))
             })?;
             return Ok(None);
         }
         self.layout_index.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape layout index allocation failed: {error}"))
+            Error::limit(format!("shape layout index allocation failed: {error:?}"))
         })?;
         let mut ids = Vec::new();
         ids.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape layout index allocation failed: {error}"))
+            Error::limit(format!("shape layout index allocation failed: {error:?}"))
         })?;
         Ok(Some(ids))
     }
@@ -654,13 +662,15 @@ impl ShapeFamily {
             .properties
             .try_reserve(properties.len())
             .map_err(|error| {
-                Error::limit(format!("shape family property allocation failed: {error}"))
+                Error::limit(format!(
+                    "shape family property allocation failed: {error:?}"
+                ))
             })?;
         family
             .offsets
             .try_reserve(properties.len())
             .map_err(|error| {
-                Error::limit(format!("shape family offset allocation failed: {error}"))
+                Error::limit(format!("shape family offset allocation failed: {error:?}"))
             })?;
         for property in properties.iter().copied() {
             let slot = PropertySlot::from_index(family.properties.len());
@@ -681,10 +691,12 @@ impl ShapeFamily {
             ));
         }
         self.properties.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape family property allocation failed: {error}"))
+            Error::limit(format!(
+                "shape family property allocation failed: {error:?}"
+            ))
         })?;
         self.offsets.try_reserve(1).map_err(|error| {
-            Error::limit(format!("shape family offset allocation failed: {error}"))
+            Error::limit(format!("shape family offset allocation failed: {error:?}"))
         })
     }
 

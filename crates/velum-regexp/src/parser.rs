@@ -181,7 +181,7 @@ impl<'a> Parser<'a> {
             return Ok(repeated);
         };
         nodes.push(repeated);
-        self.node(Node::Concat(std::mem::take(nodes)))
+        self.node(Node::Concat(core::mem::take(nodes)))
     }
 
     fn parse_atom(&mut self) -> Result<Node, CompileError> {
@@ -576,3 +576,4 @@ fn resolve_backreferences(
         | Node::AssertEnd => Ok(()),
     }
 }
+use alloc::{boxed::Box, string::String, vec::Vec};

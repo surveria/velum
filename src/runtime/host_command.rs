@@ -1,7 +1,10 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use alloc::{collections::VecDeque, rc::Rc};
 use core::{fmt, task::Waker};
 
-use parking_lot::Mutex;
+use crate::sync::Mutex;
 
 use crate::{
     HostFutureError, OwnedValue, RetainedValue,

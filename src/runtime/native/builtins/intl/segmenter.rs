@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{

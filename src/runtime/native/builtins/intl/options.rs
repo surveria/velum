@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use core::str::FromStr;
 
 use num_traits::ToPrimitive;
@@ -9,6 +12,7 @@ use crate::{
         abstract_operations::to_boolean,
         call::RuntimeCallArgs,
         object::{DateTimeFormatOptions, DateTimeFormatValue},
+        temporal_provider::time_zone_provider,
     },
     value::{ErrorName, Value},
 };
@@ -319,13 +323,14 @@ fn is_unicode_type(value: &str) -> bool {
 
 fn resolve_time_zone(requested: Option<&str>) -> Result<String> {
     let text = requested.unwrap_or("UTC");
-    let time_zone = temporal_rs::TimeZone::try_from_identifier_str(text)
-        .map_err(|error| Error::exception(ErrorName::RangeError, error.to_string()))?;
+    let time_zone =
+        temporal_rs::TimeZone::try_from_identifier_str_with_provider(text, time_zone_provider())
+            .map_err(|error| Error::exception(ErrorName::RangeError, error.to_string()))?;
     if let Some((canonical_case, _)) = jiff_tzdb::get(text) {
         return Ok(canonical_case.to_owned());
     }
     time_zone
-        .identifier()
+        .identifier_with_provider(time_zone_provider())
         .map_err(|error| Error::exception(ErrorName::RangeError, error.to_string()))
 }
 

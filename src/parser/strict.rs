@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::ast::{Expr, Statement, StaticBinding, StaticName, Stmt};
 use crate::error::Result;
 

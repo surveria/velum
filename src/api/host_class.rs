@@ -1,6 +1,5 @@
-use alloc::rc::Rc;
-use core::{any::Any, fmt, future::Future};
-
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
 use crate::{
     RetainedValue,
     api::{
@@ -20,7 +19,8 @@ use crate::{
     syntax::DeclKind,
     value::Value,
 };
-
+use alloc::rc::Rc;
+use core::{any::Any, fmt, future::Future};
 mod staging;
 
 use staging::StagedHostClass;

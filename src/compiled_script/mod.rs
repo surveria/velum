@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 mod usage;
 
 pub use usage::CompiledScriptUsage;

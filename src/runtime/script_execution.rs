@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     compiled_module::CompiledModule,
     compiled_script::CompiledScript,

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use icu_casemap::CaseMapper;
 use icu_locale::{LanguageIdentifier, Locale};
 

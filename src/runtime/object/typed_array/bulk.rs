@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     error::{Error, Result},
     runtime::abstract_operations::{to_bigint_primitive, to_number_primitive},
