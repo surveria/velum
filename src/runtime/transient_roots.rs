@@ -2,8 +2,7 @@
 use crate::prelude::*;
 
 use alloc::rc::Rc;
-
-use crate::sync::Mutex;
+use core::cell::RefCell;
 
 use crate::{error::Result, value::Value};
 
@@ -17,13 +16,15 @@ const MAX_RETAINED_ROOT_VALUES_PER_SCOPE: usize = 32;
 
 #[derive(Debug)]
 pub(in crate::runtime) struct TransientRootRegistry {
-    state: Rc<Mutex<TransientRootState>>,
+    // Context execution is single-threaded, and every borrow ends before
+    // JavaScript or a host callback can re-enter root traversal.
+    state: Rc<RefCell<TransientRootState>>,
 }
 
 impl TransientRootRegistry {
     pub(in crate::runtime) fn new(storage_ledger: VmStorageLedger) -> Self {
         Self {
-            state: Rc::new(Mutex::new(TransientRootState::new(storage_ledger))),
+            state: Rc::new(RefCell::new(TransientRootState::new(storage_ledger))),
         }
     }
 
@@ -58,7 +59,7 @@ impl TransientRootRegistry {
         first_traceable_value: &'value Value,
         values: &mut (dyn Iterator<Item = &'value Value> + '_),
     ) -> Result<TransientRootScope> {
-        let mut state = self.state.lock();
+        let mut state = self.state.borrow_mut();
         let scope = state.activate_scope(kind)?;
         if let Err(error) = state.add_scope_values(scope, Some(first_traceable_value), values) {
             state.release_scope(scope);
@@ -91,7 +92,7 @@ impl TransientRootRegistry {
             return Ok(TransientRootScope::inactive());
         }
 
-        let mut state = self.state.lock();
+        let mut state = self.state.borrow_mut();
         let scope = state.activate_scope(kind)?;
         if let Err(error) = state.add_scope_slice_and_value(scope, values, last, traceable_count) {
             state.release_scope(scope);
@@ -110,7 +111,7 @@ impl TransientRootRegistry {
                 "transient root scope requires a transient root category",
             ));
         }
-        let mut state = self.state.lock();
+        let mut state = self.state.borrow_mut();
         let scope = state.activate_scope(kind)?;
         drop(state);
         Ok(TransientRootScope {
@@ -120,7 +121,7 @@ impl TransientRootRegistry {
     }
 
     pub(in crate::runtime) fn visit<V: DirectRootVisitor>(&self, visitor: &mut V) -> Result<()> {
-        let state = self.state.lock();
+        let state = self.state.borrow();
         for bucket in &state.scopes {
             if !bucket.active {
                 continue;
@@ -134,7 +135,7 @@ impl TransientRootRegistry {
     }
 
     pub(in crate::runtime) fn active_count(&self) -> usize {
-        self.state.lock().root_count
+        self.state.borrow().root_count
     }
 }
 
@@ -380,7 +381,7 @@ impl TransientRootBucket {
 #[derive(Debug)]
 #[must_use = "transient roots must stay alive across the allocation point"]
 pub struct TransientRootScope {
-    state: Option<Rc<Mutex<TransientRootState>>>,
+    state: Option<Rc<RefCell<TransientRootState>>>,
     scope: usize,
 }
 
@@ -399,7 +400,7 @@ impl TransientRootScope {
         let Some(state) = &self.state else {
             return Ok(());
         };
-        let mut state = state.lock();
+        let mut state = state.borrow_mut();
         let mut values = values.into_iter();
         state.add_scope_values(self.scope, None, &mut values)?;
         drop(state);
@@ -410,7 +411,7 @@ impl TransientRootScope {
 impl Drop for TransientRootScope {
     fn drop(&mut self) {
         if let Some(state) = &self.state {
-            let mut state = state.lock();
+            let mut state = state.borrow_mut();
             state.release_scope(self.scope);
         }
     }
