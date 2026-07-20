@@ -24,6 +24,7 @@ mod fast_path;
 mod fast_path_expression;
 mod intrinsic;
 mod names;
+mod numeric_recurrence;
 mod parameters;
 mod pre_setup;
 mod properties;
