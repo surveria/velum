@@ -13,11 +13,11 @@ use super::{BytecodeAddress, BytecodeInstruction, BytecodeLinearTemplate};
 /// One instruction and its canonical source range.
 pub struct BytecodeStep<'a> {
     instruction: &'a BytecodeInstruction,
-    span: SourceSpan,
+    span: &'a SourceSpan,
 }
 
 impl<'a> BytecodeStep<'a> {
-    pub(crate) const fn new(instruction: &'a BytecodeInstruction, span: SourceSpan) -> Self {
+    pub(crate) const fn new(instruction: &'a BytecodeInstruction, span: &'a SourceSpan) -> Self {
         Self { instruction, span }
     }
 
@@ -26,7 +26,7 @@ impl<'a> BytecodeStep<'a> {
     }
 
     pub(crate) const fn span(&self) -> SourceSpan {
-        self.span
+        *self.span
     }
 }
 
@@ -90,7 +90,6 @@ impl BytecodeBlock {
         let span = self
             .spans
             .get(index)
-            .copied()
             .ok_or_else(|| Error::runtime("bytecode source span is not available"))?;
         Ok(Some(BytecodeStep::new(instruction, span)))
     }
