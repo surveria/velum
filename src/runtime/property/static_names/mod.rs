@@ -248,6 +248,10 @@ impl Context {
         self.intern_static_name_atom(name).map(PropertyKey::new)
     }
 
+    // Profiling confirms ordinary inlining leaves a large Result transfer on
+    // the static-property read hot path, while forced inlining removes it.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn static_property_lookup<'a>(
         &self,
         name: &'a StaticName,
