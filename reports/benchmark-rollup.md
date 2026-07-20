@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260720T184412Z.md`
-- Task: PR #686: Optimize the next post-root JetStream hot path
-- Performance: 0.20x (0/5 >1.00x) (from `velum-test-report-20260720T184412Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260720T184412Z.md`)
+- `velum-test-report-20260720T190622Z.md`
+- Task: PR #687: Optimize the next post-TypedArray JetStream hot path
+- Performance: 0.20x (0/5 >1.00x) (from `velum-test-report-20260720T190622Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260720T190622Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260720T184412Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260720T190622Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -610,3 +610,4 @@ Latest report:
 | `20260720T175608Z` `3ed4e37` PR #684: Optimize the next post-cache JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T182243Z` `be60c39` PR #685: Optimize the next post-owner JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T184412Z` `7840caf` PR #686: Optimize the next post-root JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260720T190622Z` `2f43096` PR #687: Optimize the next post-TypedArray JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
