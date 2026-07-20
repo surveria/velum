@@ -155,7 +155,15 @@ impl Context {
         };
         let upvalues = upvalues.as_deref().unwrap_or(&[]);
         let active_layout = self.current_static_binding_layout();
-        if binding_layout == active_layout {
+        let binding_layout_is_active = match (&binding_layout, &active_layout) {
+            (Some(binding_layout), Some(active_layout)) => {
+                binding_layout.shares_operand_storage_with(active_layout)
+                    || binding_layout == active_layout
+            }
+            (None, None) => true,
+            (Some(_), None) | (None, Some(_)) => false,
+        };
+        if binding_layout_is_active {
             return self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues);
         }
         if !self.active_function_has_arguments_binding() {
