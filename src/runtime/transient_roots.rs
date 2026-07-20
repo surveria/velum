@@ -27,6 +27,9 @@ impl TransientRootRegistry {
         }
     }
 
+    // Keep the per-instruction empty-root scan inline while sharing the heavier
+    // active-scope path across every concrete iterator type.
+    #[inline]
     pub(in crate::runtime) fn scope<'value, I>(
         &self,
         kind: VmRootKind,
@@ -45,10 +48,19 @@ impl TransientRootRegistry {
             return Ok(TransientRootScope::inactive());
         };
 
+        self.scope_with_values(kind, first_traceable_value, &mut values)
+    }
+
+    #[inline(never)]
+    fn scope_with_values<'value>(
+        &self,
+        kind: VmRootKind,
+        first_traceable_value: &'value Value,
+        values: &mut (dyn Iterator<Item = &'value Value> + '_),
+    ) -> Result<TransientRootScope> {
         let mut state = self.state.lock();
         let scope = state.activate_scope(kind)?;
-        if let Err(error) = state.add_scope_values(scope, Some(first_traceable_value), &mut values)
-        {
+        if let Err(error) = state.add_scope_values(scope, Some(first_traceable_value), values) {
             state.release_scope(scope);
             return Err(error);
         }
@@ -177,15 +189,12 @@ impl TransientRootState {
         }
     }
 
-    fn add_scope_values<'value, I>(
+    fn add_scope_values<'value>(
         &mut self,
         scope: usize,
         first_traceable_value: Option<&'value Value>,
-        values: &mut I,
-    ) -> Result<()>
-    where
-        I: Iterator<Item = &'value Value>,
-    {
+        values: &mut (dyn Iterator<Item = &'value Value> + '_),
+    ) -> Result<()> {
         let Some(bucket) = self.scopes.get_mut(scope) else {
             return Err(crate::Error::runtime(
                 "transient root scope is not available",
