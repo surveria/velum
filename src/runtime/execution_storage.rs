@@ -308,13 +308,15 @@ impl Context {
         Ok(false)
     }
 
-    pub(in crate::runtime) fn current_activation_this(&self) -> Option<&Value> {
+    pub(in crate::runtime) fn current_activation_this_context(
+        &self,
+    ) -> Option<(&Value, Option<&alloc::rc::Rc<FunctionSuperBinding>>)> {
         for frame in self.activation_frames.iter().rev() {
             if frame.is_eval_boundary() {
                 return None;
             }
             if let Some(value) = frame.this_value() {
-                return Some(value);
+                return Some((value, frame.super_binding()));
             }
         }
         None
