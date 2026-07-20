@@ -144,6 +144,7 @@ struct VelumPreparedSession {
 
 impl PreparedBenchSession for VelumPreparedSession {
     fn run(&mut self) -> anyhow::Result<BenchmarkChecksum> {
+        self.context.begin_runtime_step_budget();
         let value = self
             .context
             .eval_compiled(&self.run_script)
@@ -152,6 +153,7 @@ impl PreparedBenchSession for VelumPreparedSession {
     }
 
     fn verify(&mut self) -> anyhow::Result<BenchmarkChecksum> {
+        self.context.begin_runtime_step_budget();
         let value = self
             .context
             .eval_compiled(&self.verify_script)
@@ -352,4 +354,49 @@ fn quickjs_checksum(value: &rquickjs::Value<'_>) -> anyhow::Result<BenchmarkChec
         "benchmark checksum must be a primitive value, got {}",
         value.type_name()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use velum::{Runtime, Value};
+
+    use super::*;
+
+    #[test]
+    fn prepared_session_starts_a_fresh_runtime_budget_per_operation() -> anyhow::Result<()> {
+        let probe_runtime = Runtime::new();
+        let probe_script = probe_runtime
+            .compile("1")
+            .map_err(|error| anyhow::anyhow!("runtime-step probe compile failed: {error}"))?;
+        let mut probe = probe_runtime.context();
+        let probe_value = probe
+            .eval_compiled(&probe_script)
+            .map_err(|error| anyhow::anyhow!("runtime-step probe evaluation failed: {error}"))?;
+        if probe_value != Value::Number(1.0) {
+            anyhow::bail!("unexpected runtime-step probe value: {probe_value:?}");
+        }
+        let runtime = Runtime::with_limits(RuntimeLimits {
+            max_runtime_steps: probe.runtime_steps(),
+            ..RuntimeLimits::default()
+        });
+        let run_script = runtime
+            .compile("1")
+            .map_err(|error| anyhow::anyhow!("bounded operation compile failed: {error}"))?;
+        let verify_script = run_script.clone();
+        let mut session = VelumPreparedSession {
+            context: runtime.context(),
+            run_script,
+            verify_script,
+        };
+
+        let first = session.run()?;
+        let second = session.run()?;
+        let verify = session.verify()?;
+        if first != second || first != verify {
+            anyhow::bail!(
+                "prepared operation checksums diverged: {first:?}, {second:?}, {verify:?}"
+            );
+        }
+        Ok(())
+    }
 }

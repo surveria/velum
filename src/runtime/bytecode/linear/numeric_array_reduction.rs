@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::prelude::*;
+
 use crate::{
     api::native_call::NativeCallTarget,
     bytecode::{
@@ -7,8 +10,10 @@ use crate::{
     },
     error::Result,
     runtime::{
-        Context, binding::scope::BindingCell, numeric::number_to_i32,
-        object::CacheableNativePropertyValue,
+        Context,
+        binding::scope::BindingCell,
+        numeric::number_to_i32,
+        object::{CacheableNativePropertyValue, CacheablePropertyValue},
     },
     syntax::UpdateOp,
     value::Value,
@@ -17,14 +22,18 @@ use crate::{
 use super::super::state::BytecodeState;
 
 const CONDITION_STEP_COST: usize = 5;
+const LITERAL_CONDITION_STEP_COST: usize = 4;
 const ARRAY_ITERATION_STEP_COST: usize = 18;
 const STRING_ITERATION_STEP_COST: usize = 20;
+const PROPERTY_TERM_INSTRUCTION_COUNT: usize = 6;
+const UPDATE_AND_LOOP_STEP_COST: usize = 6;
 const CHAR_CODE_AT_PROPERTY: &str = "charCodeAt";
 const LENGTH_PROPERTY: &str = "length";
 
 #[derive(Debug)]
 pub(in crate::runtime::bytecode) enum NumericReductionPlan<'a> {
     Array(NumericArrayReductionPlan<'a>),
+    Property(NumericPropertyReductionPlan<'a>),
     String(NumericStringReductionPlan<'a>),
 }
 
@@ -49,6 +58,24 @@ pub(in crate::runtime::bytecode) struct NumericStringReductionPlan<'a> {
     property: &'a BytecodeProperty,
 }
 
+#[derive(Debug)]
+pub(in crate::runtime::bytecode) struct NumericPropertyReductionPlan<'a> {
+    index: &'a BytecodeBinding,
+    index_cell: BindingCell,
+    limit: usize,
+    target: &'a BytecodeBinding,
+    target_cell: BindingCell,
+    terms: Vec<NumericPropertyReductionTerm<'a>>,
+    iteration_step_cost: usize,
+}
+
+#[derive(Debug)]
+struct NumericPropertyReductionTerm<'a> {
+    object: &'a BytecodeBinding,
+    object_cell: BindingCell,
+    property: &'a BytecodeProperty,
+}
+
 impl Context {
     pub(in crate::runtime::bytecode) fn bind_numeric_reduction_plan<'a>(
         &mut self,
@@ -62,8 +89,11 @@ impl Context {
         if let Some(plan) = self.bind_numeric_array_reduction_plan(condition, update, body)? {
             return Ok(Some(NumericReductionPlan::Array(plan)));
         }
-        self.bind_numeric_string_reduction_plan(condition, update, body)
-            .map(|plan| plan.map(NumericReductionPlan::String))
+        if let Some(plan) = self.bind_numeric_string_reduction_plan(condition, update, body)? {
+            return Ok(Some(NumericReductionPlan::String(plan)));
+        }
+        self.bind_numeric_property_reduction_plan(condition, update, body)
+            .map(|plan| plan.map(NumericReductionPlan::Property))
     }
 
     fn bind_numeric_array_reduction_plan<'a>(
@@ -230,6 +260,107 @@ impl Context {
         }))
     }
 
+    fn bind_numeric_property_reduction_plan<'a>(
+        &mut self,
+        condition: Option<&'a BytecodeBlock>,
+        update: Option<&'a BytecodeBlock>,
+        body: &'a BytecodeBlock,
+    ) -> Result<Option<NumericPropertyReductionPlan<'a>>> {
+        let (Some(condition), Some(update)) = (condition, update) else {
+            return Ok(None);
+        };
+        let [
+            BytecodeInstruction::LoadBinding(condition_index),
+            BytecodeInstruction::PushLiteral(Value::Number(limit)),
+            BytecodeInstruction::NumberCompare(BytecodeNumericCompareOp::Less),
+            BytecodeInstruction::StoreLast,
+        ] = condition.instructions()
+        else {
+            return Ok(None);
+        };
+        let Some(limit) = non_negative_integer_index(*limit) else {
+            return Ok(None);
+        };
+        let Some(update_index) = numeric_increment_binding(update) else {
+            return Ok(None);
+        };
+        if !same_binding(condition_index, update_index) {
+            return Ok(None);
+        }
+        let mut chunks = body
+            .instructions()
+            .chunks_exact(PROPERTY_TERM_INSTRUCTION_COUNT);
+        if !chunks.remainder().is_empty() {
+            return Ok(None);
+        }
+        let mut target = None;
+        let mut terms = Vec::new();
+        for chunk in &mut chunks {
+            let [
+                BytecodeInstruction::LoadBinding(target_read),
+                BytecodeInstruction::LoadBinding(object),
+                BytecodeInstruction::StaticMember { property },
+                BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
+                BytecodeInstruction::StoreBinding(target_write),
+                BytecodeInstruction::StoreLast,
+            ] = chunk
+            else {
+                return Ok(None);
+            };
+            let expected_target = target.get_or_insert(target_write);
+            if !same_binding(target_read, target_write)
+                || !same_binding(expected_target, target_write)
+                || same_binding(condition_index, target_write)
+                || self.builtin_value(object.name().name())?.is_some()
+            {
+                return Ok(None);
+            }
+            let Some(object_cell) = self.get_binding_bytecode(object)? else {
+                return Ok(None);
+            };
+            terms.push(NumericPropertyReductionTerm {
+                object,
+                object_cell,
+                property,
+            });
+        }
+        if terms.len() < 2 || self.builtin_value(condition_index.name().name())?.is_some() {
+            return Ok(None);
+        }
+        let Some(target) = target else {
+            return Ok(None);
+        };
+        if self.builtin_value(target.name().name())?.is_some() {
+            return Ok(None);
+        }
+        let Some(index_cell) = self.get_binding_bytecode(condition_index)? else {
+            return Ok(None);
+        };
+        let Some(target_cell) = self.get_or_materialize_binding_bytecode(target)? else {
+            return Ok(None);
+        };
+        if !index_cell.kind().is_mutable() || !target_cell.kind().is_mutable() {
+            return Ok(None);
+        }
+        let iteration_step_cost = terms
+            .len()
+            .checked_mul(PROPERTY_TERM_INSTRUCTION_COUNT)
+            .and_then(|cost| cost.checked_add(LITERAL_CONDITION_STEP_COST))
+            .and_then(|cost| cost.checked_add(UPDATE_AND_LOOP_STEP_COST))
+            .ok_or_else(|| {
+                crate::Error::limit("numeric property reduction step cost overflowed")
+            })?;
+        Ok(Some(NumericPropertyReductionPlan {
+            index: condition_index,
+            index_cell,
+            limit,
+            target,
+            target_cell,
+            terms,
+            iteration_step_cost,
+        }))
+    }
+
     pub(in crate::runtime::bytecode) fn eval_numeric_reduction_plan(
         &mut self,
         state: &mut BytecodeState,
@@ -239,6 +370,9 @@ impl Context {
         match plan {
             NumericReductionPlan::Array(plan) => {
                 self.eval_numeric_array_reduction_plan(state, next, plan)
+            }
+            NumericReductionPlan::Property(plan) => {
+                self.eval_numeric_property_reduction_plan(state, next, plan)
             }
             NumericReductionPlan::String(plan) => {
                 self.eval_numeric_string_reduction_plan(state, next, plan)
@@ -334,6 +468,61 @@ impl Context {
         Ok(true)
     }
 
+    fn eval_numeric_property_reduction_plan(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+        plan: &NumericPropertyReductionPlan<'_>,
+    ) -> Result<bool> {
+        let Value::Number(index) = plan.index_cell.value(plan.index.name())? else {
+            return Ok(false);
+        };
+        let Value::Number(mut total) = plan.target_cell.value(plan.target.name())? else {
+            return Ok(false);
+        };
+        let Some(mut index) = non_negative_integer_index(index) else {
+            return Ok(false);
+        };
+        if index >= plan.limit {
+            self.charge_runtime_steps(LITERAL_CONDITION_STEP_COST)?;
+            self.store_numeric_property_reduction_state(plan, index, total)?;
+            state.last = Value::Undefined;
+            state.pc = next;
+            return Ok(true);
+        }
+        let mut values = Vec::with_capacity(plan.terms.len());
+        for term in &plan.terms {
+            let Value::Object(object) = term.object_cell.value(term.object.name())? else {
+                return Ok(false);
+            };
+            let lookup = self.static_property_lookup(term.property.name())?;
+            let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
+            let value = self
+                .objects
+                .read_cacheable_property_value_for(object, candidate)?;
+            let CacheablePropertyValue::Hit(Value::Number(value)) = value else {
+                return Ok(false);
+            };
+            values.push(value);
+        }
+        while index < plan.limit {
+            if let Err(error) = self.charge_runtime_steps(plan.iteration_step_cost) {
+                self.store_numeric_property_reduction_state(plan, index, total)?;
+                return Err(error);
+            }
+            for value in &values {
+                total += value;
+            }
+            index = index.saturating_add(1);
+            self.record_bytecode_linear_direct_runs(3)?;
+        }
+        self.charge_runtime_steps(LITERAL_CONDITION_STEP_COST)?;
+        self.store_numeric_property_reduction_state(plan, index, total)?;
+        state.last = self.checked_value(Value::Number(total))?;
+        state.pc = next;
+        Ok(true)
+    }
+
     fn string_char_code_at_reduction_is_current(
         &mut self,
         plan: &NumericStringReductionPlan<'_>,
@@ -367,6 +556,18 @@ impl Context {
     fn store_numeric_string_reduction_state(
         &self,
         plan: &NumericStringReductionPlan<'_>,
+        index: usize,
+        total: f64,
+    ) -> Result<()> {
+        let index = self.checked_value(Value::Number(usize_to_f64(index)?))?;
+        plan.index_cell.assign(plan.index.name(), index)?;
+        let total = self.checked_value(Value::Number(total))?;
+        plan.target_cell.assign(plan.target.name(), total)
+    }
+
+    fn store_numeric_property_reduction_state(
+        &self,
+        plan: &NumericPropertyReductionPlan<'_>,
         index: usize,
         total: f64,
     ) -> Result<()> {
