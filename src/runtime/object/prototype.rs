@@ -10,6 +10,12 @@ use super::{ObjectHeap, ObjectPropertyValue, PropertyLookup};
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
 
+#[cold]
+#[inline(never)]
+fn clone_non_object_prototype(value: &Value) -> Value {
+    value.clone()
+}
+
 impl ObjectHeap {
     pub(super) fn prototype_get_in_chain(
         &self,
@@ -174,6 +180,7 @@ impl ObjectHeap {
         Ok(false)
     }
 
+    #[inline]
     pub(crate) fn prototype_value(&self, id: ObjectId) -> Result<Value> {
         let object = self.object(id)?;
         // Copy object-like handles directly so ordinary prototype reads avoid
@@ -183,7 +190,7 @@ impl ObjectHeap {
             Some(Value::Function(id)) => Ok(Value::Function(*id)),
             Some(Value::NativeFunction(id)) => Ok(Value::NativeFunction(*id)),
             Some(Value::HostFunction(id)) => Ok(Value::HostFunction(*id)),
-            Some(value) => Ok(value.clone()),
+            Some(value) => Ok(clone_non_object_prototype(value)),
             None => Ok(Value::Null),
         }
     }
