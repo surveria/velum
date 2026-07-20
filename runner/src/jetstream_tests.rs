@@ -73,6 +73,31 @@ fn failed_jetstream_candidate_preserves_quickjs_measurement() -> anyhow::Result<
     ensure_usize(outcome.counts.failed, 1)
 }
 
+#[test]
+fn measured_jetstream_candidate_identifies_missing_baseline() -> anyhow::Result<()> {
+    let case = super::JetStreamCase::timed(
+        "missing-reference-candidate",
+        &["tests/external/jetstream/simple/hash-map.js"],
+    );
+    let outcome = super::measured_with_reference_result(
+        &case,
+        super::timing::Timed {
+            value: sample_stats()?,
+            elapsed: Duration::from_millis(1),
+        },
+        super::ReferenceMeasurement::Missing,
+        "2.00 ms".to_owned(),
+    );
+    ensure_text(&outcome.row.status, "✅ measured")?;
+    ensure_text(
+        &outcome.row.reference_source,
+        super::REFERENCE_SOURCE_MISSING,
+    )?;
+    ensure_usize(outcome.counts.measured, 1)?;
+    ensure_usize(outcome.counts.skipped, 1)?;
+    ensure_usize(outcome.counts.reference_missing, 1)
+}
+
 fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
     let config = super::MeasureConfig::new(Duration::from_millis(0), Duration::from_millis(1), 3)
         .with_quality(Duration::ZERO, u32::MAX);
