@@ -256,6 +256,7 @@ impl ObjectHeap {
         ))
     }
 
+    #[inline]
     pub(crate) fn read_cacheable_property_value_for(
         &self,
         id: ObjectId,
