@@ -102,6 +102,13 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        if let Value::String(text) = this_value {
+            let position = self.string_position_arg(args.first())?;
+            let Some(unit) = Self::char_at(text.as_utf16(), position) else {
+                return self.heap_string_value(EMPTY_STRING);
+            };
+            return self.heap_string_code_unit_value(unit);
+        }
         let text = self.string_receiver_utf16(this_value)?;
         let position = self.string_position_arg(args.first())?;
         let Some(unit) = Self::char_at(&text, position) else {
@@ -123,6 +130,13 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        if let Value::String(text) = this_value {
+            let position = self.string_position_arg(args.first())?;
+            let Some(unit) = Self::char_at(text.as_utf16(), position) else {
+                return Ok(Value::Number(f64::NAN));
+            };
+            return Ok(Value::Number(f64::from(unit)));
+        }
         let text = self.string_receiver_utf16(this_value)?;
         let position = self.string_position_arg(args.first())?;
         let Some(unit) = Self::char_at(&text, position) else {

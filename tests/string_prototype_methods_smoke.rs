@@ -103,6 +103,41 @@ fn supports_string_prototype_methods() -> TestResult {
 }
 
 #[test]
+fn character_access_preserves_receiver_and_index_coercion() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let order = "";
+        let receiver = {
+            toString: function () {
+                order = order + "r";
+                return "Camera";
+            }
+        };
+        let index = {
+            valueOf: function () {
+                order = order + "i";
+                return 1.9;
+            }
+        };
+        let boxed = new String("Boxed");
+        let huge = 9007199254740990;
+        String.prototype.charCodeAt.call(receiver, index) === 97 &&
+            order === "ri" &&
+            boxed.charCodeAt(1) === 111 &&
+            "\u{1F600}".charCodeAt(0) === 0xD83D &&
+            "\u{1F600}".charAt(1).charCodeAt(0) === 0xDE00 &&
+            "abc".charCodeAt(Infinity) !== "abc".charCodeAt(Infinity) &&
+            "abc".charCodeAt(huge) !== "abc".charCodeAt(huge) &&
+            "abc".charAt(huge) === "" &&
+            "abc".charAt(-1) === "" ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn case_conversion_uses_current_unicode_data_and_preserves_lone_surrogates() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

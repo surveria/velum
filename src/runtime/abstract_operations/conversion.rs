@@ -26,6 +26,12 @@ const STRING_POSITIVE_INFINITY: &str = "Infinity";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const MAX_SAFE_INTEGER_NUMBER: f64 = 9_007_199_254_740_991.0;
 const TO_INDEX_RANGE_ERROR: &str = "Index must be between 0 and Number.MAX_SAFE_INTEGER";
+const F64_EXPONENT_SHIFT: u32 = 52;
+const F64_EXPONENT_MASK: u64 = 0x7ff;
+const F64_EXPONENT_BIAS: u64 = 1023;
+const F64_MAX_U64_EXPONENT: u64 = 63;
+const F64_IMPLICIT_SIGNIFICAND_BIT: u64 = 1_u64 << F64_EXPONENT_SHIFT;
+const F64_FRACTION_MASK: u64 = F64_IMPLICIT_SIGNIFICAND_BIT - 1;
 
 /// Preferred result type supplied to ECMAScript `ToPrimitive`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -176,15 +182,8 @@ impl Context {
         integer: f64,
         error: &str,
     ) -> Result<usize> {
-        if integer == 0.0 {
-            return Ok(0);
-        }
-        if !integer.is_finite() || integer < 0.0 || integer.fract() != 0.0 {
-            return Err(Error::limit(error));
-        }
-        format!("{integer:.0}")
-            .parse::<usize>()
-            .map_err(|_| Error::limit(error))
+        let integer = finite_nonnegative_integer_to_u64(integer, error)?;
+        usize::try_from(integer).map_err(|_| Error::limit(error))
     }
 
     pub(in crate::runtime) fn usize_to_number(value: usize, error: &str) -> Result<f64> {
@@ -287,9 +286,40 @@ fn length_from_integer(integer: f64) -> Result<u64> {
     if integer >= MAX_SAFE_INTEGER_NUMBER {
         return Ok(MAX_SAFE_INTEGER);
     }
-    format!("{integer:.0}")
-        .parse::<u64>()
-        .map_err(|_| Error::limit("length conversion exceeded supported range"))
+    finite_nonnegative_integer_to_u64(integer, "length conversion exceeded supported range")
+}
+
+fn finite_nonnegative_integer_to_u64(integer: f64, error: &str) -> Result<u64> {
+    if integer == 0.0 {
+        return Ok(0);
+    }
+    if !integer.is_finite() || integer < 0.0 || integer.fract() != 0.0 {
+        return Err(Error::limit(error));
+    }
+
+    let bits = integer.to_bits();
+    let exponent_bits = (bits >> F64_EXPONENT_SHIFT) & F64_EXPONENT_MASK;
+    let Some(exponent) = exponent_bits.checked_sub(F64_EXPONENT_BIAS) else {
+        return Err(Error::limit(error));
+    };
+    if exponent > F64_MAX_U64_EXPONENT {
+        return Err(Error::limit(error));
+    }
+
+    let significand = (bits & F64_FRACTION_MASK) | F64_IMPLICIT_SIGNIFICAND_BIT;
+    if exponent >= u64::from(F64_EXPONENT_SHIFT) {
+        let shift = u32::try_from(exponent - u64::from(F64_EXPONENT_SHIFT))
+            .map_err(|_| Error::limit(error))?;
+        return significand
+            .checked_shl(shift)
+            .ok_or_else(|| Error::limit(error));
+    }
+
+    let shift =
+        u32::try_from(u64::from(F64_EXPONENT_SHIFT) - exponent).map_err(|_| Error::limit(error))?;
+    significand
+        .checked_shr(shift)
+        .ok_or_else(|| Error::limit(error))
 }
 
 pub(in crate::runtime) const fn is_primitive(value: &Value) -> bool {
