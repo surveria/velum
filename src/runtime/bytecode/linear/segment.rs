@@ -121,10 +121,14 @@ impl Context {
         while let Some(step) = block.step(state.pc)? {
             let instruction = step.instruction();
             let span = step.span();
-            let _root_scope = self.transient_root_scope(
-                VmRootKind::TransientOperand,
-                state.synchronous_root_values(),
-            )?;
+            let _root_scope = if let Some((values, last)) = state.simple_synchronous_root_values() {
+                self.transient_bytecode_root_scope(values, last)?
+            } else {
+                self.transient_root_scope(
+                    VmRootKind::TransientOperand,
+                    state.synchronous_root_values(),
+                )?
+            };
             self.collect_garbage_at_bytecode_safe_point()
                 .map_err(|error| error.with_runtime_span(span))?;
             if let Some(segment) = plan.segment_at(state.pc.index()) {

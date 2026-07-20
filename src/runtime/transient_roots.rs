@@ -71,6 +71,39 @@ impl TransientRootRegistry {
         })
     }
 
+    fn scope_with_slice_and_value(
+        &self,
+        kind: VmRootKind,
+        values: &[Value],
+        last: &Value,
+    ) -> Result<TransientRootScope> {
+        if !kind.is_transient() {
+            return Err(crate::Error::runtime(
+                "transient root scope requires a transient root category",
+            ));
+        }
+        let traceable_count = values
+            .iter()
+            .chain(core::iter::once(last))
+            .filter(|value| is_traceable(value))
+            .count();
+        if traceable_count == 0 {
+            return Ok(TransientRootScope::inactive());
+        }
+
+        let mut state = self.state.lock();
+        let scope = state.activate_scope(kind)?;
+        if let Err(error) = state.add_scope_slice_and_value(scope, values, last, traceable_count) {
+            state.release_scope(scope);
+            return Err(error);
+        }
+        drop(state);
+        Ok(TransientRootScope {
+            state: Some(Rc::clone(&self.state)),
+            scope,
+        })
+    }
+
     pub(in crate::runtime) fn active_scope(&self, kind: VmRootKind) -> Result<TransientRootScope> {
         if !kind.is_transient() {
             return Err(crate::Error::runtime(
@@ -122,6 +155,15 @@ impl Context {
         kind: VmRootKind,
     ) -> Result<TransientRootScope> {
         self.transient_roots.active_scope(kind)
+    }
+
+    pub(in crate::runtime) fn transient_bytecode_root_scope(
+        &self,
+        values: &[Value],
+        last: &Value,
+    ) -> Result<TransientRootScope> {
+        self.transient_roots
+            .scope_with_slice_and_value(VmRootKind::TransientOperand, values, last)
     }
 }
 
@@ -240,6 +282,48 @@ impl TransientRootState {
             .grow_count(VmStorageKind::TransientRoot, additions)
         {
             self.truncate_scope(scope, initial_length);
+            return Err(error);
+        }
+        self.root_count = updated_count;
+        Ok(())
+    }
+
+    fn add_scope_slice_and_value(
+        &mut self,
+        scope: usize,
+        values: &[Value],
+        last: &Value,
+        traceable_count: usize,
+    ) -> Result<()> {
+        let Some(bucket) = self.scopes.get_mut(scope) else {
+            return Err(crate::Error::runtime(
+                "transient root scope is not available",
+            ));
+        };
+        if !bucket.active {
+            return Err(crate::Error::runtime("transient root scope is not active"));
+        }
+        if let Err(error) = bucket.values.try_reserve(traceable_count) {
+            return Err(crate::Error::limit(format!(
+                "transient root storage exhausted: {error}"
+            )));
+        }
+        for value in values
+            .iter()
+            .chain(core::iter::once(last))
+            .filter(|value| is_traceable(value))
+        {
+            bucket.values.push(value.clone());
+        }
+        let Some(updated_count) = self.root_count.checked_add(traceable_count) else {
+            bucket.values.clear();
+            return Err(crate::Error::limit("transient root count overflowed"));
+        };
+        if let Err(error) = self
+            .storage_ledger
+            .grow_count(VmStorageKind::TransientRoot, traceable_count)
+        {
+            bucket.values.clear();
             return Err(error);
         }
         self.root_count = updated_count;
