@@ -473,6 +473,12 @@ impl BytecodeState {
             )
     }
 
+    pub(super) fn simple_synchronous_root_values(&self) -> Option<(&[Value], &Value)> {
+        self.resolved_bindings
+            .is_empty()
+            .then_some((self.stack.values(), &self.last))
+    }
+
     fn root_values_with_cold<'state>(
         &'state self,
         cold: Vec<&'state Value>,
