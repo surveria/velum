@@ -80,6 +80,7 @@ impl SemanticObjectRef<'_> {
 impl Context {
     /// Resolves every currently object-like `Value` variant through one checked
     /// entrypoint while leaving its physical payload in the existing store.
+    #[inline]
     pub(in crate::runtime) fn semantic_object_ref<'value>(
         &self,
         value: &'value Value,
