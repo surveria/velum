@@ -76,6 +76,11 @@ impl BindingLayout {
         self.operands.len().saturating_sub(self.unresolved_count)
     }
 
+    // The immutable operand allocation uniquely identifies one analyzed layout.
+    pub(crate) fn shares_operand_storage_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.operands, &other.operands)
+    }
+
     pub(crate) fn storage_entry_count(&self) -> Result<usize> {
         self.operands
             .len()
