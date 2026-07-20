@@ -243,6 +243,17 @@ impl Context {
 
     #[inline]
     pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
+        if matches!(
+            value,
+            Value::String(_) | Value::Symbol(_) | Value::BigInt(_)
+        ) {
+            return self.checked_nontrivial_value(value);
+        }
+        Ok(value)
+    }
+
+    #[inline(never)]
+    fn checked_nontrivial_value(&self, value: Value) -> Result<Value> {
         match &value {
             Value::String(text) => {
                 self.check_utf16_string_len(text.as_utf16())?;
