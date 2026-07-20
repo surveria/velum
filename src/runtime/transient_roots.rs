@@ -9,10 +9,11 @@ use crate::{error::Result, value::Value};
 
 use super::{
     Context, VmStorageKind,
-    arena::SlotArena,
     roots::{DirectRootVisitor, VmRootKind},
     storage_ledger::VmStorageLedger,
 };
+
+const MAX_RETAINED_ROOT_VALUES_PER_SCOPE: usize = 32;
 
 #[derive(Debug)]
 pub(in crate::runtime) struct TransientRootRegistry {
@@ -39,16 +40,23 @@ impl TransientRootRegistry {
                 "transient root scope requires a transient root category",
             ));
         }
-        let mut values = values
-            .into_iter()
-            .filter(|value| is_traceable(value))
-            .peekable();
-        if values.peek().is_none() {
+        let mut values = values.into_iter();
+        let Some(first_traceable_value) = values.find(|value| is_traceable(value)) else {
             return Ok(TransientRootScope::inactive());
+        };
+
+        let mut state = self.state.lock();
+        let scope = state.activate_scope(kind)?;
+        if let Err(error) = state.add_scope_values(scope, Some(first_traceable_value), &mut values)
+        {
+            state.release_scope(scope);
+            return Err(error);
         }
-        let scope = self.active_scope(kind)?;
-        scope.add_values(values)?;
-        Ok(scope)
+        drop(state);
+        Ok(TransientRootScope {
+            state: Some(Rc::clone(&self.state)),
+            scope,
+        })
     }
 
     pub(in crate::runtime) fn active_scope(&self, kind: VmRootKind) -> Result<TransientRootScope> {
@@ -58,13 +66,7 @@ impl TransientRootRegistry {
             ));
         }
         let mut state = self.state.lock();
-        let removal_capacity = state
-            .scopes
-            .len()
-            .checked_add(1)
-            .ok_or_else(|| crate::Error::limit("transient root scope count overflowed"))?;
-        state.scopes.reserve_removals(removal_capacity)?;
-        let scope = state.scopes.insert(TransientRootBucket::new(kind))?;
+        let scope = state.activate_scope(kind)?;
         drop(state);
         Ok(TransientRootScope {
             state: Some(Rc::clone(&self.state)),
@@ -75,6 +77,9 @@ impl TransientRootRegistry {
     pub(in crate::runtime) fn visit<V: DirectRootVisitor>(&self, visitor: &mut V) -> Result<()> {
         let state = self.state.lock();
         for bucket in &state.scopes {
+            if !bucket.active {
+                continue;
+            }
             for value in &bucket.values {
                 visitor.visit_value(bucket.kind, value)?;
             }
@@ -110,7 +115,8 @@ impl Context {
 
 #[derive(Debug)]
 struct TransientRootState {
-    scopes: SlotArena<TransientRootBucket>,
+    scopes: Vec<TransientRootBucket>,
+    free_scopes: Vec<usize>,
     root_count: usize,
     storage_ledger: VmStorageLedger,
 }
@@ -118,15 +124,136 @@ struct TransientRootState {
 impl TransientRootState {
     const fn new(storage_ledger: VmStorageLedger) -> Self {
         Self {
-            scopes: SlotArena::new(),
+            scopes: Vec::new(),
+            free_scopes: Vec::new(),
             root_count: 0,
             storage_ledger,
         }
+    }
+
+    fn activate_scope(&mut self, kind: VmRootKind) -> Result<usize> {
+        if let Some(scope) = self.free_scopes.pop() {
+            let Some(bucket) = self.scopes.get_mut(scope) else {
+                self.free_scopes.push(scope);
+                return Err(crate::Error::runtime(
+                    "transient root free scope is not available",
+                ));
+            };
+            if bucket.active || !bucket.values.is_empty() {
+                self.free_scopes.push(scope);
+                return Err(crate::Error::runtime(
+                    "transient root free scope is still active",
+                ));
+            }
+            bucket.kind = kind;
+            bucket.active = true;
+            return Ok(scope);
+        }
+
+        let scope_count = self
+            .scopes
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| crate::Error::limit("transient root scope count overflowed"))?;
+        self.scopes.try_reserve(1).map_err(|error| {
+            crate::Error::limit(format!("transient root scope storage exhausted: {error}"))
+        })?;
+        let free_capacity = scope_count.saturating_sub(self.free_scopes.len());
+        self.free_scopes
+            .try_reserve(free_capacity)
+            .map_err(|error| {
+                crate::Error::limit(format!(
+                    "transient root free scope storage exhausted: {error}"
+                ))
+            })?;
+        let scope = self.scopes.len();
+        self.scopes.push(TransientRootBucket::new(kind));
+        Ok(scope)
+    }
+
+    fn truncate_scope(&mut self, scope: usize, length: usize) {
+        if let Some(bucket) = self.scopes.get_mut(scope) {
+            bucket.values.truncate(length);
+        }
+    }
+
+    fn add_scope_values<'value, I>(
+        &mut self,
+        scope: usize,
+        first_traceable_value: Option<&'value Value>,
+        values: &mut I,
+    ) -> Result<()>
+    where
+        I: Iterator<Item = &'value Value>,
+    {
+        let Some(bucket) = self.scopes.get_mut(scope) else {
+            return Err(crate::Error::runtime(
+                "transient root scope is not available",
+            ));
+        };
+        if !bucket.active {
+            return Err(crate::Error::runtime("transient root scope is not active"));
+        }
+        let initial_length = bucket.values.len();
+        if let Some(value) = first_traceable_value {
+            if let Err(error) = bucket.values.try_reserve(1) {
+                return Err(crate::Error::limit(format!(
+                    "transient root storage exhausted: {error}"
+                )));
+            }
+            bucket.values.push(value.clone());
+        }
+        for value in values.filter(|value| is_traceable(value)) {
+            if let Err(error) = bucket.values.try_reserve(1) {
+                bucket.values.truncate(initial_length);
+                return Err(crate::Error::limit(format!(
+                    "transient root storage exhausted: {error}"
+                )));
+            }
+            bucket.values.push(value.clone());
+        }
+        let Some(additions) = bucket.values.len().checked_sub(initial_length) else {
+            bucket.values.truncate(initial_length);
+            return Err(crate::Error::runtime(
+                "transient root count decreased while adding",
+            ));
+        };
+        if additions == 0 {
+            return Ok(());
+        }
+
+        let Some(updated_count) = self.root_count.checked_add(additions) else {
+            self.truncate_scope(scope, initial_length);
+            return Err(crate::Error::limit("transient root count overflowed"));
+        };
+        if let Err(error) = self
+            .storage_ledger
+            .grow_count(VmStorageKind::TransientRoot, additions)
+        {
+            self.truncate_scope(scope, initial_length);
+            return Err(error);
+        }
+        self.root_count = updated_count;
+        Ok(())
+    }
+
+    fn release_scope(&mut self, scope: usize) {
+        let Some(bucket) = self.scopes.get_mut(scope) else {
+            return;
+        };
+        let Some(released) = bucket.deactivate() else {
+            return;
+        };
+        self.free_scopes.push(scope);
+        self.root_count = self.root_count.saturating_sub(released);
+        self.storage_ledger
+            .release_count_on_drop(VmStorageKind::TransientRoot, released);
     }
 }
 
 #[derive(Debug)]
 struct TransientRootBucket {
+    active: bool,
     kind: VmRootKind,
     values: Vec<Value>,
 }
@@ -134,9 +261,23 @@ struct TransientRootBucket {
 impl TransientRootBucket {
     const fn new(kind: VmRootKind) -> Self {
         Self {
+            active: true,
             kind,
             values: Vec::new(),
         }
+    }
+
+    fn deactivate(&mut self) -> Option<usize> {
+        if !self.active {
+            return None;
+        }
+        let released = self.values.len();
+        self.values.clear();
+        if self.values.capacity() > MAX_RETAINED_ROOT_VALUES_PER_SCOPE {
+            self.values = Vec::new();
+        }
+        self.active = false;
+        Some(released)
     }
 }
 
@@ -165,39 +306,9 @@ impl TransientRootScope {
         let Some(state) = &self.state else {
             return Ok(());
         };
-        let mut additions = Vec::new();
-        for value in values.into_iter().filter(|value| is_traceable(value)) {
-            additions.try_reserve(1).map_err(|error| {
-                crate::Error::limit(format!("transient root storage exhausted: {error}"))
-            })?;
-            additions.push(value.clone());
-        }
-        if additions.is_empty() {
-            return Ok(());
-        }
-
         let mut state = state.lock();
-        let updated_count = state
-            .root_count
-            .checked_add(additions.len())
-            .ok_or_else(|| crate::Error::limit("transient root count overflowed"))?;
-        let reservation = state
-            .storage_ledger
-            .reserve_count(VmStorageKind::TransientRoot, additions.len())?;
-        let Some(bucket) = state.scopes.get_mut(self.scope) else {
-            return Err(crate::Error::runtime(
-                "transient root scope is not available",
-            ));
-        };
-        bucket
-            .values
-            .try_reserve(additions.len())
-            .map_err(|error| {
-                crate::Error::limit(format!("transient root storage exhausted: {error}"))
-            })?;
-        reservation.commit()?;
-        bucket.values.extend(additions);
-        state.root_count = updated_count;
+        let mut values = values.into_iter();
+        state.add_scope_values(self.scope, None, &mut values)?;
         drop(state);
         Ok(())
     }
@@ -207,14 +318,7 @@ impl Drop for TransientRootScope {
     fn drop(&mut self) {
         if let Some(state) = &self.state {
             let mut state = state.lock();
-            let Ok(Some(bucket)) = state.scopes.remove_reserved(self.scope) else {
-                return;
-            };
-            let released = bucket.values.len();
-            state.root_count = state.root_count.saturating_sub(released);
-            state
-                .storage_ledger
-                .release_count_on_drop(VmStorageKind::TransientRoot, released);
+            state.release_scope(self.scope);
         }
     }
 }
