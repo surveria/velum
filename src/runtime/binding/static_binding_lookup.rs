@@ -212,7 +212,7 @@ impl Context {
             return Ok(());
         };
         let location = location.for_compiled_operand(operand);
-        layout.for_each_matching_operand_id(binding, |binding| cache.remember_id(binding, location))
+        cache.remember_id(binding, location)
     }
 
     pub(in crate::runtime::binding) fn resolve_binding_location(
