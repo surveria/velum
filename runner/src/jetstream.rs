@@ -261,7 +261,7 @@ fn measured_with_reference_result(
             ours,
             case_elapsed,
             REFERENCE_BASELINE_MISSING,
-            NOT_MEASURED,
+            REFERENCE_SOURCE_MISSING,
             Some("content-addressed QuickJS baseline entry is missing or stale"),
             true,
         ),
