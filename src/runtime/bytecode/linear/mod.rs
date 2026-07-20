@@ -20,6 +20,7 @@ use crate::{
 };
 
 use super::state::BytecodeState;
+pub(in crate::runtime) use numeric_chain::apply_number_binary;
 use numeric_chain::{NumericBindingChain, NumericCompoundBinding, NumericCompoundChain};
 use property_chain::PropertyMutation;
 pub(super) use segment::BytecodeLinearPlan;

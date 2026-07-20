@@ -563,7 +563,7 @@ impl Context {
     }
 }
 
-pub(in crate::runtime::bytecode::linear) fn apply_number_binary(
+pub(in crate::runtime) fn apply_number_binary(
     op: BytecodeNumericBinaryOp,
     left: f64,
     right: f64,
