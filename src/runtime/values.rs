@@ -241,6 +241,7 @@ impl Context {
         Ok(text)
     }
 
+    #[inline]
     pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
         match &value {
             Value::String(text) => {
