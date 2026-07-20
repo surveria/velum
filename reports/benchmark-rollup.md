@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260720T134943Z.md`
-- Task: PR #676: [codex] Optimize prepared property read hot paths
-- Performance: 4.80x (4/5 >1.00x) (from `velum-test-report-20260720T134943Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260720T134943Z.md`)
+- `velum-test-report-20260720T150153Z.md`
+- Task: PR #678: [codex] Optimize remaining property read dispatch hot paths
+- Performance: 0.67x (2/5 >1.00x) (from `velum-test-report-20260720T150153Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260720T150153Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260720T134943Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260720T150153Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -602,3 +602,4 @@ Latest report:
 | `20260720T090632Z` `ac9b33d` PR #673: [codex] Optimize JetStream object and call hot paths | 6.33x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T124742Z` `c5e3e4d` PR #674: [codex] Optimize prepared string scan hot paths | 5.92x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T134943Z` `6f0443c` PR #676: [codex] Optimize prepared property read hot paths | 4.80x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260720T150153Z` `4948735` PR #678: [codex] Optimize remaining property read dispatch hot paths | 0.67x (2/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
