@@ -1,6 +1,3 @@
-#[cfg(not(feature = "std"))]
-use crate::prelude::*;
-
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
