@@ -91,23 +91,6 @@ impl BindingLayout {
             .ok_or_else(|| Error::limit("binding layout entry count overflowed"))
     }
 
-    pub fn for_each_matching_operand_id(
-        &self,
-        binding: StaticBindingId,
-        mut visit: impl FnMut(StaticBindingId) -> Result<()>,
-    ) -> Result<()> {
-        let Some(target) = self.operand_for_binding_id(binding)? else {
-            return Ok(());
-        };
-        for (index, operand) in self.operands.iter().enumerate() {
-            if *operand != target {
-                continue;
-            }
-            visit(StaticBindingId::from_index(index)?)?;
-        }
-        Ok(())
-    }
-
     pub fn operand_for_binding_id(
         &self,
         binding: StaticBindingId,
