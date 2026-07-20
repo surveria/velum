@@ -306,7 +306,6 @@ impl Context {
             });
         }
         while let Some(step) = block.step(state.pc)? {
-            let span = step.span();
             let _root_scope = if state.has_suspend_state() {
                 self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?
             } else if let Some((values, last)) = state.simple_synchronous_root_values() {
@@ -318,13 +317,15 @@ impl Context {
                 )?
             };
             self.collect_garbage_at_bytecode_safe_point()
-                .map_err(|error| error.with_runtime_span(span))?;
-            self.step().map_err(|error| error.with_runtime_span(span))?;
+                .map_err(|error| error.with_runtime_span(step.span()))?;
+            self.step()
+                .map_err(|error| error.with_runtime_span(step.span()))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
-                Err(error) => self.bytecode_error_completion(error, span)?,
+                Err(error) => self.bytecode_error_completion(error, step.span())?,
             };
             if let Some(completion) = completion {
+                let span = step.span();
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
                 }
@@ -357,7 +358,6 @@ impl Context {
         state: &mut BytecodeState,
     ) -> Result<Completion> {
         while let Some(step) = block.step(state.pc)? {
-            let span = step.span();
             let _root_scope = if let Some((values, last)) = state.simple_synchronous_root_values() {
                 self.transient_bytecode_root_scope(values, last)?
             } else {
@@ -367,13 +367,15 @@ impl Context {
                 )?
             };
             self.collect_garbage_at_bytecode_safe_point()
-                .map_err(|error| error.with_runtime_span(span))?;
-            self.step().map_err(|error| error.with_runtime_span(span))?;
+                .map_err(|error| error.with_runtime_span(step.span()))?;
+            self.step()
+                .map_err(|error| error.with_runtime_span(step.span()))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
-                Err(error) => self.bytecode_error_completion(error, span)?,
+                Err(error) => self.bytecode_error_completion(error, step.span())?,
             };
             if let Some(completion) = completion {
+                let span = step.span();
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
                 }

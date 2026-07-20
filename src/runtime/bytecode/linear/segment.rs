@@ -120,7 +120,6 @@ impl Context {
         }
         while let Some(step) = block.step(state.pc)? {
             let instruction = step.instruction();
-            let span = step.span();
             let _root_scope = if let Some((values, last)) = state.simple_synchronous_root_values() {
                 self.transient_bytecode_root_scope(values, last)?
             } else {
@@ -130,7 +129,7 @@ impl Context {
                 )?
             };
             self.collect_garbage_at_bytecode_safe_point()
-                .map_err(|error| error.with_runtime_span(span))?;
+                .map_err(|error| error.with_runtime_span(step.span()))?;
             if let Some(segment) = plan.segment_at(state.pc.index()) {
                 if let Some(completion) = self.eval_bytecode_linear_segment(segment, state)? {
                     return Ok(completion);
@@ -138,12 +137,14 @@ impl Context {
                 continue;
             }
 
-            self.step().map_err(|error| error.with_runtime_span(span))?;
+            self.step()
+                .map_err(|error| error.with_runtime_span(step.span()))?;
             let completion = match self.eval_bytecode_instruction(state, instruction) {
                 Ok(completion) => completion,
-                Err(error) => self.bytecode_error_completion(error, span)?,
+                Err(error) => self.bytecode_error_completion(error, step.span())?,
             };
             if let Some(completion) = completion {
+                let span = step.span();
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
                 }
@@ -164,14 +165,14 @@ impl Context {
         let span = segment
             .spans
             .first()
-            .copied()
             .ok_or_else(|| Error::runtime("bytecode linear segment has no source span"))?;
         self.record_bytecode_linear_segment_run()
-            .map_err(|error| error.with_runtime_span(span))?;
-        for (op, span) in segment.ops.iter().zip(segment.spans.iter().copied()) {
-            self.step().map_err(|error| error.with_runtime_span(span))?;
+            .map_err(|error| error.with_runtime_span(*span))?;
+        for (op, span) in segment.ops.iter().zip(&segment.spans) {
+            self.step()
+                .map_err(|error| error.with_runtime_span(*span))?;
             if let Err(error) = self.eval_bytecode_linear_op(state, op) {
-                return self.bytecode_error_completion(error, span);
+                return self.bytecode_error_completion(error, *span);
             }
         }
         state.pc = BytecodeAddress::new(segment.end);
