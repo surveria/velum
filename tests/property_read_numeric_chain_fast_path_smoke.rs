@@ -26,15 +26,23 @@ fn numeric_property_read_assignments_use_linear_peepholes() -> TestResult {
         "compiled linear peephole candidates",
     )?;
 
-    let before = vm.resource_usage().bytecode_linear_segment_runs;
+    let before = vm.resource_usage();
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(960.0))?;
     let segment_delta = vm
         .resource_usage()
         .bytecode_linear_segment_runs
-        .checked_sub(before)
+        .checked_sub(before.bytecode_linear_segment_runs)
         .ok_or("bytecode linear segment counter moved backwards")?;
-    ensure_at_least(segment_delta, 64, "bytecode linear segment runs")
+    let direct_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(before.bytecode_linear_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    let optimized_runs = segment_delta
+        .checked_add(direct_delta)
+        .ok_or("bytecode linear optimized run count overflowed")?;
+    ensure_at_least(optimized_runs, 64, "bytecode linear optimized runs")
 }
 
 #[test]

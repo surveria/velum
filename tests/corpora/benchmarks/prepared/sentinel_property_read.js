@@ -15,7 +15,7 @@ function __velumBenchSetup() {
 
 function __velumBenchRun() {
     var total = 0;
-    for (var index = 0; index < 262144; index = index + 1) {
+    for (var index = 0; index < 524288; index = index + 1) {
         total = total + __velumBenchRecord.alpha;
         total = total + __velumBenchRecord.beta;
         total = total + __velumBenchRecord.gamma;
@@ -27,5 +27,5 @@ function __velumBenchRun() {
 }
 
 function __velumBenchVerify() {
-    return 10223616;
+    return 20447232;
 }
