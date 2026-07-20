@@ -83,18 +83,22 @@ impl TransientRootRegistry {
                 "transient root scope requires a transient root category",
             ));
         }
-        let traceable_count = values
-            .iter()
-            .chain(core::iter::once(last))
-            .filter(|value| is_traceable(value))
-            .count();
-        if traceable_count == 0 {
+        let remaining_values = if let Some(first) = values.iter().position(is_traceable) {
+            let Some(remaining) = values.get(first..) else {
+                return Err(crate::Error::runtime(
+                    "transient root slice position is not available",
+                ));
+            };
+            remaining
+        } else if is_traceable(last) {
+            &[]
+        } else {
             return Ok(TransientRootScope::inactive());
-        }
+        };
 
         let mut state = self.state.borrow_mut();
         let scope = state.activate_scope(kind)?;
-        if let Err(error) = state.add_scope_slice_and_value(scope, values, last, traceable_count) {
+        if let Err(error) = state.add_scope_slice_and_value(scope, remaining_values, last) {
             state.release_scope(scope);
             return Err(error);
         }
@@ -294,7 +298,6 @@ impl TransientRootState {
         scope: usize,
         values: &[Value],
         last: &Value,
-        traceable_count: usize,
     ) -> Result<()> {
         let Some(bucket) = self.scopes.get_mut(scope) else {
             return Err(crate::Error::runtime(
@@ -304,27 +307,35 @@ impl TransientRootState {
         if !bucket.active {
             return Err(crate::Error::runtime("transient root scope is not active"));
         }
-        if let Err(error) = bucket.values.try_reserve(traceable_count) {
-            return Err(crate::Error::limit(format!(
-                "transient root storage exhausted: {error}"
-            )));
-        }
+        let initial_length = bucket.values.len();
         for value in values
             .iter()
             .chain(core::iter::once(last))
             .filter(|value| is_traceable(value))
         {
+            if let Err(error) = bucket.values.try_reserve(1) {
+                bucket.values.truncate(initial_length);
+                return Err(crate::Error::limit(format!(
+                    "transient root storage exhausted: {error}"
+                )));
+            }
             bucket.values.push(value.clone());
         }
-        let Some(updated_count) = self.root_count.checked_add(traceable_count) else {
-            bucket.values.clear();
+        let Some(additions) = bucket.values.len().checked_sub(initial_length) else {
+            bucket.values.truncate(initial_length);
+            return Err(crate::Error::runtime(
+                "transient root count decreased while adding",
+            ));
+        };
+        let Some(updated_count) = self.root_count.checked_add(additions) else {
+            bucket.values.truncate(initial_length);
             return Err(crate::Error::limit("transient root count overflowed"));
         };
         if let Err(error) = self
             .storage_ledger
-            .grow_count(VmStorageKind::TransientRoot, traceable_count)
+            .grow_count(VmStorageKind::TransientRoot, additions)
         {
-            bucket.values.clear();
+            bucket.values.truncate(initial_length);
             return Err(error);
         }
         self.root_count = updated_count;
