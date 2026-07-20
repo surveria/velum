@@ -550,15 +550,11 @@ impl Context {
                 None
             } else {
                 self.run_bytecode_control_action(handle, &control, |context| {
-                    context.bind_numeric_array_reduction_plan(
-                        parts.condition,
-                        parts.update,
-                        parts.body,
-                    )
+                    context.bind_numeric_reduction_plan(parts.condition, parts.update, parts.body)
                 })?
             };
             if let Some(reduction) = reduction {
-                match self.eval_numeric_array_reduction_plan(state, next, &reduction) {
+                match self.eval_numeric_reduction_plan(state, next, &reduction) {
                     Ok(true) => return self.finish_bytecode_control_result(handle, Ok(None)),
                     Ok(false) => {}
                     Err(error) => {
