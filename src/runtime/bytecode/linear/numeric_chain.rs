@@ -48,6 +48,12 @@ enum NumericBindingChainTerm<'a> {
         op: BytecodeNumericBinaryOp,
         right: f64,
     },
+    StaticProperty {
+        object: &'a BytecodeBinding,
+        object_cell: BindingCell,
+        property: &'a BytecodeProperty,
+        op: BytecodeNumericBinaryOp,
+    },
     BindingBitAndLiteral {
         binding: &'a BytecodeBinding,
         cell: BindingCell,
@@ -172,6 +178,28 @@ impl Context {
                     right: *right,
                 },
                 2,
+            )));
+        }
+
+        if let Some(
+            [
+                BytecodeInstruction::LoadBinding(object),
+                BytecodeInstruction::StaticMember { property },
+                BytecodeInstruction::NumberBinary(op),
+            ],
+        ) = instruction_window(instructions, index, 3)
+        {
+            let Some(object_cell) = self.get_binding_bytecode(object)? else {
+                return Ok(None);
+            };
+            return Ok(Some((
+                NumericBindingChainTerm::StaticProperty {
+                    object,
+                    object_cell,
+                    property,
+                    op: *op,
+                },
+                3,
             )));
         }
 
@@ -402,80 +430,61 @@ impl Context {
         state: &mut super::BytecodeState,
         chain: &NumericBindingChain<'_>,
     ) -> Result<()> {
-        let initial = self.runtime_value(chain.source_cell.value(chain.source.name())?)?;
-        if let Value::Number(number) = initial
-            && let Some(value) = self.eval_numeric_binding_chain_number(number, &chain.terms)?
-        {
-            let value = self.checked_value(Value::Number(value))?;
-            self.assign_bytecode_cell(chain.target, &chain.target_cell, value.clone())?;
-            state.last = value;
-            return Ok(());
+        let mut value = self.runtime_value(chain.source_cell.value(chain.source.name())?)?;
+        for term in &chain.terms {
+            let (op, right) = self.eval_numeric_binding_chain_rhs(term)?;
+            value = if let (Value::Number(left), Value::Number(right)) = (&value, &right) {
+                Value::Number(apply_number_binary(op, *left, *right)?)
+            } else {
+                self.eval_bytecode_number_binary(op, &value, &right)?
+            };
         }
-
-        let value = self.eval_numeric_binding_chain_slow_path(initial, &chain.terms)?;
+        let value = self.checked_value(value)?;
         self.assign_bytecode_cell(chain.target, &chain.target_cell, value.clone())?;
         state.last = value;
         Ok(())
     }
 
-    fn eval_numeric_binding_chain_number(
+    fn eval_numeric_binding_chain_rhs(
         &mut self,
-        mut value: f64,
-        terms: &[NumericBindingChainTerm<'_>],
-    ) -> Result<Option<f64>> {
-        for term in terms {
-            let (op, right) = match term {
-                NumericBindingChainTerm::Literal { op, right } => (*op, *right),
-                NumericBindingChainTerm::BindingBitAndLiteral {
-                    binding,
-                    cell,
-                    mask,
-                    op,
-                } => {
-                    let rhs = self.runtime_value(cell.value(binding.name())?)?;
-                    let Value::Number(rhs) = rhs else {
-                        return Ok(None);
-                    };
-                    (
-                        *op,
-                        apply_number_binary(BytecodeNumericBinaryOp::BitAnd, rhs, *mask)?,
-                    )
-                }
-            };
-            value = apply_number_binary(op, value, right)?;
+        term: &NumericBindingChainTerm<'_>,
+    ) -> Result<(BytecodeNumericBinaryOp, Value)> {
+        match term {
+            NumericBindingChainTerm::Literal { op, right } => Ok((*op, Value::Number(*right))),
+            NumericBindingChainTerm::StaticProperty {
+                object,
+                object_cell,
+                property,
+                op,
+            } => {
+                let object = self.runtime_value(object_cell.value(object.name())?)?;
+                let right =
+                    self.get_static_property_value(&object, property.name(), property.access())?;
+                Ok((*op, right))
+            }
+            NumericBindingChainTerm::BindingBitAndLiteral {
+                binding,
+                cell,
+                mask,
+                op,
+            } => {
+                let rhs = self.runtime_value(cell.value(binding.name())?)?;
+                let right = if let Value::Number(rhs) = rhs {
+                    Value::Number(apply_number_binary(
+                        BytecodeNumericBinaryOp::BitAnd,
+                        rhs,
+                        *mask,
+                    )?)
+                } else {
+                    self.eval_bytecode_number_binary(
+                        BytecodeNumericBinaryOp::BitAnd,
+                        &rhs,
+                        &Value::Number(*mask),
+                    )?
+                };
+                Ok((*op, right))
+            }
         }
-        Ok(Some(value))
-    }
-
-    fn eval_numeric_binding_chain_slow_path(
-        &mut self,
-        mut value: Value,
-        terms: &[NumericBindingChainTerm<'_>],
-    ) -> Result<Value> {
-        for term in terms {
-            let (op, right) = match term {
-                NumericBindingChainTerm::Literal { op, right } => (*op, Value::Number(*right)),
-                NumericBindingChainTerm::BindingBitAndLiteral {
-                    binding,
-                    cell,
-                    mask,
-                    op,
-                } => {
-                    let rhs = self.runtime_value(cell.value(binding.name())?)?;
-                    let mask = Value::Number(*mask);
-                    (
-                        *op,
-                        self.eval_bytecode_number_binary(
-                            BytecodeNumericBinaryOp::BitAnd,
-                            &rhs,
-                            &mask,
-                        )?,
-                    )
-                }
-            };
-            value = self.eval_bytecode_number_binary(op, &value, &right)?;
-        }
-        Ok(value)
     }
 
     pub(super) fn eval_numeric_compound_binding(

@@ -238,6 +238,15 @@ fn recognize_numeric_binding_chain(
         ) {
             2
         } else if matches!(
+            instruction_window(instructions, cursor, 3),
+            Some([
+                BytecodeInstruction::LoadBinding(_),
+                BytecodeInstruction::StaticMember { .. },
+                BytecodeInstruction::NumberBinary(_),
+            ])
+        ) {
+            3
+        } else if matches!(
             instruction_window(instructions, cursor, 4),
             Some([
                 BytecodeInstruction::LoadBinding(_),
