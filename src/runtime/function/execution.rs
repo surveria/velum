@@ -60,6 +60,16 @@ impl Context {
         if function.bytecode.strict() {
             return Ok(call_this);
         }
+        // Sloppy calls only need ToObject for primitive receivers.
+        if matches!(
+            call_this,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
+            return Ok(call_this);
+        }
         if matches!(call_this, Value::Undefined | Value::Null) {
             return self.global_this_value();
         }
