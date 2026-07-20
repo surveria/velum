@@ -1,6 +1,7 @@
 mod direct;
 mod in_operator;
 mod numeric_array_reduction;
+mod numeric_call_reduction;
 mod numeric_chain;
 mod property_chain;
 mod property_numeric;

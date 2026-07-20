@@ -20,6 +20,7 @@ use crate::{
 };
 
 use super::super::state::BytecodeState;
+use super::numeric_call_reduction::NumericCallReductionPlan;
 
 const CONDITION_STEP_COST: usize = 5;
 const LITERAL_CONDITION_STEP_COST: usize = 4;
@@ -33,6 +34,7 @@ const LENGTH_PROPERTY: &str = "length";
 #[derive(Debug)]
 pub(in crate::runtime::bytecode) enum NumericReductionPlan<'a> {
     Array(NumericArrayReductionPlan<'a>),
+    Call(NumericCallReductionPlan<'a>),
     Property(NumericPropertyReductionPlan<'a>),
     String(NumericStringReductionPlan<'a>),
 }
@@ -91,6 +93,9 @@ impl Context {
         }
         if let Some(plan) = self.bind_numeric_string_reduction_plan(condition, update, body)? {
             return Ok(Some(NumericReductionPlan::String(plan)));
+        }
+        if let Some(plan) = self.bind_numeric_call_reduction_plan(condition, update, body)? {
+            return Ok(Some(NumericReductionPlan::Call(plan)));
         }
         self.bind_numeric_property_reduction_plan(condition, update, body)
             .map(|plan| plan.map(NumericReductionPlan::Property))
@@ -370,6 +375,9 @@ impl Context {
         match plan {
             NumericReductionPlan::Array(plan) => {
                 self.eval_numeric_array_reduction_plan(state, next, plan)
+            }
+            NumericReductionPlan::Call(plan) => {
+                self.eval_numeric_call_reduction_plan(state, next, plan)
             }
             NumericReductionPlan::Property(plan) => {
                 self.eval_numeric_property_reduction_plan(state, next, plan)
