@@ -176,7 +176,16 @@ impl ObjectHeap {
 
     pub(crate) fn prototype_value(&self, id: ObjectId) -> Result<Value> {
         let object = self.object(id)?;
-        Ok(object.prototype.clone().unwrap_or(Value::Null))
+        // Copy object-like handles directly so ordinary prototype reads avoid
+        // the generic clone path used for heap-backed primitive values.
+        match object.prototype.as_ref() {
+            Some(Value::Object(id)) => Ok(Value::Object(*id)),
+            Some(Value::Function(id)) => Ok(Value::Function(*id)),
+            Some(Value::NativeFunction(id)) => Ok(Value::NativeFunction(*id)),
+            Some(Value::HostFunction(id)) => Ok(Value::HostFunction(*id)),
+            Some(value) => Ok(value.clone()),
+            None => Ok(Value::Null),
+        }
     }
 
     pub(crate) fn prototype_chain_requires_semantic_index_write(
