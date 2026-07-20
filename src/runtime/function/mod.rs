@@ -21,6 +21,7 @@ mod callback_fast_path;
 mod class_support;
 mod execution;
 mod fast_path;
+mod fast_path_expression;
 mod intrinsic;
 mod names;
 mod parameters;

@@ -24,6 +24,7 @@ mod template;
 pub(in crate::runtime) use continuation::BytecodeContinuationFrame;
 pub(in crate::runtime) use destructure::DestructureOutcome;
 pub(in crate::runtime) use execution::BytecodeOutcome;
+pub(in crate::runtime) use linear::apply_number_binary;
 
 use crate::{
     bytecode::{BytecodeAddress, BytecodeInstruction, BytecodeProperty},

@@ -12,13 +12,15 @@ use crate::{
     runtime::{
         CompiledBindingFrame, Context,
         binding::scope::BindingCell,
+        bytecode::apply_number_binary,
         control::{Completion, reference_error_undefined},
         native::UNDEFINED_NAME,
-        numeric::number_exponentiate,
     },
     syntax::{DeclKind, StaticString},
     value::Value,
 };
+
+use super::fast_path_expression::compile_numeric_expression;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct FunctionFastPath {
@@ -481,20 +483,7 @@ impl Context {
         let (Value::Number(left), Value::Number(right)) = (left, right) else {
             return Ok(None);
         };
-        let value = match op {
-            BytecodeNumericBinaryOp::Add => left + right,
-            BytecodeNumericBinaryOp::Sub => left - right,
-            BytecodeNumericBinaryOp::Mul => left * right,
-            BytecodeNumericBinaryOp::Div => left / right,
-            BytecodeNumericBinaryOp::Rem => left % right,
-            BytecodeNumericBinaryOp::Pow => number_exponentiate(*left, *right),
-            BytecodeNumericBinaryOp::BitAnd
-            | BytecodeNumericBinaryOp::BitOr
-            | BytecodeNumericBinaryOp::BitXor
-            | BytecodeNumericBinaryOp::ShiftLeft
-            | BytecodeNumericBinaryOp::ShiftRight
-            | BytecodeNumericBinaryOp::ShiftRightUnsigned => return Ok(None),
-        };
+        let value = apply_number_binary(op, *left, *right)?;
         self.checked_value(Value::Number(value)).map(Some)
     }
 }
@@ -615,7 +604,7 @@ fn compile_function_fast_path_kind(
         {
             compile_store_binary_return_kind(param_frames, target, *op, left, right)
         }
-        _ => Ok(None),
+        _ => compile_numeric_expression(has_empty_hoist(bytecode), param_frames, instructions),
     }
 }
 
@@ -716,7 +705,7 @@ fn compile_store_binary_return_kind(
     }))
 }
 
-fn source_for_binding(
+pub(super) fn source_for_binding(
     param_frames: &[Option<CompiledBindingFrame>],
     binding: &BytecodeBinding,
 ) -> Result<Option<FastValueSource>> {
