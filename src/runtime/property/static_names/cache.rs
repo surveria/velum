@@ -1,7 +1,7 @@
 #[cfg(not(feature = "std"))]
 use crate::prelude::*;
 
-use alloc::rc::Rc;
+use alloc::{boxed::Box, rc::Rc};
 use core::cell::{Cell, RefCell};
 
 use crate::{
@@ -17,11 +17,16 @@ use super::native_call_cache::StaticPropertyNativeCallCache;
 
 #[derive(Debug, Clone)]
 pub struct StaticNameAtomCacheHandle {
-    atoms: Rc<[Cell<Option<AtomId>>]>,
-    property_lookups: Rc<[Cell<Option<CacheablePropertyLookup>>]>,
-    native_calls: Rc<[Cell<Option<StaticPropertyNativeCallCache>>]>,
-    call_values: Rc<[Cell<Option<CallValueCache>>]>,
-    template_objects: Rc<[RefCell<Option<Value>>]>,
+    state: Rc<StaticNameAtomCacheState>,
+}
+
+#[derive(Debug)]
+struct StaticNameAtomCacheState {
+    atoms: Box<[Cell<Option<AtomId>>]>,
+    property_lookups: Box<[Cell<Option<CacheablePropertyLookup>>]>,
+    native_calls: Box<[Cell<Option<StaticPropertyNativeCallCache>>]>,
+    call_values: Box<[Cell<Option<CallValueCache>>]>,
+    template_objects: Box<[RefCell<Option<Value>>]>,
 }
 
 impl StaticNameAtomCacheHandle {
@@ -49,21 +54,24 @@ impl StaticNameAtomCacheHandle {
             template_objects.push(RefCell::new(None));
         }
         Self {
-            atoms: Rc::from(atoms.into_boxed_slice()),
-            property_lookups: Rc::from(property_lookups.into_boxed_slice()),
-            native_calls: Rc::from(native_calls.into_boxed_slice()),
-            call_values: Rc::from(call_values.into_boxed_slice()),
-            template_objects: Rc::from(template_objects.into_boxed_slice()),
+            state: Rc::new(StaticNameAtomCacheState {
+                atoms: atoms.into_boxed_slice(),
+                property_lookups: property_lookups.into_boxed_slice(),
+                native_calls: native_calls.into_boxed_slice(),
+                call_values: call_values.into_boxed_slice(),
+                template_objects: template_objects.into_boxed_slice(),
+            }),
         }
     }
 
     pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
-        self.atoms
+        self.state
+            .atoms
             .len()
-            .checked_add(self.property_lookups.len())
-            .and_then(|count| count.checked_add(self.native_calls.len()))
-            .and_then(|count| count.checked_add(self.call_values.len()))
-            .and_then(|count| count.checked_add(self.template_objects.len()))
+            .checked_add(self.state.property_lookups.len())
+            .and_then(|count| count.checked_add(self.state.native_calls.len()))
+            .and_then(|count| count.checked_add(self.state.call_values.len()))
+            .and_then(|count| count.checked_add(self.state.template_objects.len()))
             .ok_or_else(|| Error::limit("static name cache entry count overflowed"))
     }
 
@@ -72,7 +80,7 @@ impl StaticNameAtomCacheHandle {
         name: &StaticName,
         expected_atom: Option<AtomId>,
     ) -> Result<bool> {
-        let Some(slot) = self.atoms.get(name.id().index()?) else {
+        let Some(slot) = self.state.atoms.get(name.id().index()?) else {
             return Ok(false);
         };
         Ok(slot
@@ -81,16 +89,17 @@ impl StaticNameAtomCacheHandle {
     }
 
     pub(in crate::runtime) fn invalidate_identity_caches(&self) {
-        for slot in self.native_calls.iter() {
+        for slot in &self.state.native_calls {
             slot.set(None);
         }
-        for slot in self.call_values.iter() {
+        for slot in &self.state.call_values {
             slot.set(None);
         }
     }
 
     pub(super) fn atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
-        self.atoms
+        self.state
+            .atoms
             .get(name.id().index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static name atom cache slot is not defined"))
@@ -98,6 +107,7 @@ impl StaticNameAtomCacheHandle {
 
     pub(super) fn remember(&self, name: &StaticName, atom: AtomId) -> Result<()> {
         let slot = self
+            .state
             .atoms
             .get(name.id().index()?)
             .ok_or_else(|| Error::runtime("static name atom cache slot is not defined"))?;
@@ -109,7 +119,8 @@ impl StaticNameAtomCacheHandle {
         &self,
         access: StaticPropertyAccessId,
     ) -> Result<Option<CacheablePropertyLookup>> {
-        self.property_lookups
+        self.state
+            .property_lookups
             .get(access.index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static property cache slot is not defined"))
@@ -121,6 +132,7 @@ impl StaticNameAtomCacheHandle {
         lookup: CacheablePropertyLookup,
     ) -> Result<()> {
         let slot = self
+            .state
             .property_lookups
             .get(access.index()?)
             .ok_or_else(|| Error::runtime("static property cache slot is not defined"))?;
@@ -132,7 +144,8 @@ impl StaticNameAtomCacheHandle {
         &self,
         access: StaticPropertyAccessId,
     ) -> Result<Option<StaticPropertyNativeCallCache>> {
-        self.native_calls
+        self.state
+            .native_calls
             .get(access.index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static property native call cache slot is not defined"))
@@ -144,9 +157,13 @@ impl StaticNameAtomCacheHandle {
         function: NativeFunctionId,
         kind: NativeFunctionKind,
     ) -> Result<()> {
-        let slot = self.native_calls.get(access.index()?).ok_or_else(|| {
-            Error::runtime("static property native call cache slot is not defined")
-        })?;
+        let slot = self
+            .state
+            .native_calls
+            .get(access.index()?)
+            .ok_or_else(|| {
+                Error::runtime("static property native call cache slot is not defined")
+            })?;
         slot.set(Some(StaticPropertyNativeCallCache::new(function, kind)));
         Ok(())
     }
@@ -159,9 +176,13 @@ impl StaticNameAtomCacheHandle {
         function: NativeFunctionId,
         kind: NativeFunctionKind,
     ) -> Result<()> {
-        let slot = self.native_calls.get(access.index()?).ok_or_else(|| {
-            Error::runtime("static property native call cache slot is not defined")
-        })?;
+        let slot = self
+            .state
+            .native_calls
+            .get(access.index()?)
+            .ok_or_else(|| {
+                Error::runtime("static property native call cache slot is not defined")
+            })?;
         slot.set(Some(StaticPropertyNativeCallCache::new_object_property(
             lookup, version, function, kind,
         )));
@@ -169,7 +190,8 @@ impl StaticNameAtomCacheHandle {
     }
 
     pub(super) fn call_value(&self, site: StaticCallSiteId) -> Result<Option<CallValueCache>> {
-        self.call_values
+        self.state
+            .call_values
             .get(site.index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static call value cache slot is not defined"))
@@ -181,6 +203,7 @@ impl StaticNameAtomCacheHandle {
         cache: CallValueCache,
     ) -> Result<()> {
         let slot = self
+            .state
             .call_values
             .get(site.index()?)
             .ok_or_else(|| Error::runtime("static call value cache slot is not defined"))?;
@@ -192,7 +215,8 @@ impl StaticNameAtomCacheHandle {
         &self,
         site: StaticCallSiteId,
     ) -> Result<Option<Value>> {
-        self.template_objects
+        self.state
+            .template_objects
             .get(site.index()?)
             .map(|slot| slot.borrow().clone())
             .ok_or_else(|| Error::runtime("static template object cache slot is not defined"))
@@ -204,6 +228,7 @@ impl StaticNameAtomCacheHandle {
         value: Value,
     ) -> Result<()> {
         let slot = self
+            .state
             .template_objects
             .get(site.index()?)
             .ok_or_else(|| Error::runtime("static template object cache slot is not defined"))?;
@@ -215,7 +240,7 @@ impl StaticNameAtomCacheHandle {
         &self,
         mut visit: impl FnMut(&Value) -> Result<()>,
     ) -> Result<()> {
-        for slot in self.template_objects.iter() {
+        for slot in &self.state.template_objects {
             let value = slot.borrow();
             if let Some(value) = value.as_ref() {
                 visit(value)?;
