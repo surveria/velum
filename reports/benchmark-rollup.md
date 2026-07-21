@@ -19,11 +19,11 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260721T005543Z.md`
-- Task: PR #699: bench: restore benchmark publication
+- `velum-jetstream-report-20260721T005829Z.yaml`
+- Task: JetStream shell benchmark lane
 - Performance: 0.14x (0/5 >1.00x) (from `velum-test-report-20260721T005543Z.md`)
 - Memory: - (0/5 >1.00x) (from `velum-test-report-20260721T005543Z.md`)
-- JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
+- JetStream: 18.56x (24/30 >1.00x) (from `velum-jetstream-report-20260721T005829Z.yaml`)
 - Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260721T005543Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -614,3 +614,4 @@ Latest report:
 | `20260720T193455Z` `156dbf3` PR #688: Optimize the next post-root-scan JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T200611Z` `bcb0fde` PR #689: runtime: optimize the next post-semantic-inline JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260721T005543Z` `e734a65` PR #699: bench: restore benchmark publication | 0.14x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260721T005829Z` `92d26ee` JetStream shell benchmark lane | - (0/0 >1.00x) | - (0/0 >1.00x) | 18.56x (24/30 >1.00x) | - |
