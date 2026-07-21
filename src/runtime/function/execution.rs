@@ -114,12 +114,7 @@ impl Context {
         new_target: Value,
     ) -> Result<Completion> {
         self.enter_call_stack_frame()?;
-        let result = self.eval_function_tail_chain::<CAN_SUSPEND>(
-            id,
-            args.as_slice().to_vec(),
-            this_value,
-            new_target,
-        );
+        let result = self.eval_function_tail_chain::<CAN_SUSPEND>(id, args, this_value, new_target);
         self.leave_call_stack_frame();
         result
     }
@@ -175,19 +170,24 @@ impl Context {
     fn eval_function_tail_chain<const CAN_SUSPEND: bool>(
         &mut self,
         mut id: FunctionId,
-        mut args: Vec<Value>,
+        initial_args: RuntimeCallArgs<'_>,
         mut this_value: Value,
         mut new_target: Value,
     ) -> Result<Completion> {
         let mut return_mode = TailCallReturnMode::Ordinary;
+        // Tail-call requests already provide owned arguments; keep the common
+        // first invocation borrowed until a request actually replaces them.
+        let initial_args = initial_args.as_slice();
+        let mut tail_args: Option<Vec<Value>> = None;
         loop {
             let _return_root =
                 self.transient_root_scope(VmRootKind::TransientCall, return_mode.root_value())?;
             let realm = self.function(id)?.realm;
+            let args = tail_args.as_deref().unwrap_or(initial_args);
             let (completion, function_return_mode) = self.with_realm(realm, |context| {
                 context.eval_function_completion_with_this_inner::<CAN_SUSPEND>(
                     id,
-                    RuntimeCallArgs::values(&args),
+                    RuntimeCallArgs::values(args),
                     this_value.clone(),
                     new_target.clone(),
                 )
@@ -228,7 +228,7 @@ impl Context {
                 return self.normalize_tail_call_return(completion, return_mode);
             };
             id = next_id;
-            args = next_args;
+            tail_args = Some(next_args);
             this_value = next_this;
             new_target = next_target;
         }
