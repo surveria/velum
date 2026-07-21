@@ -12,7 +12,7 @@ function __velumBenchSetup() {
 
 function __velumBenchRun() {
     var total = 0;
-    for (var round = 0; round < 16; round = round + 1) {
+    for (var round = 0; round < 64; round = round + 1) {
         for (var index = 0; index < __velumBenchText.length; index = index + 1) {
             total = total + __velumBenchText.charCodeAt(index);
         }
@@ -22,5 +22,5 @@ function __velumBenchRun() {
 }
 
 function __velumBenchVerify() {
-    return 14401536;
+    return 57606144;
 }

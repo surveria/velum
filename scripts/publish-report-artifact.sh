@@ -152,6 +152,8 @@ validate_workflow_run_fields() {
   local status="${10}"
   local conclusion="${11}"
   local workflow_head_tree="${12}"
+  local workflow_head_sha="${13}"
+  local expected_pr_head="${14}"
 
   [[ "${actual_run_id}" =~ ^[0-9]+$ ]] || return 1
   [[ "${actual_repository}" == "${expected_repository}" ]] || return 1
@@ -172,8 +174,14 @@ validate_workflow_run_fields() {
     [[ "${status}" == completed && "${conclusion}" == success ]] || return 1
     return 0
   fi
+  if [[ "${event_name}" == pull_request ]]; then
+    [[ "${expected_pr_head}" =~ ^[0-9a-f]{40}$ ]] || return 1
+    [[ "${workflow_head_sha}" == "${expected_pr_head}" ]] || return 1
+    [[ "${status}" == completed && "${conclusion}" == success ]]
+    return
+  fi
+  [[ "${event_name}" == merge_group ]] || return 1
   [[ "${workflow_head_tree}" == "${expected_tree}" ]] || return 1
-  [[ "${event_name}" == pull_request || "${event_name}" == merge_group ]] || return 1
   [[ "${status}" == completed && "${conclusion}" == success ]]
 }
 
@@ -183,6 +191,7 @@ load_trusted_workflow_run() {
   local expected_tree="$3"
   local expected_mode="$4"
   local expected_run_id="$5"
+  local expected_pr_head="${6:-}"
 
   local fields
   if ! fields="$(gh api "/repos/${repository}/actions/runs/${run_id}" \
@@ -196,7 +205,8 @@ load_trusted_workflow_run() {
   fi
   validate_workflow_run_fields "${expected_mode}" "${repository}" "${expected_tree}" \
     "${expected_run_id}" "${RUN_ID}" "${RUN_REPOSITORY}" "${RUN_PATH}" "${RUN_NAME}" \
-    "${RUN_EVENT}" "${RUN_STATUS}" "${RUN_CONCLUSION}" "${RUN_HEAD_TREE}"
+    "${RUN_EVENT}" "${RUN_STATUS}" "${RUN_CONCLUSION}" "${RUN_HEAD_TREE}" \
+    "${RUN_HEAD_SHA}" "${expected_pr_head}"
 }
 
 commit_tree_from_github() {
@@ -213,6 +223,7 @@ download_matching_artifact() {
   local expected_mode="$4"
   local target_dir="$5"
   local expected_run_id="${6:-}"
+  local expected_pr_head="${7:-}"
 
   local artifact_lines
   artifact_lines="$(gh api "/repos/${repository}/actions/artifacts?name=${artifact_name}&per_page=100" \
@@ -225,7 +236,8 @@ download_matching_artifact() {
   local artifact_id run_id candidate metadata_file
   while IFS=$'\t' read -r artifact_id run_id; do
     [[ -n "${artifact_id}" && -n "${run_id}" ]] || continue
-    if ! load_trusted_workflow_run "${repository}" "${run_id}" "${expected_tree}" "${expected_mode}" "${expected_run_id}"; then
+    if ! load_trusted_workflow_run "${repository}" "${run_id}" "${expected_tree}" \
+      "${expected_mode}" "${expected_run_id}" "${expected_pr_head}"; then
       printf 'skipping artifact %s from untrusted workflow run %s\n' "${artifact_id}" "${run_id}" >&2
       continue
     fi
@@ -361,6 +373,7 @@ download_matching_artifact_with_retry() {
   local expected_mode="$4"
   local target_dir="$5"
   local expected_run_id="${6:-}"
+  local expected_pr_head="${7:-}"
   local attempts="${VELUM_ARTIFACT_WAIT_ATTEMPTS:-${default_artifact_wait_attempts}}"
   local wait_seconds="${VELUM_ARTIFACT_WAIT_SECONDS:-${default_artifact_wait_seconds}}"
 
@@ -373,7 +386,8 @@ download_matching_artifact_with_retry() {
   local attempt=1 artifact_dir
   while ((attempt <= attempts)); do
     if artifact_dir="$(download_matching_artifact "${repository}" "${artifact_name}" \
-      "${expected_tree}" "${expected_mode}" "${target_dir}" "${expected_run_id}")"; then
+      "${expected_tree}" "${expected_mode}" "${target_dir}" "${expected_run_id}" \
+      "${expected_pr_head}")"; then
       printf '%s\n' "${artifact_dir}"
       return 0
     fi
@@ -720,6 +734,9 @@ repository="${GITHUB_REPOSITORY:-}"
 
 merge_commit="${VELUM_MERGE_COMMIT_SHA:-}"
 [[ -n "${merge_commit}" ]] || fail "VELUM_MERGE_COMMIT_SHA is required"
+merged_pr_head="${VELUM_MERGED_PR_HEAD_SHA:-}"
+[[ "${merged_pr_head}" =~ ^[0-9a-f]{40}$ ]] ||
+  fail "VELUM_MERGED_PR_HEAD_SHA must be a full lowercase commit SHA"
 
 expected_tree="${VELUM_EXPECTED_TREE_SHA:-}"
 if [[ -z "${expected_tree}" ]]; then
@@ -744,7 +761,8 @@ source_pull_request="${VELUM_ARTIFACT_PR_NUMBER:-}"
 source_task="${VELUM_ARTIFACT_TASK:-}"
 
 correctness_artifact_dir="$(download_matching_artifact_with_retry "${repository}" \
-  "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
+  "${correctness_artifact_name}" "${expected_tree}" correctness \
+  "${tmp_dir}/correctness" "" "${merged_pr_head}")"
 correctness_metadata_file="${correctness_artifact_dir}/velum-report-metadata.env"
 read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
 correctness_component="${correctness_artifact_dir}/${VELUM_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
