@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `velum-test-report-20260720T200611Z.md`
-- Task: PR #689: runtime: optimize the next post-semantic-inline JetStream hot path
-- Performance: 0.20x (0/5 >1.00x) (from `velum-test-report-20260720T200611Z.md`)
-- Memory: - (0/5 >1.00x) (from `velum-test-report-20260720T200611Z.md`)
+- `velum-test-report-20260721T005543Z.md`
+- Task: PR #699: bench: restore benchmark publication
+- Performance: 0.14x (0/5 >1.00x) (from `velum-test-report-20260721T005543Z.md`)
+- Memory: - (0/5 >1.00x) (from `velum-test-report-20260721T005543Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `velum-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260720T200611Z.md`)
+- Full Test262: 102578 passed / 0 failed (100.00%) (from `velum-test-report-20260721T005543Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -613,3 +613,4 @@ Latest report:
 | `20260720T190622Z` `2f43096` PR #687: Optimize the next post-TypedArray JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T193455Z` `156dbf3` PR #688: Optimize the next post-root-scan JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
 | `20260720T200611Z` `bcb0fde` PR #689: runtime: optimize the next post-semantic-inline JetStream hot path | 0.20x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
+| `20260721T005543Z` `e734a65` PR #699: bench: restore benchmark publication | 0.14x (0/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 102578 passed / 0 failed (100.00%) |
