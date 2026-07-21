@@ -1,0 +1,51 @@
+[workspace]
+
+[package]
+name = "velum-differential-fuzz"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "velum-diff-fuzz"
+path = "src/bin/velum-diff-fuzz.rs"
+
+[[bin]]
+name = "velum-diff-target"
+path = "src/bin/velum-diff-target.rs"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+ctrlc = "3"
+hex = "0.4"
+humantime = "2"
+nix = { version = "0.31", features = ["signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tabled = "0.21"
+velum = { path = "../.." }
+
+[build-dependencies]
+cc = "1"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+uninlined_format_args = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+redundant_pub_crate = "deny"
+too_many_lines = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"

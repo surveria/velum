@@ -93,6 +93,9 @@
 !/fuzzing-test/
 !/fuzzing-test/.gitignore
 
+!/fuzzing-differential-test/
+!/fuzzing-differential-test/.gitignore
+
 !/tests/
 !/tests/**/
 !/tests/**/*.md
