@@ -118,40 +118,50 @@ tree_sha="0123456789abcdef0123456789abcdef01234567"
 head_sha="89abcdef0123456789abcdef0123456789abcdef"
 head_tree="fedcba9876543210fedcba9876543210fedcba98"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
+  .github/workflows/ci.yml CI pull_request completed success "${head_tree}" \
+  "${head_sha}" "${head_sha}" ||
   fail_test "rejected trusted correctness workflow run"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI workflow_dispatch completed success "${head_tree}" ||
+  .github/workflows/ci.yml CI workflow_dispatch completed success "${head_tree}" \
+  "${head_sha}" "" ||
   fail_test "rejected trusted historical-source correctness recovery run"
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI workflow_dispatch completed failure "${head_tree}"; then
+  .github/workflows/ci.yml CI workflow_dispatch completed failure "${head_tree}" \
+  "${head_sha}" ""; then
   fail_test "accepted failed historical-source correctness recovery run"
 fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
-  fail_test "accepted correctness from a different workflow head tree"
+  .github/workflows/ci.yml CI pull_request completed success "${head_tree}" \
+  "${head_sha}" "${tree_sha}"; then
+  fail_test "accepted correctness from a different pull request head"
 fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI push completed success "${tree_sha}"; then
+  .github/workflows/ci.yml CI push completed success "${tree_sha}" \
+  "${head_sha}" "${head_sha}"; then
   fail_test "accepted correctness from an unsupported workflow event"
 fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 101 owner/repo \
-  .github/workflows/ci.yml CI pull_request completed failure "${tree_sha}"; then
+  .github/workflows/ci.yml CI pull_request completed failure "${head_tree}" \
+  "${head_sha}" "${head_sha}"; then
   fail_test "accepted failed newest correctness workflow run"
 fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 102 owner/repo \
-  .github/workflows/unrelated.yml CI pull_request completed success "${tree_sha}"; then
+  .github/workflows/unrelated.yml CI pull_request completed success "${head_tree}" \
+  "${head_sha}" "${head_sha}"; then
   fail_test "accepted unrelated newest correctness workflow run"
 fi
 validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
-  .github/workflows/ci.yml CI pull_request in_progress "${null_workflow_conclusion}" "${head_tree}" ||
+  .github/workflows/ci.yml CI pull_request in_progress "${null_workflow_conclusion}" \
+  "${head_tree}" "${head_sha}" "" ||
   fail_test "rejected current performance workflow run with a distinct PR head tree"
 if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
-  .github/workflows/ci.yml CI pull_request in_progress "" "${head_tree}"; then
+  .github/workflows/ci.yml CI pull_request in_progress "" "${head_tree}" \
+  "${head_sha}" ""; then
   fail_test "accepted an empty parsed performance conclusion"
 fi
 if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 201 owner/repo \
-  .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
+  .github/workflows/ci.yml CI pull_request completed success "${head_tree}" \
+  "${head_sha}" ""; then
   fail_test "accepted performance artifact from another run"
 fi
 
@@ -174,7 +184,7 @@ gh() {
   esac
 }
 
-load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 ||
+load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 "" ||
   fail_test "rejected a merge-tree-bound artifact after a null workflow conclusion"
 [[ "${RUN_CONCLUSION}" == "${null_workflow_conclusion}" ]] ||
   fail_test "changed the parsed null conclusion sentinel"
