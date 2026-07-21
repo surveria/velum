@@ -17,31 +17,14 @@ use nix::{
     unistd::Pid,
 };
 use velum_differential_fuzz::{
+    artifacts::{ArtifactRecorder, TargetConfig},
+    compare::CompareConfig,
+    diff_config::{Config, HELP, StopAfter, parse_arguments, stop_after_json},
     report::build_report,
-    time::{duration_millis_u64, parse_duration, unix_timestamp_millis},
+    time::{duration_millis_u64, unix_timestamp_millis},
 };
 
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(100);
-const DEFAULT_ARTIFACT_ROOT: &str = "/home/user/velum-fuzzing-artifacts/differential-v8";
-const HELP: &str = r"Usage: velum-diff-fuzz [OPTIONS]
-
-Run a local Fuzzilli differential campaign comparing Velum with V8/Node.
-
-Options:
-  --duration TIME       Stop after a human duration such as 30s, 10m, or 1h
-  --iterations N        Stop after N Fuzzilli iterations
-  --jobs N              Run N Fuzzilli workers (default: 1)
-  --artifact-root PATH  Shared artifact root (default: /home/user/velum-fuzzing-artifacts/differential-v8)
-  --output PATH         Store this session at PATH
-  --resume PATH         Resume an existing session
-  --node PATH           Node/V8 executable (default: node)
-  --engine-timeout TIME Per-engine V8 timeout such as 4s (default: 4s)
-  --slow-ratio N        Save equivalent cases with Velum/V8 ratio >= N (default: 10)
-  --slow-min TIME       Minimum Velum time before a slow case is saved (default: 5ms)
-  --save-all            Save every generated JavaScript program
-  --skip-build          Reuse existing Fuzzilli and differential target binaries
-  -h, --help            Show this help
-";
 
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -53,18 +36,27 @@ fn main() {
 }
 
 fn run() -> anyhow::Result<()> {
-    let config = parse_arguments(env::args().skip(1))?;
+    let differential_dir = differential_directory()?;
+    let config = parse_arguments(env::args().skip(1), &differential_dir)?;
     if config.help {
         println!("{HELP}");
         return Ok(());
     }
-    let differential_dir = differential_directory()?;
     let repo_root = repository_root(&differential_dir)?;
     if !config.skip_build {
         run_checked(
             Command::new(differential_dir.join("scripts/build.sh")).current_dir(&repo_root),
             "failed to build differential fuzzing tools",
         )?;
+    }
+
+    let session_dir = config.session_dir()?;
+    prepare_session(&session_dir, config.resume())?;
+    write_manifest(&session_dir, &repo_root, &differential_dir, &config)?;
+    install_ctrlc_handler()?;
+
+    if let Some(replay_path) = &config.replay_path {
+        return run_replay(&session_dir, replay_path, &differential_dir, &config);
     }
 
     let fuzzilli = repo_root.join("fuzzing-test/.bin/FuzzilliCli");
@@ -74,11 +66,6 @@ fn run() -> anyhow::Result<()> {
     ));
     ensure_file(&fuzzilli, "Fuzzilli")?;
     ensure_file(&target, "differential target")?;
-
-    let session_dir = config.session_dir()?;
-    prepare_session(&session_dir, config.resume())?;
-    write_manifest(&session_dir, &repo_root, &config)?;
-    install_ctrlc_handler()?;
 
     let fuzzilli_storage = session_dir.join("fuzzilli");
     let mut command = Command::new(&fuzzilli);
@@ -91,11 +78,11 @@ fn run() -> anyhow::Result<()> {
         .arg("--statisticsExportInterval=1")
         .arg(format!(
             "--timeout={}",
-            fuzzilli_timeout_millis(config.engine_timeout)
+            fuzzilli_timeout_millis(config.engine262_timeout)
         ))
         .arg(format!(
             "--additionalArguments={}",
-            additional_target_arguments(&session_dir, &config).join(",")
+            additional_target_arguments(&session_dir, &differential_dir, &config).join(",")
         ))
         .arg(format!("--tag=velum-diff-{}", git_head(&repo_root)?))
         .env("VELUM_DIFF_ARTIFACT_DIR", &session_dir);
@@ -114,7 +101,7 @@ fn run() -> anyhow::Result<()> {
     print_startup(&session_dir, &pending_log, &config);
     let started_at = Instant::now();
     let mut child = pending_log.spawn(command, config.duration)?;
-    let status = wait_for_fuzzilli(&mut child, config.duration)?;
+    let status = wait_for_fuzzilli(&mut child, &session_dir, config.duration, config.stop_after)?;
     let elapsed = started_at.elapsed();
     let log_path = pending_log.finalize(&session_dir)?;
     let report = build_report(&session_dir, elapsed, &status.to_string())?;
@@ -124,144 +111,66 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-struct Config {
-    duration: Option<Duration>,
-    iterations: Option<NonZeroUsize>,
-    jobs: NonZeroUsize,
-    artifact_root: PathBuf,
-    output: Option<PathBuf>,
-    resume_path: Option<PathBuf>,
-    node_binary: String,
-    engine_timeout: Duration,
-    slow_ratio: f64,
-    slow_min: Duration,
-    save_all: bool,
-    skip_build: bool,
-    help: bool,
-}
-
-impl Config {
-    fn session_dir(&self) -> anyhow::Result<PathBuf> {
-        if let Some(path) = &self.resume_path {
-            return Ok(path.clone());
-        }
-        if let Some(path) = &self.output {
-            return Ok(path.clone());
-        }
-        let timestamp = unix_timestamp_millis()?;
-        Ok(self.artifact_root.join(format!("session-{timestamp}")))
-    }
-
-    const fn resume(&self) -> bool {
-        self.resume_path.is_some()
-    }
-}
-
-fn parse_arguments(mut args: impl Iterator<Item = String>) -> anyhow::Result<Config> {
-    let mut config = Config {
-        duration: None,
-        iterations: None,
-        jobs: NonZeroUsize::MIN,
-        artifact_root: default_artifact_root(),
-        output: None,
-        resume_path: None,
-        node_binary: "node".to_owned(),
-        engine_timeout: parse_duration("4s")?,
-        slow_ratio: 10.0,
-        slow_min: parse_duration("5ms")?,
-        save_all: false,
-        skip_build: false,
-        help: false,
-    };
-
-    while let Some(argument) = args.next() {
-        match argument.as_str() {
-            "--duration" => {
-                config.duration = Some(parse_duration(&next_value(&mut args, "--duration")?)?);
-            }
-            "--iterations" => {
-                config.iterations = Some(parse_positive(&next_value(&mut args, "--iterations")?)?);
-            }
-            "--jobs" => config.jobs = parse_positive(&next_value(&mut args, "--jobs")?)?,
-            "--artifact-root" => {
-                config.artifact_root = PathBuf::from(next_value(&mut args, "--artifact-root")?);
-            }
-            "--output" => {
-                ensure!(
-                    config.resume_path.is_none(),
-                    "--output cannot be combined with --resume"
-                );
-                config.output = Some(PathBuf::from(next_value(&mut args, "--output")?));
-            }
-            "--resume" => {
-                ensure!(
-                    config.output.is_none(),
-                    "--resume cannot be combined with --output"
-                );
-                config.resume_path = Some(PathBuf::from(next_value(&mut args, "--resume")?));
-            }
-            "--node" => config.node_binary = next_value(&mut args, "--node")?,
-            "--engine-timeout" => {
-                config.engine_timeout =
-                    parse_duration(&next_value(&mut args, "--engine-timeout")?)?;
-            }
-            "--slow-ratio" => {
-                config.slow_ratio = next_value(&mut args, "--slow-ratio")?
-                    .parse::<f64>()
-                    .context("--slow-ratio must be a number")?;
-            }
-            "--slow-min" => {
-                config.slow_min = parse_duration(&next_value(&mut args, "--slow-min")?)?;
-            }
-            "--save-all" => config.save_all = true,
-            "--skip-build" => config.skip_build = true,
-            "-h" | "--help" => config.help = true,
-            _ => bail!("unknown argument '{argument}'\n\n{HELP}"),
-        }
-    }
-
+fn run_replay(
+    session_dir: &Path,
+    replay_path: &Path,
+    differential_dir: &Path,
+    config: &Config,
+) -> anyhow::Result<()> {
     ensure!(
-        config.slow_ratio.is_finite() && config.slow_ratio > 0.0,
-        "--slow-ratio must be a positive finite number"
+        replay_path.is_dir() || replay_path.is_file(),
+        "replay path is missing: {}",
+        replay_path.display()
     );
+    let mut scripts = Vec::new();
+    if replay_path.is_file() {
+        scripts.push(replay_path.to_path_buf());
+    } else {
+        collect_javascript_files(replay_path, &mut scripts)?;
+    }
     ensure!(
-        config.artifact_root.is_absolute(),
-        "artifact root must be absolute: {}",
-        config.artifact_root.display()
+        !scripts.is_empty(),
+        "replay path contains no JavaScript files: {}",
+        replay_path.display()
     );
-    if let Some(path) = &config.output {
-        ensure!(
-            path.is_absolute(),
-            "output path must be absolute: {}",
-            path.display()
-        );
+    println!(
+        "Replaying {} JavaScript scripts into {}",
+        scripts.len(),
+        session_dir.display()
+    );
+    let started_at = Instant::now();
+    let mut recorder = ArtifactRecorder::new(TargetConfig {
+        artifact_dir: session_dir.to_path_buf(),
+        node_binary: config.node_binary.clone(),
+        engine262_package_dir: differential_dir.to_path_buf(),
+        compare: CompareConfig {
+            engine262_timeout: config.engine262_timeout,
+            v8_timeout: config.v8_timeout,
+            slow_ratio: config.slow_ratio,
+            slow_min: config.slow_min,
+        },
+        save_all: config.save_all,
+    })?;
+    let mut outcome = "replay completed".to_owned();
+    for script in scripts {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            "replay stopped by Ctrl-C".clone_into(&mut outcome);
+            break;
+        }
+        let bytes = fs::read(&script)
+            .with_context(|| format!("failed to read replay script '{}'", script.display()))?;
+        recorder
+            .record(&bytes)
+            .with_context(|| format!("failed to replay script '{}'", script.display()))?;
+        if let Some(reason) = stop_after_reason(session_dir, config.stop_after)? {
+            outcome = reason;
+            break;
+        }
     }
-    if let Some(path) = &config.resume_path {
-        ensure!(
-            path.is_absolute(),
-            "resume path must be absolute: {}",
-            path.display()
-        );
-    }
-    Ok(config)
-}
-
-fn default_artifact_root() -> PathBuf {
-    env::var("VELUM_DIFF_ARTIFACT_ROOT")
-        .map_or_else(|_| PathBuf::from(DEFAULT_ARTIFACT_ROOT), PathBuf::from)
-}
-
-fn next_value(args: &mut impl Iterator<Item = String>, option: &str) -> anyhow::Result<String> {
-    args.next()
-        .with_context(|| format!("missing value after {option}"))
-}
-
-fn parse_positive(value: &str) -> anyhow::Result<NonZeroUsize> {
-    let parsed = value
-        .parse::<usize>()
-        .with_context(|| format!("expected a positive integer, got '{value}'"))?;
-    NonZeroUsize::new(parsed).with_context(|| format!("expected a positive integer, got '{value}'"))
+    let elapsed = started_at.elapsed();
+    let report = build_report(session_dir, elapsed, &outcome)?;
+    println!("{}", report.render());
+    Ok(())
 }
 
 fn prepare_session(path: &Path, resume: bool) -> anyhow::Result<()> {
@@ -282,19 +191,30 @@ fn prepare_session(path: &Path, resume: bool) -> anyhow::Result<()> {
         .with_context(|| format!("failed to create session directory '{}'", path.display()))
 }
 
-fn write_manifest(session_dir: &Path, repo_root: &Path, config: &Config) -> anyhow::Result<()> {
+fn write_manifest(
+    session_dir: &Path,
+    repo_root: &Path,
+    differential_dir: &Path,
+    config: &Config,
+) -> anyhow::Result<()> {
     let path = session_dir.join("manifest.json");
     let manifest = serde_json::json!({
         "schema_version": 1,
         "repo_root": repo_root,
+        "differential_dir": differential_dir,
+        "config_path": &config.config_path,
         "engine_commit": git_head(repo_root)?,
+        "mode": if config.replay_path.is_some() { "replay" } else { "fuzzilli" },
         "duration": config.duration.map(|value| humantime::format_duration(value).to_string()),
         "iterations": config.iterations.map(NonZeroUsize::get),
         "jobs": config.jobs.get(),
-        "node_binary": config.node_binary,
-        "engine_timeout": humantime::format_duration(config.engine_timeout).to_string(),
+        "replay_path": &config.replay_path,
+        "node_binary": &config.node_binary,
+        "engine262_timeout": humantime::format_duration(config.engine262_timeout).to_string(),
+        "v8_timeout": humantime::format_duration(config.v8_timeout).to_string(),
         "slow_ratio": config.slow_ratio,
         "slow_min": humantime::format_duration(config.slow_min).to_string(),
+        "stop_after": stop_after_json(config.stop_after),
         "save_all": config.save_all,
         "resume": config.resume(),
     });
@@ -371,15 +291,26 @@ impl PendingLog {
 
 fn print_startup(session_dir: &Path, pending_log: &PendingLog, config: &Config) {
     println!(
-        "Velum/V8 differential fuzzing session: {}",
+        "Velum/Engine262/V8 differential session: {}",
         session_dir.display()
     );
+    println!("Config: {}", config.config_path.display());
     println!("Parallel Fuzzilli workers: {}", config.jobs);
-    println!("Node/V8 executable: {}", config.node_binary);
+    println!("Node executable: {}", config.node_binary);
     println!(
-        "Per-engine timeout: {}",
-        humantime::format_duration(config.engine_timeout)
+        "Engine262 timeout: {}",
+        humantime::format_duration(config.engine262_timeout)
     );
+    println!(
+        "V8 timeout: {}",
+        humantime::format_duration(config.v8_timeout)
+    );
+    if let Some(limit) = config.stop_after.correctness_mismatches {
+        println!("Stop after correctness mismatches: {}", limit.get());
+    }
+    if let Some(replay_path) = &config.replay_path {
+        println!("Replay source: {}", replay_path.display());
+    }
     println!(
         "Live log while running: {}",
         pending_log.temporary_path.display()
@@ -393,18 +324,26 @@ fn print_startup(session_dir: &Path, pending_log: &PendingLog, config: &Config) 
             humantime::format_duration(duration)
         );
     } else if config.iterations.is_none() {
-        println!("The campaign runs until Ctrl-C.");
+        println!("The campaign runs until a stop criterion is reached or Ctrl-C is pressed.");
     }
 }
 
-fn additional_target_arguments(session_dir: &Path, config: &Config) -> Vec<String> {
+fn additional_target_arguments(
+    session_dir: &Path,
+    differential_dir: &Path,
+    config: &Config,
+) -> Vec<String> {
     let mut args = vec![
         "--artifact-dir".to_owned(),
         session_dir.display().to_string(),
         "--node".to_owned(),
         config.node_binary.clone(),
-        "--engine-timeout".to_owned(),
-        humantime::format_duration(config.engine_timeout).to_string(),
+        "--engine262-package-dir".to_owned(),
+        differential_dir.display().to_string(),
+        "--engine262-timeout".to_owned(),
+        humantime::format_duration(config.engine262_timeout).to_string(),
+        "--v8-timeout".to_owned(),
+        humantime::format_duration(config.v8_timeout).to_string(),
         "--slow-ratio".to_owned(),
         config.slow_ratio.to_string(),
         "--slow-min".to_owned(),
@@ -416,7 +355,12 @@ fn additional_target_arguments(session_dir: &Path, config: &Config) -> Vec<Strin
     args
 }
 
-fn wait_for_fuzzilli(child: &mut Child, duration: Option<Duration>) -> anyhow::Result<ExitStatus> {
+fn wait_for_fuzzilli(
+    child: &mut Child,
+    session_dir: &Path,
+    duration: Option<Duration>,
+    stop_after: StopAfter,
+) -> anyhow::Result<ExitStatus> {
     let deadline = duration
         .map(|value| {
             Instant::now()
@@ -433,9 +377,13 @@ fn wait_for_fuzzilli(child: &mut Child, duration: Option<Duration>) -> anyhow::R
 
         let manual_stop = STOP_REQUESTED.load(Ordering::SeqCst);
         let duration_expired = deadline.is_some_and(|value| Instant::now() >= value);
-        if !shutdown_requested && (manual_stop || duration_expired) {
+        let finding_limit = stop_after_reason(session_dir, stop_after)?;
+        if !shutdown_requested && (manual_stop || duration_expired || finding_limit.is_some()) {
             if duration_expired && !manual_stop {
                 println!("Duration limit reached; stopping Fuzzilli gracefully.");
+            }
+            if let Some(reason) = finding_limit {
+                println!("{reason}; stopping Fuzzilli gracefully.");
             }
             if let Err(error) = signal_interrupt(child.id()) {
                 child
@@ -452,6 +400,75 @@ fn wait_for_fuzzilli(child: &mut Child, duration: Option<Duration>) -> anyhow::R
         }
         thread::sleep(PROCESS_POLL_INTERVAL);
     }
+}
+
+fn stop_after_reason(session_dir: &Path, stop_after: StopAfter) -> anyhow::Result<Option<String>> {
+    for (limit, relative, label) in [
+        (
+            stop_after.correctness_mismatches,
+            "findings/correctness-mismatches",
+            "correctness mismatches",
+        ),
+        (
+            stop_after.performance_slow,
+            "findings/performance-slow",
+            "performance slow cases",
+        ),
+        (
+            stop_after.v8_timeouts,
+            "findings/v8-timeouts",
+            "V8 timeouts",
+        ),
+        (stop_after.v8_crashes, "findings/v8-crashes", "V8 crashes"),
+        (
+            stop_after.engine262_timeouts,
+            "findings/engine262-timeouts",
+            "Engine262 timeouts",
+        ),
+        (
+            stop_after.engine262_crashes,
+            "findings/engine262-crashes",
+            "Engine262 crashes",
+        ),
+    ] {
+        let Some(limit) = limit else {
+            continue;
+        };
+        let count = count_javascript_files(&session_dir.join(relative))?;
+        if count >= limit.get() {
+            return Ok(Some(format!(
+                "Stop criterion reached: {count} {label} >= {}",
+                limit.get()
+            )));
+        }
+    }
+    Ok(None)
+}
+
+fn count_javascript_files(directory: &Path) -> anyhow::Result<usize> {
+    let mut files = Vec::new();
+    collect_javascript_files(directory, &mut files)?;
+    Ok(files.len())
+}
+
+fn collect_javascript_files(directory: &Path, files: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+    if !directory.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(directory)
+        .with_context(|| format!("failed to read '{}'", directory.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to read '{}'", directory.display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_javascript_files(&path, files)?;
+        } else if path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("js")
+        {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(())
 }
 
 fn install_ctrlc_handler() -> anyhow::Result<()> {

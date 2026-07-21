@@ -2,7 +2,12 @@
 
 !/.gitignore
 !/README.md
+!/package.json
+!/package-lock.json
 !/run.sh
+
+!/config/
+!/config/*.json
 
 !/scripts/
 !/scripts/*.sh

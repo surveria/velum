@@ -24,6 +24,7 @@ require_command cargo 'install Rust with rustup from https://rustup.rs/'
 require_command rustc 'install Rust with rustup from https://rustup.rs/'
 require_command "${CC:-cc}" 'sudo apt install build-essential'
 require_command node 'install Node.js from https://nodejs.org/ or with your system package manager'
+require_command npm 'install npm with Node.js or your system package manager'
 
 if ! cargo +nightly --version >/dev/null 2>&1 \
     || ! rustc +nightly --version >/dev/null 2>&1; then
@@ -37,6 +38,15 @@ if [[ -n "$(git -C "${repo_root}" status --short --untracked-files=normal)" ]]; 
     source_revision="${source_revision}+dirty"
 fi
 printf 'Building differential fuzzing from Velum checkout: %s\n' "${source_revision}"
+
+npm ci --prefix "${differential_dir}"
+
+if [[ ! -d "${differential_dir}/node_modules/@engine262/engine262" ]]; then
+    printf 'Engine262 dependency was not installed under %s\n' \
+        "${differential_dir}/node_modules/@engine262/engine262" >&2
+    printf '%s\n' 'Try rerunning: npm ci --prefix fuzzing-differential-test' >&2
+    exit 1
+fi
 
 if ! "${fuzzing_dir}/scripts/fuzzilli-cache.sh" restore "${fuzzilli_binary}"; then
     require_command swift 'sudo apt install swiftlang'

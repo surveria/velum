@@ -8,7 +8,10 @@ use std::{
 use anyhow::Context as _;
 use tabled::{Table, Tabled};
 
-use crate::compare::{CaseClassification, CaseRecord, OutcomeStatus};
+use crate::{
+    artifacts::normalized_findings,
+    compare::{CaseFinding, CaseRecord, OutcomeStatus},
+};
 
 const LATEST_FINDING_LIMIT: usize = 10;
 
@@ -49,12 +52,17 @@ impl DifferentialReport {
 #[derive(Default)]
 struct Summary {
     total: u64,
-    matches: u64,
-    mismatches: u64,
-    slow: u64,
+    engine262_equivalent: u64,
+    correctness_mismatches: u64,
+    performance_slow: u64,
+    velum_timeouts: u64,
+    velum_crashes: u64,
+    engine262_timeouts: u64,
+    engine262_crashes: u64,
     v8_timeouts: u64,
     v8_crashes: u64,
     velum_js_errors: u64,
+    engine262_js_errors: u64,
     v8_js_errors: u64,
     ratio_sum: f64,
     ratio_count: u64,
@@ -84,8 +92,17 @@ pub fn build_report(
     let records = read_records(&session_dir.join("cases"))?;
     let summary = summarize(&records);
     let latest_findings = latest_javascript_files(&session_dir.join("findings"))?;
+    let pending_count = javascript_file_count(&session_dir.join("pending"))?;
     let summary_path = session_dir.join("summary.txt");
-    let table = Table::new(rows(&summary, elapsed, outcome, latest_findings.len())).to_string();
+    let table = Table::new(rows(
+        session_dir,
+        &summary,
+        elapsed,
+        outcome,
+        latest_findings.len(),
+        pending_count,
+    ))
+    .to_string();
     let report = DifferentialReport {
         table,
         latest_findings,
@@ -102,21 +119,44 @@ pub fn build_report(
 }
 
 fn rows(
+    session_dir: &Path,
     summary: &Summary,
     elapsed: Duration,
     outcome: &str,
     finding_files: usize,
+    pending_files: usize,
 ) -> Vec<SummaryRow> {
     vec![
-        row("Fuzzilli outcome", outcome),
+        row("Run outcome", outcome),
+        row("Artifact directory", &session_dir.display().to_string()),
         row("Elapsed", &humantime::format_duration(elapsed).to_string()),
         row("Compared scripts", &summary.total.to_string()),
-        row("Equivalent results", &summary.matches.to_string()),
-        row("Mismatches", &summary.mismatches.to_string()),
-        row("Slow equivalent cases", &summary.slow.to_string()),
+        row(
+            "Engine262-equivalent scripts",
+            &summary.engine262_equivalent.to_string(),
+        ),
+        row(
+            "Correctness mismatches",
+            &summary.correctness_mismatches.to_string(),
+        ),
+        row(
+            "Performance slow cases",
+            &summary.performance_slow.to_string(),
+        ),
+        row("Velum timeouts", &summary.velum_timeouts.to_string()),
+        row("Velum crashes", &summary.velum_crashes.to_string()),
+        row(
+            "Engine262 timeouts",
+            &summary.engine262_timeouts.to_string(),
+        ),
+        row("Engine262 crashes", &summary.engine262_crashes.to_string()),
         row("V8 timeouts", &summary.v8_timeouts.to_string()),
         row("V8 crashes", &summary.v8_crashes.to_string()),
         row("Velum JS errors", &summary.velum_js_errors.to_string()),
+        row(
+            "Engine262 JS errors",
+            &summary.engine262_js_errors.to_string(),
+        ),
         row("V8 JS errors", &summary.v8_js_errors.to_string()),
         row(
             "Mean Velum/V8 ratio",
@@ -135,6 +175,7 @@ fn rows(
             summary.max_ratio_case.as_deref().unwrap_or("unavailable"),
         ),
         row("Saved finding scripts", &finding_files.to_string()),
+        row("Pending Velum abort candidates", &pending_files.to_string()),
     ]
 }
 
@@ -148,15 +189,49 @@ fn row(metric: &'static str, value: &str) -> SummaryRow {
 impl Summary {
     fn add(&mut self, record: &CaseRecord) {
         self.total = self.total.saturating_add(1);
-        match record.classification {
-            CaseClassification::Match => self.matches = self.matches.saturating_add(1),
-            CaseClassification::Mismatch => self.mismatches = self.mismatches.saturating_add(1),
-            CaseClassification::Slow => self.slow = self.slow.saturating_add(1),
-            CaseClassification::V8Timeout => self.v8_timeouts = self.v8_timeouts.saturating_add(1),
-            CaseClassification::V8Crash => self.v8_crashes = self.v8_crashes.saturating_add(1),
+        let findings = normalized_findings(record);
+        let mut has_correctness_problem = false;
+        for finding in &findings {
+            match finding {
+                CaseFinding::CorrectnessMismatch => {
+                    self.correctness_mismatches = self.correctness_mismatches.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::PerformanceSlow => {
+                    self.performance_slow = self.performance_slow.saturating_add(1);
+                }
+                CaseFinding::VelumTimeout => {
+                    self.velum_timeouts = self.velum_timeouts.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::VelumCrash => {
+                    self.velum_crashes = self.velum_crashes.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::Engine262Timeout => {
+                    self.engine262_timeouts = self.engine262_timeouts.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::Engine262Crash => {
+                    self.engine262_crashes = self.engine262_crashes.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::V8Timeout => {
+                    self.v8_timeouts = self.v8_timeouts.saturating_add(1);
+                }
+                CaseFinding::V8Crash => {
+                    self.v8_crashes = self.v8_crashes.saturating_add(1);
+                }
+            }
+        }
+        if !has_correctness_problem {
+            self.engine262_equivalent = self.engine262_equivalent.saturating_add(1);
         }
         if record.velum.status == OutcomeStatus::JsError {
             self.velum_js_errors = self.velum_js_errors.saturating_add(1);
+        }
+        if record.engine262.status == OutcomeStatus::JsError {
+            self.engine262_js_errors = self.engine262_js_errors.saturating_add(1);
         }
         if record.v8.status == OutcomeStatus::JsError {
             self.v8_js_errors = self.v8_js_errors.saturating_add(1);
@@ -251,6 +326,10 @@ fn collect_javascript_files(directory: &Path, files: &mut Vec<PathBuf>) -> anyho
     Ok(())
 }
 
+fn javascript_file_count(directory: &Path) -> anyhow::Result<usize> {
+    Ok(latest_javascript_files(directory)?.len())
+}
+
 fn append_jsonl_listing(session_dir: &Path, records: &[CaseRecord]) -> anyhow::Result<()> {
     let path = session_dir.join("slowest.tsv");
     let mut sorted = records
@@ -271,23 +350,31 @@ fn append_jsonl_listing(session_dir: &Path, records: &[CaseRecord]) -> anyhow::R
         .with_context(|| format!("failed to write '{}'", path.display()))?;
     writeln!(
         file,
-        "ratio\tcase_id\tclassification\tvelum_ns\tv8_ns\tsaved_script"
+        "ratio\tcase_id\tclassification\tfindings\tvelum_ns\tv8_ns\tsaved_scripts"
     )
     .with_context(|| format!("failed to write '{}'", path.display()))?;
     for (ratio, record) in sorted.into_iter().take(100) {
         writeln!(
             file,
-            "{}\t{}\t{:?}\t{}\t{}\t{}",
+            "{}\t{}\t{:?}\t{:?}\t{}\t{}\t{}",
             format_ratio(ratio),
             record.case_id,
             record.classification,
+            normalized_findings(record),
             record.velum.elapsed_nanos,
             record.v8.elapsed_nanos,
-            record.saved_script.as_deref().unwrap_or("")
+            saved_scripts_text(record)
         )
         .with_context(|| format!("failed to write '{}'", path.display()))?;
     }
     Ok(())
+}
+
+fn saved_scripts_text(record: &CaseRecord) -> String {
+    if !record.saved_scripts.is_empty() {
+        return record.saved_scripts.join(",");
+    }
+    record.saved_script.clone().unwrap_or_default()
 }
 
 fn format_ratio(value: f64) -> String {

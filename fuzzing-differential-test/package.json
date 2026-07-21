@@ -1,0 +1,11 @@
+{
+  "name": "velum-differential-fuzzing",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local Velum differential fuzzing support tools.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@engine262/engine262": "0.0.1-ebbe12cf2095a69834d266c930c254ffebb4e7c8"
+  }
+}
