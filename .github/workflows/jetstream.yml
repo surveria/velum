@@ -44,6 +44,9 @@ jobs:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
       VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
+      # Canonical unfiltered runs must not let newly compatible long workloads
+      # starve the later comparison rows that feed the history chart.
+      VELUM_JETSTREAM_SUITE_MAX_SECONDS: "900"
       VELUM_JETSTREAM_FILTER: ${{ inputs.filter || '' }}
       VELUM_JETSTREAM_QUICKJS_BASELINE: ${{ inputs.refresh_quickjs && 'refresh' || 'read' }}
       VELUM_JETSTREAM_QUICKJS_BASELINE_PATH: tests/corpora/jetstream/quickjs-baseline.tsv
