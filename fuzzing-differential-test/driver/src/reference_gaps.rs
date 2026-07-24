@@ -21,7 +21,7 @@ const IMMUTABLE_ARRAY_BUFFER_METHODS: [&str; 3] = [
     "transferToImmutable",
     "transferToFixedLength",
 ];
-const ANNEX_B_STRING_HTML_METHODS: [&str; 13] = [
+const ANNEX_B_STRING_LEGACY_METHODS: [&str; 14] = [
     "anchor",
     "big",
     "blink",
@@ -33,6 +33,7 @@ const ANNEX_B_STRING_HTML_METHODS: [&str; 13] = [
     "link",
     "small",
     "strike",
+    "substr",
     "sub",
     "sup",
 ];
@@ -60,7 +61,7 @@ pub fn is_engine262_unsupported(
             && !outcomes_equivalent(engine262, v8))
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
-        || is_engine262_missing_annex_b_string_html_method(source, velum, engine262, v8)
+        || is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
@@ -210,7 +211,7 @@ fn references_complete_but_disagree(engine262: &EngineOutcome, v8: &EngineOutcom
     engine262.is_completed() && v8.is_completed() && !outcomes_equivalent(engine262, v8)
 }
 
-fn is_engine262_missing_annex_b_string_html_method(
+fn is_engine262_missing_annex_b_string_legacy_method(
     source: &str,
     velum: &EngineOutcome,
     engine262: &EngineOutcome,
@@ -219,7 +220,7 @@ fn is_engine262_missing_annex_b_string_html_method(
     engine262.status == OutcomeStatus::JsError
         && engine262.error_name.as_deref() == Some("TypeError")
         && outcomes_equivalent(velum, v8)
-        && ANNEX_B_STRING_HTML_METHODS
+        && ANNEX_B_STRING_LEGACY_METHODS
             .iter()
             .any(|method| source_contains_method_reference(source, method))
 }
@@ -518,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn annex_b_string_html_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    fn annex_b_string_legacy_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
         let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let engine262 = type_error("TypeError: (\"\").bold is not a function");
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
@@ -533,13 +534,14 @@ mod tests {
     }
 
     #[test]
-    fn annex_b_string_html_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Result<()> {
+    fn annex_b_string_legacy_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Result<()> {
         let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let engine262 = type_error("TypeError: Cannot convert undefined to object");
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         for source in [
             "(\"129\")[\"bold\"](\"bold\")",
             "(\"1D\").blink.apply(\"1D\", [])",
+            "(\"take\")[\"substr\"](1073741824, 1073741824)",
         ] {
             let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
             let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
