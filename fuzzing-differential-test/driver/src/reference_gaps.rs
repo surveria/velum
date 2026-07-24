@@ -82,6 +82,7 @@ pub fn is_engine262_unsupported(
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
         || is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
+        || is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_engine262_missing_annex_b_regexp_compile_method(source, velum, engine262)
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
         || is_reference_unsupported_date_temporal_instant_method(source, velum, engine262, v8)
@@ -122,6 +123,7 @@ pub fn correctness_oracle<'a>(
             source, engine262, v8,
         )
         || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
@@ -429,6 +431,20 @@ fn is_engine262_missing_annex_b_string_legacy_method(
         && ANNEX_B_STRING_LEGACY_METHODS
             .iter()
             .any(|method| source_contains_method_reference(source, method))
+}
+
+fn is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && ANNEX_B_STRING_LEGACY_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
 fn is_engine262_missing_annex_b_regexp_compile_method(

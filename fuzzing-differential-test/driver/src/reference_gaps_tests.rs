@@ -89,6 +89,24 @@ fn annex_b_string_legacy_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Re
 }
 
 #[test]
+fn annex_b_string_legacy_and_v8_rab_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error(
+        "TypeError: (\"D4\").blink is not a function. (In \"(\"D4\").blink()\", it is undefined)",
+    );
+    let v8 = range_error("byte length of Int32Array should be a multiple of 4");
+    let source = "\
+        const value = (\"D4\").blink();\
+        const buffer = new SharedArrayBuffer(5, { maxByteLength: 5 });\
+        new Int32Array(buffer);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: buffer.sliceToImmutable is not a function");
