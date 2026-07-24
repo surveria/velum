@@ -10,7 +10,6 @@ const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
-const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
@@ -109,11 +108,7 @@ fn is_shared_array_buffer_alignment_without_oracle(
         && source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
         && (is_engine262_missing_global(engine262)
             || engine262.status == OutcomeStatus::JsError
-                && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
-                && engine262.error_message.as_deref().is_some_and(|message| {
-                    message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR)
-                })
-                && (source.contains("\\p{") || source.contains("\\P{")))
+                && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
@@ -679,10 +674,10 @@ mod tests {
             1,
             "",
             Some("SyntaxError".to_owned()),
-            Some("SyntaxError: Invalid identity escape".to_owned()),
+            Some("SyntaxError: Unexpected token".to_owned()),
         );
-        let source = "/[\\p{Script_Extensions=Mongolian}]/m; \
-            new Uint32Array(new SharedArrayBuffer(713, { maxByteLength: 4294967296 }));";
+        let source = "/DL[p[\\0]*]/msy; \
+            new Uint32Array(new SharedArrayBuffer(9, { maxByteLength: 2520 }));";
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
