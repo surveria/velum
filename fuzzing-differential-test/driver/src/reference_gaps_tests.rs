@@ -313,6 +313,29 @@ fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> any
 }
 
 #[test]
+fn engine262_invalid_decimal_digits_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Invalid decimal digits".to_owned()),
+    );
+    let v8 = range_error("byte length of BigUint64Array should be a multiple of 8");
+    let source = "\
+        const buffer = new ArrayBuffer(7, { maxByteLength: 10 });\
+        new BigUint64Array(buffer);\
+        /EXPa\\Da{z}hlT/;\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(
