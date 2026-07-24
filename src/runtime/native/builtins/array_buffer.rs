@@ -433,7 +433,6 @@ impl Context {
     }
 
     fn array_buffer_usize_number(value: usize) -> Result<f64> {
-        let value = u32::try_from(value).map_err(|_| Error::limit(LENGTH_LIMIT_ERROR))?;
-        Ok(f64::from(value))
+        Self::usize_to_number(value, LENGTH_LIMIT_ERROR)
     }
 }

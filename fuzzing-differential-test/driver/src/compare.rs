@@ -12,6 +12,7 @@ use velum::{Error, Runtime, RuntimeLimits};
 use crate::{
     engine262_worker::Engine262Worker,
     node_worker::NodeWorker,
+    reference_gaps,
     time::{duration_millis_u64, duration_nanos_u64},
 };
 
@@ -26,11 +27,8 @@ const ECMASCRIPT_ERROR_NAMES: [&str; 8] = [
     "URIError",
     "Error",
 ];
-const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const LEXER_ERROR_PREFIX: &str = "lexer error";
 const PARSER_ERROR_PREFIX: &str = "parser error";
-const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
-const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
 
@@ -203,16 +201,18 @@ fn findings(
     if v8.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::V8Crash);
     }
-    let engine262_unsupported = is_engine262_unsupported(source, velum, engine262, v8);
+    let engine262_unsupported =
+        reference_gaps::is_engine262_unsupported(source, velum, engine262, v8);
     if engine262_unsupported {
         findings.push(CaseFinding::Engine262Unsupported);
     }
-    let correctness_oracle = correctness_oracle(source, engine262, v8, engine262_unsupported);
+    let correctness_oracle =
+        reference_gaps::correctness_oracle(source, engine262, v8, engine262_unsupported);
     if let Some(correctness_oracle) = correctness_oracle
         && velum.is_completed()
         && !velum_resource_limit
         && correctness_oracle.is_completed()
-        && !equivalent(velum, correctness_oracle)
+        && !reference_gaps::outcomes_equivalent(velum, correctness_oracle)
     {
         findings.push(CaseFinding::CorrectnessMismatch);
     }
@@ -256,33 +256,6 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
     CaseClassification::Match
 }
 
-fn equivalent(velum: &EngineOutcome, v8: &EngineOutcome) -> bool {
-    if velum.status != v8.status {
-        return false;
-    }
-    match velum.status {
-        OutcomeStatus::Ok => velum.stdout_sha256 == v8.stdout_sha256,
-        OutcomeStatus::JsError => velum.error_name == v8.error_name,
-        OutcomeStatus::Timeout | OutcomeStatus::Crash => true,
-    }
-}
-
-fn is_engine262_unsupported(
-    source: &str,
-    velum: &EngineOutcome,
-    engine262: &EngineOutcome,
-    v8: &EngineOutcome,
-) -> bool {
-    is_engine262_missing_global(engine262)
-        || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
-            && !equivalent(velum, engine262)
-            && !equivalent(engine262, v8))
-        || is_reference_unsupported_resource_management(source, engine262, v8)
-        || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
-            && !equivalent(velum, engine262)
-            && !equivalent(engine262, v8))
-}
-
 fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
     velum.status == OutcomeStatus::JsError
         && velum.error_name.as_deref() == Some("Error")
@@ -290,135 +263,6 @@ fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
             .error_message
             .as_deref()
             .is_some_and(|message| message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX))
-}
-
-fn correctness_oracle<'a>(
-    source: &str,
-    engine262: &'a EngineOutcome,
-    v8: &'a EngineOutcome,
-    engine262_unsupported: bool,
-) -> Option<&'a EngineOutcome> {
-    if !engine262_unsupported {
-        return Some(engine262);
-    }
-    if is_reference_unsupported_resource_management(source, engine262, v8) {
-        return None;
-    }
-    if is_v8_missing_global(v8) {
-        return None;
-    }
-    Some(v8)
-}
-
-fn is_reference_unsupported_resource_management(
-    source: &str,
-    engine262: &EngineOutcome,
-    v8: &EngineOutcome,
-) -> bool {
-    references_reject_as_syntax(engine262, v8) && source_contains_resource_management_syntax(source)
-}
-
-fn references_reject_as_syntax(engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
-    engine262.status == OutcomeStatus::JsError
-        && v8.status == OutcomeStatus::JsError
-        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
-        && v8.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
-}
-
-fn source_contains_resource_management_syntax(source: &str) -> bool {
-    let mut search_start = 0;
-    while let Some(relative_start) = source
-        .get(search_start..)
-        .and_then(|tail| tail.find(RESOURCE_MANAGEMENT_KEYWORD))
-    {
-        let start = search_start.saturating_add(relative_start);
-        let end = start.saturating_add(RESOURCE_MANAGEMENT_KEYWORD.len());
-        if is_keyword_boundary(source, start, end)
-            && resource_binding_follows_using(source.get(end..).unwrap_or_default())
-        {
-            return true;
-        }
-        search_start = end;
-    }
-    false
-}
-
-fn is_keyword_boundary(source: &str, start: usize, end: usize) -> bool {
-    let previous = source
-        .get(..start)
-        .and_then(|prefix| prefix.chars().next_back());
-    let next = source.get(end..).and_then(|suffix| suffix.chars().next());
-    !previous.is_some_and(is_ascii_identifier_part) && !next.is_some_and(is_ascii_identifier_part)
-}
-
-fn resource_binding_follows_using(rest: &str) -> bool {
-    let tail = rest.trim_start();
-    let Some(first) = tail.chars().next() else {
-        return false;
-    };
-    if !is_ascii_identifier_start(first) {
-        return false;
-    }
-    let name_end = tail
-        .char_indices()
-        .find_map(|(index, value)| (!is_ascii_identifier_part(value)).then_some(index))
-        .unwrap_or(tail.len());
-    let Some(after_name) = tail.get(name_end..) else {
-        return false;
-    };
-    let after_name = after_name.trim_start();
-    after_name.starts_with('=') || starts_with_word(after_name, RESOURCE_FOR_OF_KEYWORD)
-}
-
-fn starts_with_word(source: &str, word: &str) -> bool {
-    let Some(after) = source.get(word.len()..) else {
-        return false;
-    };
-    source.starts_with(word) && !after.chars().next().is_some_and(is_ascii_identifier_part)
-}
-
-const fn is_ascii_identifier_start(value: char) -> bool {
-    value == '_' || value == '$' || value.is_ascii_alphabetic()
-}
-
-const fn is_ascii_identifier_part(value: char) -> bool {
-    is_ascii_identifier_start(value) || value.is_ascii_digit()
-}
-
-fn is_engine262_missing_global(engine262: &EngineOutcome) -> bool {
-    engine262.status == OutcomeStatus::JsError
-        && engine262.error_name.as_deref() == Some("ReferenceError")
-        && engine262
-            .error_message
-            .as_deref()
-            .is_some_and(is_engine262_missing_global_message)
-}
-
-fn is_engine262_missing_global_message(message: &str) -> bool {
-    message.contains("\"Intl\" is not defined")
-        || message.contains("Intl is not defined")
-        || message.contains("\"SharedArrayBuffer\" is not defined")
-        || message.contains("SharedArrayBuffer is not defined")
-        || message.contains("\"Temporal\" is not defined")
-        || message.contains("Temporal is not defined")
-}
-
-fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
-    v8.status == OutcomeStatus::JsError
-        && v8.error_name.as_deref() == Some("ReferenceError")
-        && v8
-            .error_message
-            .as_deref()
-            .is_some_and(is_v8_missing_global_message)
-}
-
-fn is_v8_missing_global_message(message: &str) -> bool {
-    message.contains("Iterator is not defined")
-        || message.contains("AsyncIterator is not defined")
-        || message.contains("DisposableStack is not defined")
-        || message.contains("AsyncDisposableStack is not defined")
-        || message.contains("SuppressedError is not defined")
-        || message.contains("Temporal is not defined")
 }
 
 fn timing_ratio(velum: &EngineOutcome, v8: &EngineOutcome) -> Option<f64> {

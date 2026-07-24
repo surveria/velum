@@ -84,9 +84,6 @@ impl Context {
             None
         };
         self.check_byte_buffer_length(length)?;
-        if let Some(maximum) = maximum {
-            Self::check_byte_buffer_supported_length(maximum)?;
-        }
         let buffer = ByteBuffer::new_shared(length, maximum);
         if let Some(prototype) = prototype {
             return self
@@ -323,7 +320,6 @@ impl Context {
     }
 
     fn shared_buffer_usize_number(value: usize) -> Result<f64> {
-        let value = u32::try_from(value).map_err(|_| Error::limit(LENGTH_ERROR))?;
-        Ok(f64::from(value))
+        Self::usize_to_number(value, LENGTH_ERROR)
     }
 }

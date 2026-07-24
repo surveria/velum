@@ -31,6 +31,32 @@ fn shares_bytes_across_views_and_grows_without_shrinking() -> TestResult {
 }
 
 #[test]
+fn accepts_large_logical_max_byte_length_without_allocating_it() -> TestResult {
+    ensure_eval(
+        r"
+        let maximum = 4294967296;
+        let shared = new SharedArrayBuffer(1024, { maxByteLength: maximum });
+        let local = new ArrayBuffer(1024, { maxByteLength: maximum });
+        let failures = 0;
+        try { shared.grow(maximum); } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
+        try { local.resize(maximum); } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
+        shared.byteLength === 1024 &&
+            shared.maxByteLength === maximum &&
+            shared.growable === true &&
+            local.byteLength === 1024 &&
+            local.maxByteLength === maximum &&
+            local.resizable === true &&
+            failures === 2 ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn performs_number_and_bigint_atomic_updates() -> TestResult {
     ensure_eval(
         r"

@@ -133,9 +133,6 @@ impl Context {
             None
         };
         self.check_byte_buffer_length(length)?;
-        if let Some(maximum) = max_byte_length {
-            Self::check_byte_buffer_supported_length(maximum)?;
-        }
         let buffer = max_byte_length.map_or_else(
             || ByteBuffer::new(length, ByteBufferOrigin::EngineOwned),
             |maximum| ByteBuffer::new_resizable(length, maximum),
