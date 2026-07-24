@@ -203,7 +203,7 @@ fn findings(
     if v8.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::V8Crash);
     }
-    let engine262_unsupported = is_engine262_unsupported(source, engine262, v8);
+    let engine262_unsupported = is_engine262_unsupported(source, velum, engine262, v8);
     if engine262_unsupported {
         findings.push(CaseFinding::Engine262Unsupported);
     }
@@ -267,11 +267,19 @@ fn equivalent(velum: &EngineOutcome, v8: &EngineOutcome) -> bool {
     }
 }
 
-fn is_engine262_unsupported(source: &str, engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
+fn is_engine262_unsupported(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
     is_engine262_missing_global(engine262)
-        || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER) && !equivalent(engine262, v8))
+        || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+            && !equivalent(velum, engine262)
+            && !equivalent(engine262, v8))
         || is_reference_unsupported_resource_management(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+            && !equivalent(velum, engine262)
             && !equivalent(engine262, v8))
 }
 
@@ -602,14 +610,8 @@ mod tests {
             None,
             config(),
         );
-        ensure!(
-            findings.contains(&CaseFinding::Engine262Unsupported),
-            "Engine262 unsupported finding is missing"
-        );
-        ensure!(
-            !findings.contains(&CaseFinding::CorrectnessMismatch),
-            "unsupported Engine262 Intl gap must not count as correctness mismatch"
-        );
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 
@@ -638,14 +640,8 @@ mod tests {
             None,
             config(),
         );
-        ensure!(
-            findings.contains(&CaseFinding::Engine262Unsupported),
-            "Engine262 unsupported finding is missing"
-        );
-        ensure!(
-            findings.contains(&CaseFinding::CorrectnessMismatch),
-            "V8 fallback mismatch is missing"
-        );
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 
@@ -668,14 +664,8 @@ mod tests {
             None,
             config(),
         );
-        ensure!(
-            findings.contains(&CaseFinding::Engine262Unsupported),
-            "Engine262 syntax gap should be recorded"
-        );
-        ensure!(
-            !findings.contains(&CaseFinding::CorrectnessMismatch),
-            "Velum/V8 agreement should not count as correctness mismatch"
-        );
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 
@@ -704,14 +694,8 @@ mod tests {
             None,
             config(),
         );
-        ensure!(
-            findings.contains(&CaseFinding::Engine262Unsupported),
-            "resource management syntax should be recorded as unsupported"
-        );
-        ensure!(
-            !findings.contains(&CaseFinding::CorrectnessMismatch),
-            "reference syntax gap must not count as correctness mismatch"
-        );
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 
@@ -727,14 +711,8 @@ mod tests {
         let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let findings = findings("for (;;) {}", &velum, &engine262, &v8, None, config());
-        ensure!(
-            findings.contains(&CaseFinding::VelumResourceLimit),
-            "Velum resource limit finding is missing"
-        );
-        ensure!(
-            !findings.contains(&CaseFinding::CorrectnessMismatch),
-            "resource limits must not count as correctness mismatch"
-        );
+        ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 
@@ -763,14 +741,32 @@ mod tests {
             None,
             config(),
         );
-        ensure!(
-            findings.contains(&CaseFinding::Engine262Unsupported),
-            "Engine262 unsupported finding is missing"
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        Ok(())
+    }
+
+    #[test]
+    fn matching_engine262_result_is_not_replaced_by_v8_fallback() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("TypeError".to_owned()),
+            Some("Math.f16round is not a function".to_owned()),
         );
-        ensure!(
-            !findings.contains(&CaseFinding::CorrectnessMismatch),
-            "missing V8 fallback globals must not count as correctness mismatch"
+        let findings = findings(
+            "new ArrayBuffer(5, { maxByteLength: 10 }); Math.f16round(1);",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
         );
+        ensure!(!findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 }
