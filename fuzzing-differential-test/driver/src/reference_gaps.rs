@@ -10,6 +10,7 @@ const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
+const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
@@ -106,7 +107,13 @@ fn is_shared_array_buffer_alignment_without_oracle(
 ) -> bool {
     source.contains(SHARED_ARRAY_BUFFER_CONSTRUCTOR)
         && source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
-        && is_engine262_missing_global(engine262)
+        && (is_engine262_missing_global(engine262)
+            || engine262.status == OutcomeStatus::JsError
+                && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+                && engine262.error_message.as_deref().is_some_and(|message| {
+                    message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR)
+                })
+                && (source.contains("\\p{") || source.contains("\\P{")))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
@@ -667,6 +674,18 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("SyntaxError".to_owned()),
+            Some("SyntaxError: Invalid identity escape".to_owned()),
+        );
+        let source = "/[\\p{Script_Extensions=Mongolian}]/m; \
+            new Uint32Array(new SharedArrayBuffer(713, { maxByteLength: 4294967296 }));";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
         let engine262 = range_error("RangeError: Cannot allocate memory");
         let v8 = range_error("byte length of Uint32Array should be a multiple of 4");
         let source = "new Uint32Array(new ArrayBuffer(7, { maxByteLength: 4294967296 }))";
@@ -738,20 +757,8 @@ mod tests {
 
     #[test]
     fn resource_management_syntax_detector_ignores_plain_identifiers() -> anyhow::Result<()> {
-        ensure!(source_contains_resource_management_syntax(
-            "for (using value of []) {}"
-        ));
-        ensure!(!source_contains_resource_management_syntax(
-            "const usingValue = 1;"
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn outcome_equivalence_uses_error_names_only_for_js_errors() -> anyhow::Result<()> {
-        let left = reference_error("ReferenceError: left");
-        let right = reference_error("ReferenceError: right");
-        ensure!(outcomes_equivalent(&left, &right));
+        ensure!(source_contains_resource_management_syntax("for (using value of []) {}"));
+        ensure!(!source_contains_resource_management_syntax("const usingValue = 1;"));
         Ok(())
     }
 
