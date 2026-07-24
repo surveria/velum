@@ -56,6 +56,24 @@ do
 done
 ```
 
+## Tokio-Owned VMs And Host-Class Macros
+
+The optional `velum-tokio` workspace crate adds a runtime adapter without
+adding Tokio to the engine itself. Its companion example defines an
+asynchronous Rust-backed `WebSocket` with `#[velum::host_class]` and
+`#[velum::host_methods]`, keeps its transport token and message storage hidden
+from JavaScript, and runs the VM on a permanent single-owner worker:
+
+```sh
+cargo run -p velum-tokio --example tokio_host_class
+```
+
+The adapter distributes independent VMs across a configurable number of Tokio
+current-thread workers. Commands for one VM stay serialized on its owner,
+while host futures, queued Rust-to-JavaScript commands, and Promise jobs are
+driven automatically. Results crossing the worker boundary must be `Send`;
+VM-local handles remain inside the command closure.
+
 ## Ownership And Scheduling Model
 
 `OwnedValue` contains VM-independent primitives. `RetainedValue` is an
@@ -67,6 +85,10 @@ the outer executor and explicitly interleaves `poll_host_futures`,
 `run_host_commands`, and `run_jobs`. The interval, module loader, clock, and
 mock transport in this directory are application policies, not unconditional
 browser or Node.js globals added to the engine.
+
+Applications using `velum-tokio` delegate that same explicit pump to the
+adapter. The underlying engine contract and bytecode-owned execution path do
+not change.
 
 The design and acceptance requirements behind the suite remain documented in
 [`TODO.md`](TODO.md).

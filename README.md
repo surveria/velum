@@ -260,10 +260,46 @@ storage limits, and heap/optimization snapshots. Async host calls return
 ordinary JavaScript Promises; `poll_host_futures` advances Rust futures and
 `run_jobs` separately drains the Promise reactions they enqueue.
 
+Enable `velum`'s `host-macros` feature to describe Rust-backed JavaScript
+classes directly on ordinary Rust types. Only fields and methods carrying a
+`#[js(...)]` marker are exported. Unmarked fields remain private Rust
+implementation state and are still available to the type's methods. A normal
+Rust `async fn` becomes an asynchronous host method; the generated definition
+uses the existing `HostClass`, host-future, Promise, descriptor, and semantic
+call paths without generating JavaScript source or invoking `eval`.
+
+```rust
+#[velum::host_class(name = "Socket", rename_all = "camelCase")]
+struct Socket {
+    #[js(get)]
+    public_url: String,
+    private_transport: tokio::sync::Mutex<Transport>,
+}
+
+#[velum::host_methods]
+impl Socket {
+    #[js(method)]
+    async fn send(&self, message: String) -> velum::Result<String> {
+        self.private_transport.lock().await.send(message).await
+    }
+}
+```
+
+The workspace companion crate `velum-tokio` supplies an optional outer
+scheduler. `VmRuntimeBuilder::worker_threads` is a runtime-level setting, not
+a class annotation. Each VM is created permanently inside one Tokio
+current-thread worker and accepts serialized commands through a bounded
+`VmHandle`; multiple independent VMs are distributed across the configured
+workers and may make asynchronous progress in parallel. The engine crate
+remains executor-neutral.
+
 The complete [embedding example suite](examples/README.md) provides fifteen
 directly runnable programs, progressing from Hello World through bidirectional
 async calls, stored callbacks, Rust-backed classes, module loading, shared
-memory, observability, and deterministic teardown.
+memory, observability, and deterministic teardown. The
+[`tokio_host_class`](crates/velum-tokio/examples/tokio_host_class.rs) companion
+example combines host-class macros, hidden Rust state, natural `async fn`
+methods, and a worker-owned VM.
 
 ## Interesting internals
 

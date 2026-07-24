@@ -27,4 +27,6 @@ for example in "${examples[@]}"; do
   cargo run --quiet --example "${example}" >/dev/null
 done
 
-echo "check-examples: ok (${#examples[@]} examples)"
+cargo run --quiet -p velum-tokio --example tokio_host_class >/dev/null
+
+echo "check-examples: ok (${#examples[@]} root examples + Tokio companion)"
