@@ -246,6 +246,16 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
         try { new BigInt64Array(new SharedArrayBuffer(6)); } catch (error) {
             if (error instanceof RangeError) failures = failures + 1;
         }
+        try {
+            new BigInt64Array(new ArrayBuffer(26, { maxByteLength: 40 }));
+        } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
+        try {
+            new BigInt64Array(new SharedArrayBuffer(26, { maxByteLength: 40 }));
+        } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
         try { Int8Array(1); } catch (error) {
             if (error instanceof TypeError) failures = failures + 1;
         }
@@ -262,7 +272,7 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
         ",
     )?;
 
-    ensure_value(&value, &Value::Number(5.0))
+    ensure_value(&value, &Value::Number(7.0))
 }
 
 #[test]
