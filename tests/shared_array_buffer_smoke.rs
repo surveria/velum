@@ -44,13 +44,23 @@ fn accepts_large_logical_max_byte_length_without_allocating_it() -> TestResult {
         try { local.resize(maximum); } catch (error) {
             if (error instanceof RangeError) failures = failures + 1;
         }
+        try {
+            new SharedArrayBuffer(0, { maxByteLength: 7 * Math.pow(1024, 5) });
+        } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
+        try {
+            new ArrayBuffer(0, { maxByteLength: Math.pow(2, 53) - 1 });
+        } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
         shared.byteLength === 1024 &&
             shared.maxByteLength === maximum &&
             shared.growable === true &&
             local.byteLength === 1024 &&
             local.maxByteLength === maximum &&
             local.resizable === true &&
-            failures === 2 ? 42 : 0
+            failures === 4 ? 42 : 0
         ",
         &Value::Number(42.0),
     )
