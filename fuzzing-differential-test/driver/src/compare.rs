@@ -29,6 +29,8 @@ const ECMASCRIPT_ERROR_NAMES: [&str; 8] = [
 const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const LEXER_ERROR_PREFIX: &str = "lexer error";
 const PARSER_ERROR_PREFIX: &str = "parser error";
+const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
+const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -198,8 +200,9 @@ fn findings(
     if engine262_unsupported {
         findings.push(CaseFinding::Engine262Unsupported);
     }
-    let correctness_oracle = if engine262_unsupported { v8 } else { engine262 };
-    if velum.is_completed()
+    let correctness_oracle = correctness_oracle(source, engine262, v8, engine262_unsupported);
+    if let Some(correctness_oracle) = correctness_oracle
+        && velum.is_completed()
         && correctness_oracle.is_completed()
         && !equivalent(velum, correctness_oracle)
     {
@@ -257,8 +260,99 @@ fn equivalent(velum: &EngineOutcome, v8: &EngineOutcome) -> bool {
 fn is_engine262_unsupported(source: &str, engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
     is_engine262_missing_global(engine262)
         || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER) && !equivalent(engine262, v8))
+        || is_reference_unsupported_resource_management(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !equivalent(engine262, v8))
+}
+
+fn correctness_oracle<'a>(
+    source: &str,
+    engine262: &'a EngineOutcome,
+    v8: &'a EngineOutcome,
+    engine262_unsupported: bool,
+) -> Option<&'a EngineOutcome> {
+    if !engine262_unsupported {
+        return Some(engine262);
+    }
+    if is_reference_unsupported_resource_management(source, engine262, v8) {
+        return None;
+    }
+    Some(v8)
+}
+
+fn is_reference_unsupported_resource_management(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    references_reject_as_syntax(engine262, v8) && source_contains_resource_management_syntax(source)
+}
+
+fn references_reject_as_syntax(engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
+    engine262.status == OutcomeStatus::JsError
+        && v8.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && v8.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+}
+
+fn source_contains_resource_management_syntax(source: &str) -> bool {
+    let mut search_start = 0;
+    while let Some(relative_start) = source
+        .get(search_start..)
+        .and_then(|tail| tail.find(RESOURCE_MANAGEMENT_KEYWORD))
+    {
+        let start = search_start.saturating_add(relative_start);
+        let end = start.saturating_add(RESOURCE_MANAGEMENT_KEYWORD.len());
+        if is_keyword_boundary(source, start, end)
+            && resource_binding_follows_using(source.get(end..).unwrap_or_default())
+        {
+            return true;
+        }
+        search_start = end;
+    }
+    false
+}
+
+fn is_keyword_boundary(source: &str, start: usize, end: usize) -> bool {
+    let previous = source
+        .get(..start)
+        .and_then(|prefix| prefix.chars().next_back());
+    let next = source.get(end..).and_then(|suffix| suffix.chars().next());
+    !previous.is_some_and(is_ascii_identifier_part) && !next.is_some_and(is_ascii_identifier_part)
+}
+
+fn resource_binding_follows_using(rest: &str) -> bool {
+    let tail = rest.trim_start();
+    let Some(first) = tail.chars().next() else {
+        return false;
+    };
+    if !is_ascii_identifier_start(first) {
+        return false;
+    }
+    let name_end = tail
+        .char_indices()
+        .find_map(|(index, value)| (!is_ascii_identifier_part(value)).then_some(index))
+        .unwrap_or(tail.len());
+    let Some(after_name) = tail.get(name_end..) else {
+        return false;
+    };
+    let after_name = after_name.trim_start();
+    after_name.starts_with('=') || starts_with_word(after_name, RESOURCE_FOR_OF_KEYWORD)
+}
+
+fn starts_with_word(source: &str, word: &str) -> bool {
+    let Some(after) = source.get(word.len()..) else {
+        return false;
+    };
+    source.starts_with(word) && !after.chars().next().is_some_and(is_ascii_identifier_part)
+}
+
+const fn is_ascii_identifier_start(value: char) -> bool {
+    value == '_' || value == '$' || value.is_ascii_alphabetic()
+}
+
+const fn is_ascii_identifier_part(value: char) -> bool {
+    is_ascii_identifier_start(value) || value.is_ascii_digit()
 }
 
 fn is_engine262_missing_global(engine262: &EngineOutcome) -> bool {
@@ -548,6 +642,47 @@ mod tests {
         ensure!(
             !findings.contains(&CaseFinding::CorrectnessMismatch),
             "Velum/V8 agreement should not count as correctness mismatch"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn resource_management_syntax_gap_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some(SYNTAX_ERROR_NAME.to_owned()),
+            Some("SyntaxError: Unexpected token".to_owned()),
+        );
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some(SYNTAX_ERROR_NAME.to_owned()),
+            Some("Unexpected identifier 'value'".to_owned()),
+        );
+        let findings = findings(
+            "for (using value of []) {}",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            CompareConfig {
+                engine262_timeout: Duration::from_secs(30),
+                v8_timeout: Duration::from_secs(4),
+                slow_ratio: 2.0,
+                slow_min: Duration::from_millis(5),
+            },
+        );
+        ensure!(
+            findings.contains(&CaseFinding::Engine262Unsupported),
+            "resource management syntax should be recorded as unsupported"
+        );
+        ensure!(
+            !findings.contains(&CaseFinding::CorrectnessMismatch),
+            "reference syntax gap must not count as correctness mismatch"
         );
         Ok(())
     }
