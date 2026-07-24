@@ -21,8 +21,10 @@ use crate::{
 };
 use alloc::rc::Rc;
 use core::{any::Any, fmt, future::Future};
+mod macro_support;
 mod staging;
 
+pub use macro_support::{HostClassDefinition, HostClassMetadata};
 use staging::StagedHostClass;
 
 type ConstructorCallback<T> = dyn for<'call> Fn(HostCall<'call>) -> Result<HostInstance<T>>;
@@ -57,17 +59,6 @@ impl<T> HostInstance<T> {
     pub fn with_traced_values(mut self, values: Vec<RetainedValue>) -> Self {
         self.traced_values = values;
         self
-    }
-
-    fn erase(self) -> ErasedHostInstance
-    where
-        T: 'static,
-    {
-        ErasedHostInstance {
-            payload: Box::new(self.payload),
-            logical_payload_bytes: self.logical_payload_bytes,
-            traced_values: self.traced_values,
-        }
     }
 }
 
@@ -498,6 +489,14 @@ impl Vm {
     /// or VM storage failures.
     pub fn register_host_class<T: 'static>(&mut self, class: HostClass<T>) -> Result<()> {
         self.embedding_context_mut().register_host_class(class)
+    }
+
+    /// Registers a compile-time host-class definition.
+    ///
+    /// # Errors
+    /// Fails under the same conditions as [`Self::register_host_class`].
+    pub fn register_host_type<T: HostClassDefinition>(&mut self) -> Result<()> {
+        self.register_host_class(T::host_class())
     }
 }
 

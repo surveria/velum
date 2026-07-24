@@ -31,6 +31,11 @@
 !/docs/*.md
 
 !/crates/
+!/crates/velum-macros/
+!/crates/velum-macros/Cargo.toml
+!/crates/velum-macros/src/
+!/crates/velum-macros/src/**/
+!/crates/velum-macros/src/**/*.rs
 !/crates/velum-regexp/
 !/crates/velum-regexp/Cargo.toml
 !/crates/velum-regexp/src/
@@ -41,6 +46,15 @@
 !/crates/velum-regexp/unicode/GENERATED-SHA256SUMS
 !/crates/velum-regexp/tests/
 !/crates/velum-regexp/tests/**/*.rs
+!/crates/velum-tokio/
+!/crates/velum-tokio/Cargo.toml
+!/crates/velum-tokio/src/
+!/crates/velum-tokio/src/**/
+!/crates/velum-tokio/src/**/*.rs
+!/crates/velum-tokio/tests/
+!/crates/velum-tokio/tests/**/*.rs
+!/crates/velum-tokio/examples/
+!/crates/velum-tokio/examples/**/*.rs
 
 !/tools/
 !/tools/regexp-unicode-gen/

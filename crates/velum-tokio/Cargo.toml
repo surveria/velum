@@ -1,0 +1,35 @@
+[package]
+name = "velum-tokio"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/surveria/velum"
+description = "Tokio-owned VM workers for the Velum JavaScript engine."
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
+velum = { path = "../.." }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+velum = { path = "../..", features = ["host-macros"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+uninlined_format_args = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+redundant_pub_crate = "deny"
+too_many_lines = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"

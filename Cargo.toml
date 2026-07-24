@@ -1,8 +1,13 @@
-# The root engine and its dependency-light RegExp library share one workspace.
-# Maintenance tooling is a workspace member so formatting and explicit tool
-# checks remain reproducible, but it is not a default build member.
+# The dependency-light engine and RegExp library remain the default members.
+# Optional macro/runtime adapters and maintenance tooling share the workspace
+# for formatting and explicit checks without entering the default build.
 [workspace]
-members = ["crates/velum-regexp", "tools/regexp-unicode-gen"]
+members = [
+    "crates/velum-macros",
+    "crates/velum-regexp",
+    "crates/velum-tokio",
+    "tools/regexp-unicode-gen",
+]
 default-members = [".", "crates/velum-regexp"]
 exclude = ["cli", "runner", "src/regress"]
 
@@ -26,6 +31,7 @@ required-features = ["std"]
 
 [features]
 default = ["std"]
+host-macros = ["std", "dep:velum-macros"]
 std = [
     "dep:anyhow",
     "dep:parking_lot",
@@ -60,6 +66,7 @@ unicode-ident = "1"
 unicode-normalization = { version = "0.1", default-features = false }
 unicode-segmentation = "1.13"
 velum-regexp = { path = "crates/velum-regexp", default-features = false }
+velum-macros = { path = "crates/velum-macros", optional = true }
 
 [dev-dependencies]
 regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }

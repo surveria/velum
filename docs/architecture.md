@@ -346,6 +346,28 @@ may borrow payload state only while constructing an owned `'static` future;
 Promise settlement remains on the normal host-future and job paths. Host
 constructors and classes do not generate source or use eval.
 
+The optional `host-macros` feature is a compile-time facade over that builder.
+`#[velum::host_class]` generates class metadata and explicitly annotated field
+descriptors; `#[velum::host_methods]` generates the constructor and method
+builder calls. Unannotated fields produce no descriptor and remain ordinary
+Rust state. Rust `async fn` methods generate the same `HostClass::async_method`
+registration used manually, so compilation, receiver validation, host-future
+ownership, Promise settlement, and bytecode execution keep one semantic path.
+Naming attributes are registration metadata, not runtime implementation
+lookups: JavaScript property lookup resolves the installed function object,
+whose VM-local host-function id selects the registered Rust callback.
+
+`crates/velum-tokio` is an optional embedding adapter, not an engine
+dependency. A `VmRuntime` owns a configurable set of OS threads, each running
+a Tokio current-thread runtime and `LocalSet`. A VM is constructed inside one
+worker, never becomes `Send`, and processes a bounded FIFO command queue
+through `VmHandle`. The owning actor polls host futures with Tokio's waker and
+then drains host commands and ordinary Promise jobs. Independent VMs are
+distributed round-robin across workers, so they may execute and wait for I/O
+in parallel without allowing concurrent entry into one VM. Runtime mode and
+worker count remain outer application policy and do not appear in host-class
+annotations.
+
 Async Rust callbacks use `register_async_host_function` or the typed variant.
 The synchronous callback entry must copy primitive arguments or retain
 VM-local values before returning a `'static` Rust future. Invocation creates an
