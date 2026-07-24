@@ -14,6 +14,7 @@ const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
 const DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD: &str = "toTemporalInstant";
+const ENGINE262_STACK_OVERFLOW_ERROR: &str = "Maximum call stack size exceeded";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
 const ENGINE262_EXPECTED_CHARACTER_ERROR: &str = "Expected a character";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
@@ -28,6 +29,15 @@ const IMMUTABLE_ARRAY_BUFFER_METHODS: [&str; 3] = [
     "sliceToImmutable",
     "transferToImmutable",
     "transferToFixedLength",
+];
+const SET_COMPOSITION_METHODS: [&str; 7] = [
+    "difference",
+    "intersection",
+    "isDisjointFrom",
+    "isSubsetOf",
+    "isSupersetOf",
+    "symmetricDifference",
+    "union",
 ];
 const ANNEX_B_STRING_LEGACY_METHODS: [&str; 16] = [
     "anchor",
@@ -152,8 +162,18 @@ fn is_resizable_array_buffer_alignment_without_oracle(
         && (is_engine262_missing_global(engine262)
             || outcome_is_range_error_with(engine262, |message| {
                 message.contains("Cannot allocate memory")
-            }))
+            })
+            || outcome_is_engine262_stack_overflow_crash(engine262))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn outcome_is_engine262_stack_overflow_crash(outcome: &EngineOutcome) -> bool {
+    outcome.status == OutcomeStatus::Crash
+        && outcome.error_name.as_deref() == Some("RangeError")
+        && outcome
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_STACK_OVERFLOW_ERROR))
 }
 
 fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
@@ -636,6 +656,7 @@ fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
     is_v8_missing_global(v8)
         || is_v8_missing_typed_array_base64_or_hex(v8)
         || is_v8_missing_math_f16round(v8)
+        || is_v8_missing_set_composition(v8)
 }
 
 fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
@@ -682,4 +703,14 @@ fn is_v8_missing_math_f16round(v8: &EngineOutcome) -> bool {
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains("Math.f16round is not a function"))
+}
+
+fn is_v8_missing_set_composition(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8.error_message.as_deref().is_some_and(|message| {
+            SET_COMPOSITION_METHODS
+                .iter()
+                .any(|method| message.contains(&format!("{method} is not a function")))
+        })
 }

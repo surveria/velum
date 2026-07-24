@@ -234,6 +234,46 @@ fn shared_array_buffer_alignment_gap_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
+fn resizable_array_buffer_alignment_and_engine262_stack_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::Crash,
+        1,
+        "",
+        Some("RangeError".to_owned()),
+        Some("RangeError: Maximum call stack size exceeded".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(833, { maxByteLength: 1723 });\
+        new Uint16Array(buffer);\
+        function recurse() { try { recurse(); } catch (error) {} }\
+        recurse();\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn missing_set_composition_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+    let v8 = type_error("v11.intersection is not a function");
+    let source = "\
+        new SharedArrayBuffer(5, { maxByteLength: 10 });\
+        const set = new Set();\
+        set.intersection(set);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(

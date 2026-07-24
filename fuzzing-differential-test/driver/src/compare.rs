@@ -7,7 +7,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
-use velum::{Error, Runtime, RuntimeLimits};
+use velum::{
+    DataPropertyDefinition, Error, JsValueRef, PropertyKeyRef, RuntimeLimits, Vm, VmConfig,
+};
 
 use crate::{
     engine262_worker::Engine262Worker,
@@ -287,13 +289,12 @@ fn execute_velum(source: &str) -> anyhow::Result<EngineOutcome> {
     let started = Instant::now();
     let output = Rc::new(RefCell::new(String::new()));
     let output_sink = Rc::clone(&output);
-    let runtime = Runtime::with_limits(RuntimeLimits {
+    let mut vm = Vm::with_config(VmConfig::with_limits(RuntimeLimits {
         max_call_stack_bytes: DIFFERENTIAL_MAX_CALL_STACK_BYTES,
         ..RuntimeLimits::default()
-    });
-    let mut context = runtime.context();
-    context
-        .register_host_function_typed("fuzzilli", move |call| {
+    }));
+    let callback = vm
+        .create_host_function_typed("fuzzilli", move |call| {
             let operation = call.string(0, "operation")?;
             if operation != "FUZZILLI_PRINT" {
                 return Ok(());
@@ -307,11 +308,24 @@ fn execute_velum(source: &str) -> anyhow::Result<EngineOutcome> {
             Ok(())
         })
         .map_err(|error| {
-            anyhow::anyhow!("failed to register the Fuzzilli host callback: {error}")
+            anyhow::anyhow!("failed to create the Fuzzilli host callback: {error}")
         })?;
+    let global = vm
+        .eval_retained("globalThis")
+        .map_err(|error| anyhow::anyhow!("failed to retain globalThis: {error}"))?;
+    let descriptor = DataPropertyDefinition::new(JsValueRef::from(&callback))
+        .with_writable(true)
+        .with_enumerable(false)
+        .with_configurable(true);
+    vm.define_property_or_throw(
+        JsValueRef::from(&global),
+        PropertyKeyRef::Name("fuzzilli"),
+        descriptor.into(),
+    )
+    .map_err(|error| anyhow::anyhow!("failed to install the Fuzzilli host callback: {error}"))?;
 
-    let result = context.eval(source);
-    drop(context.take_output());
+    let result = vm.eval(source);
+    drop(vm.context().take_output());
     let elapsed_nanos = duration_nanos_u64(started.elapsed());
     let stdout = output.borrow().clone();
     match result {
@@ -410,6 +424,19 @@ mod tests {
             slow_ratio: 2.0,
             slow_min: Duration::from_millis(5),
         }
+    }
+
+    #[test]
+    fn velum_fuzzilli_hook_allows_global_assignment() -> anyhow::Result<()> {
+        let outcome = super::execute_velum(
+            "fuzzilli('FUZZILLI_PRINT', 'before'); fuzzilli = new Set();",
+        )?;
+        ensure!(
+            outcome.status == OutcomeStatus::Ok,
+            "unexpected outcome: {outcome:?}"
+        );
+        ensure!(outcome.stdout_bytes == 7, "unexpected stdout size");
+        Ok(())
     }
 
     #[test]
