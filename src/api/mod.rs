@@ -9,6 +9,8 @@ pub mod owned_value;
 mod queued_call;
 pub mod shared_array_buffer;
 
-pub use host_class::{HostClass, HostInstance, HostMethodResult};
+pub use host_class::{
+    HostClass, HostClassDefinition, HostClassMetadata, HostInstance, HostMethodResult,
+};
 pub use host_object::HostObjectOptions;
 pub use object::ObjectOptions;

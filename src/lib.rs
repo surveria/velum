@@ -42,6 +42,7 @@ pub use crate::api::invocation::{
 pub use crate::api::owned_value::OwnedValue;
 pub use crate::api::shared_array_buffer::SharedArrayBufferHandle;
 pub use crate::api::{HostClass, HostInstance, HostMethodResult, HostObjectOptions, ObjectOptions};
+pub use crate::api::{HostClassDefinition, HostClassMetadata};
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_module::{
     CompiledModule, DynamicModuleRequest, ModuleExport, ModuleImport, ModuleImportName,
@@ -65,3 +66,6 @@ pub use crate::storage::string_heap::{JsString, StringId};
 pub use crate::storage::symbol::{JsSymbol, SymbolId};
 pub use crate::syntax::ImportPhase;
 pub use crate::value::{JsBigInt, Value};
+
+#[cfg(feature = "host-macros")]
+pub use velum_macros::{host_class, host_methods};
