@@ -150,6 +150,27 @@ fn rejected_next_results_enter_async_control_flow() -> TestResult {
 }
 
 #[test]
+fn preserves_sync_iterator_wrapper_promises_across_gc() -> TestResult {
+    ensure_string_after(
+        r#"
+        const values = new Float64Array(2131);
+        let result = "pending";
+        async function consume() {
+            for await (const value of values) {
+            }
+            return WeakMap;
+        }
+        consume().then(
+            function(value) { result = value === WeakMap ? "ok" : "wrong"; },
+            function(error) { result = error.name + ":" + error.message; }
+        );
+        "#,
+        "result",
+        "ok",
+    )
+}
+
+#[test]
 fn allows_for_await_only_in_async_functions() -> TestResult {
     let error = eval("for await (const value of []) {}")
         .err()

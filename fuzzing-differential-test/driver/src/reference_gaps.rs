@@ -69,6 +69,7 @@ pub fn is_engine262_unsupported(
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
+        || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !outcomes_equivalent(velum, engine262)
@@ -89,6 +90,7 @@ pub fn correctness_oracle<'a>(
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
+        || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
@@ -185,9 +187,26 @@ fn source_constructs_zero_length_shared_array_buffer(source: &str) -> bool {
                 return true;
             }
         }
+        if let Some(after_constructor) = args.strip_prefix(SHARED_ARRAY_BUFFER_CONSTRUCTOR) {
+            let after_constructor = after_constructor.trim_start();
+            if after_constructor.starts_with(')') || after_constructor.starts_with(',') {
+                return true;
+            }
+        }
         search_start = after_constructor_start;
     }
     false
+}
+
+fn is_native_function_throw_stringification_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains("throw DataView;")
+        && is_engine262_missing_global(engine262)
+        && v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("DataView")
 }
 
 fn is_webassembly_host_api_gap(
@@ -212,7 +231,8 @@ fn is_webassembly_host_api_without_oracle(
     v8: &EngineOutcome,
 ) -> bool {
     source.contains(WEBASSEMBLY_GLOBAL_ACCESS)
-        && (is_engine262_missing_global(engine262) || !references_complete_equivalently(engine262, v8))
+        && (is_engine262_missing_global(engine262)
+            || !references_complete_equivalently(engine262, v8))
 }
 
 fn is_fuzzilli_introspection_reference_unstable(
@@ -221,7 +241,8 @@ fn is_fuzzilli_introspection_reference_unstable(
     v8: &EngineOutcome,
 ) -> bool {
     source_contains_fuzzilli_introspection_harness(source)
-        && (is_engine262_missing_global(engine262) || references_complete_but_disagree(engine262, v8))
+        && (is_engine262_missing_global(engine262)
+            || references_complete_but_disagree(engine262, v8))
 }
 
 fn source_contains_fuzzilli_introspection_harness(source: &str) -> bool {
@@ -437,7 +458,9 @@ fn is_engine262_missing_global(engine262: &EngineOutcome) -> bool {
 }
 
 fn is_engine262_missing_global_message(message: &str) -> bool {
-    message.contains("\"Intl\" is not defined")
+    message.contains("\"Atomics\" is not defined")
+        || message.contains("Atomics is not defined")
+        || message.contains("\"Intl\" is not defined")
         || message.contains("Intl is not defined")
         || message.contains("\"SharedArrayBuffer\" is not defined")
         || message.contains("SharedArrayBuffer is not defined")
@@ -503,10 +526,7 @@ mod tests {
 
     use crate::compare::{OutcomeStatus, outcome};
 
-    use super::{
-        correctness_oracle, is_engine262_unsupported, outcomes_equivalent,
-        source_contains_resource_management_syntax,
-    };
+    use super::{correctness_oracle, is_engine262_unsupported, outcomes_equivalent};
 
     #[test]
     fn missing_float16_v8_fallback_global_disables_oracle() -> anyhow::Result<()> {
@@ -712,7 +732,7 @@ mod tests {
         let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
         let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-        let source = "const buffer = new SharedArrayBuffer(); buffer.slice(40);";
+        let source = "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);";
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
@@ -741,8 +761,9 @@ mod tests {
 
     #[test]
     fn resource_management_syntax_detector_ignores_plain_identifiers() -> anyhow::Result<()> {
-        ensure!(source_contains_resource_management_syntax("for (using value of []) {}"));
-        ensure!(!source_contains_resource_management_syntax("const usingValue = 1;"));
+        let contains = super::source_contains_resource_management_syntax;
+        ensure!(contains("for (using value of []) {}"));
+        ensure!(!contains("const usingValue = 1;"));
         Ok(())
     }
 

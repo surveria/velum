@@ -204,6 +204,33 @@ fn extends_supports_constructor_functions() -> TestResult {
 }
 
 #[test]
+fn private_elements_brand_native_function_returned_from_super() -> TestResult {
+    ensure_string(
+        r#"
+        let answer = 0;
+        let branded = false;
+        function returns(value) {
+            return value;
+        }
+        class Derived extends returns {
+            #value = 40;
+            #read() {
+                return this.#value + 2;
+            }
+            constructor() {
+                super(BigInt64Array);
+                answer = this.#read();
+                branded = #value in this && #read in this;
+            }
+        }
+        new Derived();
+        "" + answer + ":" + branded
+        "#,
+        "42:true",
+    )
+}
+
+#[test]
 fn super_calls_accept_spread_arguments() -> TestResult {
     ensure_string(
         r#"

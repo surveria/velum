@@ -1,11 +1,18 @@
+use alloc::vec::Vec;
+
 use crate::{
-    error::Result,
-    runtime::function::{FunctionIntrinsicDefaults, FunctionProperties},
-    runtime::object::{
-        DataPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyWritable,
+    error::{Error, Result},
+    runtime::{
+        VmStorageKind,
+        function::{FunctionIntrinsicDefaults, FunctionProperties},
+        object::{
+            DataPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyWritable,
+        },
+        private::{PrivateNameId, PrivateSlot, PrivateSlotValue},
+        realm::RealmIndex,
+        storage_ledger::VmStorageLedger,
+        trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     },
-    runtime::realm::RealmIndex,
-    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     value::Value,
 };
 
@@ -154,6 +161,7 @@ pub(in crate::runtime) struct NativeFunction {
     kind: NativeFunctionKind,
     properties: FunctionProperties,
     static_parent: Option<Value>,
+    private_slots: Vec<PrivateSlot>,
 }
 
 impl NativeFunction {
@@ -178,6 +186,7 @@ impl NativeFunction {
             kind,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
             static_parent: None,
+            private_slots: Vec::new(),
         }
     }
 
@@ -195,6 +204,76 @@ impl NativeFunction {
 
     pub(in crate::runtime) const fn properties_mut(&mut self) -> &mut FunctionProperties {
         &mut self.properties
+    }
+
+    pub(in crate::runtime) fn storage_property_count(&self) -> Result<usize> {
+        self.properties
+            .storage_property_count()?
+            .checked_add(self.private_slots.len())
+            .ok_or_else(|| Error::limit("native function property count overflowed"))
+    }
+
+    pub(in crate::runtime) fn private_slot(
+        &self,
+        name: &PrivateNameId,
+    ) -> Option<PrivateSlotValue> {
+        self.private_slots
+            .iter()
+            .find(|slot| slot.id == *name)
+            .map(|slot| slot.value.clone())
+    }
+
+    pub(in crate::runtime) fn add_private_slot(
+        &mut self,
+        name: PrivateNameId,
+        value: PrivateSlotValue,
+        max_properties: usize,
+        storage_ledger: &VmStorageLedger,
+    ) -> Result<()> {
+        if self.private_slots.iter().any(|slot| slot.id == name) {
+            return Err(Error::type_error("private slot is already defined"));
+        }
+        let property_count = self
+            .storage_property_count()?
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("native function property count overflowed"))?;
+        if property_count > max_properties {
+            return Err(Error::limit(
+                "native function property count exceeded configured limit",
+            ));
+        }
+        let reservation = storage_ledger.reserve_count(VmStorageKind::ObjectProperty, 1)?;
+        self.private_slots.push(PrivateSlot { id: name, value });
+        reservation.commit()
+    }
+
+    pub(in crate::runtime) fn set_private_field(
+        &mut self,
+        name: &PrivateNameId,
+        value: Value,
+    ) -> bool {
+        let Some(slot) = self.private_slots.iter_mut().find(|slot| slot.id == *name) else {
+            return false;
+        };
+        let PrivateSlotValue::Field(_) = &mut slot.value else {
+            return false;
+        };
+        slot.value = PrivateSlotValue::Field(value);
+        true
+    }
+
+    pub(in crate::runtime) fn replace_private_slot(
+        &mut self,
+        name: &PrivateNameId,
+        value: PrivateSlotValue,
+    ) -> Result<()> {
+        let slot = self
+            .private_slots
+            .iter_mut()
+            .find(|slot| slot.id == *name)
+            .ok_or_else(|| Error::runtime("private slot disappeared"))?;
+        slot.value = value;
+        Ok(())
     }
 
     pub(in crate::runtime) const fn static_parent(&self) -> Option<&Value> {
@@ -232,6 +311,14 @@ impl NativeFunction {
                 VmCallableEdgeKind::NativeFunctionInternal,
                 StrongEdgeReference::Value(parent),
             )?;
+        }
+        for slot in &self.private_slots {
+            for value in slot.value.values() {
+                visitor.visit(
+                    VmCallableEdgeKind::NativeFunctionInternal,
+                    StrongEdgeReference::Value(value),
+                )?;
+            }
         }
         match self.kind {
             NativeFunctionKind::BoundFunction(id) => visitor.visit(

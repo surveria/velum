@@ -7,13 +7,14 @@ use crate::{
         Context, VmStorageKind,
         abstract_operations::IteratorSource,
         call::RuntimeCallArgs,
-        control::{Completion, Suspension, runtime_exception_value},
+        control::{Completion, runtime_exception_value},
         function::SuspendedExecutionStorageFootprint,
         object::AtomicWaitOutcome,
     },
-    value::{ErrorName, FunctionId, ObjectId, Value},
+    value::{ErrorName, ObjectId, Value},
 };
 
+mod async_function;
 mod combinator;
 mod finally_function;
 mod job;
@@ -197,137 +198,6 @@ impl Context {
                 .release_count(VmStorageKind::PromiseReaction, 1)?;
             return Err(Error::runtime(
                 "Promise state changed while adding reaction",
-            ));
-        };
-        reactions.push(reaction);
-        Ok(())
-    }
-
-    pub(in crate::runtime) fn eval_async_function_with_this(
-        &mut self,
-        id: FunctionId,
-        args: RuntimeCallArgs<'_>,
-        this_value: Value,
-        new_target: Value,
-    ) -> Result<Value> {
-        let (promise, object) = self.create_pending_promise()?;
-        let completion = self.eval_async_function_completion_with_this_and_new_target(
-            id, args, this_value, new_target,
-        )?;
-        self.settle_or_suspend_async_function(id, promise, completion)?;
-        Ok(object)
-    }
-
-    fn settle_or_suspend_async_function(
-        &mut self,
-        function: FunctionId,
-        result_promise: PromiseId,
-        completion: Completion,
-    ) -> Result<()> {
-        let completion = self.normalize_resumed_tail_call(completion)?;
-        match completion {
-            Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
-            Completion::Return(value) | Completion::ReturnDirect(value) => {
-                self.resolve_promise(result_promise, value)
-            }
-            Completion::Throw(value) => self.reject_promise(result_promise, value),
-            Completion::TailCall(_) => Err(Error::runtime("tail call escaped async function")),
-            Completion::Break { .. } | Completion::Continue { .. } => {
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::SyntaxError,
-                        "invalid async function completion",
-                    ),
-                    true,
-                )?;
-                self.reject_promise(result_promise, reason)
-            }
-            Completion::Suspend(Suspension::Await(awaited)) => {
-                let continuation =
-                    self.detach_suspended_async_function(function, result_promise)?;
-                self.add_async_await_reaction(awaited, continuation)
-            }
-            Completion::Suspend(Suspension::Yield(value)) => {
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::TypeError,
-                        format!("async function yielded unexpected value {value}"),
-                    ),
-                    true,
-                )?;
-                self.reject_promise(result_promise, reason)
-            }
-            Completion::Suspend(Suspension::DelegatedYield(delegated)) => {
-                let value = delegated.root_value();
-                let reason = self.create_error_object(
-                    JavaScriptErrorMetadata::new(
-                        ErrorName::TypeError,
-                        format!("async function yielded unexpected value {value}"),
-                    ),
-                    true,
-                )?;
-                self.reject_promise(result_promise, reason)
-            }
-            Completion::Suspend(Suspension::GeneratorStart) => {
-                Err(Error::runtime("async function entered generator start"))
-            }
-        }
-    }
-
-    pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
-        let promise = self.promise_resolve_for_await(value)?;
-        Ok(Completion::Suspend(Suspension::Await(promise)))
-    }
-
-    pub(in crate::runtime) fn promise_resolve_for_await(
-        &mut self,
-        value: Value,
-    ) -> Result<PromiseId> {
-        if let Ok(promise) = self.promise_id_from_value(&value) {
-            let constructor = self.get_named(&value, "constructor")?;
-            let intrinsic = self.promise_constructor_value()?;
-            if constructor == intrinsic {
-                return Ok(promise);
-            }
-        }
-        let (promise, _object) = self.create_pending_promise()?;
-        self.resolve_promise(promise, value)?;
-        Ok(promise)
-    }
-
-    fn add_async_await_reaction(
-        &mut self,
-        promise: PromiseId,
-        continuation: crate::runtime::function::SuspendedAsyncFunction,
-    ) -> Result<()> {
-        let settled = match self.promise_state(promise)? {
-            PromiseState::Pending { .. } => None,
-            PromiseState::Fulfilled(value) => Some(PromiseSettledState::fulfilled(value.clone())),
-            PromiseState::Rejected(reason) => Some(PromiseSettledState::rejected(reason.clone())),
-        };
-        let storage_kind = if settled.is_some() {
-            VmStorageKind::PromiseJob
-        } else {
-            VmStorageKind::PromiseReaction
-        };
-        if let Err(error) = self.storage_ledger.grow_count(storage_kind, 1) {
-            continuation.cancel_storage(&self.storage_ledger)?;
-            return Err(error);
-        }
-        let reaction = PromiseReaction::awaiting(continuation);
-        if let Some(state) = settled {
-            self.promise_jobs
-                .push_back(PromiseJob::Reaction { reaction, state });
-            return Ok(());
-        }
-        let PromiseState::Pending { reactions } = &mut self.promise_mut(promise)?.state else {
-            self.storage_ledger.release_count(storage_kind, 1)?;
-            let Some(continuation) = reaction.into_suspended() else {
-                return Err(Error::runtime("async await reaction disappeared"));
-            };
-            continuation.cancel_storage(&self.storage_ledger)?;
-            return Err(Error::runtime(
-                "Promise state changed while adding await reaction",
             ));
         };
         reactions.push(reaction);
@@ -754,45 +624,22 @@ impl Context {
         }
     }
 
-    fn resume_async_function(
-        &mut self,
-        continuation: crate::runtime::function::SuspendedAsyncFunction,
-        state: PromiseSettledState,
-    ) -> Result<()> {
-        let function = continuation.function();
-        let result_promise = continuation.result_promise();
-        let resume = match state.status {
-            PromiseStatus::Fulfilled => Completion::Normal(state.value),
-            PromiseStatus::Rejected => Completion::Throw(state.value),
-        };
-        let completion = match self.resume_suspended_async_function(continuation, resume) {
-            Ok(completion) => completion,
-            Err(error) => {
-                let Some(reason) = runtime_exception_value(self, &error)? else {
-                    return Err(error);
-                };
-                return self.reject_promise(result_promise, reason);
-            }
-        };
-        self.settle_or_suspend_async_function(function, result_promise, completion)
-    }
-
     fn promise_state(&self, id: PromiseId) -> Result<&PromiseState> {
         self.promises
             .get(id.index())
             .map(|promise| &promise.state)
-            .ok_or_else(|| Error::runtime("Promise id is not defined"))
+            .ok_or_else(|| Error::runtime(format!("Promise id {} is not defined", id.index())))
     }
 
     fn promise(&self, id: PromiseId) -> Result<&Promise> {
         self.promises
             .get(id.index())
-            .ok_or_else(|| Error::runtime("Promise id is not defined"))
+            .ok_or_else(|| Error::runtime(format!("Promise id {} is not defined", id.index())))
     }
 
     fn promise_mut(&mut self, id: PromiseId) -> Result<&mut Promise> {
         self.promises
             .get_mut(id.index())
-            .ok_or_else(|| Error::runtime("Promise id is not defined"))
+            .ok_or_else(|| Error::runtime(format!("Promise id {} is not defined", id.index())))
     }
 }
