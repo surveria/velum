@@ -3,6 +3,7 @@ pub mod compare;
 pub mod diff_config;
 pub mod engine262_worker;
 pub mod node_worker;
+pub(crate) mod reference_gap_predicates;
 pub(crate) mod reference_gaps;
 #[cfg(test)]
 mod reference_gaps_tests;
