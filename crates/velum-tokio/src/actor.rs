@@ -61,6 +61,12 @@ fn handle_command(
                 record_fault(&error, fault, idle_waiters);
             }
         }
+        VmCommand::RunLocal(operation) => {
+            operation.start(vm);
+            if let Err(error) = run_ready_work(vm) {
+                record_fault(&error, fault, idle_waiters);
+            }
+        }
         VmCommand::WaitIdle(response) => {
             if is_idle(vm) {
                 drop(response.send(Ok(())));
@@ -75,6 +81,7 @@ fn reject_command(command: VmCommand, fault: Option<&RuntimeError>) {
     let error = fault.cloned().unwrap_or(RuntimeError::VmClosed);
     match command {
         VmCommand::Run(operation) => operation.reject(error),
+        VmCommand::RunLocal(operation) => operation.reject(error),
         VmCommand::WaitIdle(response) => drop(response.send(Err(error))),
     }
 }

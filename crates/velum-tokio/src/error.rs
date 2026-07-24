@@ -24,6 +24,12 @@ impl RuntimeError {
     }
 }
 
+impl From<velum::HostFutureError> for RuntimeError {
+    fn from(error: velum::HostFutureError) -> Self {
+        Self::Engine(error.to_string())
+    }
+}
+
 impl fmt::Display for RuntimeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

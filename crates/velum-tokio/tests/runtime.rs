@@ -118,6 +118,55 @@ async fn async_macro_method_can_use_hidden_vm_local_state() -> TestResult {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_requests_progress_without_moving_vm_state() -> TestResult {
+    let runtime = VmRuntime::builder(Engine::new())
+        .worker_threads(1)
+        .build()?;
+    let vm = runtime.spawn_vm().await?;
+    vm.run(|vm| {
+        vm.eval(
+            r"
+            async function addLater(left, right) {
+                await Promise.resolve();
+                return left + right;
+            }
+            ",
+        )?;
+        Ok(())
+    })
+    .await?;
+
+    let sum = vm
+        .run_local(|vm| {
+            let function = vm
+                .get_global_retained("addLater")?
+                .ok_or_else(|| velum::Error::runtime("addLater was not defined"))?;
+            let request = vm.enqueue_call(
+                &function,
+                &[
+                    velum::JsValueRef::Number(20.0),
+                    velum::JsValueRef::Number(22.0),
+                ],
+            )?;
+            function.release()?;
+            Ok(async move {
+                let result = request.await.map_err(velum_tokio::RuntimeError::from)?;
+                let velum::QueuedCallResult::Owned(OwnedValue::Number(sum)) = result else {
+                    return Err(velum_tokio::RuntimeError::Engine(
+                        "addLater did not return a number".to_owned(),
+                    ));
+                };
+                Ok(sum)
+            })
+        })
+        .await?;
+    if (sum - 42.0).abs() > f64::EPSILON {
+        return Err(format!("unexpected local request result: {sum}").into());
+    }
+    Ok(())
+}
+
 async fn spawn_barrier_vm(
     runtime: &VmRuntime,
     barrier: Arc<Barrier>,
