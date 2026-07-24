@@ -4,11 +4,15 @@ const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SHARED_ARRAY_BUFFER_CONSTRUCTOR: &str = "SharedArrayBuffer";
+const SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR: &str = "new SharedArrayBuffer";
+const SHARED_ARRAY_BUFFER_SLICE_METHOD: &str = "slice";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
+const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
+    "SharedArrayBuffer subclass returned this from species constructor";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
 const FUZZILLI_PROBE_MARKER: &str = "PROBING_RESULTS";
@@ -61,6 +65,7 @@ pub fn is_engine262_unsupported(
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !outcomes_equivalent(velum, engine262)
@@ -79,6 +84,7 @@ pub fn correctness_oracle<'a>(
     if is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_webassembly_host_api_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
@@ -108,6 +114,57 @@ fn is_shared_array_buffer_alignment_without_oracle(
 
 fn is_v8_typed_array_alignment_error(message: &str) -> bool {
     message.contains("byte length of") && message.contains(V8_TYPED_ARRAY_ALIGNMENT_ERROR)
+}
+
+fn is_shared_array_buffer_zero_length_slice_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_constructs_zero_length_shared_array_buffer(source)
+        && source_contains_method_reference(source, SHARED_ARRAY_BUFFER_SLICE_METHOD)
+        && !source.contains("species")
+        && is_engine262_missing_global(engine262)
+        && v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR))
+}
+
+fn source_constructs_zero_length_shared_array_buffer(source: &str) -> bool {
+    let mut search_start = 0;
+    while let Some(relative_start) = source
+        .get(search_start..)
+        .and_then(|tail| tail.find(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR))
+    {
+        let start = search_start.saturating_add(relative_start);
+        let Some(after_constructor_start) =
+            start.checked_add(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR.len())
+        else {
+            return false;
+        };
+        let Some(after_constructor) = source.get(after_constructor_start..) else {
+            return false;
+        };
+        let Some(args) = after_constructor.trim_start().strip_prefix('(') else {
+            search_start = after_constructor_start;
+            continue;
+        };
+        let args = args.trim_start();
+        if args.starts_with(')') {
+            return true;
+        }
+        if let Some(after_zero) = args.strip_prefix('0') {
+            let after_zero = after_zero.trim_start();
+            if after_zero.starts_with(')') || after_zero.starts_with(',') {
+                return true;
+            }
+        }
+        search_start = after_constructor_start;
+    }
+    false
 }
 
 fn is_webassembly_host_api_gap(
@@ -590,6 +647,37 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+        let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
+        let source = "const buffer = new SharedArrayBuffer(); buffer.slice(40);";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn shared_array_buffer_species_slice_gap_keeps_v8_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+        let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
+        let source = "\
+            const buffer = new SharedArrayBuffer();\
+            buffer.constructor = { [Symbol.species]: function() { return buffer; } };\
+            buffer.slice(40);\
+        ";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+            anyhow::bail!("expected V8 fallback oracle");
+        };
+        ensure!(unsupported);
+        ensure!(outcomes_equivalent(oracle, &v8));
         Ok(())
     }
 

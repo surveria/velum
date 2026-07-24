@@ -152,7 +152,10 @@ impl Context {
             constructor.clone(),
         )?;
         let (_, target) = self.shared_array_buffer_receiver(&result)?;
-        if result == *this_value || target.byte_length() < new_length {
+        if result == *this_value
+            || target.shares_storage(&source)
+            || target.byte_length() < new_length
+        {
             return Err(Error::type_error(SPECIES_RESULT_ERROR));
         }
         let copy_end = start

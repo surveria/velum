@@ -67,6 +67,30 @@ fn accepts_large_logical_max_byte_length_without_allocating_it() -> TestResult {
 }
 
 #[test]
+fn slice_accepts_empty_copy_but_rejects_species_alias() -> TestResult {
+    ensure_eval(
+        r"
+        let source = new SharedArrayBuffer();
+        let empty = source.slice(40);
+        let failures = 0;
+        source.constructor = {
+            [Symbol.species]: function() {
+                return source;
+            }
+        };
+        try { source.slice(0); } catch (error) {
+            if (error instanceof TypeError) failures = failures + 1;
+        }
+        empty instanceof SharedArrayBuffer &&
+            empty.byteLength === 0 &&
+            empty !== source &&
+            failures === 1 ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn performs_number_and_bigint_atomic_updates() -> TestResult {
     ensure_eval(
         r"
