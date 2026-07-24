@@ -113,8 +113,8 @@ fn is_reference_unsupported_resource_management_symbols(
     v8: &EngineOutcome,
 ) -> bool {
     source_contains_resource_management_symbol_access(source)
-        && references_complete_equivalently(engine262, v8)
         && !outcomes_equivalent(velum, engine262)
+        && (references_complete_equivalently(engine262, v8) || outcomes_equivalent(velum, v8))
 }
 
 fn references_reject_as_syntax(engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
@@ -327,6 +327,21 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn engine262_only_resource_management_symbol_gap_falls_back_to_v8() -> anyhow::Result<()> {
+        let velum = type_error("Cannot convert a Symbol value to a number");
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = type_error("Cannot convert a Symbol value to a number");
+        let source = "new Uint16Array(Symbol.asyncDispose, Symbol.asyncDispose)";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+            anyhow::bail!("expected V8 fallback oracle");
+        };
+        ensure!(unsupported);
+        ensure!(outcomes_equivalent(oracle, &v8));
         Ok(())
     }
 
