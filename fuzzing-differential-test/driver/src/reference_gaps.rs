@@ -3,10 +3,12 @@ use crate::compare::{EngineOutcome, OutcomeStatus};
 const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
+const SHARED_ARRAY_BUFFER_CONSTRUCTOR: &str = "SharedArrayBuffer";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
+const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
 const FUZZILLI_PROBE_MARKER: &str = "PROBING_RESULTS";
@@ -58,6 +60,7 @@ pub fn is_engine262_unsupported(
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
+        || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !outcomes_equivalent(velum, engine262)
@@ -75,6 +78,7 @@ pub fn correctness_oracle<'a>(
     }
     if is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_webassembly_host_api_without_oracle(source, engine262, v8)
+        || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
@@ -84,6 +88,26 @@ pub fn correctness_oracle<'a>(
         return None;
     }
     Some(v8)
+}
+
+fn is_shared_array_buffer_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(SHARED_ARRAY_BUFFER_CONSTRUCTOR)
+        && source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && is_engine262_missing_global(engine262)
+        && v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("RangeError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(is_v8_typed_array_alignment_error)
+}
+
+fn is_v8_typed_array_alignment_error(message: &str) -> bool {
+    message.contains("byte length of") && message.contains(V8_TYPED_ARRAY_ALIGNMENT_ERROR)
 }
 
 fn is_webassembly_host_api_gap(
@@ -555,6 +579,21 @@ mod tests {
     }
 
     #[test]
+    fn shared_array_buffer_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+        let v8 = range_error("byte length of BigInt64Array should be a multiple of 8");
+        let source = "\
+            const buffer = new SharedArrayBuffer(26, { maxByteLength: 40 });\
+            new BigInt64Array(buffer);\
+        ";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
     fn unstable_fuzzilli_introspection_disables_oracle_when_references_disagree()
     -> anyhow::Result<()> {
         let velum = outcome(OutcomeStatus::Ok, 1, "EXPLORE_ACTION: left\n", None, None);
@@ -637,6 +676,16 @@ mod tests {
             1,
             "",
             Some("TypeError".to_owned()),
+            Some(message.to_owned()),
+        )
+    }
+
+    fn range_error(message: &str) -> crate::compare::EngineOutcome {
+        outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
             Some(message.to_owned()),
         )
     }
