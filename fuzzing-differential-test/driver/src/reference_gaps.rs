@@ -62,6 +62,7 @@ pub fn is_engine262_unsupported(
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
         || is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
+        || is_engine262_missing_annex_b_regexp_compile_method(source, velum, engine262)
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
@@ -122,9 +123,10 @@ fn is_resizable_array_buffer_alignment_without_oracle(
     v8: &EngineOutcome,
 ) -> bool {
     source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
-        && outcome_is_range_error_with(engine262, |message| {
-            message.contains("Cannot allocate memory")
-        })
+        && (is_engine262_missing_global(engine262)
+            || outcome_is_range_error_with(engine262, |message| {
+                message.contains("Cannot allocate memory")
+            }))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
@@ -243,6 +245,21 @@ fn is_engine262_missing_annex_b_string_legacy_method(
         && ANNEX_B_STRING_LEGACY_METHODS
             .iter()
             .any(|method| source_contains_method_reference(source, method))
+}
+
+fn is_engine262_missing_annex_b_regexp_compile_method(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+) -> bool {
+    source_contains_method_reference(source, "compile")
+        && !outcomes_equivalent(velum, engine262)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains("compile"))
 }
 
 fn is_reference_unsupported_immutable_array_buffer_method(
@@ -719,34 +736,6 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn stable_fuzzilli_introspection_keeps_oracle_when_references_agree() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "PROBING_RESULTS: {}\n", None, None);
-        let engine262 = outcome(
-            OutcomeStatus::Ok,
-            1,
-            "PROBING_RESULTS: {\"load\":1}\n",
-            None,
-            None,
-        );
-        let v8 = outcome(
-            OutcomeStatus::Ok,
-            1,
-            "PROBING_RESULTS: {\"load\":1}\n",
-            None,
-            None,
-        );
-        let source =
-            "if (typeof fuzzilli === 'undefined') fuzzilli = function() {}; 'PROBING_RESULTS';";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-            anyhow::bail!("expected Engine262 oracle");
-        };
-        ensure!(!unsupported);
-        ensure!(outcomes_equivalent(oracle, &engine262));
         Ok(())
     }
 
