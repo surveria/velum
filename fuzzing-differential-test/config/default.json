@@ -1,0 +1,18 @@
+{
+  "duration": null,
+  "jobs": 1,
+  "node": "node",
+  "engine262_timeout": "30s",
+  "v8_timeout": "4s",
+  "slow_ratio": 2.0,
+  "slow_min": "5ms",
+  "save_all": false,
+  "stop_after": {
+    "correctness_mismatches": 10,
+    "performance_slow": 0,
+    "v8_timeouts": 0,
+    "v8_crashes": 0,
+    "engine262_timeouts": 0,
+    "engine262_crashes": 0
+  }
+}

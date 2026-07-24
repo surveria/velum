@@ -92,6 +92,48 @@ fn canonical_locale_lists_use_locale_internal_slots() -> TestResult {
 }
 
 #[test]
+fn accepts_structurally_valid_unknown_extended_language_tags() -> TestResult {
+    let value = eval(
+        r#"
+        function throwsRangeError(callback) {
+            try {
+                callback();
+                return false;
+            } catch (error) {
+                return error instanceof RangeError;
+            }
+        }
+        const plain = new Intl.Locale("symbol");
+        const regional = new Intl.Locale("SYMBOL-latn-us");
+        const numbered = new Intl.Locale("symbol-u-nu-latn");
+        const optionLanguage = new Intl.Locale("en", {
+            language: "symbol",
+            region: "US"
+        });
+        const localized = new Uint8ClampedArray(new ArrayBuffer(2))
+            .toLocaleString("symbol", []);
+        plain.toString() === "symbol" &&
+            plain.language === "symbol" &&
+            plain.baseName === "symbol" &&
+            plain.maximize().toString() === "symbol" &&
+            plain.minimize().toString() === "symbol" &&
+            regional.toString() === "symbol-Latn-US" &&
+            regional.language === "symbol" &&
+            regional.script === "Latn" &&
+            regional.region === "US" &&
+            numbered.numberingSystem === "latn" &&
+            optionLanguage.toString() === "symbol-US" &&
+            Intl.getCanonicalLocales(["SYMBOL-u-nu-latn"]).join() ===
+                "symbol-u-nu-latn" &&
+            localized === "0,0" &&
+            throwsRangeError(() => new Intl.Locale("abcd")) &&
+            throwsRangeError(() => Intl.getCanonicalLocales("en1"))
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn canonicalizes_unicode_aliases_and_boxes_primitive_lists() -> TestResult {
     let value = eval(
         r#"

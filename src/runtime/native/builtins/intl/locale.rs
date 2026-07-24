@@ -105,6 +105,58 @@ impl LocaleOptions {
     }
 }
 
+struct ParsedLocale {
+    locale: Locale,
+    extended_language: Option<String>,
+}
+
+impl ParsedLocale {
+    const fn new(locale: Locale) -> Self {
+        Self {
+            locale,
+            extended_language: None,
+        }
+    }
+
+    const fn extended(locale: Locale, language: String) -> Self {
+        Self {
+            locale,
+            extended_language: Some(language),
+        }
+    }
+
+    fn language(&self) -> &str {
+        self.extended_language
+            .as_deref()
+            .unwrap_or_else(|| self.locale.id.language.as_str())
+    }
+
+    const fn has_extended_language(&self) -> bool {
+        self.extended_language.is_some()
+    }
+
+    fn canonical_string(&self) -> String {
+        self.with_language(canonical_locale_string(&self.locale))
+    }
+
+    fn base_name(&self) -> String {
+        self.with_language(self.locale.id.to_string())
+    }
+
+    fn with_language(&self, tag: String) -> String {
+        let Some(language) = self.extended_language.as_deref() else {
+            return tag;
+        };
+        if tag == "und" {
+            return language.to_owned();
+        }
+        if let Some(tail) = tag.strip_prefix("und-") {
+            return format!("{language}-{tail}");
+        }
+        tag
+    }
+}
+
 impl Context {
     pub(in crate::runtime) fn intl_locale_constructor_value(&mut self) -> Result<Value> {
         let constructor_kind = IntlFunctionKind::LocaleConstructor;
@@ -151,8 +203,8 @@ impl Context {
         let mut locale = parse_and_canonicalize_locale(&source_tag)?;
         let options = self.parse_locale_options(&options_value)?;
         apply_locale_options(&mut locale, options)?;
-        canonicalize_locale(&mut locale)?;
-        self.create_locale_value(locale.to_string())
+        canonicalize_locale(&mut locale.locale)?;
+        self.create_locale_value(locale.canonical_string())
     }
 
     pub(super) fn eval_intl_get_canonical_locales(
@@ -193,26 +245,38 @@ impl Context {
         }
         let locale = parse_locale(&tag)?;
         match kind {
-            LocaleAccessorKind::BaseName => self.heap_string_value(&locale.id.to_string()),
-            LocaleAccessorKind::Calendar => self.locale_keyword_value(&locale, "ca", false),
-            LocaleAccessorKind::CaseFirst => self.locale_keyword_value(&locale, "kf", false),
-            LocaleAccessorKind::Collation => self.locale_keyword_value(&locale, "co", false),
-            LocaleAccessorKind::FirstDayOfWeek => self.locale_keyword_value(&locale, "fw", false),
-            LocaleAccessorKind::HourCycle => self.locale_keyword_value(&locale, "hc", false),
-            LocaleAccessorKind::Language => self.heap_string_value(locale.id.language.as_str()),
-            LocaleAccessorKind::NumberingSystem => self.locale_keyword_value(&locale, "nu", false),
-            LocaleAccessorKind::Numeric => self.locale_keyword_value(&locale, "kn", true),
-            LocaleAccessorKind::Region => locale.id.region.map_or(Ok(Value::Undefined), |region| {
-                self.heap_string_value(region.as_str())
-            }),
-            LocaleAccessorKind::Script => locale.id.script.map_or(Ok(Value::Undefined), |script| {
-                self.heap_string_value(script.as_str())
-            }),
+            LocaleAccessorKind::BaseName => self.heap_string_value(&locale.base_name()),
+            LocaleAccessorKind::Calendar => self.locale_keyword_value(&locale.locale, "ca", false),
+            LocaleAccessorKind::CaseFirst => self.locale_keyword_value(&locale.locale, "kf", false),
+            LocaleAccessorKind::Collation => self.locale_keyword_value(&locale.locale, "co", false),
+            LocaleAccessorKind::FirstDayOfWeek => {
+                self.locale_keyword_value(&locale.locale, "fw", false)
+            }
+            LocaleAccessorKind::HourCycle => self.locale_keyword_value(&locale.locale, "hc", false),
+            LocaleAccessorKind::Language => self.heap_string_value(locale.language()),
+            LocaleAccessorKind::NumberingSystem => {
+                self.locale_keyword_value(&locale.locale, "nu", false)
+            }
+            LocaleAccessorKind::Numeric => self.locale_keyword_value(&locale.locale, "kn", true),
+            LocaleAccessorKind::Region => locale
+                .locale
+                .id
+                .region
+                .map_or(Ok(Value::Undefined), |region| {
+                    self.heap_string_value(region.as_str())
+                }),
+            LocaleAccessorKind::Script => locale
+                .locale
+                .id
+                .script
+                .map_or(Ok(Value::Undefined), |script| {
+                    self.heap_string_value(script.as_str())
+                }),
             LocaleAccessorKind::Variants => {
-                if locale.id.variants.is_empty() {
+                if locale.locale.id.variants.is_empty() {
                     Ok(Value::Undefined)
                 } else {
-                    self.heap_string_value(&locale.id.variants.to_string())
+                    self.heap_string_value(&locale.locale.id.variants.to_string())
                 }
             }
         }
@@ -252,29 +316,33 @@ impl Context {
         let mut locale = parse_locale(&tag)?;
         match kind {
             LocaleMethodKind::GetCalendars => {
-                self.locale_preference_array(&locale, "ca", &["gregory"])
+                self.locale_preference_array(&locale.locale, "ca", &["gregory"])
             }
             LocaleMethodKind::GetCollations => {
-                self.locale_preference_array(&locale, "co", &["emoji"])
+                self.locale_preference_array(&locale.locale, "co", &["emoji"])
             }
             LocaleMethodKind::GetHourCycles => {
-                self.locale_preference_array(&locale, "hc", &["h12", "h23"])
+                self.locale_preference_array(&locale.locale, "hc", &["h12", "h23"])
             }
             LocaleMethodKind::GetNumberingSystems => {
-                self.locale_preference_array(&locale, "nu", &["latn"])
+                self.locale_preference_array(&locale.locale, "nu", &["latn"])
             }
-            LocaleMethodKind::GetTextInfo => self.locale_text_info(&locale),
-            LocaleMethodKind::GetTimeZones => self.locale_time_zones(&locale),
-            LocaleMethodKind::GetWeekInfo => self.locale_week_info(&locale),
+            LocaleMethodKind::GetTextInfo => self.locale_text_info(&locale.locale),
+            LocaleMethodKind::GetTimeZones => self.locale_time_zones(&locale.locale),
+            LocaleMethodKind::GetWeekInfo => self.locale_week_info(&locale.locale),
             LocaleMethodKind::Maximize => {
-                LocaleExpander::new_extended().maximize(&mut locale.id);
-                self.create_locale_value(locale.to_string())
+                if !locale.has_extended_language() {
+                    LocaleExpander::new_extended().maximize(&mut locale.locale.id);
+                }
+                self.create_locale_value(locale.canonical_string())
             }
             LocaleMethodKind::Minimize => {
-                LocaleExpander::new_extended().minimize(&mut locale.id);
-                self.create_locale_value(locale.to_string())
+                if !locale.has_extended_language() {
+                    LocaleExpander::new_extended().minimize(&mut locale.locale.id);
+                }
+                self.create_locale_value(locale.canonical_string())
             }
-            LocaleMethodKind::ToString => self.heap_string_value(&locale.to_string()),
+            LocaleMethodKind::ToString => self.heap_string_value(&locale.canonical_string()),
         }
     }
 
@@ -487,18 +555,28 @@ impl Context {
     }
 }
 
-fn apply_locale_options(locale: &mut Locale, options: LocaleOptions) -> Result<()> {
+fn apply_locale_options(locale: &mut ParsedLocale, options: LocaleOptions) -> Result<()> {
     if let Some(language) = options.language {
-        locale.id.language = Language::from_str(&language).map_err(|_| locale_range_error())?;
+        if is_extended_language_subtag(&language) {
+            locale.locale.id.language =
+                Language::from_str("und").map_err(|_| locale_range_error())?;
+            locale.extended_language = Some(language.to_ascii_lowercase());
+        } else {
+            locale.locale.id.language =
+                Language::from_str(&language).map_err(|_| locale_range_error())?;
+            locale.extended_language = None;
+        }
     }
     if let Some(script) = options.script {
-        locale.id.script = Some(Script::from_str(&script).map_err(|_| locale_range_error())?);
+        locale.locale.id.script =
+            Some(Script::from_str(&script).map_err(|_| locale_range_error())?);
     }
     if let Some(region) = options.region {
-        locale.id.region = Some(Region::from_str(&region).map_err(|_| locale_range_error())?);
+        locale.locale.id.region =
+            Some(Region::from_str(&region).map_err(|_| locale_range_error())?);
     }
     if let Some(variants) = options.variants {
-        locale.id.variants = parse_variants(&variants)?;
+        locale.locale.id.variants = parse_variants(&variants)?;
     }
     if options
         .hour_cycle
@@ -523,18 +601,22 @@ fn apply_locale_options(locale: &mut Locale, options: LocaleOptions) -> Result<(
             if !is_unicode_type(&value) {
                 return Err(locale_range_error());
             }
-            set_unicode_keyword(locale, key, &value)?;
+            set_unicode_keyword(&mut locale.locale, key, &value)?;
         }
     }
     if let Some(numeric) = options.numeric {
-        set_unicode_keyword(locale, "kn", if numeric { "true" } else { "false" })?;
+        set_unicode_keyword(
+            &mut locale.locale,
+            "kn",
+            if numeric { "true" } else { "false" },
+        )?;
     }
     Ok(())
 }
 
-fn parse_and_canonicalize_locale(tag: &str) -> Result<Locale> {
+fn parse_and_canonicalize_locale(tag: &str) -> Result<ParsedLocale> {
     let mut locale = parse_locale(tag)?;
-    canonicalize_locale(&mut locale)?;
+    canonicalize_locale(&mut locale.locale)?;
     Ok(locale)
 }
 
@@ -542,10 +624,10 @@ pub(super) fn canonicalize_locale_tag(tag: &str) -> Result<String> {
     if tag.eq_ignore_ascii_case("posix") {
         return Ok("posix".to_owned());
     }
-    parse_and_canonicalize_locale(tag).map(|locale| canonical_locale_string(&locale))
+    parse_and_canonicalize_locale(tag).map(|locale| locale.canonical_string())
 }
 
-fn parse_locale(tag: &str) -> Result<Locale> {
+fn parse_locale(tag: &str) -> Result<ParsedLocale> {
     let lower = tag.to_ascii_lowercase();
     if tag.is_empty()
         || tag
@@ -555,7 +637,34 @@ fn parse_locale(tag: &str) -> Result<Locale> {
     {
         return Err(locale_range_error());
     }
-    Locale::from_str(tag).map_err(|_| locale_range_error())
+    Locale::from_str(tag).map_or_else(
+        |_| parse_extended_language_locale(tag),
+        |locale| Ok(ParsedLocale::new(locale)),
+    )
+}
+
+fn parse_extended_language_locale(tag: &str) -> Result<ParsedLocale> {
+    let mut parts = tag.split('-');
+    let Some(language) = parts.next() else {
+        return Err(locale_range_error());
+    };
+    if !is_extended_language_subtag(language) {
+        return Err(locale_range_error());
+    }
+    let mut structural_tag = String::from("und");
+    for part in parts {
+        structural_tag.push('-');
+        structural_tag.push_str(part);
+    }
+    let locale = Locale::from_str(&structural_tag).map_err(|_| locale_range_error())?;
+    Ok(ParsedLocale::extended(
+        locale,
+        language.to_ascii_lowercase(),
+    ))
+}
+
+fn is_extended_language_subtag(value: &str) -> bool {
+    (5..=8).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_alphabetic())
 }
 
 fn canonicalize_locale(locale: &mut Locale) -> Result<()> {

@@ -243,17 +243,26 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
         try { new Float64Array(new ArrayBuffer(8), 0, 2); } catch (error) {
             if (error instanceof RangeError) failures = failures + 1;
         }
+        try { new BigInt64Array(new SharedArrayBuffer(6)); } catch (error) {
+            if (error instanceof RangeError) failures = failures + 1;
+        }
         try { Int8Array(1); } catch (error) {
             if (error instanceof TypeError) failures = failures + 1;
         }
         try { ArrayBuffer(1); } catch (error) {
             if (error instanceof TypeError) failures = failures + 1;
         }
-        failures
+        const largeResizable = new Uint8Array(
+            new ArrayBuffer(255, { maxByteLength: 4294967295 })
+        );
+        const largeGrowable = new Uint8ClampedArray(
+            new SharedArrayBuffer(223, { maxByteLength: 268435440 })
+        );
+        largeResizable.length === 255 && largeGrowable.length === 223 ? failures : 0
         ",
     )?;
 
-    ensure_value(&value, &Value::Number(4.0))
+    ensure_value(&value, &Value::Number(5.0))
 }
 
 #[test]

@@ -729,30 +729,6 @@ impl Context {
         Ok(function.has_intrinsic_property(property_name) || function.properties().has(property))
     }
 
-    pub(crate) fn has_native_function_property_including_prototype_lookup(
-        &mut self,
-        id: NativeFunctionId,
-        property: PropertyLookup<'_>,
-    ) -> Result<bool> {
-        if self.has_native_function_property_lookup(id, property)? {
-            return Ok(true);
-        }
-        let kind = self.native_function(id)?.kind();
-        if !matches!(kind, NativeFunctionKind::TypedArray(_))
-            && !self.should_materialize_function_prototype_for(property)
-        {
-            return Ok(false);
-        }
-        let parent = self.native_function_object_prototype_value(id)?;
-        if matches!(parent, Value::Null | Value::Undefined) {
-            return Ok(false);
-        }
-        let Some(presence) = self.semantic_property_presence(&parent, property)? else {
-            return Ok(false);
-        };
-        self.finish_semantic_property_presence(presence, property)
-    }
-
     pub(crate) fn define_native_function_property_key(
         &mut self,
         id: NativeFunctionId,

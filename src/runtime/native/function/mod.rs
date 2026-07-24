@@ -153,6 +153,7 @@ pub(in crate::runtime) struct NativeFunction {
     realm: RealmIndex,
     kind: NativeFunctionKind,
     properties: FunctionProperties,
+    static_parent: Option<Value>,
 }
 
 impl NativeFunction {
@@ -176,6 +177,7 @@ impl NativeFunction {
             realm,
             kind,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
+            static_parent: None,
         }
     }
 
@@ -193,6 +195,14 @@ impl NativeFunction {
 
     pub(in crate::runtime) const fn properties_mut(&mut self) -> &mut FunctionProperties {
         &mut self.properties
+    }
+
+    pub(in crate::runtime) const fn static_parent(&self) -> Option<&Value> {
+        self.static_parent.as_ref()
+    }
+
+    pub(in crate::runtime) fn set_static_parent(&mut self, parent: Value) {
+        self.static_parent = Some(parent);
     }
 
     pub(in crate::runtime) fn intrinsic_property(&self, property: &str) -> Option<Value> {
@@ -217,6 +227,12 @@ impl NativeFunction {
     ) -> Result<()> {
         self.properties
             .visit_strong_edges(VmCallableEdgeKind::NativeFunctionProperty, visitor)?;
+        if let Some(parent) = &self.static_parent {
+            visitor.visit(
+                VmCallableEdgeKind::NativeFunctionInternal,
+                StrongEdgeReference::Value(parent),
+            )?;
+        }
         match self.kind {
             NativeFunctionKind::BoundFunction(id) => visitor.visit(
                 VmCallableEdgeKind::NativeFunctionInternal,

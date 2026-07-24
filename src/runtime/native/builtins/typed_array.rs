@@ -28,6 +28,7 @@ const BYTES_PER_ELEMENT_PROPERTY: &str = "BYTES_PER_ELEMENT";
 const TYPED_ARRAY_LENGTH_LIMIT_ERROR: &str = "typed array length exceeded supported range";
 const TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR: &str =
     "typed array byte length exceeded supported range";
+const LOGICAL_BYTE_BUFFER_LENGTH_LIMIT: u64 = 4_294_967_296;
 const TYPED_ARRAY_BUFFER_RANGE_ERROR: &str = "typed array view exceeds its ArrayBuffer";
 const TYPED_ARRAY_OFFSET_ALIGNMENT_ERROR: &str =
     "typed array byteOffset must align to the element size";
@@ -133,9 +134,6 @@ impl Context {
             None
         };
         self.check_byte_buffer_length(length)?;
-        if let Some(maximum) = max_byte_length {
-            self.check_byte_buffer_length(maximum)?;
-        }
         let buffer = max_byte_length.map_or_else(
             || ByteBuffer::new(length, ByteBufferOrigin::EngineOwned),
             |maximum| ByteBuffer::new_resizable(length, maximum),
@@ -163,11 +161,9 @@ impl Context {
         if matches!(maximum, Value::Undefined) {
             return Ok(None);
         }
-        Self::length_to_usize(
-            self.to_index(Some(&maximum))?,
-            TYPED_ARRAY_LENGTH_LIMIT_ERROR,
-        )
-        .map(Some)
+        let maximum = self.to_index(Some(&maximum))?;
+        Self::check_logical_byte_buffer_length(maximum)?;
+        Self::length_to_usize(maximum, TYPED_ARRAY_LENGTH_LIMIT_ERROR).map(Some)
     }
 
     pub(in crate::runtime) fn construct_typed_array(
@@ -508,6 +504,17 @@ impl Context {
     }
 
     pub(super) fn check_byte_buffer_length(&self, length: usize) -> Result<()> {
+        Self::check_byte_buffer_supported_length(length)?;
+        if length > self.limits.max_byte_buffer_len {
+            return Err(Error::limit(format!(
+                "typed array byte length exceeded {}",
+                self.limits.max_byte_buffer_len
+            )));
+        }
+        Ok(())
+    }
+
+    pub(super) fn check_byte_buffer_supported_length(length: usize) -> Result<()> {
         let maximum = usize::try_from(u32::MAX)
             .map_err(|_| Error::limit(TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR))?;
         if length > maximum {
@@ -516,11 +523,15 @@ impl Context {
                 TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
             ));
         }
-        if length > self.limits.max_byte_buffer_len {
-            return Err(Error::limit(format!(
-                "typed array byte length exceeded {}",
-                self.limits.max_byte_buffer_len
-            )));
+        Ok(())
+    }
+
+    fn check_logical_byte_buffer_length(length: u64) -> Result<()> {
+        if length > LOGICAL_BYTE_BUFFER_LENGTH_LIMIT {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
+            ));
         }
         Ok(())
     }

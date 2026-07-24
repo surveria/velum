@@ -537,6 +537,7 @@ impl ObjectHeap {
                 RESIZE_LIMIT_ERROR,
             ));
         }
+        Self::check_supported_byte_buffer_length(new_length)?;
         let old_length = buffer.byte_length();
         let projected = if new_length >= old_length {
             self.byte_buffer_payload_bytes
@@ -581,6 +582,7 @@ impl ObjectHeap {
                 "SharedArrayBuffer grow length is out of range",
             ));
         }
+        Self::check_supported_byte_buffer_length(new_length)?;
         if new_length == old_length {
             return Ok(());
         }
@@ -597,6 +599,18 @@ impl ObjectHeap {
         }
         buffer.resize(new_length)?;
         self.byte_buffer_payload_bytes = projected;
+        Ok(())
+    }
+
+    fn check_supported_byte_buffer_length(length: usize) -> Result<()> {
+        let maximum =
+            usize::try_from(u32::MAX).map_err(|_| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
+        if length > maximum {
+            return Err(Error::exception(
+                crate::value::ErrorName::RangeError,
+                TYPED_ARRAY_RANGE_ERROR,
+            ));
+        }
         Ok(())
     }
 

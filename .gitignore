@@ -108,6 +108,13 @@
 !/fuzzing-test/
 !/fuzzing-test/.gitignore
 
+!/fuzzing-differential-test/
+!/fuzzing-differential-test/.gitignore
+!/fuzzing-differential-test/package.json
+!/fuzzing-differential-test/package-lock.json
+!/fuzzing-differential-test/config/
+!/fuzzing-differential-test/config/*.json
+
 !/tests/
 !/tests/**/
 !/tests/**/*.md
