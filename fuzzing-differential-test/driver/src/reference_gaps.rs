@@ -20,6 +20,9 @@ pub fn is_engine262_unsupported(
         || predicates::is_annex_b_string_legacy_with_unavailable_v8_fallback(source, engine262, v8)
         || predicates::is_engine262_missing_annex_b_regexp_compile_method(source, velum, engine262)
         || predicates::is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
+        || predicates::is_immutable_array_buffer_method_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || predicates::is_reference_unsupported_date_temporal_instant_method(source, velum, engine262, v8)
         || predicates::is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || predicates::is_webassembly_host_api_gap(source, velum, engine262, v8)
@@ -76,6 +79,9 @@ pub fn correctness_oracle<'a>(
         || predicates::source_contains_resource_management_symbol_access(source)
             && predicates::references_complete_equivalently(engine262, v8)
         || predicates::is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
+        || predicates::is_immutable_array_buffer_method_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || predicates::is_reference_missing_date_temporal_instant_method(source, engine262, v8)
         || predicates::is_v8_fallback_unavailable(v8)
     {

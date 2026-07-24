@@ -470,6 +470,20 @@ pub fn is_reference_unsupported_immutable_array_buffer_method(
         && is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
 }
 
+pub fn is_immutable_array_buffer_method_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && IMMUTABLE_ARRAY_BUFFER_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
 pub fn is_reference_unsupported_date_temporal_instant_method(
     source: &str,
     velum: &EngineOutcome,
