@@ -153,7 +153,11 @@ fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
 }
 
 fn source_contains_legacy_decimal_escape(source: &str) -> bool {
-    source.contains("\\8") || source.contains("\\9")
+    let bytes = source.as_bytes();
+    bytes.windows(2).any(|window| {
+        window.first() == Some(&b'\\')
+            && window.get(1).is_some_and(u8::is_ascii_digit)
+    })
 }
 
 fn outcome_is_range_error_with(

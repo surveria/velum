@@ -217,7 +217,7 @@ fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> any
     );
     let v8 = range_error("byte length of Uint32Array should be a multiple of 4");
     let source = "\
-        const legacy = /i\\9/mgisy;\
+        const legacy = /8(x)(x)(x)(x)(x)(x)(x)(x)(x)(x)\\11?/ds;\
         new Uint32Array(new ArrayBuffer(1522, { maxByteLength: 1522 }));\
     ";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
