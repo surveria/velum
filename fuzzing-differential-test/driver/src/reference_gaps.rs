@@ -6,6 +6,21 @@ const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
+const ANNEX_B_STRING_HTML_METHODS: [&str; 13] = [
+    "anchor",
+    "big",
+    "blink",
+    "bold",
+    "fixed",
+    "fontcolor",
+    "fontsize",
+    "italics",
+    "link",
+    "small",
+    "strike",
+    "sub",
+    "sup",
+];
 
 pub fn outcomes_equivalent(left: &EngineOutcome, right: &EngineOutcome) -> bool {
     if left.status != right.status {
@@ -30,6 +45,7 @@ pub fn is_engine262_unsupported(
             && !outcomes_equivalent(engine262, v8))
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
+        || is_engine262_missing_annex_b_string_html_method(source, velum, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !outcomes_equivalent(velum, engine262)
             && !outcomes_equivalent(engine262, v8))
@@ -47,11 +63,39 @@ pub fn correctness_oracle<'a>(
     if is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
-        || is_v8_missing_global(v8)
+        || is_v8_fallback_unavailable(v8)
     {
         return None;
     }
     Some(v8)
+}
+
+fn is_engine262_missing_annex_b_string_html_method(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && outcomes_equivalent(velum, v8)
+        && engine262.error_message.as_deref().is_some_and(|message| {
+            message.contains("is not a function")
+                && ANNEX_B_STRING_HTML_METHODS
+                    .iter()
+                    .any(|method| source_contains_method_call(source, method))
+        })
+}
+
+fn source_contains_method_call(source: &str, method: &str) -> bool {
+    let Some(pattern_len) = method.len().checked_add(2) else {
+        return false;
+    };
+    source.as_bytes().windows(pattern_len).any(|window| {
+        window.first() == Some(&b'.')
+            && window.get(1..1 + method.len()) == Some(method.as_bytes())
+            && window.last() == Some(&b'(')
+    })
 }
 
 fn is_reference_unsupported_resource_management_syntax(
@@ -166,6 +210,10 @@ fn is_engine262_missing_global_message(message: &str) -> bool {
         || message.contains("Temporal is not defined")
 }
 
+fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
+    is_v8_missing_global(v8) || is_v8_missing_typed_array_base64_or_hex(v8)
+}
+
 fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
     v8.status == OutcomeStatus::JsError
         && v8.error_name.as_deref() == Some("ReferenceError")
@@ -183,6 +231,24 @@ fn is_v8_missing_global_message(message: &str) -> bool {
         || message.contains("SuppressedError is not defined")
         || message.contains("Temporal is not defined")
         || message.contains("Float16Array is not defined")
+}
+
+fn is_v8_missing_typed_array_base64_or_hex(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(is_v8_missing_typed_array_base64_or_hex_message)
+}
+
+fn is_v8_missing_typed_array_base64_or_hex_message(message: &str) -> bool {
+    message.contains("toBase64 is not a function")
+        || message.contains("fromBase64 is not a function")
+        || message.contains("setFromBase64 is not a function")
+        || message.contains("toHex is not a function")
+        || message.contains("fromHex is not a function")
+        || message.contains("setFromHex is not a function")
 }
 
 #[cfg(test)]
@@ -209,6 +275,40 @@ mod tests {
         );
         ensure!(unsupported);
         ensure!(correctness_oracle("new Float16Array(1)", &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn missing_typed_array_base64_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+        let v8 = type_error("Uint8Array.of(...).toBase64 is not a function");
+        let unsupported = is_engine262_unsupported(
+            "new SharedArrayBuffer(8); Uint8Array.of(1).toBase64();",
+            &velum,
+            &engine262,
+            &v8,
+        );
+        ensure!(unsupported);
+        ensure!(
+            correctness_oracle("Uint8Array.of(1).toBase64()", &engine262, &v8, unsupported)
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn annex_b_string_html_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = type_error("TypeError: (\"\").bold is not a function");
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let source = "(\"\").bold()";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+            anyhow::bail!("expected V8 fallback oracle");
+        };
+        ensure!(unsupported);
+        ensure!(outcomes_equivalent(oracle, &v8));
         Ok(())
     }
 
@@ -255,6 +355,16 @@ mod tests {
             1,
             "",
             Some("ReferenceError".to_owned()),
+            Some(message.to_owned()),
+        )
+    }
+
+    fn type_error(message: &str) -> crate::compare::EngineOutcome {
+        outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("TypeError".to_owned()),
             Some(message.to_owned()),
         )
     }
