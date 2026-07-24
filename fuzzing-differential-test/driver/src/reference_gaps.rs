@@ -13,9 +13,15 @@ const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
+const DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD: &str = "toTemporalInstant";
+const ENGINE262_STACK_OVERFLOW_ERROR: &str = "Maximum call stack size exceeded";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
+const ENGINE262_EXPECTED_CHARACTER_ERROR: &str = "Expected a character";
+const ENGINE262_INVALID_DECIMAL_DIGITS_ERROR: &str = "Invalid decimal digits";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const ENGINE262_UNEXPECTED_TOKEN_ERROR: &str = "Unexpected token";
+const REGEXP_NEGATIVE_LOOKAHEAD_MARKER: &str = "(?!";
+const REGEXP_POSITIVE_LOOKAHEAD_MARKER: &str = "(?=";
 const REGEXP_UNESCAPED_CLOSING_BRACKET_MARKER: &str = "/]";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
@@ -24,6 +30,15 @@ const IMMUTABLE_ARRAY_BUFFER_METHODS: [&str; 3] = [
     "sliceToImmutable",
     "transferToImmutable",
     "transferToFixedLength",
+];
+const SET_COMPOSITION_METHODS: [&str; 7] = [
+    "difference",
+    "intersection",
+    "isDisjointFrom",
+    "isSubsetOf",
+    "isSupersetOf",
+    "symmetricDifference",
+    "union",
 ];
 const ANNEX_B_STRING_LEGACY_METHODS: [&str; 16] = [
     "anchor",
@@ -68,13 +83,26 @@ pub fn is_engine262_unsupported(
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
         || is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
+        || is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_annex_b_string_legacy_with_unavailable_v8_fallback(source, engine262, v8)
         || is_engine262_missing_annex_b_regexp_compile_method(source, velum, engine262)
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
+        || is_reference_unsupported_date_temporal_instant_method(source, velum, engine262, v8)
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
@@ -98,13 +126,26 @@ pub fn correctness_oracle<'a>(
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_annex_b_string_legacy_with_unavailable_v8_fallback(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
         || is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
+        || is_reference_missing_date_temporal_instant_method(source, engine262, v8)
         || is_v8_fallback_unavailable(v8)
     {
         return None;
@@ -138,8 +179,18 @@ fn is_resizable_array_buffer_alignment_without_oracle(
         && (is_engine262_missing_global(engine262)
             || outcome_is_range_error_with(engine262, |message| {
                 message.contains("Cannot allocate memory")
-            }))
+            })
+            || outcome_is_engine262_stack_overflow_crash(engine262))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn outcome_is_engine262_stack_overflow_crash(outcome: &EngineOutcome) -> bool {
+    outcome.status == OutcomeStatus::Crash
+        && outcome.error_name.as_deref() == Some("RangeError")
+        && outcome
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_STACK_OVERFLOW_ERROR))
 }
 
 fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
@@ -164,6 +215,115 @@ fn source_contains_legacy_decimal_escape(source: &str) -> bool {
         window.first() == Some(&b'\\')
             && window.get(1).is_some_and(u8::is_ascii_digit)
     })
+}
+
+fn is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_INVALID_DECIMAL_DIGITS_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn is_legacy_control_escape_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && source_contains_legacy_malformed_control_escape(source)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_UNEXPECTED_TOKEN_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn source_contains_legacy_malformed_control_escape(source: &str) -> bool {
+    let bytes = source.as_bytes();
+    bytes.windows(3).any(|window| {
+        window.first() == Some(&b'\\')
+            && window.get(1) == Some(&b'c')
+            && window.get(2).is_some_and(|byte| !byte.is_ascii_alphabetic())
+    })
+}
+
+fn is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && source_contains_legacy_quantified_lookahead(source)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_EXPECTED_CHARACTER_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn source_contains_legacy_quantified_lookahead(source: &str) -> bool {
+    [REGEXP_POSITIVE_LOOKAHEAD_MARKER, REGEXP_NEGATIVE_LOOKAHEAD_MARKER]
+        .into_iter()
+        .any(|marker| source_contains_quantified_lookahead(source, marker))
+}
+
+fn source_contains_quantified_lookahead(source: &str, marker: &str) -> bool {
+    let mut search_start = 0;
+    while let Some(relative_start) = source.get(search_start..).and_then(|tail| tail.find(marker)) {
+        let start = search_start.saturating_add(relative_start);
+        let Some(after_marker_start) = start.checked_add(marker.len()) else {
+            return false;
+        };
+        let Some(after_marker) = source.get(after_marker_start..) else {
+            return false;
+        };
+        let Some(close_relative) = after_marker.find(')') else {
+            return false;
+        };
+        let Some(after_close_start) = after_marker_start
+            .checked_add(close_relative)
+            .and_then(|value| value.checked_add(1))
+        else {
+            return false;
+        };
+        let Some(after_close) = source.get(after_close_start..) else {
+            return false;
+        };
+        if after_close.as_bytes().first().is_some_and(|byte| {
+            matches!(*byte, b'?' | b'*' | b'+' | b'{')
+        }) {
+            return true;
+        }
+        search_start = after_close_start;
+    }
+    false
 }
 
 fn is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(
@@ -318,6 +478,33 @@ fn is_engine262_missing_annex_b_string_legacy_method(
             .any(|method| source_contains_method_reference(source, method))
 }
 
+fn is_annex_b_string_legacy_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && ANNEX_B_STRING_LEGACY_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn is_annex_b_string_legacy_with_unavailable_v8_fallback(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && ANNEX_B_STRING_LEGACY_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
+        && is_v8_fallback_unavailable(v8)
+}
+
 fn is_engine262_missing_annex_b_regexp_compile_method(
     source: &str,
     velum: &EngineOutcome,
@@ -343,6 +530,16 @@ fn is_reference_unsupported_immutable_array_buffer_method(
         && is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
 }
 
+fn is_reference_unsupported_date_temporal_instant_method(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    !outcomes_equivalent(velum, engine262)
+        && is_reference_missing_date_temporal_instant_method(source, engine262, v8)
+}
+
 fn is_reference_missing_immutable_array_buffer_method(
     source: &str,
     engine262: &EngineOutcome,
@@ -354,6 +551,17 @@ fn is_reference_missing_immutable_array_buffer_method(
         && IMMUTABLE_ARRAY_BUFFER_METHODS
             .iter()
             .any(|method| source_contains_method_reference(source, method))
+}
+
+fn is_reference_missing_date_temporal_instant_method(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_method_reference(source, DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD)
+        && references_complete_equivalently(engine262, v8)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
 }
 
 fn is_engine262_locale_validation_gap(
@@ -522,6 +730,7 @@ fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
     is_v8_missing_global(v8)
         || is_v8_missing_typed_array_base64_or_hex(v8)
         || is_v8_missing_math_f16round(v8)
+        || is_v8_missing_set_composition(v8)
 }
 
 fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
@@ -568,4 +777,14 @@ fn is_v8_missing_math_f16round(v8: &EngineOutcome) -> bool {
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains("Math.f16round is not a function"))
+}
+
+fn is_v8_missing_set_composition(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8.error_message.as_deref().is_some_and(|message| {
+            SET_COMPOSITION_METHODS
+                .iter()
+                .any(|method| message.contains(&format!("{method} is not a function")))
+        })
 }

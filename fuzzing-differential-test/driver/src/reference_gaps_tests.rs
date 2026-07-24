@@ -89,6 +89,42 @@ fn annex_b_string_legacy_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Re
 }
 
 #[test]
+fn annex_b_string_legacy_and_v8_rab_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error(
+        "TypeError: (\"D4\").blink is not a function. (In \"(\"D4\").blink()\", it is undefined)",
+    );
+    let v8 = range_error("byte length of Int32Array should be a multiple of 4");
+    let source = "\
+        const value = (\"D4\").blink();\
+        const buffer = new SharedArrayBuffer(5, { maxByteLength: 5 });\
+        new Int32Array(buffer);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn annex_b_string_legacy_and_unavailable_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error(
+        "TypeError: (\"f\").small is not a function. (In \"(\"f\").small()\", it is undefined)",
+    );
+    let v8 = reference_error("Temporal is not defined");
+    let source = "\
+        const value = (\"f\").small();\
+        const instant = Temporal.Instant;\
+        new instant(7n);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: buffer.sliceToImmutable is not a function");
@@ -110,6 +146,18 @@ fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::
         new Float32Array(buffer);\
         /[o\\9\\cA]/d;\
     ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn missing_date_temporal_instant_reference_method_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: v12.toTemporalInstant is not a function");
+    let v8 = type_error("v12.toTemporalInstant is not a function");
+    let source = "const v12 = new Date(); v12.toTemporalInstant();";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);
     ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
@@ -222,6 +270,46 @@ fn shared_array_buffer_alignment_gap_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
+fn resizable_array_buffer_alignment_and_engine262_stack_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::Crash,
+        1,
+        "",
+        Some("RangeError".to_owned()),
+        Some("RangeError: Maximum call stack size exceeded".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(833, { maxByteLength: 1723 });\
+        new Uint16Array(buffer);\
+        function recurse() { try { recurse(); } catch (error) {} }\
+        recurse();\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn missing_set_composition_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+    let v8 = type_error("v11.intersection is not a function");
+    let source = "\
+        new SharedArrayBuffer(5, { maxByteLength: 10 });\
+        const set = new Set();\
+        set.intersection(set);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(
@@ -235,6 +323,97 @@ fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> any
     let source = "\
         const legacy = /8(x)(x)(x)(x)(x)(x)(x)(x)(x)(x)\\11?/ds;\
         new Uint32Array(new ArrayBuffer(1522, { maxByteLength: 1522 }));\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn engine262_invalid_decimal_digits_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Invalid decimal digits".to_owned()),
+    );
+    let v8 = range_error("byte length of BigUint64Array should be a multiple of 8");
+    let source = "\
+        const buffer = new ArrayBuffer(7, { maxByteLength: 10 });\
+        new BigUint64Array(buffer);\
+        /EXPa\\Da{z}hlT/;\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn engine262_invalid_identity_escape_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Invalid identity escape".to_owned()),
+    );
+    let v8 = range_error("byte length of Float64Array should be a multiple of 8");
+    let source = "\
+        const value = /a\\s\\P{sc=Greek}ga\\q?/sidg;\
+        const buffer = new ArrayBuffer(4060, { maxByteLength: 4060 });\
+        new Float64Array(buffer);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Unexpected token".to_owned()),
+    );
+    let v8 = range_error("byte length of BigInt64Array should be a multiple of 8");
+    let source = "\
+        const legacy = /a\\bc\\c(ab|cde)/mgd;\
+        const buffer = new ArrayBuffer(127, { maxByteLength: 536870888 });\
+        new BigInt64Array(buffer);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn legacy_quantified_lookahead_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Expected a character but got {".to_owned()),
+    );
+    let v8 = range_error("byte length of BigUint64Array should be a multiple of 8");
+    let source = "\
+        const legacy = /kaPc(?=a){1,10}a*/mi;\
+        const buffer = new ArrayBuffer(4047, { maxByteLength: 4047 });\
+        new BigUint64Array(buffer);\
     ";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);

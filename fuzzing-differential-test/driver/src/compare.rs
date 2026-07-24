@@ -7,7 +7,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
-use velum::{Error, Runtime, RuntimeLimits};
+use velum::{
+    DataPropertyDefinition, Error, JsValueRef, PropertyKeyRef, RuntimeLimits, Vm, VmConfig,
+};
 
 use crate::{
     engine262_worker::Engine262Worker,
@@ -31,6 +33,7 @@ const LEXER_ERROR_PREFIX: &str = "lexer error";
 const PARSER_ERROR_PREFIX: &str = "parser error";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
+const VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT: &str = "RegExp compile error InstructionLimit";
 const VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT: &str = "exceeded supported range";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -267,6 +270,9 @@ fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
     if velum.error_name.as_deref() == Some("Error") {
         return message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX);
     }
+    if velum.error_name.as_deref() == Some(SYNTAX_ERROR_NAME) {
+        return message.contains(VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT);
+    }
     velum.error_name.as_deref() == Some("RangeError")
         && message.contains(VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT)
 }
@@ -283,13 +289,12 @@ fn execute_velum(source: &str) -> anyhow::Result<EngineOutcome> {
     let started = Instant::now();
     let output = Rc::new(RefCell::new(String::new()));
     let output_sink = Rc::clone(&output);
-    let runtime = Runtime::with_limits(RuntimeLimits {
+    let mut vm = Vm::with_config(VmConfig::with_limits(RuntimeLimits {
         max_call_stack_bytes: DIFFERENTIAL_MAX_CALL_STACK_BYTES,
         ..RuntimeLimits::default()
-    });
-    let mut context = runtime.context();
-    context
-        .register_host_function_typed("fuzzilli", move |call| {
+    }));
+    let callback = vm
+        .create_host_function_typed("fuzzilli", move |call| {
             let operation = call.string(0, "operation")?;
             if operation != "FUZZILLI_PRINT" {
                 return Ok(());
@@ -303,11 +308,24 @@ fn execute_velum(source: &str) -> anyhow::Result<EngineOutcome> {
             Ok(())
         })
         .map_err(|error| {
-            anyhow::anyhow!("failed to register the Fuzzilli host callback: {error}")
+            anyhow::anyhow!("failed to create the Fuzzilli host callback: {error}")
         })?;
+    let global = vm
+        .eval_retained("globalThis")
+        .map_err(|error| anyhow::anyhow!("failed to retain globalThis: {error}"))?;
+    let descriptor = DataPropertyDefinition::new(JsValueRef::from(&callback))
+        .with_writable(true)
+        .with_enumerable(false)
+        .with_configurable(true);
+    vm.define_property_or_throw(
+        JsValueRef::from(&global),
+        PropertyKeyRef::Name("fuzzilli"),
+        descriptor.into(),
+    )
+    .map_err(|error| anyhow::anyhow!("failed to install the Fuzzilli host callback: {error}"))?;
 
-    let result = context.eval(source);
-    drop(context.take_output());
+    let result = vm.eval(source);
+    drop(vm.context().take_output());
     let elapsed_nanos = duration_nanos_u64(started.elapsed());
     let stdout = output.borrow().clone();
     match result {
@@ -406,6 +424,19 @@ mod tests {
             slow_ratio: 2.0,
             slow_min: Duration::from_millis(5),
         }
+    }
+
+    #[test]
+    fn velum_fuzzilli_hook_allows_global_assignment() -> anyhow::Result<()> {
+        let outcome = super::execute_velum(
+            "fuzzilli('FUZZILLI_PRINT', 'before'); fuzzilli = new Set();",
+        )?;
+        ensure!(
+            outcome.status == OutcomeStatus::Ok,
+            "unexpected outcome: {outcome:?}"
+        );
+        ensure!(outcome.stdout_bytes == 7, "unexpected stdout size");
+        Ok(())
     }
 
     #[test]
@@ -587,6 +618,33 @@ mod tests {
         let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let findings = findings("for (;;) {}", &velum, &engine262, &v8, None, config());
+        ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        Ok(())
+    }
+
+    #[test]
+    fn velum_regexp_instruction_limit_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("SyntaxError".to_owned()),
+            Some(
+                "lexer error at 66: invalid regular expression pattern: RegExp compile error InstructionLimit { limit: 262144 } at UTF-16 offset 0"
+                    .to_owned(),
+            ),
+        );
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let findings = findings(
+            "const value = /(?:a{5,1000000}){3,1000000}/gui;",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
+        );
         ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
         ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
