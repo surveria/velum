@@ -19,6 +19,8 @@ const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
 const ENGINE262_EXPECTED_CHARACTER_ERROR: &str = "Expected a character";
 const ENGINE262_INVALID_DECIMAL_DIGITS_ERROR: &str = "Invalid decimal digits";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
+const ENGINE262_NUMBERS_OUT_OF_ORDER_IN_QUANTIFIER_ERROR: &str =
+    "Numbers out of order in quantifier";
 const ENGINE262_UNEXPECTED_TOKEN_ERROR: &str = "Unexpected token";
 const REGEXP_NEGATIVE_LOOKAHEAD_MARKER: &str = "(?!";
 const REGEXP_POSITIVE_LOOKAHEAD_MARKER: &str = "(?=";
@@ -184,6 +186,20 @@ pub fn is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+pub fn is_engine262_invalid_quantifier_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262.error_message.as_deref().is_some_and(|message| {
+            message.contains(ENGINE262_NUMBERS_OUT_OF_ORDER_IN_QUANTIFIER_ERROR)
+        })
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 

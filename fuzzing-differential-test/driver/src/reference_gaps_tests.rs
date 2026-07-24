@@ -397,6 +397,29 @@ fn engine262_invalid_identity_escape_and_v8_resizable_alignment_gap_disables_ora
 }
 
 #[test]
+fn engine262_invalid_quantifier_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Numbers out of order in quantifier".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(121, { maxByteLength: 1073741820 });\
+        new Uint16Array(buffer);\
+        /foo(?!bar)baz{12,3b/mgd;\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(

@@ -35,6 +35,9 @@ pub fn is_engine262_unsupported(
         || predicates::is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
+        || predicates::is_engine262_invalid_quantifier_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || predicates::is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || predicates::is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
@@ -64,6 +67,9 @@ pub fn correctness_oracle<'a>(
             source, engine262, v8,
         )
         || predicates::is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || predicates::is_engine262_invalid_quantifier_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
         || predicates::is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
