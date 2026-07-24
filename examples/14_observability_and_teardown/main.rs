@@ -1,6 +1,7 @@
 use velum::{Engine, VmGcKind, engine_build_info};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let build = engine_build_info();
     println!(
         "Engine build: {} {} ({})",
@@ -42,6 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         optimization.bytecode_linear_direct_runs()
     );
 
+    tokio::task::yield_now().await;
     retained.release()?;
     let collection = vm.collect_garbage()?;
     let storage_after_gc = vm.storage_snapshot()?;

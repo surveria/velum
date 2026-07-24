@@ -1,6 +1,7 @@
 use velum::{Engine, OwnedValue};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = Engine::new();
     let compiler = engine.create_vm();
     let script = compiler.compile_named(
@@ -14,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut first = engine.create_vm();
     let mut second = engine.create_vm();
     let first_run = first.eval_compiled_owned(&script)?;
+    tokio::task::yield_now().await;
     let second_run = first.eval_compiled_owned(&script)?;
     let isolated_run = second.eval_compiled_owned(&script)?;
 

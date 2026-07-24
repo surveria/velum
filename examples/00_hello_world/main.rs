@@ -1,13 +1,20 @@
 use velum::Engine;
+use velum_tokio::VmRuntime;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut vm = Engine::new().create_vm();
-    vm.eval_named(
-        "examples/00_hello_world/main.js",
-        r#"print("Hello, world!");"#,
-    )?;
-
-    for line in vm.take_output() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = VmRuntime::new(Engine::new())?;
+    let vm = runtime.spawn_vm().await?;
+    let output = vm
+        .run(|vm| {
+            vm.eval_named(
+                "examples/00_hello_world/main.js",
+                r#"print("Hello, world!");"#,
+            )?;
+            Ok(vm.take_output())
+        })
+        .await?;
+    for line in output {
         println!("{line}");
     }
     Ok(())

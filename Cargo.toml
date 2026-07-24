@@ -6,6 +6,7 @@ members = [
     "crates/velum-macros",
     "crates/velum-regexp",
     "crates/velum-tokio",
+    "examples",
     "tools/regexp-unicode-gen",
 ]
 default-members = [".", "crates/velum-regexp"]
@@ -19,6 +20,7 @@ license = "MIT"
 repository = "https://github.com/surveria/velum"
 description = "An independent, embeddable ECMAScript bytecode engine written in Rust."
 readme = "README.md"
+autoexamples = false
 
 [lib]
 name = "velum"

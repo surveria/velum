@@ -1,127 +1,147 @@
-use std::{mem::size_of, sync::Arc};
+use core::mem::size_of;
 
-use parking_lot::Mutex;
-use velum::{Engine, Error, HostClass, HostInstance, HostMethodResult, OwnedValue};
+use tokio::sync::Mutex;
+use velum::{Engine, Error, HostInstance, HostMethodResult, OwnedValue};
+use velum_tokio::VmRuntime;
 
-const CONNECTING: u8 = 0;
 const OPEN: u8 = 1;
 const CLOSED: u8 = 3;
 const MAX_MESSAGES: usize = 8;
 const MAX_MESSAGE_BYTES: usize = 256;
-const LOGICAL_PAYLOAD_BYTES: usize =
-    size_of::<MockSocket>().saturating_add(MAX_MESSAGES.saturating_mul(MAX_MESSAGE_BYTES));
 
 #[derive(Debug)]
-struct MockSocket {
-    url: String,
+struct SocketState {
     ready_state: u8,
-    buffered_amount: usize,
     sent_messages: Vec<String>,
 }
 
-type SharedSocket = Arc<Mutex<MockSocket>>;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut vm = Engine::new().create_vm();
-    vm.register_host_class(websocket_class())?;
-
-    let result = vm.eval_owned(
-        r#"
-        const socket = new WebSocket("wss://example.invalid/events");
-        socket.send("first");
-        const clone = socket.cloneHandle();
-        clone.send("second");
-        const summary = [
-            socket.url,
-            socket.readyState,
-            socket.sentMessages(),
-            socket === clone
-        ].join(" | ");
-        clone.close();
-        summary + " | closed=" + socket.readyState;
-        "#,
-    )?;
-    let OwnedValue::String(summary) = result else {
-        return Err("mock WebSocket did not return a summary string".into());
-    };
-    println!("{summary}");
-    Ok(())
+#[velum::host_class(name = "WebSocket", rename_all = "camelCase")]
+struct MockSocket {
+    #[js(get)]
+    url: String,
+    state: Mutex<SocketState>,
 }
 
-fn websocket_class() -> HostClass<SharedSocket> {
-    HostClass::new("WebSocket", |call| {
-        let url = call.string(0, "url")?.to_owned();
-        let state = MockSocket {
-            url,
-            ready_state: OPEN,
-            buffered_amount: 0,
-            sent_messages: Vec::with_capacity(MAX_MESSAGES),
-        };
+#[velum::host_methods]
+impl MockSocket {
+    #[js(constructor)]
+    fn connect(url: String) -> velum::Result<HostInstance<Self>> {
+        let logical_bytes = size_of::<Self>()
+            .checked_add(url.len())
+            .and_then(|bytes| bytes.checked_add(MAX_MESSAGES.saturating_mul(MAX_MESSAGE_BYTES)))
+            .ok_or_else(|| Error::limit("mock WebSocket payload size overflowed"))?;
         Ok(HostInstance::new(
-            Arc::new(Mutex::new(state)),
-            LOGICAL_PAYLOAD_BYTES,
+            Self {
+                url,
+                state: Mutex::new(SocketState {
+                    ready_state: OPEN,
+                    sent_messages: Vec::with_capacity(MAX_MESSAGES),
+                }),
+            },
+            logical_bytes,
         ))
-    })
-    .with_constructor_length(1)
-    .getter("url", |socket, _call| Ok(socket.lock().url.clone()))
-    .getter("readyState", |socket, _call| {
-        Ok(f64::from(socket.lock().ready_state))
-    })
-    .getter("bufferedAmount", |socket, _call| {
-        usize_to_number(socket.lock().buffered_amount)
-    })
-    .method_with_length("send", 1, |socket, call| {
-        let message = call.string(0, "message")?;
-        let mut state = socket.lock();
-        if state.ready_state != OPEN {
-            return Err(Error::runtime("mock WebSocket is not open"));
-        }
+    }
+
+    #[js(method)]
+    async fn send(&self, message: String) -> velum::Result<()> {
+        tokio::task::yield_now().await;
         if message.len() > MAX_MESSAGE_BYTES {
             return Err(Error::runtime("mock WebSocket message is too large"));
+        }
+        let mut state = self.state.lock().await;
+        if state.ready_state != OPEN {
+            return Err(Error::runtime("mock WebSocket is not open"));
         }
         if state.sent_messages.len() >= MAX_MESSAGES {
             return Err(Error::runtime("mock WebSocket history is full"));
         }
-        state.buffered_amount = state
-            .buffered_amount
-            .checked_add(message.len())
-            .ok_or_else(|| Error::runtime("mock buffered amount overflowed"))?;
-        state.sent_messages.push(message.to_owned());
-        state.buffered_amount = 0;
+        state.sent_messages.push(message);
         drop(state);
         Ok(())
-    })
-    .method("close", |socket, _call| {
-        socket.lock().ready_state = CLOSED;
+    }
+
+    #[js(method)]
+    async fn close(&self) -> velum::Result<()> {
+        self.state.lock().await.ready_state = CLOSED;
         Ok(())
-    })
-    .method("sentMessages", |socket, _call| {
-        Ok(socket.lock().sent_messages.join(","))
-    })
-    .method_with_result("cloneHandle", 0, |_socket, _call| {
+    }
+
+    #[js(method)]
+    async fn ready_state(&self) -> velum::Result<f64> {
+        Ok(f64::from(self.state.lock().await.ready_state))
+    }
+
+    #[js(method)]
+    async fn sent_messages(&self) -> velum::Result<String> {
+        Ok(self.state.lock().await.sent_messages.join(","))
+    }
+
+    #[js(method, raw)]
+    fn clone_handle(&self) -> velum::Result<HostMethodResult> {
+        if self.url.is_empty() {
+            return Err(Error::runtime("mock WebSocket URL is unavailable"));
+        }
         Ok(HostMethodResult::shared_receiver())
-    })
-    .static_method("stateName", 1, |call| {
-        let state = call.number(0, "state")?;
-        let name = if same_number(state, CONNECTING) {
-            "CONNECTING"
-        } else if same_number(state, OPEN) {
+    }
+
+    #[js(static_method)]
+    fn state_name(state: f64) -> velum::Result<String> {
+        if !state.is_finite() {
+            return Err(Error::runtime("mock WebSocket state must be finite"));
+        }
+        let name = if (state - f64::from(OPEN)).abs() <= f64::EPSILON {
             "OPEN"
-        } else if same_number(state, CLOSED) {
+        } else if (state - f64::from(CLOSED)).abs() <= f64::EPSILON {
             "CLOSED"
         } else {
             "UNKNOWN"
         };
-        Ok(name)
+        Ok(name.to_owned())
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = VmRuntime::new(Engine::new())?;
+    let vm = runtime
+        .spawn_vm_with(velum::Vm::register_host_type::<MockSocket>)
+        .await?;
+    vm.run(|vm| {
+        vm.eval(
+            r#"
+            const socket = new WebSocket("wss://example.invalid/events");
+            const clone = socket.cloneHandle();
+            globalThis.summary = "pending";
+            (async () => {
+                await socket.send("first");
+                await clone.send("second");
+                const openState = await socket.readyState();
+                const messages = await socket.sentMessages();
+                await clone.close();
+                const closedState = await socket.readyState();
+                globalThis.summary = [
+                    socket.url,
+                    WebSocket.stateName(openState),
+                    messages,
+                    socket === clone,
+                    WebSocket.stateName(closedState),
+                    "state" in socket
+                ].join(" | ");
+            })();
+            "#,
+        )?;
+        Ok(())
     })
-}
-
-fn same_number(number: f64, integer: u8) -> bool {
-    (number - f64::from(integer)).abs() <= f64::EPSILON
-}
-
-fn usize_to_number(value: usize) -> Result<f64, Error> {
-    let value =
-        u32::try_from(value).map_err(|_| Error::runtime("mock buffered amount exceeds u32"))?;
-    Ok(f64::from(value))
+    .await?;
+    vm.wait_idle().await?;
+    let summary = vm
+        .run(|vm| {
+            let OwnedValue::String(summary) = vm.eval_owned("summary")? else {
+                return Err(Error::runtime("mock WebSocket summary was not a string"));
+            };
+            Ok(summary)
+        })
+        .await?;
+    println!("{summary}");
+    Ok(())
 }

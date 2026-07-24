@@ -21,12 +21,15 @@ examples=(
   12_realms_and_plugins
   13_shared_memory_between_vms
   14_observability_and_teardown
+  15_host_type_multiple_vms
 )
 
+cargo clippy -p velum-embedding-examples --all-targets --all-features -- -D warnings
+
 for example in "${examples[@]}"; do
-  cargo run --quiet --example "${example}" >/dev/null
+  cargo run --quiet -p velum-embedding-examples --example "${example}" >/dev/null
 done
 
 cargo run --quiet -p velum-tokio --example tokio_host_class >/dev/null
 
-echo "check-examples: ok (${#examples[@]} root examples + Tokio companion)"
+echo "check-examples: ok (${#examples[@]} embedding examples + Tokio companion)"

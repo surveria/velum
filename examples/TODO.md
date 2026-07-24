@@ -3,7 +3,7 @@
 This document defines the target embedding examples for Velum and the engine
 capabilities required to implement them as real application-facing APIs.
 
-The capability tranches and all fifteen examples are implemented. This file
+The capability tranches and all sixteen examples are implemented. This file
 retains the product acceptance requirements and architectural rationale behind
 the runnable suite documented in `examples/README.md`.
 
@@ -34,7 +34,8 @@ Their implementation must follow these rules:
 
 ## Example Catalog
 
-Every catalog entry is directly runnable with `cargo run --example <name>`.
+Every catalog entry is directly runnable with
+`cargo run -p velum-embedding-examples --example <name>`.
 
 | ID | Planned directory | Status | Purpose |
 | --- | --- | --- | --- |
@@ -53,6 +54,7 @@ Every catalog entry is directly runnable with `cargo run --example <name>`.
 | 12 | `12_realms_and_plugins` | Implemented | Compare realms and independent VMs, showing isolated globals and intrinsics versus shared VM ownership. |
 | 13 | `13_shared_memory_between_vms` | Implemented | Transfer a `SharedArrayBufferHandle` between independent VMs and coordinate through `Atomics`. |
 | 14 | `14_observability_and_teardown` | Implemented | Inspect usage, storage, roots, heap reachability, optimization counters, explicit GC, build identity, and deterministic teardown. |
+| 15 | `15_host_type_multiple_vms` | Implemented | Register one macro-defined Rust host type in three Tokio-owned VMs and prove that each VM receives independent hidden state. |
 
 ## Acceptance Example Specifications
 
@@ -72,10 +74,11 @@ Rust calls jsEntry()
 ```
 
 The Rust host future must not call into a mutably borrowed VM directly. The
-JavaScript callback invocation must be represented as VM-owned queued work,
-and progress must interleave polling the application executor with draining VM
-jobs. Fulfilment, rejection, cancellation, and teardown must settle or release
-every owner exactly once.
+JavaScript callback invocation must be represented as VM-owned queued work.
+The Tokio adapter must interleave local Rust futures, host commands, and VM
+jobs without moving VM-local state across its owner boundary. Fulfilment,
+rejection, cancellation, and teardown must settle or release every owner
+exactly once.
 
 Required capabilities:
 
@@ -91,14 +94,15 @@ Required capabilities:
 ### 04: Stored Rust Callback And Intervals
 
 Rust should create a real callable value and pass it as an argument to a
-JavaScript method. JavaScript stores that value on a class instance and invokes
-it ten times from an interval callback. The example should use a deterministic
-virtual clock so it has no sleeps or timing flakes.
+JavaScript class. JavaScript stores that value on the instance and invokes it
+ten times from an example-owned `setInterval` function. The function awaits a
+Tokio-backed Rust sleep for each tick, and the test waits for completion rather
+than asserting wall-clock timing.
 
-`setInterval` and `clearInterval` are host capabilities in this example, not
-ECMAScript built-ins and not permanent browser APIs in the engine. The timer
-scheduler retains scheduled callbacks explicitly, enqueues due calls into the
-VM, and releases them on cancellation or teardown.
+`setInterval` is example policy, not an ECMAScript built-in and not a permanent
+browser API in the engine. Tokio owns the outer timer, while the callback stays
+an ordinary JavaScript property and every invocation uses normal call
+semantics.
 
 Required capabilities:
 
@@ -293,17 +297,17 @@ independent callable, receiver, and retained-argument roots. Results and exact
 JavaScript rejections are observable through `QueuedCallRequest`; dropping a
 request abandons dispatch, and VM-wide cancellation or teardown wakes or
 terminates pending owners deterministically. Host-command count and payload
-limits provide queue backpressure. The deterministic virtual-clock scheduler
-and its per-timer accounting remain example-owned code for tranche 7 rather
-than unconditional engine globals.
+limits provide queue backpressure. Timer policy remains example-owned code
+rather than an unconditional engine global.
 
 Expose a controlled way for the embedding application to enqueue a call to a
 retained callable. Build the example-only interval service on that primitive.
 
 The engine should not grow browser or Node.js timers as unconditional globals.
-The example installs `setInterval` and `clearInterval` explicitly, owns the
-clock and schedule in Rust, advances virtual time deterministically, and posts
-due callbacks into the VM queue.
+The current example installs `setInterval` explicitly in JavaScript, stores the
+Rust callable on an ordinary class instance, and awaits an async Rust sleep
+backed by Tokio for each tick. Completion, rather than elapsed wall-clock
+duration, is asserted.
 
 The tranche must define queue backpressure, cancellation races, callback
 release, callback exceptions, VM shutdown, and per-timer resource accounting.
@@ -353,8 +357,9 @@ case, not a special runtime object kind built only for that class.
 
 ### Tranche 7: Public Facade And Full Example Suite
 
-Status: implemented. Examples 00 through 14 are Cargo-discovered binaries and
-`examples/README.md` provides the ordered learning path. The module-loader and
+Status: implemented. Examples 00 through 15 are explicit targets in the
+dedicated `velum-embedding-examples` package, and `examples/README.md` provides
+the ordered learning path. The module-loader and
 shared-buffer scenarios use thin `Vm` facade methods over their existing
 runtime owners; no example imports `Context` or internal arena identifiers.
 
@@ -362,7 +367,7 @@ Review the completed surface through `Engine` and `Vm`. Example code should not
 drop into internal modules, depend on raw arena identifiers, or use `Context`
 only because a useful operation was omitted from the primary facade.
 
-Then implement examples 00 through 14, add an `examples/README.md` learning
+Then implement examples 00 through 15, add an `examples/README.md` learning
 path, and make every example directly runnable. Shared helpers should remain
 small and should not hide the public API being taught.
 
@@ -442,7 +447,7 @@ work can build on without later rewrites.
 
 This roadmap is complete when:
 
-- all fifteen examples run through documented public APIs;
+- all sixteen examples run through documented public APIs;
 - examples 03 through 06 contain no generated-source or `eval` workaround;
 - Rust and JavaScript can call, construct, inspect, mutate, retain, and release
   values through VM-checked handles;
