@@ -57,6 +57,7 @@ struct Summary {
     performance_slow: u64,
     velum_timeouts: u64,
     velum_crashes: u64,
+    velum_resource_limits: u64,
     engine262_timeouts: u64,
     engine262_crashes: u64,
     engine262_unsupported: u64,
@@ -147,6 +148,10 @@ fn rows(
         row("Velum timeouts", &summary.velum_timeouts.to_string()),
         row("Velum crashes", &summary.velum_crashes.to_string()),
         row(
+            "Velum resource limits",
+            &summary.velum_resource_limits.to_string(),
+        ),
+        row(
             "Engine262 timeouts",
             &summary.engine262_timeouts.to_string(),
         ),
@@ -212,6 +217,10 @@ impl Summary {
                 }
                 CaseFinding::VelumCrash => {
                     self.velum_crashes = self.velum_crashes.saturating_add(1);
+                    has_correctness_problem = true;
+                }
+                CaseFinding::VelumResourceLimit => {
+                    self.velum_resource_limits = self.velum_resource_limits.saturating_add(1);
                     has_correctness_problem = true;
                 }
                 CaseFinding::Engine262Timeout => {

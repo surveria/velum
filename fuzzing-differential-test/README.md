@@ -36,6 +36,8 @@ absolute shared directory. The session contains:
 - `findings/correctness-mismatches/*.js` for Velum-vs-Engine262 differences;
 - `findings/performance-slow/*.js` for cases where Velum is slower than V8 by
   the configured ratio;
+- `findings/velum-resource-limits/*.js` for cases where Velum stops execution
+  through its configured resource limits before reaching a semantic result;
 - `findings/engine262-unsupported/*.js` for programs that require APIs missing
   from the pinned Engine262 oracle, such as ECMA-402 `Intl`;
 - `findings/*-timeouts/*.js` and `findings/*-crashes/*.js` for engine-specific

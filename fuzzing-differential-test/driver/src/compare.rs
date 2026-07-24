@@ -32,6 +32,7 @@ const PARSER_ERROR_PREFIX: &str = "parser error";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
+const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -101,6 +102,7 @@ pub enum CaseClassification {
     PerformanceSlow,
     VelumTimeout,
     VelumCrash,
+    VelumResourceLimit,
     Engine262Timeout,
     Engine262Crash,
     Engine262Unsupported,
@@ -115,6 +117,7 @@ pub enum CaseFinding {
     PerformanceSlow,
     VelumTimeout,
     VelumCrash,
+    VelumResourceLimit,
     Engine262Timeout,
     Engine262Crash,
     Engine262Unsupported,
@@ -184,6 +187,10 @@ fn findings(
     if velum.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::VelumCrash);
     }
+    let velum_resource_limit = is_velum_resource_limit(velum);
+    if velum_resource_limit {
+        findings.push(CaseFinding::VelumResourceLimit);
+    }
     if engine262.status == OutcomeStatus::Timeout {
         findings.push(CaseFinding::Engine262Timeout);
     }
@@ -203,6 +210,7 @@ fn findings(
     let correctness_oracle = correctness_oracle(source, engine262, v8, engine262_unsupported);
     if let Some(correctness_oracle) = correctness_oracle
         && velum.is_completed()
+        && !velum_resource_limit
         && correctness_oracle.is_completed()
         && !equivalent(velum, correctness_oracle)
     {
@@ -221,6 +229,7 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
     for candidate in [
         CaseFinding::VelumCrash,
         CaseFinding::VelumTimeout,
+        CaseFinding::VelumResourceLimit,
         CaseFinding::CorrectnessMismatch,
         CaseFinding::Engine262Crash,
         CaseFinding::Engine262Timeout,
@@ -235,6 +244,7 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
                 CaseFinding::PerformanceSlow => CaseClassification::PerformanceSlow,
                 CaseFinding::VelumTimeout => CaseClassification::VelumTimeout,
                 CaseFinding::VelumCrash => CaseClassification::VelumCrash,
+                CaseFinding::VelumResourceLimit => CaseClassification::VelumResourceLimit,
                 CaseFinding::Engine262Timeout => CaseClassification::Engine262Timeout,
                 CaseFinding::Engine262Crash => CaseClassification::Engine262Crash,
                 CaseFinding::Engine262Unsupported => CaseClassification::Engine262Unsupported,
@@ -263,6 +273,15 @@ fn is_engine262_unsupported(source: &str, engine262: &EngineOutcome, v8: &Engine
         || is_reference_unsupported_resource_management(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !equivalent(engine262, v8))
+}
+
+fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
+    velum.status == OutcomeStatus::JsError
+        && velum.error_name.as_deref() == Some("Error")
+        && velum
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX))
 }
 
 fn correctness_oracle<'a>(
@@ -683,6 +702,41 @@ mod tests {
         ensure!(
             !findings.contains(&CaseFinding::CorrectnessMismatch),
             "reference syntax gap must not count as correctness mismatch"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn velum_resource_limit_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("Error".to_owned()),
+            Some("resource limit exceeded: runtime steps exceeded 100000".to_owned()),
+        );
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let findings = findings(
+            "for (;;) {}",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            CompareConfig {
+                engine262_timeout: Duration::from_secs(30),
+                v8_timeout: Duration::from_secs(4),
+                slow_ratio: 2.0,
+                slow_min: Duration::from_millis(5),
+            },
+        );
+        ensure!(
+            findings.contains(&CaseFinding::VelumResourceLimit),
+            "Velum resource limit finding is missing"
+        );
+        ensure!(
+            !findings.contains(&CaseFinding::CorrectnessMismatch),
+            "resource limits must not count as correctness mismatch"
         );
         Ok(())
     }
