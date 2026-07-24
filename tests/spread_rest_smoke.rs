@@ -220,6 +220,62 @@ fn spread_evaluation_order_is_left_to_right() -> TestResult {
 }
 
 #[test]
+fn evaluates_spread_call_callee_before_spread_arguments() -> TestResult {
+    ensure_string(
+        r#"
+        let log = "";
+        const proto = new Proxy({}, {
+            get(target, key) {
+                log = log + "g";
+                return function () {};
+            }
+        });
+        const target = Object.create(proto);
+        const key = {
+            toString() {
+                log = log + "k";
+                return "m";
+            }
+        };
+        try { target.m(...undefined); } catch (error) { log = log + "e"; }
+        try { target[key](...undefined); } catch (error) { log = log + "e"; }
+        const spread = {
+            get [Symbol.iterator]() {
+                log = log + "s";
+                return function* () {};
+            }
+        };
+        class PrivateHolder {
+            #m() {}
+            test(receiver) {
+                try { receiver.#m(...spread); } catch (error) { log = log + "e"; }
+            }
+        }
+        new PrivateHolder().test({});
+        class Base {
+            get m() {
+                log = log + "G";
+                return function () {};
+            }
+        }
+        class Derived extends Base {
+            callStatic() {
+                try { super.m(...undefined); } catch (error) { log = log + "e"; }
+            }
+            callComputed() {
+                try { super[key](...undefined); } catch (error) { log = log + "e"; }
+            }
+        }
+        const derived = new Derived();
+        derived.callStatic();
+        derived.callComputed();
+        log
+        "#,
+        "gekgeeGekGe",
+    )
+}
+
+#[test]
 fn throws_type_error_for_non_iterable_spread() -> TestResult {
     ensure_string(
         r#"

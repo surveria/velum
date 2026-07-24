@@ -401,17 +401,6 @@ impl Context {
         self.eval_super_member_call(state, property, &args, next)
     }
 
-    pub(super) fn eval_bytecode_call_super_member_spread(
-        &mut self,
-        state: &mut BytecodeState,
-        property: &BytecodeProperty,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let packed = state.stack.pop()?;
-        let args = self.spread_call_arguments(&packed)?;
-        self.eval_super_member_call(state, property, &args, next)
-    }
-
     /// Calls a `super.method(...)` with the method resolved on the home
     /// prototype and `this` bound to the current instance.
     fn eval_super_member_call(
@@ -441,19 +430,6 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let args = state.stack.pop_many(arg_count)?;
-        let property_value = state.stack.pop()?;
-        let property = self.dynamic_property_key(&property_value)?;
-        self.eval_computed_super_member_call(state, property.lookup(), &args, next)
-    }
-
-    pub(super) fn eval_bytecode_call_computed_super_member_spread(
-        &mut self,
-        state: &mut BytecodeState,
-        _property: BytecodeDynamicProperty,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let packed = state.stack.pop()?;
-        let args = self.spread_call_arguments(&packed)?;
         let property_value = state.stack.pop()?;
         let property = self.dynamic_property_key(&property_value)?;
         self.eval_computed_super_member_call(state, property.lookup(), &args, next)

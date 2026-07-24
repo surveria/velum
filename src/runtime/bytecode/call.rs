@@ -79,15 +79,6 @@ impl Context {
             BytecodeInstruction::CallValueWithReceiverSpread => {
                 self.eval_bytecode_call_value_with_receiver_spread(state, next)
             }
-            BytecodeInstruction::CallStaticMemberSpread { property } => {
-                self.eval_bytecode_call_static_member_spread(state, property, next)
-            }
-            BytecodeInstruction::CallComputedMemberSpread { property } => {
-                self.eval_bytecode_call_computed_member_spread(state, *property, next)
-            }
-            BytecodeInstruction::CallPrivateMemberSpread { property } => {
-                self.eval_bytecode_call_private_member_spread(state, property, next)
-            }
             BytecodeInstruction::ConstructValueSpread => {
                 self.eval_bytecode_construct_value_spread(state, next)
             }
@@ -116,16 +107,10 @@ impl Context {
                 property,
                 arg_count,
             } => self.eval_bytecode_call_super_member(state, property, *arg_count, next),
-            BytecodeInstruction::CallSuperMemberSpread { property } => {
-                self.eval_bytecode_call_super_member_spread(state, property, next)
-            }
             BytecodeInstruction::CallComputedSuperMember {
                 property,
                 arg_count,
             } => self.eval_bytecode_call_computed_super_member(state, *property, *arg_count, next),
-            BytecodeInstruction::CallComputedSuperMemberSpread { property } => {
-                self.eval_bytecode_call_computed_super_member_spread(state, *property, next)
-            }
             BytecodeInstruction::SuperPropertyAssign { .. }
             | BytecodeInstruction::UpdateSuperProperty { .. }
             | BytecodeInstruction::CompoundSuperProperty { .. } => {

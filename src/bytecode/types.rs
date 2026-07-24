@@ -430,12 +430,6 @@ pub enum BytecodeInstruction {
     },
     CallValueSpread,
     CallValueWithReceiverSpread,
-    CallStaticMemberSpread {
-        property: BytecodeProperty,
-    },
-    CallComputedMemberSpread {
-        property: BytecodeDynamicProperty,
-    },
     ConstructValueSpread,
     ArrayLiteralSpread {
         spread_flags: Rc<[bool]>,
@@ -588,10 +582,6 @@ pub enum BytecodeInstruction {
         property: BytecodePrivateName,
         arg_count: usize,
     },
-    /// Spread-argument variant of `CallPrivateMember`.
-    CallPrivateMemberSpread {
-        property: BytecodePrivateName,
-    },
     /// Pushes whether the popped object owns the resolved private slot.
     PrivateIn {
         property: BytecodePrivateName,
@@ -738,15 +728,9 @@ pub enum BytecodeInstruction {
         property: BytecodeProperty,
         arg_count: usize,
     },
-    CallSuperMemberSpread {
-        property: BytecodeProperty,
-    },
     CallComputedSuperMember {
         property: BytecodeDynamicProperty,
         arg_count: usize,
-    },
-    CallComputedSuperMemberSpread {
-        property: BytecodeDynamicProperty,
     },
     SuperPropertyAssign {
         property: BytecodeSuperProperty,

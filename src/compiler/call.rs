@@ -664,12 +664,11 @@ impl BytecodeCompiler<'_> {
                 access,
             } => {
                 self.compile_expr(object)?;
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallStaticMemberSpread {
+                self.emit(BytecodeInstruction::Duplicate);
+                self.emit(BytecodeInstruction::StaticMember {
                     property: Self::compile_property(property, *access),
                 });
-                Ok(())
+                self.compile_prepared_spread_receiver_call(args)
             }
             Expr::OptionalMember {
                 object,
@@ -693,39 +692,38 @@ impl BytecodeCompiler<'_> {
                 access,
             } => {
                 self.compile_expr(object)?;
+                self.emit(BytecodeInstruction::Duplicate);
                 self.compile_expr(property)?;
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallComputedMemberSpread {
+                self.emit(BytecodeInstruction::ComputedMember {
                     property: Self::compile_dynamic_property(*access),
                 });
-                Ok(())
+                self.compile_prepared_spread_receiver_call(args)
             }
             Expr::PrivateMember { object, name } => {
                 self.compile_expr(object)?;
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallPrivateMemberSpread {
+                self.emit(BytecodeInstruction::Duplicate);
+                self.emit(BytecodeInstruction::PrivateMember {
                     property: crate::bytecode::BytecodePrivateName::new(name.clone()),
                 });
-                Ok(())
+                self.compile_prepared_spread_receiver_call(args)
             }
             Expr::SuperMember { property, access } => {
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallSuperMemberSpread {
+                self.emit(BytecodeInstruction::LoadThis);
+                self.emit(BytecodeInstruction::SuperMember {
                     property: Self::compile_property(property, *access),
                 });
-                Ok(())
+                self.compile_prepared_spread_receiver_call(args)
             }
             Expr::SuperComputedMember { property, access } => {
-                self.compile_expr(property)?;
-                let spread_flags = self.compile_spread_parts(args)?;
-                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
-                self.emit(BytecodeInstruction::CallComputedSuperMemberSpread {
+                self.emit(BytecodeInstruction::LoadThis);
+                self.emit(BytecodeInstruction::ComputedSuperMember {
+                    expression: crate::bytecode::BytecodeBlock::compile_expression(
+                        property,
+                        self.layout,
+                    )?,
                     property: Self::compile_dynamic_property(*access),
                 });
-                Ok(())
+                self.compile_prepared_spread_receiver_call(args)
             }
             Expr::Parenthesized(callee) => self.compile_spread_call_expr(callee, strict, args),
             _ => {
@@ -736,6 +734,13 @@ impl BytecodeCompiler<'_> {
                 Ok(())
             }
         }
+    }
+
+    fn compile_prepared_spread_receiver_call(&mut self, args: &[Expression]) -> Result<()> {
+        let spread_flags = self.compile_spread_parts(args)?;
+        self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+        self.emit(BytecodeInstruction::CallValueWithReceiverSpread);
+        Ok(())
     }
 
     fn finish_optional_call(&mut self, nullish_jump: InstructionIndex) -> Result<()> {

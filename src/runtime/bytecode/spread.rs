@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use crate::{
     api::native_call::NativeCallTarget,
-    bytecode::{BytecodeAddress, BytecodeBinding, BytecodeDynamicProperty, BytecodeProperty},
+    bytecode::{BytecodeAddress, BytecodeBinding},
     error::{Error, Result},
     runtime::{Context, abstract_operations::IteratorStep, control::Completion},
     value::Value,
@@ -188,38 +188,6 @@ impl Context {
         let callee = state.stack.pop()?;
         let receiver = state.stack.pop()?;
         let completion = self.call(&callee, &args, receiver)?;
-        Ok(Self::push_spread_completion(state, completion, next))
-    }
-
-    pub(super) fn eval_bytecode_call_static_member_spread(
-        &mut self,
-        state: &mut BytecodeState,
-        property: &BytecodeProperty,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let packed = state.stack.pop()?;
-        let args = self.spread_call_arguments(&packed)?;
-        let this_value = state.stack.pop()?;
-        let callee =
-            self.get_static_property_value(&this_value, property.name(), property.access())?;
-        let completion = self.call(&callee, &args, this_value)?;
-        Ok(Self::push_spread_completion(state, completion, next))
-    }
-
-    pub(super) fn eval_bytecode_call_computed_member_spread(
-        &mut self,
-        state: &mut BytecodeState,
-        property: BytecodeDynamicProperty,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let packed = state.stack.pop()?;
-        let args = self.spread_call_arguments(&packed)?;
-        let key_value = state.stack.pop()?;
-        let this_value = state.stack.pop()?;
-        let key = self.dynamic_property_key(&key_value)?;
-        let callee =
-            self.get_cached_dynamic_property_value(&this_value, &key, property.access())?;
-        let completion = self.call(&callee, &args, this_value)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 

@@ -155,8 +155,6 @@ impl Context {
             | BytecodeInstruction::CallBindingSpread { .. }
             | BytecodeInstruction::CallValueSpread
             | BytecodeInstruction::CallValueWithReceiverSpread
-            | BytecodeInstruction::CallStaticMemberSpread { .. }
-            | BytecodeInstruction::CallComputedMemberSpread { .. }
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateClass { .. }
@@ -166,9 +164,7 @@ impl Context {
             | BytecodeInstruction::SuperMember { .. }
             | BytecodeInstruction::ComputedSuperMember { .. }
             | BytecodeInstruction::CallSuperMember { .. }
-            | BytecodeInstruction::CallSuperMemberSpread { .. }
             | BytecodeInstruction::CallComputedSuperMember { .. }
-            | BytecodeInstruction::CallComputedSuperMemberSpread { .. }
             | BytecodeInstruction::SuperPropertyAssign { .. }
             | BytecodeInstruction::UpdateSuperProperty { .. }
             | BytecodeInstruction::CompoundSuperProperty { .. }
