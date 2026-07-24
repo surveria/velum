@@ -454,7 +454,7 @@ impl Context {
         for function in &self.native_functions {
             counter.record(
                 VmStorageKind::ObjectProperty,
-                function.properties().storage_property_count()?,
+                function.storage_property_count()?,
             )?;
             counter.record(
                 VmStorageKind::CacheEntry,

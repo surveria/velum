@@ -354,7 +354,7 @@ impl Context {
             }
             requested
         } else {
-            if !length_tracking && !available.is_multiple_of(element_size) {
+            if !available.is_multiple_of(element_size) {
                 return Err(Error::exception(
                     ErrorName::RangeError,
                     TYPED_ARRAY_BUFFER_RANGE_ERROR,

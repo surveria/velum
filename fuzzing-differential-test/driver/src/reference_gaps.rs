@@ -185,6 +185,12 @@ fn source_constructs_zero_length_shared_array_buffer(source: &str) -> bool {
                 return true;
             }
         }
+        if let Some(after_constructor) = args.strip_prefix(SHARED_ARRAY_BUFFER_CONSTRUCTOR) {
+            let after_constructor = after_constructor.trim_start();
+            if after_constructor.starts_with(')') || after_constructor.starts_with(',') {
+                return true;
+            }
+        }
         search_start = after_constructor_start;
     }
     false
@@ -712,7 +718,7 @@ mod tests {
         let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
         let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-        let source = "const buffer = new SharedArrayBuffer(); buffer.slice(40);";
+        let source = "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);";
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());

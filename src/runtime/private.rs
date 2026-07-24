@@ -199,6 +199,7 @@ impl Context {
         match value {
             Value::Object(id) => self.objects.private_slot(*id, name),
             Value::Function(id) => self.function_private_slot(*id, name),
+            Value::NativeFunction(id) => Ok(self.native_function(*id)?.private_slot(name)),
             _ => Ok(None),
         }
     }
@@ -208,7 +209,10 @@ impl Context {
         value: &Value,
         name: &PrivateNameId,
     ) -> Result<bool> {
-        if !matches!(value, Value::Object(_) | Value::Function(_)) {
+        if !matches!(
+            value,
+            Value::Object(_) | Value::Function(_) | Value::NativeFunction(_)
+        ) {
             return Err(Error::type_error(
                 "right-hand side of private 'in' is not an object",
             ));
@@ -269,6 +273,18 @@ impl Context {
                         ))
                     }
                 }
+                Value::NativeFunction(id) => {
+                    if self
+                        .native_function_mut(*id)?
+                        .set_private_field(name, value)
+                    {
+                        Ok(())
+                    } else {
+                        Err(Error::runtime(
+                            "private field disappeared during assignment",
+                        ))
+                    }
+                }
                 _ => Err(Error::type_error("private field receiver is not an object")),
             },
             PrivateSlotValue::Accessor {
@@ -301,6 +317,16 @@ impl Context {
                     .add_private_slot(*id, name, value, self.limits.max_object_properties)
             }
             Value::Function(id) => self.add_function_private_slot(*id, name, value),
+            Value::NativeFunction(id) => {
+                let max_properties = self.limits.max_object_properties;
+                let storage_ledger = self.storage_ledger.clone();
+                self.native_function_mut(*id)?.add_private_slot(
+                    name,
+                    value,
+                    max_properties,
+                    &storage_ledger,
+                )
+            }
             _ => Err(Error::type_error(
                 "private element receiver is not an object",
             )),
@@ -318,6 +344,9 @@ impl Context {
             match receiver {
                 Value::Object(id) => self.objects.replace_private_slot(*id, &name, existing),
                 Value::Function(id) => self.replace_function_private_slot(*id, &name, existing),
+                Value::NativeFunction(id) => self
+                    .native_function_mut(*id)?
+                    .replace_private_slot(&name, existing),
                 _ => Err(Error::type_error(
                     "private element receiver is not an object",
                 )),
