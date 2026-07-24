@@ -246,9 +246,9 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
         try { new BigInt64Array(new SharedArrayBuffer(6)); } catch (error) {
             if (error instanceof RangeError) failures = failures + 1;
         }
-        try { new Uint32Array(new ArrayBuffer(129, { maxByteLength: 1814 })); } catch (error) {
-            if (error instanceof RangeError) failures = failures + 1;
-        }
+        const unalignedResizable = new Uint32Array(
+            new ArrayBuffer(129, { maxByteLength: 1814 })
+        );
         try { Int8Array(1); } catch (error) {
             if (error instanceof TypeError) failures = failures + 1;
         }
@@ -261,12 +261,15 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
         const largeGrowable = new Uint8ClampedArray(
             new SharedArrayBuffer(223, { maxByteLength: 268435440 })
         );
-        largeResizable.length === 255 && largeGrowable.length === 223 ? failures : 0
+        unalignedResizable.length === 32 &&
+            unalignedResizable.byteLength === 128 &&
+            largeResizable.length === 255 &&
+            largeGrowable.length === 223 ? failures : 0
         ",
     )?;
 
     context.storage_snapshot()?;
-    ensure_value(&value, &Value::Number(6.0))
+    ensure_value(&value, &Value::Number(5.0))
 }
 
 #[test]
