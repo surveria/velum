@@ -45,6 +45,21 @@ fn map_constructor_seeds_from_iterable_pairs() -> TestResult {
 }
 
 #[test]
+fn map_constructor_accepts_callable_entry_objects() -> TestResult {
+    ensure_string(
+        r#"
+        function seed() {
+            const map = new Map(arguments);
+            return "" + map.size + ":" + map.has(undefined)
+                + ":" + (map.get(undefined) === undefined);
+        }
+        seed({}, Int32Array, Array)
+        "#,
+        "1:true:true",
+    )
+}
+
+#[test]
 fn collection_subclasses_use_their_adder_before_closing_failed_iterators() -> TestResult {
     ensure_string(
         r#"

@@ -118,7 +118,7 @@ impl Context {
     ) -> Result<()> {
         let args = match kind {
             CollectionKind::Map => {
-                if !matches!(item, Value::Object(_)) {
+                if self.semantic_object_ref(&item)?.is_none() {
                     return Err(Error::type_error(MAP_ENTRY_NOT_OBJECT_ERROR));
                 }
                 let key = self.get_named(&item, "0")?;

@@ -15,8 +15,11 @@ const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
 const DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD: &str = "toTemporalInstant";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
+const ENGINE262_EXPECTED_CHARACTER_ERROR: &str = "Expected a character";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const ENGINE262_UNEXPECTED_TOKEN_ERROR: &str = "Unexpected token";
+const REGEXP_NEGATIVE_LOOKAHEAD_MARKER: &str = "(?!";
+const REGEXP_POSITIVE_LOOKAHEAD_MARKER: &str = "(?=";
 const REGEXP_UNESCAPED_CLOSING_BRACKET_MARKER: &str = "/]";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
@@ -78,6 +81,9 @@ pub fn is_engine262_unsupported(
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
@@ -102,6 +108,9 @@ pub fn correctness_oracle<'a>(
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
@@ -194,6 +203,60 @@ fn source_contains_legacy_malformed_control_escape(source: &str) -> bool {
             && window.get(1) == Some(&b'c')
             && window.get(2).is_some_and(|byte| !byte.is_ascii_alphabetic())
     })
+}
+
+fn is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && source_contains_legacy_quantified_lookahead(source)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_EXPECTED_CHARACTER_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn source_contains_legacy_quantified_lookahead(source: &str) -> bool {
+    [REGEXP_POSITIVE_LOOKAHEAD_MARKER, REGEXP_NEGATIVE_LOOKAHEAD_MARKER]
+        .into_iter()
+        .any(|marker| source_contains_quantified_lookahead(source, marker))
+}
+
+fn source_contains_quantified_lookahead(source: &str, marker: &str) -> bool {
+    let mut search_start = 0;
+    while let Some(relative_start) = source.get(search_start..).and_then(|tail| tail.find(marker)) {
+        let start = search_start.saturating_add(relative_start);
+        let Some(after_marker_start) = start.checked_add(marker.len()) else {
+            return false;
+        };
+        let Some(after_marker) = source.get(after_marker_start..) else {
+            return false;
+        };
+        let Some(close_relative) = after_marker.find(')') else {
+            return false;
+        };
+        let Some(after_close_start) = after_marker_start
+            .checked_add(close_relative)
+            .and_then(|value| value.checked_add(1))
+        else {
+            return false;
+        };
+        let Some(after_close) = source.get(after_close_start..) else {
+            return false;
+        };
+        if after_close.as_bytes().first().is_some_and(|byte| {
+            matches!(*byte, b'?' | b'*' | b'+' | b'{')
+        }) {
+            return true;
+        }
+        search_start = after_close_start;
+    }
+    false
 }
 
 fn is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(
