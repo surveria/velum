@@ -14,6 +14,7 @@ const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
+const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
 const FUZZILLI_PROBE_MARKER: &str = "PROBING_RESULTS";
@@ -148,6 +149,7 @@ fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
         && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
         && engine262.error_message.as_deref().is_some_and(|message| {
             message.contains(ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR)
+                || message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR)
         })
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }

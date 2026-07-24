@@ -97,6 +97,22 @@ fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);
     ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Invalid identity escape".to_owned()),
+    );
+    let v8 = range_error("byte length of Float32Array should be a multiple of 4");
+    let source = "\
+        const buffer = new ArrayBuffer(230, { maxByteLength: 230 });\
+        new Float32Array(buffer);\
+        /[o\\9\\cA]/d;\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
     Ok(())
 }
 
