@@ -27,6 +27,9 @@ const ECMASCRIPT_ERROR_NAMES: [&str; 8] = [
     "Error",
 ];
 const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
+const LEXER_ERROR_PREFIX: &str = "lexer error";
+const PARSER_ERROR_PREFIX: &str = "parser error";
+const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -254,6 +257,8 @@ fn equivalent(velum: &EngineOutcome, v8: &EngineOutcome) -> bool {
 fn is_engine262_unsupported(source: &str, engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
     is_engine262_missing_global(engine262)
         || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER) && !equivalent(engine262, v8))
+        || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+            && !equivalent(engine262, v8))
 }
 
 fn is_engine262_missing_global(engine262: &EngineOutcome) -> bool {
@@ -352,6 +357,10 @@ pub fn outcome(
 
 #[must_use]
 pub fn error_name_from_text(message: &str) -> String {
+    let trimmed = message.trim_start();
+    if trimmed.starts_with(LEXER_ERROR_PREFIX) || trimmed.starts_with(PARSER_ERROR_PREFIX) {
+        return SYNTAX_ERROR_NAME.to_owned();
+    }
     for (start, _) in message.char_indices() {
         for name in ECMASCRIPT_ERROR_NAMES {
             let Some(candidate) = message.get(start..) else {
@@ -392,7 +401,8 @@ mod tests {
     use anyhow::ensure;
 
     use super::{
-        CaseFinding, CompareConfig, OutcomeStatus, error_name_from_text, findings, outcome,
+        CaseFinding, CompareConfig, OutcomeStatus, SYNTAX_ERROR_NAME, error_name_from_text,
+        findings, outcome,
     };
 
     #[test]
@@ -407,6 +417,15 @@ mod tests {
     fn error_name_parser_preserves_primary_reference_error() -> anyhow::Result<()> {
         let name = error_name_from_text("ReferenceError: \"Intl\" is not defined");
         ensure!(name == "ReferenceError", "unexpected error name: {name}");
+        Ok(())
+    }
+
+    #[test]
+    fn error_name_parser_maps_lexer_errors_to_syntax_error() -> anyhow::Result<()> {
+        let name = error_name_from_text(
+            "lexer error at 11: invalid regular expression pattern: RegExp compile error",
+        );
+        ensure!(name == SYNTAX_ERROR_NAME, "unexpected error name: {name}");
         Ok(())
     }
 
@@ -494,6 +513,41 @@ mod tests {
         ensure!(
             findings.contains(&CaseFinding::CorrectnessMismatch),
             "V8 fallback mismatch is missing"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn engine262_syntax_gap_falls_back_to_v8() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some(SYNTAX_ERROR_NAME.to_owned()),
+            Some("SyntaxError: Unexpected token".to_owned()),
+        );
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let findings = findings(
+            "const value = /G4}9\\111?/dm;",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            CompareConfig {
+                engine262_timeout: Duration::from_secs(30),
+                v8_timeout: Duration::from_secs(4),
+                slow_ratio: 2.0,
+                slow_min: Duration::from_millis(5),
+            },
+        );
+        ensure!(
+            findings.contains(&CaseFinding::Engine262Unsupported),
+            "Engine262 syntax gap should be recorded"
+        );
+        ensure!(
+            !findings.contains(&CaseFinding::CorrectnessMismatch),
+            "Velum/V8 agreement should not count as correctness mismatch"
         );
         Ok(())
     }

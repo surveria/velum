@@ -107,11 +107,21 @@ impl Parser {
             return Ok(None);
         }
         if self.await_using_declaration_start() {
+            if asynchronous {
+                return Err(
+                    self.parse_error("resource declarations are not allowed in for-await heads")
+                );
+            }
             self.consume(&TokenKind::Await, "expected 'await'")?;
             self.consume_contextual_using()?;
             return self.for_resource_binding_header(DeclKind::AwaitUsing);
         }
         if self.using_declaration_start() && !self.using_of_lookahead() {
+            if asynchronous {
+                return Err(
+                    self.parse_error("resource declarations are not allowed in for-await heads")
+                );
+            }
             self.consume_contextual_using()?;
             return self.for_resource_binding_header(DeclKind::Using);
         }

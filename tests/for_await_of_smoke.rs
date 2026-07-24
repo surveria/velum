@@ -161,6 +161,25 @@ fn allows_for_await_only_in_async_functions() -> TestResult {
 }
 
 #[test]
+fn rejects_resource_declarations_in_for_await_heads() -> TestResult {
+    for source in [
+        "async function f() { for await (using value of []) {} }",
+        "async function f() { for await (await using value of []) {} }",
+    ] {
+        let error = eval(source)
+            .err()
+            .ok_or("resource declaration unexpectedly parsed in for-await head")?;
+        if !error
+            .to_string()
+            .contains("resource declarations are not allowed in for-await heads")
+        {
+            return Err(format!("unexpected parser error: {error}").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn allows_async_identifier_as_for_await_target() -> TestResult {
     ensure_string_after(
         r"
