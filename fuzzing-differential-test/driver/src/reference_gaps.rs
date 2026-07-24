@@ -1,4 +1,5 @@
 use crate::compare::EngineOutcome;
+use crate::reference_gap_rab as rab;
 use crate::reference_gap_predicates as predicates;
 
 pub use crate::reference_gap_predicates::outcomes_equivalent;
@@ -38,6 +39,7 @@ pub fn is_engine262_unsupported(
         || predicates::is_engine262_invalid_quantifier_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
+        || rab::is_user_constructor_throw_with_v8_alignment_without_oracle(source, engine262, v8)
         || predicates::is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || predicates::is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
@@ -72,6 +74,7 @@ pub fn correctness_oracle<'a>(
         || predicates::is_engine262_invalid_quantifier_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
+        || rab::is_user_constructor_throw_with_v8_alignment_without_oracle(source, engine262, v8)
         || predicates::is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || predicates::is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,

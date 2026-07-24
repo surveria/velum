@@ -420,6 +420,29 @@ fn engine262_invalid_quantifier_and_v8_resizable_alignment_gap_disables_oracle()
 }
 
 #[test]
+fn user_constructor_throw_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("Error".to_owned()),
+        Some("'must be called with new'".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(5, { maxByteLength: 675 });\
+        new Uint16Array(buffer);\
+        function F() { if (!new.target) { throw 'must be called with new'; } }\
+        F();\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(

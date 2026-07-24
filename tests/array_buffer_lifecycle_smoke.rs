@@ -59,6 +59,41 @@ fn resizes_shared_backing_storage_and_zero_fills_growth() -> TestResult {
 }
 
 #[test]
+fn rejects_fixed_buffer_resize_before_new_length_coercion() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        const fixed = new ArrayBuffer();
+        const calls = [];
+        const length = {
+            valueOf() {
+                calls.push('valueOf');
+                return -128;
+            }
+        };
+        let fixedRejectedFirst = false;
+        try {
+            fixed.resize(length);
+        } catch (error) {
+            fixedRejectedFirst = error instanceof TypeError && calls.length === 0;
+        }
+
+        const resizable = new ArrayBuffer(0, { maxByteLength: 4 });
+        let resizableCoercedLength = false;
+        try {
+            resizable.resize(length);
+        } catch (error) {
+            resizableCoercedLength = error instanceof RangeError && calls.join() === 'valueOf';
+        }
+
+        fixedRejectedFirst && resizableCoercedLength ? 42 : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn slices_and_transfers_array_buffers() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
