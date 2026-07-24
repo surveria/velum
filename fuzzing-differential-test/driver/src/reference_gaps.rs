@@ -13,6 +13,7 @@ const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
+const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
 const FUZZILLI_PROBE_MARKER: &str = "PROBING_RESULTS";
@@ -21,7 +22,7 @@ const IMMUTABLE_ARRAY_BUFFER_METHODS: [&str; 3] = [
     "transferToImmutable",
     "transferToFixedLength",
 ];
-const ANNEX_B_STRING_LEGACY_METHODS: [&str; 14] = [
+const ANNEX_B_STRING_LEGACY_METHODS: [&str; 16] = [
     "anchor",
     "big",
     "blink",
@@ -36,6 +37,8 @@ const ANNEX_B_STRING_LEGACY_METHODS: [&str; 14] = [
     "substr",
     "sub",
     "sup",
+    "trimLeft",
+    "trimRight",
 ];
 
 pub fn outcomes_equivalent(left: &EngineOutcome, right: &EngineOutcome) -> bool {
@@ -68,6 +71,7 @@ pub fn is_engine262_unsupported(
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
@@ -89,6 +93,7 @@ pub fn correctness_oracle<'a>(
         || is_webassembly_host_api_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
@@ -130,6 +135,25 @@ fn is_resizable_array_buffer_alignment_without_oracle(
                 message.contains("Cannot allocate memory")
             }))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && source_contains_legacy_decimal_escape(source)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262.error_message.as_deref().is_some_and(|message| {
+            message.contains(ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR)
+        })
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn source_contains_legacy_decimal_escape(source: &str) -> bool {
+    source.contains("\\8") || source.contains("\\9")
 }
 
 fn outcome_is_range_error_with(
@@ -388,7 +412,7 @@ fn source_contains_resource_management_symbol_access(source: &str) -> bool {
     source.contains(SYMBOL_DISPOSE_ACCESS) || source.contains(SYMBOL_ASYNC_DISPOSE_ACCESS)
 }
 
-fn source_contains_resource_management_syntax(source: &str) -> bool {
+pub(crate) fn source_contains_resource_management_syntax(source: &str) -> bool {
     let mut search_start = 0;
     while let Some(relative_start) = source
         .get(search_start..)
@@ -518,282 +542,4 @@ fn is_v8_missing_math_f16round(v8: &EngineOutcome) -> bool {
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains("Math.f16round is not a function"))
-}
-
-#[cfg(test)]
-mod tests {
-    use anyhow::ensure;
-
-    use crate::compare::{OutcomeStatus, outcome};
-
-    use super::{correctness_oracle, is_engine262_unsupported, outcomes_equivalent};
-
-    #[test]
-    fn missing_float16_v8_fallback_global_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = reference_error("Float16Array is not defined");
-        let unsupported = is_engine262_unsupported(
-            "new SharedArrayBuffer(8); new Float16Array(1);",
-            &velum,
-            &engine262,
-            &v8,
-        );
-        ensure!(unsupported);
-        ensure!(correctness_oracle("new Float16Array(1)", &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn missing_typed_array_base64_v8_fallback_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = type_error("Uint8Array.of(...).toBase64 is not a function");
-        let unsupported = is_engine262_unsupported(
-            "new SharedArrayBuffer(8); Uint8Array.of(1).toBase64();",
-            &velum,
-            &engine262,
-            &v8,
-        );
-        ensure!(unsupported);
-        ensure!(
-            correctness_oracle("Uint8Array.of(1).toBase64()", &engine262, &v8, unsupported)
-                .is_none()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn missing_math_f16round_v8_fallback_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = type_error("Math.f16round is not a function");
-        let source = "new SharedArrayBuffer(8); Math.f16round(1);";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn annex_b_string_legacy_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = type_error("TypeError: (\"\").bold is not a function");
-        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let source = "(\"\").bold()";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-            anyhow::bail!("expected V8 fallback oracle");
-        };
-        ensure!(unsupported);
-        ensure!(outcomes_equivalent(oracle, &v8));
-        Ok(())
-    }
-
-    #[test]
-    fn annex_b_string_legacy_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = type_error("TypeError: Cannot convert undefined to object");
-        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        for source in [
-            "(\"129\")[\"bold\"](\"bold\")",
-            "(\"1D\").blink.apply(\"1D\", [])",
-            "(\"take\")[\"substr\"](1073741824, 1073741824)",
-        ] {
-            let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-            let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-                anyhow::bail!("expected V8 fallback oracle for {source}");
-            };
-            ensure!(unsupported);
-            ensure!(outcomes_equivalent(oracle, &v8));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = type_error("TypeError: buffer.sliceToImmutable is not a function");
-        let v8 = type_error("buffer.sliceToImmutable is not a function");
-        let source = "const buffer = new ArrayBuffer(); buffer.sliceToImmutable(800, 8);";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn engine262_locale_validation_gap_falls_back_to_v8() -> anyhow::Result<()> {
-        let velum = outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("RangeError".to_owned()),
-            Some("Intl.Locale tag or option is invalid".to_owned()),
-        );
-        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let v8 = outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("RangeError".to_owned()),
-            Some("Incorrect locale information provided".to_owned()),
-        );
-        let source = "(5).toLocaleString(\"o\")";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-            anyhow::bail!("expected V8 fallback oracle");
-        };
-        ensure!(unsupported);
-        ensure!(outcomes_equivalent(oracle, &v8));
-        Ok(())
-    }
-
-    #[test]
-    fn resource_management_symbol_gap_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("TypeError".to_owned()),
-            None,
-        );
-        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let source = "new Float64Array(Symbol.dispose, Symbol.dispose, Symbol.dispose)";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn engine262_only_resource_management_symbol_gap_falls_back_to_v8() -> anyhow::Result<()> {
-        let velum = type_error("Cannot convert a Symbol value to a number");
-        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let v8 = type_error("Cannot convert a Symbol value to a number");
-        let source = "new Uint16Array(Symbol.asyncDispose, Symbol.asyncDispose)";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-            anyhow::bail!("expected V8 fallback oracle");
-        };
-        ensure!(unsupported);
-        ensure!(outcomes_equivalent(oracle, &v8));
-        Ok(())
-    }
-
-    #[test]
-    fn webassembly_host_api_gap_disables_oracle() -> anyhow::Result<()> {
-        let velum = reference_error("ReferenceError: WebAssembly is not defined");
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = type_error("WebAssembly.Suspending is not a constructor");
-        let source = "new SharedArrayBuffer(8); WebAssembly.Suspending;";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn shared_array_buffer_alignment_gap_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = range_error("byte length of BigInt64Array should be a multiple of 8");
-        let source = "\
-            const buffer = new SharedArrayBuffer(26, { maxByteLength: 40 });\
-            new BigInt64Array(buffer);\
-        ";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        let engine262 = outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("SyntaxError".to_owned()),
-            Some("SyntaxError: Unexpected token".to_owned()),
-        );
-        let source = "/DL[p[\\0]*]/msy; \
-            new Uint32Array(new SharedArrayBuffer(9, { maxByteLength: 2520 }));";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        let engine262 = range_error("RangeError: Cannot allocate memory");
-        let v8 = range_error("byte length of Uint32Array should be a multiple of 4");
-        let source = "new Uint32Array(new ArrayBuffer(7, { maxByteLength: 4294967296 }))";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-        let source = "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn unstable_fuzzilli_introspection_disables_oracle_when_references_disagree()
-    -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "EXPLORE_ACTION: left\n", None, None);
-        let engine262 = outcome(
-            OutcomeStatus::Ok,
-            1,
-            "EXPLORE_ACTION: engine262\n",
-            None,
-            None,
-        );
-        let v8 = outcome(OutcomeStatus::Ok, 1, "EXPLORE_ACTION: v8\n", None, None);
-        let source =
-            "if (typeof fuzzilli === 'undefined') fuzzilli = function() {}; 'EXPLORE_ACTION';";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        ensure!(unsupported);
-        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn resource_management_syntax_detector_ignores_plain_identifiers() -> anyhow::Result<()> {
-        let contains = super::source_contains_resource_management_syntax;
-        ensure!(contains("for (using value of []) {}"));
-        ensure!(!contains("const usingValue = 1;"));
-        Ok(())
-    }
-
-    fn reference_error(message: &str) -> crate::compare::EngineOutcome {
-        outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("ReferenceError".to_owned()),
-            Some(message.to_owned()),
-        )
-    }
-
-    fn type_error(message: &str) -> crate::compare::EngineOutcome {
-        outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("TypeError".to_owned()),
-            Some(message.to_owned()),
-        )
-    }
-
-    fn range_error(message: &str) -> crate::compare::EngineOutcome {
-        outcome(
-            OutcomeStatus::JsError,
-            1,
-            "",
-            Some("RangeError".to_owned()),
-            Some(message.to_owned()),
-        )
-    }
 }

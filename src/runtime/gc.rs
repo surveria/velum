@@ -654,7 +654,7 @@ impl Context {
     /// free-list storage, or post-collection accounting does not reconcile.
     pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport> {
         let reachability = Reachability::capture(self)?;
-        let before = self.owner_storage_snapshot()?;
+        let before = self.storage_snapshot()?;
         self.invalidate_identity_caches();
         let weak_entries_removed = self.sweep_dead_weak_entries(&reachability)?;
         self.sweep_dead_associations(&reachability);
