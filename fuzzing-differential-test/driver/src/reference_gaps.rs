@@ -211,7 +211,9 @@ fn is_engine262_missing_global_message(message: &str) -> bool {
 }
 
 fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
-    is_v8_missing_global(v8) || is_v8_missing_typed_array_base64_or_hex(v8)
+    is_v8_missing_global(v8)
+        || is_v8_missing_typed_array_base64_or_hex(v8)
+        || is_v8_missing_math_f16round(v8)
 }
 
 fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
@@ -249,6 +251,15 @@ fn is_v8_missing_typed_array_base64_or_hex_message(message: &str) -> bool {
         || message.contains("toHex is not a function")
         || message.contains("fromHex is not a function")
         || message.contains("setFromHex is not a function")
+}
+
+fn is_v8_missing_math_f16round(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains("Math.f16round is not a function"))
 }
 
 #[cfg(test)]
@@ -294,6 +305,18 @@ mod tests {
             correctness_oracle("Uint8Array.of(1).toBase64()", &engine262, &v8, unsupported)
                 .is_none()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn missing_math_f16round_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+        let v8 = type_error("Math.f16round is not a function");
+        let source = "new SharedArrayBuffer(8); Math.f16round(1);";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
         Ok(())
     }
 

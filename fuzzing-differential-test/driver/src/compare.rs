@@ -31,6 +31,7 @@ const LEXER_ERROR_PREFIX: &str = "lexer error";
 const PARSER_ERROR_PREFIX: &str = "parser error";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
+const VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT: &str = "exceeded supported range";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -257,12 +258,17 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
 }
 
 fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
-    velum.status == OutcomeStatus::JsError
-        && velum.error_name.as_deref() == Some("Error")
-        && velum
-            .error_message
-            .as_deref()
-            .is_some_and(|message| message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX))
+    if velum.status != OutcomeStatus::JsError {
+        return false;
+    }
+    let Some(message) = velum.error_message.as_deref() else {
+        return false;
+    };
+    if velum.error_name.as_deref() == Some("Error") {
+        return message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX);
+    }
+    velum.error_name.as_deref() == Some("RangeError")
+        && message.contains(VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT)
 }
 
 fn timing_ratio(velum: &EngineOutcome, v8: &EngineOutcome) -> Option<f64> {
@@ -582,6 +588,40 @@ mod tests {
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let findings = findings("for (;;) {}", &velum, &engine262, &v8, None, config());
         ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        Ok(())
+    }
+
+    #[test]
+    fn velum_supported_range_limit_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            Some(
+                "javascript exception: RangeError: typed array byte length exceeded supported range"
+                    .to_owned(),
+            ),
+        );
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("ReferenceError: \"SharedArrayBuffer\" is not defined".to_owned()),
+        );
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let findings = findings(
+            "new SharedArrayBuffer(1); new BigUint64Array(4294967296);",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
+        );
+        ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
         ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
