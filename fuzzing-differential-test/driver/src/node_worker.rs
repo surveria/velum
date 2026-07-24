@@ -15,6 +15,31 @@ const NODE_WORKER_SOURCE: &str = r"
 const readline = require('readline');
 const vm = require('vm');
 
+const REFERENCE_SETUP = `
+(function() {
+  const hostDispose = globalThis.__velumHostSymbolDispose;
+  const hostAsyncDispose = globalThis.__velumHostSymbolAsyncDispose;
+  delete globalThis.__velumHostSymbolDispose;
+  delete globalThis.__velumHostSymbolAsyncDispose;
+  if (typeof hostDispose === 'symbol' && typeof Symbol.dispose === 'undefined') {
+    Object.defineProperty(Symbol, 'dispose', {
+      value: hostDispose,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+  }
+  if (typeof hostAsyncDispose === 'symbol' && typeof Symbol.asyncDispose === 'undefined') {
+    Object.defineProperty(Symbol, 'asyncDispose', {
+      value: hostAsyncDispose,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+  }
+})();
+`;
+
 process.on('unhandledRejection', (reason) => {
   const message = reason && reason.stack ? reason.stack : String(reason);
   process.stderr.write(`[unhandledRejection] ${message}\n`);
@@ -36,6 +61,8 @@ function writeResponse(response) {
 
 function makeSandbox(output) {
   return {
+    __velumHostSymbolDispose: Symbol.dispose,
+    __velumHostSymbolAsyncDispose: Symbol.asyncDispose,
     fuzzilli(operation, value) {
       if (operation === 'FUZZILLI_PRINT') {
         output.push(String(value));
@@ -49,12 +76,16 @@ rl.on('line', (line) => {
     const request = JSON.parse(line);
     const source = Buffer.from(request.sourceBase64, 'base64').toString('utf8');
     const output = [];
+    const context = vm.createContext(makeSandbox(output));
+    vm.runInContext(REFERENCE_SETUP, context, {
+      displayErrors: false,
+    });
     const started = process.hrtime.bigint();
     let status = 'ok';
     let errorName = null;
     let errorMessage = null;
     try {
-      vm.runInNewContext(source, makeSandbox(output), {
+      vm.runInContext(source, context, {
         timeout: request.timeoutMs,
         displayErrors: false,
       });
@@ -271,4 +302,51 @@ fn worker_crash(message: String) -> EngineOutcome {
         Some("WorkerCrash".to_owned()),
         Some(message),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        io::ErrorKind,
+        path::{Path, PathBuf},
+    };
+
+    use anyhow::{Context as _, ensure};
+
+    use crate::compare::OutcomeStatus;
+
+    use super::NodeWorker;
+
+    #[test]
+    fn vm_context_exposes_host_resource_management_symbols() -> anyhow::Result<()> {
+        let stderr_dir = worker_stderr_dir();
+        remove_dir_if_exists(&stderr_dir)?;
+        let outcome = {
+            let mut worker = NodeWorker::start("node", stderr_dir.clone())?;
+            worker.execute("new SharedArrayBuffer(Symbol.asyncDispose, Symbol);", 1_000)?
+        };
+        remove_dir_if_exists(&stderr_dir)?;
+
+        ensure!(outcome.status == OutcomeStatus::JsError);
+        ensure!(outcome.error_name.as_deref() == Some("TypeError"));
+        ensure!(outcome.error_message.as_deref().is_some_and(|message| {
+            message.contains("Cannot convert a Symbol value to a number")
+        }));
+        Ok(())
+    }
+
+    fn worker_stderr_dir() -> PathBuf {
+        std::env::temp_dir().join(format!("velum-node-worker-symbols-{}", std::process::id()))
+    }
+
+    fn remove_dir_if_exists(path: &Path) -> anyhow::Result<()> {
+        match fs::remove_dir_all(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => {
+                Err(error).with_context(|| format!("failed to remove '{}'", path.display()))
+            }
+        }
+    }
 }
