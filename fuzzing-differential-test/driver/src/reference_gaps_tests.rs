@@ -153,6 +153,26 @@ fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::
 }
 
 #[test]
+fn immutable_array_buffer_method_and_v8_rab_alignment_gap_disables_oracle(
+) -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error(
+        "TypeError: v5.transferToImmutable is not a function. \
+         (In \"v5.transferToImmutable(102)\", it is undefined)",
+    );
+    let v8 = range_error("byte length of BigUint64Array should be a multiple of 8");
+    let source = "\
+        const v5 = new ArrayBuffer(102, { maxByteLength: 256 });\
+        const v7 = new BigUint64Array(v5);\
+        const v14 = v5.transferToImmutable(102);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn missing_date_temporal_instant_reference_method_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: v12.toTemporalInstant is not a function");
@@ -369,6 +389,29 @@ fn engine262_invalid_identity_escape_and_v8_resizable_alignment_gap_disables_ora
         const value = /a\\s\\P{sc=Greek}ga\\q?/sidg;\
         const buffer = new ArrayBuffer(4060, { maxByteLength: 4060 });\
         new Float64Array(buffer);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn engine262_invalid_quantifier_and_v8_resizable_alignment_gap_disables_oracle()
+-> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Numbers out of order in quantifier".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(121, { maxByteLength: 1073741820 });\
+        new Uint16Array(buffer);\
+        /foo(?!bar)baz{12,3b/mgd;\
     ";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);
