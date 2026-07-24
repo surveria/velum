@@ -191,6 +191,27 @@ fn reconciles_heterogeneous_function_owner_footprints() -> TestResult {
 }
 
 #[test]
+fn reconciles_collected_class_name_environments_after_drop_release() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        for (let index = 0; index < 1000; index = index + 1) {
+            class Derived extends Uint8Array {}
+            const first = new Derived();
+            const second = new Derived();
+        }
+        42
+        ",
+    )?;
+
+    vm.storage_snapshot()?;
+    vm.collect_garbage()?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
 fn reconciles_suspended_with_environment_activation_footprints() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

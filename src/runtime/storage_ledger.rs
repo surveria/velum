@@ -210,6 +210,10 @@ impl VmStorageLedger {
         self.count_cell(kind).map(Cell::get)
     }
 
+    pub(in crate::runtime) fn payload_bytes(&self, kind: VmStorageKind) -> Result<usize> {
+        self.payload_cell(kind).map(Cell::get)
+    }
+
     fn count_cell(&self, kind: VmStorageKind) -> Result<&Cell<usize>> {
         self.state
             .counts

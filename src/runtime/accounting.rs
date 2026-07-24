@@ -291,23 +291,35 @@ impl Context {
         before: &VmStorageSnapshot,
         after: &VmStorageSnapshot,
     ) -> Result<()> {
-        self.ensure_durable_storage_ledger_matches(before)?;
         for kind in LEDGER_ENFORCED_KINDS {
             if after.count(kind) > before.count(kind) {
                 return Err(Error::runtime(format!(
                     "{kind:?} owner count grew during garbage collection"
                 )));
             }
+            if after.payload_bytes(kind) > before.payload_bytes(kind) {
+                return Err(Error::runtime(format!(
+                    "{kind:?} owner payload grew during garbage collection"
+                )));
+            }
         }
         for kind in LEDGER_ENFORCED_KINDS {
-            let released = before
-                .count(kind)
+            let tracked_count = self.storage_ledger.count(kind)?;
+            let released = tracked_count
                 .checked_sub(after.count(kind))
-                .ok_or_else(|| Error::runtime("collected storage count underflowed"))?;
-            let released_payload_bytes = before
-                .payload_bytes(kind)
+                .ok_or_else(|| {
+                    Error::runtime(format!(
+                        "{kind:?} storage ledger fell below collected owner count"
+                    ))
+                })?;
+            let tracked_payload_bytes = self.storage_ledger.payload_bytes(kind)?;
+            let released_payload_bytes = tracked_payload_bytes
                 .checked_sub(after.payload_bytes(kind))
-                .ok_or_else(|| Error::runtime("collected storage payload underflowed"))?;
+                .ok_or_else(|| {
+                    Error::runtime(format!(
+                        "{kind:?} storage ledger payload fell below collected owner payload"
+                    ))
+                })?;
             self.storage_ledger
                 .release(kind, released, released_payload_bytes)?;
         }
