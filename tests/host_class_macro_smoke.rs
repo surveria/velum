@@ -36,12 +36,18 @@ impl MacroSocket {
 
     #[js(method)]
     fn send(&self, message: String) -> Result<()> {
+        if message.is_empty() {
+            return Err(velum::Error::runtime("message must not be empty"));
+        }
         self.messages.lock().push(message);
         Ok(())
     }
 
     #[js(method, name = "revealSecret")]
-    fn reveal_secret(&self, prefix: String) -> Result<String> {
+    fn reveal_secret(&self, prefix: &str) -> Result<String> {
+        if prefix.is_empty() {
+            return Err(velum::Error::runtime("secret prefix must not be empty"));
+        }
         Ok(format!("{prefix}:{}", self.secret))
     }
 
@@ -60,12 +66,19 @@ impl MacroSocket {
 
     #[js(method, raw, name = "cloneHandle")]
     fn clone_handle(&self) -> Result<HostMethodResult> {
+        if self.secret.is_empty() {
+            return Err(velum::Error::runtime("socket secret is unavailable"));
+        }
         Ok(HostMethodResult::shared_receiver())
     }
 
     #[js(static_method, name = "kind")]
     fn kind() -> Result<String> {
-        Ok("macro".to_owned())
+        let mut kind = String::new();
+        kind.try_reserve_exact("macro".len())
+            .map_err(|_error| velum::Error::limit("macro kind allocation failed"))?;
+        kind.push_str("macro");
+        Ok(kind)
     }
 }
 
@@ -95,8 +108,8 @@ fn generated_host_class_exports_only_annotated_surface() -> TestResult {
     )?;
 
     ensure_owned(
-        vm.eval_owned("syncSummary")?,
-        OwnedValue::String(
+        &vm.eval_owned("syncSummary")?,
+        &OwnedValue::String(
             "wss://example.invalid|1|1|macro|visible:secret:wss://example.invalid|false|false"
                 .to_owned(),
         ),
@@ -112,8 +125,8 @@ fn generated_host_class_exports_only_annotated_surface() -> TestResult {
         return Err(format!("expected one Promise reaction, got {completed_jobs}").into());
     }
     ensure_owned(
-        vm.eval_owned("asyncSummary")?,
-        OwnedValue::String("wss://example.invalid:ready".to_owned()),
+        &vm.eval_owned("asyncSummary")?,
+        &OwnedValue::String("wss://example.invalid:ready".to_owned()),
     )
 }
 
@@ -123,10 +136,10 @@ fn generated_definition_uses_shared_payloads() -> TestResult {
     let mut vm = Engine::new().create_vm();
     vm.register_host_class(class)?;
     let value = vm.eval_owned("new MacroSocket('shared') instanceof MacroSocket")?;
-    ensure_owned(value, OwnedValue::Bool(true))
+    ensure_owned(&value, &OwnedValue::Bool(true))
 }
 
-fn ensure_owned(actual: OwnedValue, expected: OwnedValue) -> TestResult {
+fn ensure_owned(actual: &OwnedValue, expected: &OwnedValue) -> TestResult {
     if actual != expected {
         return Err(format!("expected {expected:?}, got {actual:?}").into());
     }
