@@ -198,6 +198,9 @@ impl Context {
             visitor.visit_value(VmRootKind::ModuleBinding, import_meta)?;
         }
         self.visit_activation_roots(visitor)?;
+        for promise in &self.active_async_function_promises {
+            visitor.visit_promise(VmRootKind::BytecodeFrame, *promise)?;
+        }
         self.visit_runtime_anchor_roots(visitor)?;
         for cache in &self.static_name_atom_caches {
             cache.visit_template_objects(|value| {

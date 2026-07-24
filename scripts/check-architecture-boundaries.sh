@@ -1317,10 +1317,30 @@ check_suspended_execution_boundary() {
   for source in \
     'pub fn run_jobs(&mut self) -> Result<usize> {' \
     'pub fn cancel_jobs(&mut self) -> Result<usize> {' \
-    'continuation.cancel_storage(&self.storage_ledger)?;'; do
+    'PromiseContinuationCancellation::AsyncFunction(continuation)' \
+    'continuation.cancel_storage(&storage_ledger)?;'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/promise/mod.rs"; then
       fail "suspended execution boundary changed; pending await and embedder job ownership must stay explicit"
+    fi
+  done
+
+  for source in \
+    'fn with_active_async_promise<T>(' \
+    'self.active_async_function_promises.push(promise);' \
+    'continuation.cancel_storage(&self.storage_ledger)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/promise/async_function.rs"; then
+      fail "suspended execution boundary changed; async function result Promise ownership must stay explicit"
+    fi
+  done
+
+  for source in \
+    'for promise in &self.active_async_function_promises {' \
+    'visitor.visit_promise(VmRootKind::BytecodeFrame, *promise)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/roots.rs"; then
+      fail "suspended execution boundary changed; active async function result Promises must stay rooted"
     fi
   done
 
@@ -2070,7 +2090,7 @@ mutate_suspended_park_owner() {
 mutate_suspended_cancel_release() {
   local fixture_root="$1"
   portable_sed '/continuation.cancel_storage(&self.storage_ledger)?;/d' \
-    "${fixture_root}/src/runtime/promise/mod.rs"
+    "${fixture_root}/src/runtime/promise/async_function.rs"
 }
 
 mutate_suspended_destructure_owner() {

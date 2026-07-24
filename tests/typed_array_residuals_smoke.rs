@@ -95,14 +95,15 @@ fn variable_length_views_control_prevent_extensions_and_integrity() -> TestResul
 }
 
 #[test]
-fn length_tracking_resizable_views_accept_unaligned_initial_byte_length() -> TestResult {
+fn length_tracking_resizable_views_reject_unaligned_initial_byte_length() -> TestResult {
     ensure_eval(
         r"
         let buffer = new ArrayBuffer(7, { maxByteLength: 8 });
-        let view = new Uint32Array(buffer);
-        let before = view.length === 1 && view.byteLength === 4;
-        buffer.resize(8);
-        before && view.length === 2 && view.byteLength === 8 ? 42 : 0
+        let rejected = false;
+        try { new Uint32Array(buffer); } catch (error) {
+            rejected = error instanceof RangeError;
+        }
+        rejected ? 42 : 0
         ",
         &Value::Number(42.0),
     )

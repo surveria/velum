@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -253,10 +255,10 @@ impl NativeFunction {
         let Some(slot) = self.private_slots.iter_mut().find(|slot| slot.id == *name) else {
             return false;
         };
-        let PrivateSlotValue::Field(current) = &mut slot.value else {
+        let PrivateSlotValue::Field(_) = &mut slot.value else {
             return false;
         };
-        *current = value;
+        slot.value = PrivateSlotValue::Field(value);
         true
     }
 
