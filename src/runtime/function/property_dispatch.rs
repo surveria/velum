@@ -22,6 +22,9 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<Value> {
         let function = self.native_function(id)?;
+        if let Some(parent) = function.static_parent() {
+            return Ok(parent.clone());
+        }
         let kind = function.kind();
         if matches!(kind, NativeFunctionKind::BoundFunction(_)) {
             return Ok(function.properties().prototype());
@@ -129,15 +132,25 @@ impl Context {
         receiver: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        let kind = self.native_function(id)?.kind();
-        if !matches!(kind, NativeFunctionKind::TypedArray(_))
-            && !self.should_materialize_function_prototype_for(property)
-            && property.name() != crate::runtime::object::PROTOTYPE_PROPERTY
-        {
-            return Ok(Value::Undefined);
-        }
-        let prototype = self.native_function_object_prototype_value(id)?;
-        let Some(property) = self.known_function_prototype_lookup(property) else {
+        let (prototype, use_dynamic_key) =
+            if let Some(parent) = self.native_function_static_parent_value(id)? {
+                (parent, true)
+            } else {
+                let kind = self.native_function(id)?.kind();
+                if !matches!(kind, NativeFunctionKind::TypedArray(_))
+                    && !self.should_materialize_function_prototype_for(property)
+                    && property.name() != crate::runtime::object::PROTOTYPE_PROPERTY
+                {
+                    return Ok(Value::Undefined);
+                }
+                (self.native_function_object_prototype_value(id)?, false)
+            };
+        let property = if use_dynamic_key {
+            Some(property)
+        } else {
+            self.known_function_prototype_lookup(property)
+        };
+        let Some(property) = property else {
             return Ok(Value::Undefined);
         };
         let Some(read) =
@@ -382,6 +395,37 @@ impl Context {
         self.finish_semantic_property_presence(presence, property)
     }
 
+    pub(crate) fn has_native_function_property_including_prototype_lookup(
+        &mut self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.has_native_function_property_lookup(id, property)? {
+            return Ok(true);
+        }
+        let parent = if let Some(parent) = self.native_function_static_parent_value(id)? {
+            parent
+        } else {
+            let kind = self.native_function(id)?.kind();
+            if !matches!(kind, NativeFunctionKind::TypedArray(_))
+                && !self.should_materialize_function_prototype_for(property)
+            {
+                return Ok(false);
+            }
+            self.native_function_object_prototype_value(id)?
+        };
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return Ok(false);
+        }
+        let property = self
+            .known_function_prototype_lookup(property)
+            .unwrap_or(property);
+        let Some(presence) = self.semantic_property_presence(&parent, property)? else {
+            return Ok(false);
+        };
+        self.finish_semantic_property_presence(presence, property)
+    }
+
     pub(crate) fn has_function_property_including_prototype_lookup(
         &mut self,
         id: FunctionId,
@@ -552,6 +596,29 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<bool> {
         Ok(self.native_function(id)?.properties().is_frozen())
+    }
+
+    pub(in crate::runtime) fn native_function_static_parent_value(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<Option<Value>> {
+        Ok(self.native_function(id)?.static_parent().cloned())
+    }
+
+    pub(in crate::runtime) fn try_set_native_function_static_parent(
+        &mut self,
+        id: NativeFunctionId,
+        parent: Value,
+    ) -> Result<bool> {
+        let current = self.native_function_object_prototype_value(id)?;
+        if crate::runtime::abstract_operations::same_value(&current, &parent) {
+            return Ok(true);
+        }
+        if !self.native_function_is_extensible(id)? {
+            return Ok(false);
+        }
+        self.native_function_mut(id)?.set_static_parent(parent);
+        Ok(true)
     }
 
     pub(in crate::runtime) fn host_function_is_extensible(

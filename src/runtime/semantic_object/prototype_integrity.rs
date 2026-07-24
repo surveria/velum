@@ -70,7 +70,13 @@ impl Context {
                     self.try_set_function_static_parent(*id, prototype)?
                 }
             }
-            Value::NativeFunction(_) => false,
+            Value::NativeFunction(id) => {
+                if self.semantic_prototype_chain_contains(&prototype, target)? {
+                    false
+                } else {
+                    self.try_set_native_function_static_parent(*id, prototype)?
+                }
+            }
             Value::HostFunction(id) => {
                 if self.semantic_prototype_chain_contains(&prototype, target)? {
                     false

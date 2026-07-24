@@ -151,6 +151,49 @@ fn reflect_set_preserves_receiver_across_prototypes_proxies_and_functions() -> T
 }
 
 #[test]
+fn native_functions_support_static_parent_mutation() -> TestResult {
+    eval_is_42(
+        r"
+        let parent = { marker: 42 };
+        let before = Object.getPrototypeOf(Int8Array) === Object.getPrototypeOf(Uint16Array);
+        let reflected = Reflect.setPrototypeOf(Int8Array, parent);
+        let after = Object.getPrototypeOf(Int8Array) === parent;
+        let inherited = Int8Array.marker;
+        let assigned = (Uint16Array.__proto__ = parent) === parent;
+        let assignmentAfter = Object.getPrototypeOf(Uint16Array) === parent;
+
+        before === true &&
+            reflected === true &&
+            after === true &&
+            inherited === 42 &&
+            assigned === true &&
+            assignmentAfter === true ? 42 : 0
+        ",
+    )
+}
+
+#[test]
+fn non_extensible_native_functions_reject_static_parent_mutation() -> TestResult {
+    eval_is_42(
+        r"
+        let parent = {};
+        Object.preventExtensions(Uint8Array);
+        let reflected = Reflect.setPrototypeOf(Uint8Array, parent) === false;
+        let thrown = false;
+        try {
+            Object.setPrototypeOf(Uint8Array, parent);
+        } catch (error) {
+            thrown = error instanceof TypeError;
+        }
+
+        reflected === true &&
+            thrown === true &&
+            Object.getPrototypeOf(Uint8Array) !== parent ? 42 : 0
+        ",
+    )
+}
+
+#[test]
 fn routes_proxy_integrity_and_prototype_operations_through_semantic_methods() -> TestResult {
     eval_is_42(
         r"

@@ -399,6 +399,8 @@ fn is_engine262_missing_global_message(message: &str) -> bool {
         || message.contains("Intl is not defined")
         || message.contains("\"SharedArrayBuffer\" is not defined")
         || message.contains("SharedArrayBuffer is not defined")
+        || message.contains("\"Temporal\" is not defined")
+        || message.contains("Temporal is not defined")
 }
 
 fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
@@ -416,6 +418,7 @@ fn is_v8_missing_global_message(message: &str) -> bool {
         || message.contains("DisposableStack is not defined")
         || message.contains("AsyncDisposableStack is not defined")
         || message.contains("SuppressedError is not defined")
+        || message.contains("Temporal is not defined")
 }
 
 fn timing_ratio(velum: &EngineOutcome, v8: &EngineOutcome) -> Option<f64> {
@@ -612,6 +615,29 @@ mod tests {
         );
         ensure!(findings.contains(&CaseFinding::Engine262Unsupported));
         ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        let temporal_engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("ReferenceError: \"Temporal\" is not defined".to_owned()),
+        );
+        let temporal_v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("Temporal is not defined".to_owned()),
+        );
+        let temporal_findings = super::findings(
+            "Temporal.Now.instant()",
+            &velum,
+            &temporal_engine262,
+            &temporal_v8,
+            None,
+            config(),
+        );
+        ensure!(temporal_findings.as_slice() == [CaseFinding::Engine262Unsupported]);
         Ok(())
     }
 

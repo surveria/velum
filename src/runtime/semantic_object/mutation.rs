@@ -154,15 +154,19 @@ impl Context {
         {
             return self.reflect_write_with_descriptor(property, value, receiver, descriptor);
         }
-        let kind = self.native_function(target)?.kind();
-        if !matches!(
-            kind,
-            crate::runtime::native::NativeFunctionKind::TypedArray(_)
-        ) && !self.should_materialize_function_prototype_for(property.lookup())
-        {
-            return self.reflect_define_receiver_property(property, value, receiver);
-        }
-        let parent = self.native_function_object_prototype_value(target)?;
+        let parent = if let Some(parent) = self.native_function_static_parent_value(target)? {
+            parent
+        } else {
+            let kind = self.native_function(target)?.kind();
+            if !matches!(
+                kind,
+                crate::runtime::native::NativeFunctionKind::TypedArray(_)
+            ) && !self.should_materialize_function_prototype_for(property.lookup())
+            {
+                return self.reflect_define_receiver_property(property, value, receiver);
+            }
+            self.native_function_object_prototype_value(target)?
+        };
         if matches!(parent, Value::Null | Value::Undefined) {
             return self.reflect_define_receiver_property(property, value, receiver);
         }
