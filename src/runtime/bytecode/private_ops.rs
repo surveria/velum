@@ -26,9 +26,6 @@ impl Context {
                 property,
                 arg_count,
             } => Some(self.eval_bytecode_call_private_member(state, property, *arg_count, next)),
-            BytecodeInstruction::CallPrivateMemberSpread { property } => {
-                Some(self.eval_bytecode_call_private_member_spread(state, property, next))
-            }
             _ => None,
         }
     }
@@ -104,26 +101,6 @@ impl Context {
         };
         state.stack.drop_tail(arg_count)?;
         state.stack.pop()?;
-        state.stack.push(value);
-        state.pc = next;
-        Ok(None)
-    }
-
-    pub(super) fn eval_bytecode_call_private_member_spread(
-        &mut self,
-        state: &mut BytecodeState,
-        property: &BytecodePrivateName,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let name = self.resolve_private_name(property)?;
-        let packed = state.stack.pop()?;
-        let args = self.spread_call_arguments(&packed)?;
-        let receiver = state.stack.pop()?;
-        let callee = self.read_private_slot(&receiver, &name)?;
-        let completion = self.call(&callee, &args, receiver)?;
-        let Completion::Normal(value) = completion else {
-            return Ok(Some(completion));
-        };
         state.stack.push(value);
         state.pc = next;
         Ok(None)

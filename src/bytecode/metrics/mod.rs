@@ -190,13 +190,9 @@ impl BytecodeInstruction {
             | Self::StaticPropertyAssign { .. }
             | Self::ArrayIndexAssign { .. }
             | Self::ComputedPropertyAssign { .. }
-            | Self::CallStaticMemberSpread { .. }
-            | Self::CallComputedMemberSpread { .. }
             | Self::SuperMember { .. }
             | Self::CallSuperMember { .. }
-            | Self::CallSuperMemberSpread { .. }
-            | Self::CallComputedSuperMember { .. }
-            | Self::CallComputedSuperMemberSpread { .. } => BytecodeMetrics::property_operands(1),
+            | Self::CallComputedSuperMember { .. } => BytecodeMetrics::property_operands(1),
             Self::Binary {
                 property_access, ..
             } => BytecodeMetrics::property_operands(usize::from(property_access.is_some())),
@@ -355,7 +351,6 @@ impl BytecodeInstruction {
             | Self::CompoundPrivateProperty { .. }
             | Self::UpdatePrivateProperty { .. }
             | Self::CallPrivateMember { .. }
-            | Self::CallPrivateMemberSpread { .. }
             | Self::PrivateIn { .. }
             | Self::CallValue { .. }
             | Self::CallValueWithReceiverSpread
