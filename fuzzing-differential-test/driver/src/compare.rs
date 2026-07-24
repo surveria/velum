@@ -296,6 +296,9 @@ fn correctness_oracle<'a>(
     if is_reference_unsupported_resource_management(source, engine262, v8) {
         return None;
     }
+    if is_v8_missing_global(v8) {
+        return None;
+    }
     Some(v8)
 }
 
@@ -388,6 +391,23 @@ fn is_engine262_missing_global_message(message: &str) -> bool {
         || message.contains("Intl is not defined")
         || message.contains("\"SharedArrayBuffer\" is not defined")
         || message.contains("SharedArrayBuffer is not defined")
+}
+
+fn is_v8_missing_global(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("ReferenceError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(is_v8_missing_global_message)
+}
+
+fn is_v8_missing_global_message(message: &str) -> bool {
+    message.contains("Iterator is not defined")
+        || message.contains("AsyncIterator is not defined")
+        || message.contains("DisposableStack is not defined")
+        || message.contains("AsyncDisposableStack is not defined")
+        || message.contains("SuppressedError is not defined")
 }
 
 fn timing_ratio(velum: &EngineOutcome, v8: &EngineOutcome) -> Option<f64> {
@@ -518,6 +538,15 @@ mod tests {
         findings, outcome,
     };
 
+    fn config() -> CompareConfig {
+        CompareConfig {
+            engine262_timeout: Duration::from_secs(30),
+            v8_timeout: Duration::from_secs(4),
+            slow_ratio: 2.0,
+            slow_min: Duration::from_millis(5),
+        }
+    }
+
     #[test]
     fn error_name_parser_extracts_nested_js_error() -> anyhow::Result<()> {
         let name =
@@ -571,12 +600,7 @@ mod tests {
             &engine262,
             &v8,
             None,
-            CompareConfig {
-                engine262_timeout: Duration::from_secs(30),
-                v8_timeout: Duration::from_secs(4),
-                slow_ratio: 2.0,
-                slow_min: Duration::from_millis(5),
-            },
+            config(),
         );
         ensure!(
             findings.contains(&CaseFinding::Engine262Unsupported),
@@ -612,12 +636,7 @@ mod tests {
             &engine262,
             &v8,
             None,
-            CompareConfig {
-                engine262_timeout: Duration::from_secs(30),
-                v8_timeout: Duration::from_secs(4),
-                slow_ratio: 2.0,
-                slow_min: Duration::from_millis(5),
-            },
+            config(),
         );
         ensure!(
             findings.contains(&CaseFinding::Engine262Unsupported),
@@ -647,12 +666,7 @@ mod tests {
             &engine262,
             &v8,
             None,
-            CompareConfig {
-                engine262_timeout: Duration::from_secs(30),
-                v8_timeout: Duration::from_secs(4),
-                slow_ratio: 2.0,
-                slow_min: Duration::from_millis(5),
-            },
+            config(),
         );
         ensure!(
             findings.contains(&CaseFinding::Engine262Unsupported),
@@ -688,12 +702,7 @@ mod tests {
             &engine262,
             &v8,
             None,
-            CompareConfig {
-                engine262_timeout: Duration::from_secs(30),
-                v8_timeout: Duration::from_secs(4),
-                slow_ratio: 2.0,
-                slow_min: Duration::from_millis(5),
-            },
+            config(),
         );
         ensure!(
             findings.contains(&CaseFinding::Engine262Unsupported),
@@ -717,19 +726,7 @@ mod tests {
         );
         let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let findings = findings(
-            "for (;;) {}",
-            &velum,
-            &engine262,
-            &v8,
-            None,
-            CompareConfig {
-                engine262_timeout: Duration::from_secs(30),
-                v8_timeout: Duration::from_secs(4),
-                slow_ratio: 2.0,
-                slow_min: Duration::from_millis(5),
-            },
-        );
+        let findings = findings("for (;;) {}", &velum, &engine262, &v8, None, config());
         ensure!(
             findings.contains(&CaseFinding::VelumResourceLimit),
             "Velum resource limit finding is missing"
@@ -737,6 +734,42 @@ mod tests {
         ensure!(
             !findings.contains(&CaseFinding::CorrectnessMismatch),
             "resource limits must not count as correctness mismatch"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn missing_v8_fallback_global_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("ReferenceError: \"SharedArrayBuffer\" is not defined".to_owned()),
+        );
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("Iterator is not defined".to_owned()),
+        );
+        let findings = findings(
+            "new SharedArrayBuffer(8); Iterator.zip(new Map());",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
+        );
+        ensure!(
+            findings.contains(&CaseFinding::Engine262Unsupported),
+            "Engine262 unsupported finding is missing"
+        );
+        ensure!(
+            !findings.contains(&CaseFinding::CorrectnessMismatch),
+            "missing V8 fallback globals must not count as correctness mismatch"
         );
         Ok(())
     }

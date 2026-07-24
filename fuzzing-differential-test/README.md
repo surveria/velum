@@ -39,7 +39,7 @@ absolute shared directory. The session contains:
 - `findings/velum-resource-limits/*.js` for cases where Velum stops execution
   through its configured resource limits before reaching a semantic result;
 - `findings/engine262-unsupported/*.js` for programs that require APIs missing
-  from the pinned Engine262 oracle, such as ECMA-402 `Intl`;
+  from the pinned Engine262 oracle or unavailable in the local V8 fallback;
 - `findings/*-timeouts/*.js` and `findings/*-crashes/*.js` for engine-specific
   timeouts and crashes;
 - `pending/*.js` for scripts that were being executed if the Velum target is
