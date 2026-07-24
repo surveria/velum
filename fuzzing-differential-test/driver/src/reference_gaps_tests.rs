@@ -107,6 +107,24 @@ fn annex_b_string_legacy_and_v8_rab_alignment_gap_disables_oracle() -> anyhow::R
 }
 
 #[test]
+fn annex_b_string_legacy_and_unavailable_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error(
+        "TypeError: (\"f\").small is not a function. (In \"(\"f\").small()\", it is undefined)",
+    );
+    let v8 = reference_error("Temporal is not defined");
+    let source = "\
+        const value = (\"f\").small();\
+        const instant = Temporal.Instant;\
+        new instant(7n);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: buffer.sliceToImmutable is not a function");
