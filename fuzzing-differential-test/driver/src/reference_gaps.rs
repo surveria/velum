@@ -15,6 +15,8 @@ const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
+const ENGINE262_UNEXPECTED_TOKEN_ERROR: &str = "Unexpected token";
+const REGEXP_UNESCAPED_CLOSING_BRACKET_MARKER: &str = "/]";
 const FUZZILLI_STUB_MARKER: &str = "typeof fuzzilli";
 const FUZZILLI_EXPLORE_MARKER: &str = "EXPLORE_ACTION";
 const FUZZILLI_PROBE_MARKER: &str = "PROBING_RESULTS";
@@ -73,6 +75,7 @@ pub fn is_engine262_unsupported(
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
@@ -95,6 +98,7 @@ pub fn correctness_oracle<'a>(
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
+        || is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_native_function_throw_stringification_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
@@ -160,6 +164,22 @@ fn source_contains_legacy_decimal_escape(source: &str) -> bool {
         window.first() == Some(&b'\\')
             && window.get(1).is_some_and(u8::is_ascii_digit)
     })
+}
+
+fn is_closing_bracket_regexp_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && source.contains(REGEXP_UNESCAPED_CLOSING_BRACKET_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_UNEXPECTED_TOKEN_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
 fn outcome_is_range_error_with(

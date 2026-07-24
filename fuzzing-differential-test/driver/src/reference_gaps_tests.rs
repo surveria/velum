@@ -243,6 +243,28 @@ fn legacy_decimal_escape_and_v8_resizable_alignment_gap_disables_oracle() -> any
 }
 
 #[test]
+fn closing_bracket_regexp_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("SyntaxError: Unexpected token".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint32Array should be a multiple of 4");
+    let source = "\
+        const buffer = new ArrayBuffer(129, { maxByteLength: 224 });\
+        new Uint32Array(buffer);\
+        /]l/ymi;\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
