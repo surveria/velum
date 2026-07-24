@@ -4,7 +4,8 @@ use velum::{
     Engine, EngineConfig, OwnedValue, RuntimeLimits, VmConfig, VmStorageKind, VmStorageLimits,
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = VmStorageLimits::unlimited()
         .with_max_count(VmStorageKind::OutputEntry, 2)
         .with_max_payload_bytes(VmStorageKind::OutputEntry, 32);
@@ -28,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut vm = engine.create_vm_with_clock(move || clock_source.get());
 
     let start = vm.eval_owned("performance.now()")?;
+    tokio::task::yield_now().await;
     clock.set(Duration::from_millis(25));
     let later = vm.eval_owned("performance.now()")?;
     if start != OwnedValue::Number(0.0) || later != OwnedValue::Number(25.0) {

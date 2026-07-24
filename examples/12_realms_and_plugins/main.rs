@@ -1,6 +1,7 @@
 use velum::{Engine, OwnedValue};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     vm.eval("globalThis.pluginName = 'default';")?;
@@ -37,6 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("alpha realm did not use its own coherent intrinsics".into());
     }
 
+    tokio::task::yield_now().await;
     let mut independent = engine.create_vm();
     if independent.eval_in_realm(&alpha, "1").is_ok() {
         return Err("an independent VM accepted a foreign RealmId".into());

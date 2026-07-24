@@ -1,0 +1,95 @@
+[package]
+name = "velum-embedding-examples"
+version = "0.0.0"
+edition = "2024"
+publish = false
+autoexamples = false
+
+[dependencies]
+parking_lot = "0.12"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
+velum = { path = "..", features = ["host-macros"] }
+velum-tokio = { path = "../crates/velum-tokio" }
+
+[[example]]
+name = "00_hello_world"
+path = "00_hello_world/main.rs"
+
+[[example]]
+name = "01_basic_eval"
+path = "01_basic_eval/main.rs"
+
+[[example]]
+name = "02_typed_host_functions"
+path = "02_typed_host_functions/main.rs"
+
+[[example]]
+name = "03_async_rust_javascript_roundtrip"
+path = "03_async_rust_javascript_roundtrip/main.rs"
+
+[[example]]
+name = "04_callbacks_and_intervals"
+path = "04_callbacks_and_intervals/main.rs"
+
+[[example]]
+name = "05_rust_backed_websocket"
+path = "05_rust_backed_websocket/main.rs"
+
+[[example]]
+name = "06_javascript_class_from_rust"
+path = "06_javascript_class_from_rust/main.rs"
+
+[[example]]
+name = "07_values_and_handles"
+path = "07_values_and_handles/main.rs"
+
+[[example]]
+name = "08_compile_once_run_many"
+path = "08_compile_once_run_many/main.rs"
+
+[[example]]
+name = "09_sandboxed_execution"
+path = "09_sandboxed_execution/main.rs"
+
+[[example]]
+name = "10_custom_module_loader"
+path = "10_custom_module_loader/main.rs"
+
+[[example]]
+name = "11_promises_and_jobs"
+path = "11_promises_and_jobs/main.rs"
+
+[[example]]
+name = "12_realms_and_plugins"
+path = "12_realms_and_plugins/main.rs"
+
+[[example]]
+name = "13_shared_memory_between_vms"
+path = "13_shared_memory_between_vms/main.rs"
+
+[[example]]
+name = "14_observability_and_teardown"
+path = "14_observability_and_teardown/main.rs"
+
+[[example]]
+name = "15_host_type_multiple_vms"
+path = "15_host_type_multiple_vms/main.rs"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+uninlined_format_args = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+redundant_pub_crate = "deny"
+too_many_lines = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"

@@ -2,7 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use velum::{Engine, JsValueRef, OwnedValue, PropertyKeyRef, RetainedValue};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = Engine::new();
     let mut first = engine.create_vm();
     let mut second = engine.create_vm();
@@ -45,6 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         first.root_snapshot()?.total()
     );
 
+    tokio::task::yield_now().await;
     let foreign = second.get_property(
         JsValueRef::Retained(&object),
         PropertyKeyRef::Name("answer"),

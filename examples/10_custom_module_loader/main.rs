@@ -1,13 +1,15 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{collections::BTreeMap, sync::Arc};
 
+use parking_lot::Mutex;
 use velum::{
     DynamicModuleRequest, Engine, Error, ModuleLoader, ModuleRequest, ModuleSource, OwnedValue,
 };
+use velum_tokio::VmRuntime;
 
 #[derive(Clone)]
 struct AppLoader {
     sources: BTreeMap<String, String>,
-    requests: Rc<RefCell<Vec<String>>>,
+    requests: Arc<Mutex<Vec<String>>>,
 }
 
 impl AppLoader {
@@ -41,7 +43,7 @@ impl AppLoader {
                     "export const answer = 84;".to_owned(),
                 ),
             ]),
-            requests: Rc::new(RefCell::new(Vec::new())),
+            requests: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -91,7 +93,7 @@ impl AppLoader {
 impl ModuleLoader for AppLoader {
     fn load(&mut self, referrer: &str, request: &str) -> velum::Result<ModuleSource> {
         self.requests
-            .borrow_mut()
+            .lock()
             .push(format!("load {referrer} -> {request}"));
         self.source(referrer, request)
     }
@@ -102,7 +104,7 @@ impl ModuleLoader for AppLoader {
         request: &ModuleRequest,
     ) -> velum::Result<ModuleSource> {
         Self::validate_attributes(request)?;
-        self.requests.borrow_mut().push(format!(
+        self.requests.lock().push(format!(
             "static {:?} {referrer} -> {} {:?}",
             request.phase(),
             request.specifier(),
@@ -117,7 +119,7 @@ impl ModuleLoader for AppLoader {
         request: &DynamicModuleRequest,
     ) -> velum::Result<ModuleSource> {
         Self::validate_attributes(request)?;
-        self.requests.borrow_mut().push(format!(
+        self.requests.lock().push(format!(
             "dynamic {:?} {referrer} -> {} {:?}",
             request.phase(),
             request.specifier(),
@@ -127,35 +129,47 @@ impl ModuleLoader for AppLoader {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut vm = Engine::new().create_vm();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = VmRuntime::new(Engine::new())?;
+    let vm = runtime.spawn_vm().await?;
     let mut loader = AppLoader::new();
-    let requests = Rc::clone(&loader.requests);
-    vm.set_dynamic_module_loader(loader.clone());
-    vm.eval_module_named(
-        "app/main.js",
-        r#"
-        import { cycle, stableMeta } from "./a.js" with { type: "javascript" };
-        globalThis.moduleResult = `${cycle()}:${stableMeta()}`;
-        globalThis.dynamicResult = "pending";
-        import("./dynamic.js", { with: { type: "javascript" } }).then(module => {
-            globalThis.dynamicResult = module.answer;
-        });
-        "#,
-        &mut loader,
-    )?;
-    vm.run_jobs()?;
-
-    let static_result = vm.eval_owned("globalThis.moduleResult")?;
-    let dynamic_result = vm.eval_owned("globalThis.dynamicResult")?;
-    if static_result != OwnedValue::String("ab:true".to_owned())
-        || dynamic_result != OwnedValue::Number(84.0)
-    {
-        return Err(format!("module results were {static_result:?} and {dynamic_result:?}").into());
-    }
-    println!("Static cycle and import.meta: {static_result:?}");
-    println!("Dynamic import: {dynamic_result:?}");
-    for request in requests.borrow().iter() {
+    let requests = Arc::clone(&loader.requests);
+    vm.run(move |vm| {
+        vm.set_dynamic_module_loader(loader.clone());
+        vm.eval_module_named(
+            "app/main.js",
+            r#"
+            import { cycle, stableMeta } from "./a.js" with { type: "javascript" };
+            globalThis.moduleResult = `${cycle()}:${stableMeta()}`;
+            globalThis.dynamicResult = "pending";
+            import("./dynamic.js", { with: { type: "javascript" } }).then(module => {
+                globalThis.dynamicResult = module.answer;
+            });
+            "#,
+            &mut loader,
+        )?;
+        Ok(())
+    })
+    .await?;
+    vm.wait_idle().await?;
+    let (static_result, dynamic_result) = vm
+        .run(|vm| {
+            let static_result = vm.eval_owned("globalThis.moduleResult")?;
+            let dynamic_result = vm.eval_owned("globalThis.dynamicResult")?;
+            if static_result != OwnedValue::String("ab:true".to_owned())
+                || dynamic_result != OwnedValue::Number(84.0)
+            {
+                return Err(Error::runtime(format!(
+                    "module results were {static_result:?} and {dynamic_result:?}"
+                )));
+            }
+            Ok((format!("{static_result:?}"), format!("{dynamic_result:?}")))
+        })
+        .await?;
+    println!("Static cycle and import.meta: {static_result}");
+    println!("Dynamic import: {dynamic_result}");
+    for request in requests.lock().iter() {
         println!("Loader: {request}");
     }
     Ok(())

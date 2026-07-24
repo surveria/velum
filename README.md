@@ -293,10 +293,12 @@ current-thread worker and accepts serialized commands through a bounded
 workers and may make asynchronous progress in parallel. The engine crate
 remains executor-neutral.
 
-The complete [embedding example suite](examples/README.md) provides fifteen
+The complete [embedding example suite](examples/README.md) provides sixteen
 directly runnable programs, progressing from Hello World through bidirectional
 async calls, stored callbacks, Rust-backed classes, module loading, shared
-memory, observability, and deterministic teardown. The
+memory, multi-VM host types, observability, and deterministic teardown. Fifteen
+examples use Tokio; one intentionally shows the executor-neutral manual pump.
+The
 [`tokio_host_class`](crates/velum-tokio/examples/tokio_host_class.rs) companion
 example combines host-class macros, hidden Rust state, natural `async fn`
 methods, and a worker-owned VM.
