@@ -34,6 +34,7 @@ const PARSER_ERROR_PREFIX: &str = "parser error";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
 const VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT: &str = "RegExp compile error InstructionLimit";
+const VELUM_SPARSE_ARRAY_STORAGE_LIMIT_FRAGMENT: &str = "sparse array property key is not available";
 const VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT: &str = "exceeded supported range";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -268,7 +269,8 @@ fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
         return false;
     };
     if velum.error_name.as_deref() == Some("Error") {
-        return message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX);
+        return message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX)
+            || message.contains(VELUM_SPARSE_ARRAY_STORAGE_LIMIT_FRAGMENT);
     }
     if velum.error_name.as_deref() == Some(SYNTAX_ERROR_NAME) {
         return message.contains(VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT);
@@ -639,6 +641,36 @@ mod tests {
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let findings = findings(
             "const value = /(?:a{5,1000000}){3,1000000}/gui;",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
+        );
+        ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        Ok(())
+    }
+
+    #[test]
+    fn velum_sparse_array_storage_limit_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("Error".to_owned()),
+            Some("runtime error: sparse array property key is not available".to_owned()),
+        );
+        let engine262 = outcome(OutcomeStatus::Timeout, 1, "", None, None);
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            Some("byte length of Float32Array should be a multiple of 4".to_owned()),
+        );
+        let findings = findings(
+            "new Float32Array(new ArrayBuffer(1, { maxByteLength: 1 }));",
             &velum,
             &engine262,
             &v8,
