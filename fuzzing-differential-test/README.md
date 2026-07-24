@@ -14,7 +14,8 @@ each generated program the target:
 3. executes the same program in V8/Node for performance ratio and diagnostics;
 4. compares normalized status and `fuzzilli('FUZZILLI_PRINT', value)` output;
 5. records per-case timing and the Velum/V8 ratio;
-6. saves correctness, timeout, crash, and performance cases immediately.
+6. saves correctness, timeout, crash, performance, and reference-unsupported
+   cases immediately.
 
 The default workflow stops after 10 Velum-vs-Engine262 correctness mismatches.
 V8 timeouts and V8 crashes are recorded, but they do not stop the run by
@@ -35,6 +36,8 @@ absolute shared directory. The session contains:
 - `findings/correctness-mismatches/*.js` for Velum-vs-Engine262 differences;
 - `findings/performance-slow/*.js` for cases where Velum is slower than V8 by
   the configured ratio;
+- `findings/engine262-unsupported/*.js` for programs that require APIs missing
+  from the pinned Engine262 oracle, such as ECMA-402 `Intl`;
 - `findings/*-timeouts/*.js` and `findings/*-crashes/*.js` for engine-specific
   timeouts and crashes;
 - `pending/*.js` for scripts that were being executed if the Velum target is

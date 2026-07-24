@@ -59,6 +59,7 @@ struct Summary {
     velum_crashes: u64,
     engine262_timeouts: u64,
     engine262_crashes: u64,
+    engine262_unsupported: u64,
     v8_timeouts: u64,
     v8_crashes: u64,
     velum_js_errors: u64,
@@ -150,6 +151,10 @@ fn rows(
             &summary.engine262_timeouts.to_string(),
         ),
         row("Engine262 crashes", &summary.engine262_crashes.to_string()),
+        row(
+            "Engine262 unsupported",
+            &summary.engine262_unsupported.to_string(),
+        ),
         row("V8 timeouts", &summary.v8_timeouts.to_string()),
         row("V8 crashes", &summary.v8_crashes.to_string()),
         row("Velum JS errors", &summary.velum_js_errors.to_string()),
@@ -191,6 +196,7 @@ impl Summary {
         self.total = self.total.saturating_add(1);
         let findings = normalized_findings(record);
         let mut has_correctness_problem = false;
+        let mut has_engine262_unsupported = false;
         for finding in &findings {
             match finding {
                 CaseFinding::CorrectnessMismatch => {
@@ -216,6 +222,10 @@ impl Summary {
                     self.engine262_crashes = self.engine262_crashes.saturating_add(1);
                     has_correctness_problem = true;
                 }
+                CaseFinding::Engine262Unsupported => {
+                    self.engine262_unsupported = self.engine262_unsupported.saturating_add(1);
+                    has_engine262_unsupported = true;
+                }
                 CaseFinding::V8Timeout => {
                     self.v8_timeouts = self.v8_timeouts.saturating_add(1);
                 }
@@ -224,7 +234,7 @@ impl Summary {
                 }
             }
         }
-        if !has_correctness_problem {
+        if !has_correctness_problem && !has_engine262_unsupported {
             self.engine262_equivalent = self.engine262_equivalent.saturating_add(1);
         }
         if record.velum.status == OutcomeStatus::JsError {

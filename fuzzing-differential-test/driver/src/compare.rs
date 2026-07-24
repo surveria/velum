@@ -16,6 +16,17 @@ use crate::{
 };
 
 const DIFFERENTIAL_MAX_CALL_STACK_BYTES: usize = 984 * 1_024;
+const ECMASCRIPT_ERROR_NAMES: [&str; 8] = [
+    "AggregateError",
+    "ReferenceError",
+    "SyntaxError",
+    "RangeError",
+    "TypeError",
+    "EvalError",
+    "URIError",
+    "Error",
+];
+const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +98,7 @@ pub enum CaseClassification {
     VelumCrash,
     Engine262Timeout,
     Engine262Crash,
+    Engine262Unsupported,
     V8Timeout,
     V8Crash,
 }
@@ -100,6 +112,7 @@ pub enum CaseFinding {
     VelumCrash,
     Engine262Timeout,
     Engine262Crash,
+    Engine262Unsupported,
     V8Timeout,
     V8Crash,
 }
@@ -129,7 +142,7 @@ pub fn compare_script(
         engine262_worker.execute(source, duration_millis_u64(config.engine262_timeout))?;
     let v8 = node_worker.execute(source, duration_millis_u64(config.v8_timeout))?;
     let ratio = timing_ratio(&velum, &v8);
-    let findings = findings(&velum, &engine262, &v8, ratio, config);
+    let findings = findings(source, &velum, &engine262, &v8, ratio, config);
     let classification = primary_classification(&findings);
     Ok(ComparedScript {
         velum,
@@ -152,6 +165,7 @@ pub struct ComparedScript {
 }
 
 fn findings(
+    source: &str,
     velum: &EngineOutcome,
     engine262: &EngineOutcome,
     v8: &EngineOutcome,
@@ -177,7 +191,15 @@ fn findings(
     if v8.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::V8Crash);
     }
-    if velum.is_completed() && engine262.is_completed() && !equivalent(velum, engine262) {
+    let engine262_unsupported = is_engine262_unsupported(source, engine262, v8);
+    if engine262_unsupported {
+        findings.push(CaseFinding::Engine262Unsupported);
+    }
+    let correctness_oracle = if engine262_unsupported { v8 } else { engine262 };
+    if velum.is_completed()
+        && correctness_oracle.is_completed()
+        && !equivalent(velum, correctness_oracle)
+    {
         findings.push(CaseFinding::CorrectnessMismatch);
     }
     if let Some(value) = ratio
@@ -198,6 +220,7 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
         CaseFinding::Engine262Timeout,
         CaseFinding::V8Crash,
         CaseFinding::V8Timeout,
+        CaseFinding::Engine262Unsupported,
         CaseFinding::PerformanceSlow,
     ] {
         if findings.contains(&candidate) {
@@ -208,6 +231,7 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
                 CaseFinding::VelumCrash => CaseClassification::VelumCrash,
                 CaseFinding::Engine262Timeout => CaseClassification::Engine262Timeout,
                 CaseFinding::Engine262Crash => CaseClassification::Engine262Crash,
+                CaseFinding::Engine262Unsupported => CaseClassification::Engine262Unsupported,
                 CaseFinding::V8Timeout => CaseClassification::V8Timeout,
                 CaseFinding::V8Crash => CaseClassification::V8Crash,
             };
@@ -225,6 +249,27 @@ fn equivalent(velum: &EngineOutcome, v8: &EngineOutcome) -> bool {
         OutcomeStatus::JsError => velum.error_name == v8.error_name,
         OutcomeStatus::Timeout | OutcomeStatus::Crash => true,
     }
+}
+
+fn is_engine262_unsupported(source: &str, engine262: &EngineOutcome, v8: &EngineOutcome) -> bool {
+    is_engine262_missing_global(engine262)
+        || (source.contains(RESIZABLE_ARRAY_BUFFER_MARKER) && !equivalent(engine262, v8))
+}
+
+fn is_engine262_missing_global(engine262: &EngineOutcome) -> bool {
+    engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("ReferenceError")
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(is_engine262_missing_global_message)
+}
+
+fn is_engine262_missing_global_message(message: &str) -> bool {
+    message.contains("\"Intl\" is not defined")
+        || message.contains("Intl is not defined")
+        || message.contains("\"SharedArrayBuffer\" is not defined")
+        || message.contains("SharedArrayBuffer is not defined")
 }
 
 fn timing_ratio(velum: &EngineOutcome, v8: &EngineOutcome) -> Option<f64> {
@@ -307,16 +352,149 @@ pub fn outcome(
 
 #[must_use]
 pub fn error_name_from_text(message: &str) -> String {
-    let Some((name, _)) = message.split_once(':') else {
-        return "Error".to_owned();
-    };
-    if name.ends_with("Error") {
-        return name.to_owned();
+    for (start, _) in message.char_indices() {
+        for name in ECMASCRIPT_ERROR_NAMES {
+            let Some(candidate) = message.get(start..) else {
+                continue;
+            };
+            if candidate.starts_with(name) && is_error_name_match(message, start, name.len()) {
+                return name.to_owned();
+            }
+        }
     }
     "Error".to_owned()
+}
+
+fn is_error_name_match(message: &str, start: usize, length: usize) -> bool {
+    let end = start.saturating_add(length);
+    let Some(after) = message.get(end..) else {
+        return false;
+    };
+    let follows_error_name = after.is_empty() || after.starts_with(':');
+    if !follows_error_name {
+        return false;
+    }
+    let previous = message
+        .get(..start)
+        .and_then(|prefix| prefix.chars().next_back());
+    !previous.is_some_and(|value| value.is_ascii_alphanumeric() || value == '_')
 }
 
 #[must_use]
 pub fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use anyhow::ensure;
+
+    use super::{
+        CaseFinding, CompareConfig, OutcomeStatus, error_name_from_text, findings, outcome,
+    };
+
+    #[test]
+    fn error_name_parser_extracts_nested_js_error() -> anyhow::Result<()> {
+        let name =
+            error_name_from_text("javascript exception: TypeError: constructor requires 'new'");
+        ensure!(name == "TypeError", "unexpected error name: {name}");
+        Ok(())
+    }
+
+    #[test]
+    fn error_name_parser_preserves_primary_reference_error() -> anyhow::Result<()> {
+        let name = error_name_from_text("ReferenceError: \"Intl\" is not defined");
+        ensure!(name == "ReferenceError", "unexpected error name: {name}");
+        Ok(())
+    }
+
+    #[test]
+    fn engine262_intl_gap_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            None,
+        );
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("ReferenceError: \"Intl\" is not defined".to_owned()),
+        );
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            None,
+        );
+        let findings = findings(
+            "new Intl.Segmenter('ckb_IR')",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            CompareConfig {
+                engine262_timeout: Duration::from_secs(30),
+                v8_timeout: Duration::from_secs(4),
+                slow_ratio: 2.0,
+                slow_min: Duration::from_millis(5),
+            },
+        );
+        ensure!(
+            findings.contains(&CaseFinding::Engine262Unsupported),
+            "Engine262 unsupported finding is missing"
+        );
+        ensure!(
+            !findings.contains(&CaseFinding::CorrectnessMismatch),
+            "unsupported Engine262 Intl gap must not count as correctness mismatch"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn engine262_unsupported_falls_back_to_v8_for_correctness() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("ReferenceError".to_owned()),
+            Some("ReferenceError: \"SharedArrayBuffer\" is not defined".to_owned()),
+        );
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            None,
+        );
+        let findings = findings(
+            "new BigInt64Array(new SharedArrayBuffer(6, { maxByteLength: 6 }))",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            CompareConfig {
+                engine262_timeout: Duration::from_secs(30),
+                v8_timeout: Duration::from_secs(4),
+                slow_ratio: 2.0,
+                slow_min: Duration::from_millis(5),
+            },
+        );
+        ensure!(
+            findings.contains(&CaseFinding::Engine262Unsupported),
+            "Engine262 unsupported finding is missing"
+        );
+        ensure!(
+            findings.contains(&CaseFinding::CorrectnessMismatch),
+            "V8 fallback mismatch is missing"
+        );
+        Ok(())
+    }
 }

@@ -134,7 +134,7 @@ impl Context {
         };
         self.check_byte_buffer_length(length)?;
         if let Some(maximum) = max_byte_length {
-            self.check_byte_buffer_length(maximum)?;
+            Self::check_byte_buffer_supported_length(maximum)?;
         }
         let buffer = max_byte_length.map_or_else(
             || ByteBuffer::new(length, ByteBufferOrigin::EngineOwned),
@@ -358,7 +358,7 @@ impl Context {
             }
             requested
         } else {
-            if !length_tracking && !available.is_multiple_of(element_size) {
+            if !available.is_multiple_of(element_size) {
                 return Err(Error::exception(
                     ErrorName::RangeError,
                     TYPED_ARRAY_BUFFER_RANGE_ERROR,
@@ -508,6 +508,17 @@ impl Context {
     }
 
     pub(super) fn check_byte_buffer_length(&self, length: usize) -> Result<()> {
+        Self::check_byte_buffer_supported_length(length)?;
+        if length > self.limits.max_byte_buffer_len {
+            return Err(Error::limit(format!(
+                "typed array byte length exceeded {}",
+                self.limits.max_byte_buffer_len
+            )));
+        }
+        Ok(())
+    }
+
+    pub(super) fn check_byte_buffer_supported_length(length: usize) -> Result<()> {
         let maximum = usize::try_from(u32::MAX)
             .map_err(|_| Error::limit(TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR))?;
         if length > maximum {
@@ -515,12 +526,6 @@ impl Context {
                 ErrorName::RangeError,
                 TYPED_ARRAY_BYTE_LENGTH_LIMIT_ERROR,
             ));
-        }
-        if length > self.limits.max_byte_buffer_len {
-            return Err(Error::limit(format!(
-                "typed array byte length exceeded {}",
-                self.limits.max_byte_buffer_len
-            )));
         }
         Ok(())
     }

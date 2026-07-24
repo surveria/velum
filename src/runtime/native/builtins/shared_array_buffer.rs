@@ -85,7 +85,7 @@ impl Context {
         };
         self.check_byte_buffer_length(length)?;
         if let Some(maximum) = maximum {
-            self.check_byte_buffer_length(maximum)?;
+            Self::check_byte_buffer_supported_length(maximum)?;
         }
         let buffer = ByteBuffer::new_shared(length, maximum);
         if let Some(prototype) = prototype {

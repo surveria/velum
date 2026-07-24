@@ -267,6 +267,7 @@ fn finding_directory(root: &Path, finding: CaseFinding) -> PathBuf {
         CaseFinding::VelumCrash => root.join("findings/velum-crashes"),
         CaseFinding::Engine262Timeout => root.join("findings/engine262-timeouts"),
         CaseFinding::Engine262Crash => root.join("findings/engine262-crashes"),
+        CaseFinding::Engine262Unsupported => root.join("findings/engine262-unsupported"),
         CaseFinding::V8Timeout => root.join("findings/v8-timeouts"),
         CaseFinding::V8Crash => root.join("findings/v8-crashes"),
     }
@@ -283,6 +284,7 @@ impl CaseClassification {
             Self::VelumCrash => Some(CaseFinding::VelumCrash),
             Self::Engine262Timeout => Some(CaseFinding::Engine262Timeout),
             Self::Engine262Crash => Some(CaseFinding::Engine262Crash),
+            Self::Engine262Unsupported => Some(CaseFinding::Engine262Unsupported),
             Self::V8Timeout => Some(CaseFinding::V8Timeout),
             Self::V8Crash => Some(CaseFinding::V8Crash),
         }
@@ -312,6 +314,7 @@ fn create_layout(root: &Path) -> anyhow::Result<()> {
         &root.join("findings/velum-crashes"),
         &root.join("findings/engine262-timeouts"),
         &root.join("findings/engine262-crashes"),
+        &root.join("findings/engine262-unsupported"),
         &root.join("findings/v8-timeouts"),
         &root.join("findings/v8-crashes"),
         &root.join("pending"),
