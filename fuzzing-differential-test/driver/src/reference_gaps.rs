@@ -96,6 +96,9 @@ pub fn is_engine262_unsupported(
         || is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
+        || is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
         || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
@@ -124,6 +127,9 @@ pub fn correctness_oracle<'a>(
         || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
         || is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
+            source, engine262, v8,
+        )
+        || is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
         || is_legacy_control_escape_with_v8_rab_alignment_without_oracle(source, engine262, v8)
@@ -223,6 +229,21 @@ fn is_engine262_invalid_decimal_digits_with_v8_rab_alignment_without_oracle(
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains(ENGINE262_INVALID_DECIMAL_DIGITS_ERROR))
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn is_engine262_invalid_identity_escape_with_v8_rab_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && engine262
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains(ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
