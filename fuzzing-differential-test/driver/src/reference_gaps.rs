@@ -6,6 +6,11 @@ const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
+const IMMUTABLE_ARRAY_BUFFER_METHODS: [&str; 3] = [
+    "sliceToImmutable",
+    "transferToImmutable",
+    "transferToFixedLength",
+];
 const ANNEX_B_STRING_HTML_METHODS: [&str; 13] = [
     "anchor",
     "big",
@@ -46,6 +51,8 @@ pub fn is_engine262_unsupported(
         || is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
         || is_engine262_missing_annex_b_string_html_method(source, velum, engine262, v8)
+        || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
+        || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             && !outcomes_equivalent(velum, engine262)
             && !outcomes_equivalent(engine262, v8))
@@ -63,6 +70,7 @@ pub fn correctness_oracle<'a>(
     if is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
+        || is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
         || is_v8_fallback_unavailable(v8)
     {
         return None;
@@ -79,23 +87,80 @@ fn is_engine262_missing_annex_b_string_html_method(
     engine262.status == OutcomeStatus::JsError
         && engine262.error_name.as_deref() == Some("TypeError")
         && outcomes_equivalent(velum, v8)
-        && engine262.error_message.as_deref().is_some_and(|message| {
-            message.contains("is not a function")
-                && ANNEX_B_STRING_HTML_METHODS
-                    .iter()
-                    .any(|method| source_contains_method_call(source, method))
-        })
+        && ANNEX_B_STRING_HTML_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
 }
 
-fn source_contains_method_call(source: &str, method: &str) -> bool {
-    let Some(pattern_len) = method.len().checked_add(2) else {
+fn is_reference_unsupported_immutable_array_buffer_method(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    !outcomes_equivalent(velum, engine262)
+        && is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
+}
+
+fn is_reference_missing_immutable_array_buffer_method(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    references_complete_equivalently(engine262, v8)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
+        && IMMUTABLE_ARRAY_BUFFER_METHODS
+            .iter()
+            .any(|method| source_contains_method_reference(source, method))
+}
+
+fn is_engine262_locale_validation_gap(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_locale_sensitive_call(source)
+        && outcomes_equivalent(velum, v8)
+        && !outcomes_equivalent(velum, engine262)
+        && velum.status == OutcomeStatus::JsError
+        && velum.error_name.as_deref() == Some("RangeError")
+}
+
+fn source_contains_locale_sensitive_call(source: &str) -> bool {
+    source.contains("Intl.")
+        || source.contains("Intl[")
+        || source_contains_method_reference(source, "toLocaleString")
+        || source_contains_method_reference(source, "toLocaleDateString")
+        || source_contains_method_reference(source, "toLocaleTimeString")
+}
+
+fn source_contains_method_reference(source: &str, method: &str) -> bool {
+    source_contains_dot_property(source, method)
+        || source.contains(&format!("[\"{method}\"]"))
+        || source.contains(&format!("['{method}']"))
+}
+
+fn source_contains_dot_property(source: &str, method: &str) -> bool {
+    let Some(pattern_len) = method.len().checked_add(1) else {
         return false;
     };
-    source.as_bytes().windows(pattern_len).any(|window| {
-        window.first() == Some(&b'.')
-            && window.get(1..1 + method.len()) == Some(method.as_bytes())
-            && window.last() == Some(&b'(')
-    })
+    source
+        .as_bytes()
+        .windows(pattern_len)
+        .enumerate()
+        .any(|(start, window)| {
+            let Some(after_start) = start.checked_add(pattern_len) else {
+                return false;
+            };
+            let next = source
+                .get(after_start..)
+                .and_then(|suffix| suffix.chars().next());
+            window.first() == Some(&b'.')
+                && window.get(1..) == Some(method.as_bytes())
+                && !next.is_some_and(is_ascii_identifier_part)
+        })
 }
 
 fn is_reference_unsupported_resource_management_syntax(
@@ -326,6 +391,64 @@ mod tests {
         let engine262 = type_error("TypeError: (\"\").bold is not a function");
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let source = "(\"\").bold()";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+            anyhow::bail!("expected V8 fallback oracle");
+        };
+        ensure!(unsupported);
+        ensure!(outcomes_equivalent(oracle, &v8));
+        Ok(())
+    }
+
+    #[test]
+    fn annex_b_string_html_bracket_and_apply_forms_fall_back_to_v8() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = type_error("TypeError: Cannot convert undefined to object");
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        for source in [
+            "(\"129\")[\"bold\"](\"bold\")",
+            "(\"1D\").blink.apply(\"1D\", [])",
+        ] {
+            let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+            let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+                anyhow::bail!("expected V8 fallback oracle for {source}");
+            };
+            ensure!(unsupported);
+            ensure!(outcomes_equivalent(oracle, &v8));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::Result<()> {
+        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let engine262 = type_error("TypeError: buffer.sliceToImmutable is not a function");
+        let v8 = type_error("buffer.sliceToImmutable is not a function");
+        let source = "const buffer = new ArrayBuffer(); buffer.sliceToImmutable(800, 8);";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn engine262_locale_validation_gap_falls_back_to_v8() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            Some("Intl.Locale tag or option is invalid".to_owned()),
+        );
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("RangeError".to_owned()),
+            Some("Incorrect locale information provided".to_owned()),
+        );
+        let source = "(5).toLocaleString(\"o\")";
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
             anyhow::bail!("expected V8 fallback oracle");
