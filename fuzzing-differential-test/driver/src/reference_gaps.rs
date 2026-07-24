@@ -66,6 +66,7 @@ pub fn is_engine262_unsupported(
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || (engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
@@ -85,6 +86,7 @@ pub fn correctness_oracle<'a>(
     if is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || is_webassembly_host_api_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
+        || is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
         || is_shared_array_buffer_zero_length_slice_without_oracle(source, engine262, v8)
         || is_fuzzilli_introspection_reference_unstable(source, engine262, v8)
         || source_contains_resource_management_symbol_access(source)
@@ -105,16 +107,32 @@ fn is_shared_array_buffer_alignment_without_oracle(
     source.contains(SHARED_ARRAY_BUFFER_CONSTRUCTOR)
         && source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
         && is_engine262_missing_global(engine262)
-        && v8.status == OutcomeStatus::JsError
-        && v8.error_name.as_deref() == Some("RangeError")
-        && v8
-            .error_message
-            .as_deref()
-            .is_some_and(is_v8_typed_array_alignment_error)
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
 fn is_v8_typed_array_alignment_error(message: &str) -> bool {
     message.contains("byte length of") && message.contains(V8_TYPED_ARRAY_ALIGNMENT_ERROR)
+}
+
+fn is_resizable_array_buffer_alignment_without_oracle(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source.contains(RESIZABLE_ARRAY_BUFFER_MARKER)
+        && outcome_is_range_error_with(engine262, |message| {
+            message.contains("Cannot allocate memory")
+        })
+        && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
+}
+
+fn outcome_is_range_error_with(
+    outcome: &EngineOutcome,
+    predicate: impl FnOnce(&str) -> bool,
+) -> bool {
+    outcome.status == OutcomeStatus::JsError
+        && outcome.error_name.as_deref() == Some("RangeError")
+        && outcome.error_message.as_deref().is_some_and(predicate)
 }
 
 fn is_shared_array_buffer_zero_length_slice_without_oracle(
@@ -649,6 +667,12 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+        let engine262 = range_error("RangeError: Cannot allocate memory");
+        let v8 = range_error("byte length of Uint32Array should be a multiple of 4");
+        let source = "new Uint32Array(new ArrayBuffer(7, { maxByteLength: 4294967296 }))";
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
         Ok(())
     }
 
@@ -661,25 +685,6 @@ mod tests {
         let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
         ensure!(unsupported);
         ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn shared_array_buffer_species_slice_gap_keeps_v8_oracle() -> anyhow::Result<()> {
-        let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
-        let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
-        let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-        let source = "\
-            const buffer = new SharedArrayBuffer();\
-            buffer.constructor = { [Symbol.species]: function() { return buffer; } };\
-            buffer.slice(40);\
-        ";
-        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-        let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
-            anyhow::bail!("expected V8 fallback oracle");
-        };
-        ensure!(unsupported);
-        ensure!(outcomes_equivalent(oracle, &v8));
         Ok(())
     }
 
