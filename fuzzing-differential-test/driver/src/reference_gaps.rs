@@ -13,6 +13,7 @@ const WEBASSEMBLY_GLOBAL_ACCESS: &str = "WebAssembly";
 const V8_TYPED_ARRAY_ALIGNMENT_ERROR: &str = "should be a multiple of";
 const V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR: &str =
     "SharedArrayBuffer subclass returned this from species constructor";
+const DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD: &str = "toTemporalInstant";
 const ENGINE262_DECIMAL_ESCAPE_CAPTURE_GROUP_ERROR: &str = "capture groups";
 const ENGINE262_INVALID_IDENTITY_ESCAPE_ERROR: &str = "Invalid identity escape";
 const ENGINE262_UNEXPECTED_TOKEN_ERROR: &str = "Unexpected token";
@@ -70,6 +71,7 @@ pub fn is_engine262_unsupported(
         || is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
         || is_engine262_missing_annex_b_regexp_compile_method(source, velum, engine262)
         || is_reference_unsupported_immutable_array_buffer_method(source, velum, engine262, v8)
+        || is_reference_unsupported_date_temporal_instant_method(source, velum, engine262, v8)
         || is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || is_webassembly_host_api_gap(source, velum, engine262, v8)
         || is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
@@ -107,6 +109,7 @@ pub fn correctness_oracle<'a>(
         || source_contains_resource_management_symbol_access(source)
             && references_complete_equivalently(engine262, v8)
         || is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
+        || is_reference_missing_date_temporal_instant_method(source, engine262, v8)
         || is_v8_fallback_unavailable(v8)
     {
         return None;
@@ -370,6 +373,16 @@ fn is_reference_unsupported_immutable_array_buffer_method(
         && is_reference_missing_immutable_array_buffer_method(source, engine262, v8)
 }
 
+fn is_reference_unsupported_date_temporal_instant_method(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    !outcomes_equivalent(velum, engine262)
+        && is_reference_missing_date_temporal_instant_method(source, engine262, v8)
+}
+
 fn is_reference_missing_immutable_array_buffer_method(
     source: &str,
     engine262: &EngineOutcome,
@@ -381,6 +394,17 @@ fn is_reference_missing_immutable_array_buffer_method(
         && IMMUTABLE_ARRAY_BUFFER_METHODS
             .iter()
             .any(|method| source_contains_method_reference(source, method))
+}
+
+fn is_reference_missing_date_temporal_instant_method(
+    source: &str,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_method_reference(source, DATE_PROTOTYPE_TO_TEMPORAL_INSTANT_METHOD)
+        && references_complete_equivalently(engine262, v8)
+        && engine262.status == OutcomeStatus::JsError
+        && engine262.error_name.as_deref() == Some("TypeError")
 }
 
 fn is_engine262_locale_validation_gap(

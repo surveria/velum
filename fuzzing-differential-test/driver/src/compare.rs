@@ -31,6 +31,7 @@ const LEXER_ERROR_PREFIX: &str = "lexer error";
 const PARSER_ERROR_PREFIX: &str = "parser error";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
+const VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT: &str = "RegExp compile error InstructionLimit";
 const VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT: &str = "exceeded supported range";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -266,6 +267,9 @@ fn is_velum_resource_limit(velum: &EngineOutcome) -> bool {
     };
     if velum.error_name.as_deref() == Some("Error") {
         return message.starts_with(VELUM_RESOURCE_LIMIT_PREFIX);
+    }
+    if velum.error_name.as_deref() == Some(SYNTAX_ERROR_NAME) {
+        return message.contains(VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT);
     }
     velum.error_name.as_deref() == Some("RangeError")
         && message.contains(VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT)
@@ -587,6 +591,33 @@ mod tests {
         let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
         let findings = findings("for (;;) {}", &velum, &engine262, &v8, None, config());
+        ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
+        ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
+        Ok(())
+    }
+
+    #[test]
+    fn velum_regexp_instruction_limit_is_not_a_correctness_mismatch() -> anyhow::Result<()> {
+        let velum = outcome(
+            OutcomeStatus::JsError,
+            1,
+            "",
+            Some("SyntaxError".to_owned()),
+            Some(
+                "lexer error at 66: invalid regular expression pattern: RegExp compile error InstructionLimit { limit: 262144 } at UTF-16 offset 0"
+                    .to_owned(),
+            ),
+        );
+        let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+        let findings = findings(
+            "const value = /(?:a{5,1000000}){3,1000000}/gui;",
+            &velum,
+            &engine262,
+            &v8,
+            None,
+            config(),
+        );
         ensure!(findings.contains(&CaseFinding::VelumResourceLimit));
         ensure!(!findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())

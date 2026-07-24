@@ -117,6 +117,18 @@ fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::
 }
 
 #[test]
+fn missing_date_temporal_instant_reference_method_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: v12.toTemporalInstant is not a function");
+    let v8 = type_error("v12.toTemporalInstant is not a function");
+    let source = "const v12 = new Date(); v12.toTemporalInstant();";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn engine262_locale_validation_gap_falls_back_to_v8() -> anyhow::Result<()> {
     let velum = outcome(
         OutcomeStatus::JsError,
