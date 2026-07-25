@@ -78,6 +78,23 @@ fn missing_resource_management_v8_fallback_globals_disable_oracle() -> anyhow::R
 }
 
 #[test]
+fn missing_engine262_annex_b_escape_globals_fall_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    for global in ["escape", "unescape"] {
+        let engine262 = reference_error(&format!("ReferenceError: \"{global}\" is not defined"));
+        let source = format!("switch (DataView) {{ case {global}: break; }}");
+        let unsupported = is_engine262_unsupported(&source, &velum, &engine262, &v8);
+        let Some(oracle) = correctness_oracle(&source, &engine262, &v8, unsupported) else {
+            anyhow::bail!("expected V8 fallback oracle for {global}");
+        };
+        ensure!(unsupported);
+        ensure!(outcomes_equivalent(oracle, &v8));
+    }
+    Ok(())
+}
+
+#[test]
 fn annex_b_string_legacy_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: (\"\").bold is not a function");
@@ -317,6 +334,22 @@ fn webassembly_host_api_gap_disables_oracle() -> anyhow::Result<()> {
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
     let v8 = type_error("WebAssembly.Suspending is not a constructor");
     let source = "new SharedArrayBuffer(8); WebAssembly.Suspending;";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn missing_v8_array_buffer_transfer_to_fixed_length_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+    let v8 = type_error("v16.transferToFixedLength is not a function");
+    let source = "\
+        const v4 = new SharedArrayBuffer(67, { maxByteLength: 257 });\
+        const v16 = new ArrayBuffer(2886, {});\
+        v16.transferToFixedLength(2886);\
+    ";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);
     ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
@@ -637,6 +670,27 @@ fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result
 }
 
 #[test]
+fn engine262_super_property_syntax_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = syntax_error("super property access is only valid inside methods");
+    let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = syntax_error("'super' keyword unexpected here");
+    let source = "\
+        const v36 = {\
+            67(a19) {\
+                function* f30(a31 = super[a19]) { yield 1; }\
+            },\
+        };\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(unsupported);
+    ensure!(outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
 fn unstable_fuzzilli_introspection_disables_oracle_when_references_disagree()
 -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "EXPLORE_ACTION: left\n", None, None);
@@ -692,6 +746,16 @@ fn range_error(message: &str) -> crate::compare::EngineOutcome {
         1,
         "",
         Some("RangeError".to_owned()),
+        Some(message.to_owned()),
+    )
+}
+
+fn syntax_error(message: &str) -> crate::compare::EngineOutcome {
+    outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
         Some(message.to_owned()),
     )
 }
