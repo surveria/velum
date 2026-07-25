@@ -10,6 +10,8 @@ pub(crate) mod reference_gap_syntax;
 pub(crate) mod reference_gap_v8;
 pub(crate) mod reference_gaps;
 #[cfg(test)]
+mod reference_gaps_additional_tests;
+#[cfg(test)]
 mod reference_gaps_tests;
 pub mod report;
 pub mod reprl;
