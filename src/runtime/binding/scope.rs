@@ -687,11 +687,11 @@ impl BindingCell {
         if matches!(binding.state, BindingState::Deleted) {
             return Err(reference_error_undefined(name));
         }
-        if !binding.mutable {
-            return Err(Error::runtime(format!("assignment to constant '{name}'")));
-        }
         if matches!(binding.state, BindingState::Uninitialized) {
             return Err(reference_error_uninitialized(name));
+        }
+        if !binding.mutable {
+            return Err(Error::runtime(format!("assignment to constant '{name}'")));
         }
         binding.state = BindingState::Initialized(value);
         drop(binding);
@@ -708,6 +708,9 @@ impl BindingCell {
         if matches!(binding.state, BindingState::Deleted) {
             return Err(reference_error_undefined(name));
         }
+        if matches!(binding.state, BindingState::Uninitialized) {
+            return Err(reference_error_uninitialized(name));
+        }
         if !binding.mutable {
             if binding.immutable_assignment == ImmutableAssignment::ThrowIfStrict && !strict {
                 return Ok(());
@@ -715,9 +718,6 @@ impl BindingCell {
             return Err(Error::type_error(format!(
                 "assignment to constant '{name}'"
             )));
-        }
-        if matches!(binding.state, BindingState::Uninitialized) {
-            return Err(reference_error_uninitialized(name));
         }
         binding.state = BindingState::Initialized(value);
         drop(binding);

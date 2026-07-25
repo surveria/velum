@@ -95,6 +95,36 @@ fn missing_engine262_date_get_year_falls_back_to_v8() -> anyhow::Result<()> {
 }
 
 #[test]
+fn engine262_date_to_gmt_string_receiver_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: Cannot convert undefined to object");
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "const date = new Date(); Date.prototype.toGMTString.call(date);";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(crate::reference_gaps::outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
+fn engine262_string_locale_case_validation_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = range_error("Intl.Locale tag or option is invalid");
+    let engine262 = outcome(OutcomeStatus::Ok, 0, "", None, None);
+    let v8 = range_error("Incorrect locale information provided");
+    let source = r#"const result = "text".toLocaleUpperCase("pt_CV");"#;
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(crate::reference_gaps::outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
 fn missing_v8_array_from_async_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");

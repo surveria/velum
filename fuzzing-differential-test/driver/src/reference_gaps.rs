@@ -1,6 +1,7 @@
 use crate::compare::EngineOutcome;
 use crate::reference_gap_date as date;
 use crate::reference_gap_globals as globals;
+use crate::reference_gap_locale as locale;
 use crate::reference_gap_predicates as predicates;
 use crate::reference_gap_rab as rab;
 use crate::reference_gap_syntax as syntax_gaps;
@@ -40,10 +41,12 @@ pub fn is_engine262_unsupported(
             source, engine262, v8,
         )
         || date::is_engine262_missing_legacy_date_method(source, velum, engine262, v8)
+        || date::is_engine262_legacy_date_call_gap(source, velum, engine262, v8)
         || predicates::is_reference_unsupported_date_temporal_instant_method(
             source, velum, engine262, v8,
         )
         || predicates::is_engine262_locale_validation_gap(source, velum, engine262, v8)
+        || locale::is_engine262_string_case_locale_validation_gap(source, velum, engine262, v8)
         || predicates::is_engine262_template_literal_octal_escape_gap(source, velum, engine262, v8)
         || rab::is_locale_validation_gap_with_v8_alignment(source, velum, v8)
         || predicates::is_webassembly_host_api_gap(source, velum, engine262, v8)
