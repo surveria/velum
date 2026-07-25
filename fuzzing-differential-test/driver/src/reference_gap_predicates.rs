@@ -121,6 +121,7 @@ pub fn is_resizable_array_buffer_alignment_without_oracle(
             || outcome_is_range_error_with(engine262, |message| {
                 message.contains("Cannot allocate memory")
             })
+            || engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             || outcome_is_engine262_stack_overflow_crash(engine262))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }

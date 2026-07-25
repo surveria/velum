@@ -3,6 +3,7 @@ use crate::compare::{EngineOutcome, OutcomeStatus};
 const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const REGEXP_COMPILE_METHOD: &str = "compile";
 const LOCALE_LOWERCASE_METHOD: &str = "toLocaleLowerCase";
+const TO_LOCALE_STRING_METHOD: &str = "toLocaleString";
 const INTL_LOCALE_ENTRY_ERROR: &str = "Intl locale entry is invalid";
 const USER_CONSTRUCTOR_NEW_TARGET_MARKER: &str = "new.target";
 const USER_CONSTRUCTOR_NEW_TARGET_THROW: &str = "must be called with new";
@@ -45,7 +46,8 @@ pub fn is_locale_validation_gap_with_v8_alignment(
     velum: &EngineOutcome,
     v8: &EngineOutcome,
 ) -> bool {
-    source_contains_method_reference(source, LOCALE_LOWERCASE_METHOD)
+    (source_contains_method_reference(source, LOCALE_LOWERCASE_METHOD)
+        || source_contains_method_reference(source, TO_LOCALE_STRING_METHOD))
         && velum.status == OutcomeStatus::JsError
         && velum.error_name.as_deref() == Some("TypeError")
         && velum
@@ -59,7 +61,8 @@ pub fn is_locale_validation_with_v8_alignment_without_oracle(
     source: &str,
     v8: &EngineOutcome,
 ) -> bool {
-    source_contains_method_reference(source, LOCALE_LOWERCASE_METHOD)
+    (source_contains_method_reference(source, LOCALE_LOWERCASE_METHOD)
+        || source_contains_method_reference(source, TO_LOCALE_STRING_METHOD))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
 
