@@ -1,34 +1,40 @@
 use crate::compare::{EngineOutcome, OutcomeStatus};
 
-pub fn is_engine262_missing_unescape_global(
+const ANNEX_B_ESCAPE_GLOBALS: [&str; 2] = ["escape", "unescape"];
+
+pub fn is_engine262_missing_annex_b_escape_global(
     source: &str,
     engine262: &EngineOutcome,
     v8: &EngineOutcome,
 ) -> bool {
-    source_contains_word(source, "unescape")
-        && is_missing_engine262_unescape(engine262)
-        && !is_missing_v8_unescape(v8)
+    ANNEX_B_ESCAPE_GLOBALS.iter().any(|global| {
+        source_contains_word(source, global)
+            && is_missing_engine262_global(engine262, global)
+            && !is_missing_v8_global(v8, global)
+    })
 }
 
-fn is_missing_engine262_unescape(engine262: &EngineOutcome) -> bool {
+fn is_missing_engine262_global(engine262: &EngineOutcome, global: &str) -> bool {
     engine262.status == OutcomeStatus::JsError
         && engine262.error_name.as_deref() == Some("ReferenceError")
         && engine262
             .error_message
             .as_deref()
-            .is_some_and(is_missing_unescape_message)
+            .is_some_and(|message| is_missing_global_message(message, global))
 }
 
-fn is_missing_v8_unescape(v8: &EngineOutcome) -> bool {
+fn is_missing_v8_global(v8: &EngineOutcome, global: &str) -> bool {
     v8.status == OutcomeStatus::JsError
         && v8.error_name.as_deref() == Some("ReferenceError")
-        && v8.error_message.as_deref().is_some_and(|message| {
-            message.contains("unescape is not defined") || message.contains("\"unescape\" is not defined")
-        })
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(|message| is_missing_global_message(message, global))
 }
 
-fn is_missing_unescape_message(message: &str) -> bool {
-    message.contains("\"unescape\" is not defined") || message.contains("unescape is not defined")
+fn is_missing_global_message(message: &str, global: &str) -> bool {
+    message.contains(&format!("\"{global}\" is not defined"))
+        || message.contains(&format!("{global} is not defined"))
 }
 
 fn source_contains_word(source: &str, word: &str) -> bool {

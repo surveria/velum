@@ -2,6 +2,7 @@ use crate::compare::EngineOutcome;
 use crate::reference_gap_globals as globals;
 use crate::reference_gap_rab as rab;
 use crate::reference_gap_predicates as predicates;
+use crate::reference_gap_syntax as syntax_gaps;
 use crate::reference_gap_v8 as v8_gaps;
 
 pub use crate::reference_gap_predicates::outcomes_equivalent;
@@ -15,8 +16,9 @@ pub fn is_engine262_unsupported(
     v8: &EngineOutcome,
 ) -> bool {
     predicates::is_engine262_missing_global(engine262)
-        || globals::is_engine262_missing_unescape_global(source, engine262, v8)
+        || globals::is_engine262_missing_annex_b_escape_global(source, engine262, v8)
         || predicates::is_resizable_array_buffer_reference_divergence(source, velum, engine262, v8)
+        || syntax_gaps::is_engine262_super_property_syntax_gap(source, velum, engine262, v8)
         || predicates::is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || predicates::is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)
         || predicates::is_engine262_missing_annex_b_string_legacy_method(source, velum, engine262, v8)
@@ -101,6 +103,7 @@ pub fn correctness_oracle<'a>(
         )
         || predicates::is_reference_missing_date_temporal_instant_method(source, engine262, v8)
         || v8_gaps::is_v8_missing_map_group_by(v8)
+        || v8_gaps::is_v8_missing_array_buffer_transfer_to_fixed_length(source, v8)
         || predicates::is_v8_fallback_unavailable(v8)
     {
         return None;
