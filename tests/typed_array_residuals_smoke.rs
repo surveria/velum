@@ -75,9 +75,10 @@ fn variable_length_views_control_prevent_extensions_and_integrity() -> TestResul
         let trackingPrevented = Reflect.preventExtensions(rabTracking);
         let gsabFixedPrevented = Reflect.preventExtensions(gsabFixed);
         let gsabTrackingPrevented = Reflect.preventExtensions(gsabTracking);
-        let rabSealed = new Int32Array(rab, 0, 0);
-        Object.seal(rabSealed);
-        let rabSealSucceeded = Object.isSealed(rabSealed);
+        let rabSealThrew = false;
+        try { Object.seal(new Int32Array(rab, 0, 0)); } catch (error) {
+            rabSealThrew = error instanceof TypeError;
+        }
         let gsabTrackingSealThrew = false;
         try { Object.seal(new Int32Array(gsab)); } catch (error) {
             gsabTrackingSealThrew = error instanceof TypeError;
@@ -85,8 +86,8 @@ fn variable_length_views_control_prevent_extensions_and_integrity() -> TestResul
         let gsabEmpty = new Int32Array(gsab, 0, 0);
         Object.seal(gsabEmpty);
 
-        rabPrevented && trackingPrevented && gsabFixedPrevented &&
-            gsabTrackingPrevented && rabSealSucceeded && gsabTrackingSealThrew &&
+        !rabPrevented && !trackingPrevented && gsabFixedPrevented &&
+            !gsabTrackingPrevented && rabSealThrew && gsabTrackingSealThrew &&
             Object.isSealed(gsabEmpty) ? 42 : 0
         ",
         &Value::Number(42.0),

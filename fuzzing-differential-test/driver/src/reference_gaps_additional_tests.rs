@@ -230,6 +230,39 @@ fn locale_to_locale_string_with_v8_alignment_disables_oracle() -> anyhow::Result
     Ok(())
 }
 
+#[test]
+fn gsab_length_tracking_prevent_extensions_disables_oracle() -> anyhow::Result<()> {
+    let velum = type_error("Object.preventExtensions trap returned falsy");
+    let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "\
+        const buffer = new SharedArrayBuffer(8, { maxByteLength: 1073741823 });\
+        const view = new Float32Array(buffer);\
+        Object.preventExtensions(view);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn gsab_prevent_extensions_with_engine262_regexp_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = type_error("Object.preventExtensions trap returned falsy");
+    let engine262 = js_error("SyntaxError", "SyntaxError: Expected a character but got ?");
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "\
+        const patterns = [/1(?!a)?a\\1/simd];\
+        const buffer = new SharedArrayBuffer(8, { maxByteLength: 1073741823 });\
+        const view = new Float32Array(buffer);\
+        Object.preventExtensions(view);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
 fn reference_error(message: &str) -> crate::compare::EngineOutcome {
     js_error("ReferenceError", message)
 }

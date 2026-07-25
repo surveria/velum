@@ -50,6 +50,7 @@ pub fn is_engine262_unsupported(
         || locale::is_engine262_locale_compare_validation_gap(source, velum, engine262, v8)
         || predicates::is_engine262_template_literal_octal_escape_gap(source, velum, engine262, v8)
         || rab::is_locale_validation_gap_with_v8_alignment(source, velum, v8)
+        || rab::is_gsab_length_tracking_prevent_extensions_without_oracle(source, engine262, v8)
         || predicates::is_webassembly_host_api_gap(source, velum, engine262, v8)
         || predicates::is_shared_array_buffer_alignment_without_oracle(source, engine262, v8)
         || predicates::is_resizable_array_buffer_alignment_without_oracle(source, engine262, v8)
@@ -125,6 +126,7 @@ pub fn correctness_oracle<'a>(
         )
         || rab::is_regexp_compile_with_v8_alignment_without_oracle(source, engine262, v8)
         || rab::is_locale_validation_with_v8_alignment_without_oracle(source, v8)
+        || rab::is_gsab_length_tracking_prevent_extensions_without_oracle(source, engine262, v8)
         || predicates::is_annex_b_string_legacy_with_unavailable_v8_fallback(source, engine262, v8)
         || predicates::is_shared_array_buffer_zero_length_slice_without_oracle(
             source, engine262, v8,
