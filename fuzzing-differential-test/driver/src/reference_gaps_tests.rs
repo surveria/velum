@@ -78,6 +78,21 @@ fn missing_resource_management_v8_fallback_globals_disable_oracle() -> anyhow::R
 }
 
 #[test]
+fn missing_engine262_unescape_global_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"unescape\" is not defined");
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "switch (DataView) { case unescape: break; }";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(unsupported);
+    ensure!(outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
 fn annex_b_string_legacy_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: (\"\").bold is not a function");

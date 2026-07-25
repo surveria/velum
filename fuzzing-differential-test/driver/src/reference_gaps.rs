@@ -1,4 +1,5 @@
 use crate::compare::EngineOutcome;
+use crate::reference_gap_globals as globals;
 use crate::reference_gap_rab as rab;
 use crate::reference_gap_predicates as predicates;
 use crate::reference_gap_v8 as v8_gaps;
@@ -14,6 +15,7 @@ pub fn is_engine262_unsupported(
     v8: &EngineOutcome,
 ) -> bool {
     predicates::is_engine262_missing_global(engine262)
+        || globals::is_engine262_missing_unescape_global(source, engine262, v8)
         || predicates::is_resizable_array_buffer_reference_divergence(source, velum, engine262, v8)
         || predicates::is_reference_unsupported_resource_management_syntax(source, engine262, v8)
         || predicates::is_reference_unsupported_resource_management_symbols(source, velum, engine262, v8)

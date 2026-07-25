@@ -74,3 +74,24 @@ fn exposes_resolved_options_and_supported_locales() -> TestResult {
         "#,
     )?)
 }
+
+#[test]
+fn rejects_non_object_options() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        let constructorRejected = false;
+        let supportedLocalesRejected = false;
+        try {
+            new Intl.Segmenter(Intl.Segmenter, 24021);
+        } catch (error) {
+            constructorRejected = error instanceof TypeError;
+        }
+        try {
+            Intl.Segmenter.supportedLocalesOf(["en"], 24021);
+        } catch (error) {
+            supportedLocalesRejected = error instanceof TypeError;
+        }
+        constructorRejected && supportedLocalesRejected
+        "#,
+    )?)
+}

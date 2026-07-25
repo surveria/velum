@@ -56,10 +56,10 @@ impl Context {
     pub(super) fn construct_intl_segmenter(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let locales = self.intl_locale_list(&requested)?;
-        let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
-        if matches!(options, Value::Null) {
-            return Err(Error::type_error("Intl.Segmenter options cannot be null"));
-        }
+        let options = Self::segmenter_options_argument(
+            args.as_slice().get(1).cloned().unwrap_or(Value::Undefined),
+            "Intl.Segmenter options must be an object",
+        )?;
         let _matcher = self.segmenter_option(
             &options,
             "localeMatcher",
@@ -123,10 +123,10 @@ impl Context {
     ) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let locales = self.intl_locale_list(&requested)?;
-        let options = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
-        if matches!(options, Value::Null) {
-            return Err(Error::type_error("Intl locale options cannot be null"));
-        }
+        let options = Self::segmenter_options_argument(
+            args.as_slice().get(1).cloned().unwrap_or(Value::Undefined),
+            "Intl locale options must be an object",
+        )?;
         let _matcher = self.segmenter_option(
             &options,
             "localeMatcher",
@@ -304,6 +304,13 @@ impl Context {
         Ok(text)
     }
 
+    fn segmenter_options_argument(value: Value, message: &str) -> Result<Value> {
+        if matches!(value, Value::Undefined) || is_object_value(&value) {
+            return Ok(value);
+        }
+        Err(Error::type_error(message))
+    }
+
     fn install_segmenter_static_method(&mut self, constructor: NativeFunctionId) -> Result<()> {
         let method = self.create_native_function(
             super::intl_kind(IntlFunctionKind::SegmenterSupportedLocalesOf),
@@ -439,6 +446,13 @@ impl Context {
         let function = self.create_native_function(super::intl_kind(kind), Value::Undefined)?;
         self.define_non_enumerable_object_property(prototype, name, function)
     }
+}
+
+const fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
+    )
 }
 
 const fn segmenter_locale_is_supported(locale: &str) -> bool {
