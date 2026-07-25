@@ -80,6 +80,21 @@ fn missing_engine262_date_set_year_falls_back_to_v8() -> anyhow::Result<()> {
 }
 
 #[test]
+fn missing_engine262_bracket_date_set_year_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: v1[\"setYear\"] is not a function");
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "const date = new Date(); date[\"setYear\"](158);";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(crate::reference_gaps::outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
 fn missing_engine262_date_get_year_falls_back_to_v8() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: v24.getYear is not a function");
@@ -115,6 +130,21 @@ fn engine262_string_locale_case_validation_gap_falls_back_to_v8() -> anyhow::Res
     let engine262 = outcome(OutcomeStatus::Ok, 0, "", None, None);
     let v8 = range_error("Incorrect locale information provided");
     let source = r#"const result = "text".toLocaleUpperCase("pt_CV");"#;
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(crate::reference_gaps::outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
+fn engine262_locale_compare_null_options_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = type_error("Intl.Collator options cannot be null");
+    let engine262 = outcome(OutcomeStatus::Ok, 0, "", None, None);
+    let v8 = type_error("String.prototype.localeCompare called on null or undefined");
+    let source = r#"const result = "67".localeCompare("1629585372", "NFC", null);"#;
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     ensure!(unsupported);
     let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {

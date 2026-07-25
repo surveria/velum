@@ -413,13 +413,6 @@ impl TypedArrayView {
         (self.byte_offset, self.length_tracking)
     }
 
-    pub(in crate::runtime) fn can_prevent_extensions(&self) -> bool {
-        if self.length_tracking {
-            return false;
-        }
-        self.buffer.is_shared() || !self.buffer.is_resizable()
-    }
-
     pub const fn buffer_object(&self) -> ObjectId {
         self.buffer_object
     }

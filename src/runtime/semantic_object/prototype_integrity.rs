@@ -131,13 +131,6 @@ impl Context {
                 self.proxy_prevent_extensions(*id)?
             }
             Value::Object(id) => {
-                if self
-                    .objects
-                    .typed_array(*id)?
-                    .is_some_and(|view| !view.can_prevent_extensions())
-                {
-                    return Ok(Some(false));
-                }
                 self.objects.prevent_extensions(*id)?;
                 true
             }

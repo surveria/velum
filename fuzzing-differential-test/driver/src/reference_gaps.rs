@@ -47,6 +47,7 @@ pub fn is_engine262_unsupported(
         )
         || predicates::is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || locale::is_engine262_string_case_locale_validation_gap(source, velum, engine262, v8)
+        || locale::is_engine262_locale_compare_validation_gap(source, velum, engine262, v8)
         || predicates::is_engine262_template_literal_octal_escape_gap(source, velum, engine262, v8)
         || rab::is_locale_validation_gap_with_v8_alignment(source, velum, v8)
         || predicates::is_webassembly_host_api_gap(source, velum, engine262, v8)
