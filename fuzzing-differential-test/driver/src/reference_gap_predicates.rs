@@ -503,7 +503,10 @@ pub fn is_engine262_locale_validation_gap(
         && outcomes_equivalent(velum, v8)
         && !outcomes_equivalent(velum, engine262)
         && velum.status == OutcomeStatus::JsError
-        && velum.error_name.as_deref() == Some("RangeError")
+        && velum
+            .error_name
+            .as_deref()
+            .is_some_and(|name| matches!(name, "RangeError" | "TypeError"))
 }
 
 fn source_contains_locale_sensitive_call(source: &str) -> bool {
@@ -512,6 +515,46 @@ fn source_contains_locale_sensitive_call(source: &str) -> bool {
         || source_contains_method_reference(source, "toLocaleString")
         || source_contains_method_reference(source, "toLocaleDateString")
         || source_contains_method_reference(source, "toLocaleTimeString")
+}
+
+pub fn is_engine262_template_literal_octal_escape_gap(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_template_octal_escape(source)
+        && engine262.status == OutcomeStatus::Ok
+        && velum.status == OutcomeStatus::JsError
+        && velum.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && outcomes_equivalent(velum, v8)
+}
+
+fn source_contains_template_octal_escape(source: &str) -> bool {
+    let mut in_template = false;
+    let mut escaped = false;
+    for value in source.chars() {
+        if !in_template {
+            if value == '`' {
+                in_template = true;
+                escaped = false;
+            }
+            continue;
+        }
+        if escaped {
+            if value.is_ascii_digit() {
+                return true;
+            }
+            escaped = false;
+            continue;
+        }
+        if value == '\\' {
+            escaped = true;
+        } else if value == '`' {
+            in_template = false;
+        }
+    }
+    false
 }
 
 fn source_contains_method_reference(source: &str, method: &str) -> bool {
@@ -653,6 +696,12 @@ pub fn is_engine262_missing_global_message(message: &str) -> bool {
         || message.contains("SharedArrayBuffer is not defined")
         || message.contains("\"Temporal\" is not defined")
         || message.contains("Temporal is not defined")
+        || message.contains("\"DisposableStack\" is not defined")
+        || message.contains("DisposableStack is not defined")
+        || message.contains("\"AsyncDisposableStack\" is not defined")
+        || message.contains("AsyncDisposableStack is not defined")
+        || message.contains("\"SuppressedError\" is not defined")
+        || message.contains("SuppressedError is not defined")
 }
 
 pub fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
