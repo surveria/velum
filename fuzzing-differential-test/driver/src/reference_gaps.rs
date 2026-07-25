@@ -104,6 +104,7 @@ pub fn correctness_oracle<'a>(
         || predicates::is_reference_missing_date_temporal_instant_method(source, engine262, v8)
         || v8_gaps::is_v8_missing_map_group_by(v8)
         || v8_gaps::is_v8_missing_map_get_or_insert(source, v8)
+        || v8_gaps::is_v8_missing_date_to_temporal_instant(source, v8)
         || v8_gaps::is_v8_missing_array_buffer_transfer(source, v8)
         || v8_gaps::is_v8_missing_array_buffer_transfer_to_fixed_length(source, v8)
         || predicates::is_v8_fallback_unavailable(v8)
