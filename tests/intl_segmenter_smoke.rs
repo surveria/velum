@@ -80,18 +80,39 @@ fn rejects_non_object_options() -> TestResult {
     ensure_true(&eval(
         r#"
         let constructorRejected = false;
-        let supportedLocalesRejected = false;
         try {
             new Intl.Segmenter(Intl.Segmenter, 24021);
         } catch (error) {
             constructorRejected = error instanceof TypeError;
         }
+        let reads = [];
+        Object.defineProperty(Object.prototype, "localeMatcher", {
+            configurable: true,
+            get() {
+                reads.push("localeMatcher");
+                return "best fit";
+            }
+        });
+        const supported = Intl.Segmenter.supportedLocalesOf(["en"], 24021);
+        delete Object.prototype.localeMatcher;
+        constructorRejected &&
+            supported.join() === "en" &&
+            reads.join() === "localeMatcher"
+        "#,
+    )?)
+}
+
+#[test]
+fn supported_locales_options_null_is_rejected() -> TestResult {
+    ensure_true(&eval(
+        r#"
+        let rejected = false;
         try {
-            Intl.Segmenter.supportedLocalesOf(["en"], 24021);
+            Intl.Segmenter.supportedLocalesOf(["en"], null);
         } catch (error) {
-            supportedLocalesRejected = error instanceof TypeError;
+            rejected = error instanceof TypeError;
         }
-        constructorRejected && supportedLocalesRejected
+        rejected
         "#,
     )?)
 }

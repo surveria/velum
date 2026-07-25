@@ -123,10 +123,12 @@ impl Context {
     ) -> Result<Value> {
         let requested = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let locales = self.intl_locale_list(&requested)?;
-        let options = Self::segmenter_options_argument(
-            args.as_slice().get(1).cloned().unwrap_or(Value::Undefined),
-            "Intl locale options must be an object",
-        )?;
+        let options_source = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        let options = if matches!(options_source, Value::Undefined) {
+            Value::Undefined
+        } else {
+            self.object_to_object(&options_source)?
+        };
         let _matcher = self.segmenter_option(
             &options,
             "localeMatcher",
