@@ -65,6 +65,21 @@ fn missing_v8_date_to_temporal_instant_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
+fn missing_engine262_date_set_year_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: v2.setYear is not a function");
+    let v8 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let source = "const date = new Date(); date.setYear(38016);";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(crate::reference_gaps::outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
 fn native_typed_array_throw_without_oracle_is_ignored() -> anyhow::Result<()> {
     let velum = js_error("Error", "function()");
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
