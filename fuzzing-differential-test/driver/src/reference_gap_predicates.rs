@@ -121,6 +121,7 @@ pub fn is_resizable_array_buffer_alignment_without_oracle(
             || outcome_is_range_error_with(engine262, |message| {
                 message.contains("Cannot allocate memory")
             })
+            || engine262.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
             || outcome_is_engine262_stack_overflow_crash(engine262))
         && outcome_is_range_error_with(v8, is_v8_typed_array_alignment_error)
 }
@@ -328,10 +329,12 @@ pub fn is_native_function_throw_stringification_without_oracle(
     engine262: &EngineOutcome,
     v8: &EngineOutcome,
 ) -> bool {
-    source.contains("throw DataView;")
-        && is_engine262_missing_global(engine262)
+    is_engine262_missing_global(engine262)
         && v8.status == OutcomeStatus::JsError
-        && v8.error_name.as_deref() == Some("DataView")
+        && v8
+            .error_name
+            .as_deref()
+            .is_some_and(|constructor| source_throws_native_constructor(source, constructor))
 }
 
 pub fn is_webassembly_host_api_gap(
@@ -708,6 +711,7 @@ pub fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {
     is_v8_missing_global(v8)
         || is_v8_missing_typed_array_base64_or_hex(v8)
         || is_v8_missing_math_f16round(v8)
+        || is_v8_missing_math_sum_precise(v8)
         || is_v8_missing_set_composition(v8)
 }
 
@@ -757,6 +761,15 @@ fn is_v8_missing_math_f16round(v8: &EngineOutcome) -> bool {
             .is_some_and(|message| message.contains("Math.f16round is not a function"))
 }
 
+fn is_v8_missing_math_sum_precise(v8: &EngineOutcome) -> bool {
+    v8.status == OutcomeStatus::JsError
+        && v8.error_name.as_deref() == Some("TypeError")
+        && v8
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains("Math.sumPrecise is not a function"))
+}
+
 fn is_v8_missing_set_composition(v8: &EngineOutcome) -> bool {
     v8.status == OutcomeStatus::JsError
         && v8.error_name.as_deref() == Some("TypeError")
@@ -765,4 +778,22 @@ fn is_v8_missing_set_composition(v8: &EngineOutcome) -> bool {
                 .iter()
                 .any(|method| message.contains(&format!("{method} is not a function")))
         })
+}
+
+fn source_throws_native_constructor(source: &str, constructor: &str) -> bool {
+    match constructor {
+        "DataView" => source.contains("throw DataView;"),
+        "Int8Array" => source.contains("throw Int8Array;"),
+        "Uint8Array" => source.contains("throw Uint8Array;"),
+        "Uint8ClampedArray" => source.contains("throw Uint8ClampedArray;"),
+        "Int16Array" => source.contains("throw Int16Array;"),
+        "Uint16Array" => source.contains("throw Uint16Array;"),
+        "Int32Array" => source.contains("throw Int32Array;"),
+        "Uint32Array" => source.contains("throw Uint32Array;"),
+        "BigInt64Array" => source.contains("throw BigInt64Array;"),
+        "BigUint64Array" => source.contains("throw BigUint64Array;"),
+        "Float32Array" => source.contains("throw Float32Array;"),
+        "Float64Array" => source.contains("throw Float64Array;"),
+        _ => false,
+    }
 }

@@ -239,6 +239,33 @@ fn supports_extended_compound_assignment_operators() -> TestResult {
     )
 }
 
+#[test]
+fn sloppy_primitive_numeric_compounds_ignore_rejected_property_writes() -> TestResult {
+    ensure_source_value(
+        r#"
+        let text = "x";
+        let shifted = text.a <<= 1;
+        let powered = text.b **= 2;
+        let strictThrew = false;
+        try {
+            (function () {
+                "use strict";
+                let strictText = "x";
+                strictText.a <<= 1;
+            })();
+        } catch (error) {
+            strictThrew = error instanceof TypeError;
+        }
+        shifted === 0 &&
+            Number.isNaN(powered) &&
+            text.a === undefined &&
+            text.b === undefined &&
+            strictThrew
+        "#,
+        &Value::Bool(true),
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
