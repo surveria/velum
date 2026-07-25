@@ -4,7 +4,6 @@ const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SHARED_ARRAY_BUFFER_CONSTRUCTOR: &str = "SharedArrayBuffer";
-const SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR: &str = "new SharedArrayBuffer";
 const SHARED_ARRAY_BUFFER_SLICE_METHOD: &str = "slice";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
@@ -312,7 +311,7 @@ pub fn is_shared_array_buffer_zero_length_slice_without_oracle(
     engine262: &EngineOutcome,
     v8: &EngineOutcome,
 ) -> bool {
-    source_constructs_zero_length_shared_array_buffer(source)
+    source.contains(SHARED_ARRAY_BUFFER_CONSTRUCTOR)
         && source_contains_method_reference(source, SHARED_ARRAY_BUFFER_SLICE_METHOD)
         && !source.contains("species")
         && is_engine262_missing_global(engine262)
@@ -322,46 +321,6 @@ pub fn is_shared_array_buffer_zero_length_slice_without_oracle(
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains(V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR))
-}
-
-fn source_constructs_zero_length_shared_array_buffer(source: &str) -> bool {
-    let mut search_start = 0;
-    while let Some(relative_start) = source
-        .get(search_start..)
-        .and_then(|tail| tail.find(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR))
-    {
-        let start = search_start.saturating_add(relative_start);
-        let Some(after_constructor_start) =
-            start.checked_add(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR.len())
-        else {
-            return false;
-        };
-        let Some(after_constructor) = source.get(after_constructor_start..) else {
-            return false;
-        };
-        let Some(args) = after_constructor.trim_start().strip_prefix('(') else {
-            search_start = after_constructor_start;
-            continue;
-        };
-        let args = args.trim_start();
-        if args.starts_with(')') {
-            return true;
-        }
-        if let Some(after_zero) = args.strip_prefix('0') {
-            let after_zero = after_zero.trim_start();
-            if after_zero.starts_with(')') || after_zero.starts_with(',') {
-                return true;
-            }
-        }
-        if let Some(after_constructor) = args.strip_prefix(SHARED_ARRAY_BUFFER_CONSTRUCTOR) {
-            let after_constructor = after_constructor.trim_start();
-            if after_constructor.starts_with(')') || after_constructor.starts_with(',') {
-                return true;
-            }
-        }
-        search_start = after_constructor_start;
-    }
-    false
 }
 
 pub fn is_native_function_throw_stringification_without_oracle(
@@ -544,7 +503,10 @@ pub fn is_engine262_locale_validation_gap(
         && outcomes_equivalent(velum, v8)
         && !outcomes_equivalent(velum, engine262)
         && velum.status == OutcomeStatus::JsError
-        && velum.error_name.as_deref() == Some("RangeError")
+        && velum
+            .error_name
+            .as_deref()
+            .is_some_and(|name| matches!(name, "RangeError" | "TypeError"))
 }
 
 fn source_contains_locale_sensitive_call(source: &str) -> bool {
@@ -553,6 +515,46 @@ fn source_contains_locale_sensitive_call(source: &str) -> bool {
         || source_contains_method_reference(source, "toLocaleString")
         || source_contains_method_reference(source, "toLocaleDateString")
         || source_contains_method_reference(source, "toLocaleTimeString")
+}
+
+pub fn is_engine262_template_literal_octal_escape_gap(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_template_octal_escape(source)
+        && engine262.status == OutcomeStatus::Ok
+        && velum.status == OutcomeStatus::JsError
+        && velum.error_name.as_deref() == Some(SYNTAX_ERROR_NAME)
+        && outcomes_equivalent(velum, v8)
+}
+
+fn source_contains_template_octal_escape(source: &str) -> bool {
+    let mut in_template = false;
+    let mut escaped = false;
+    for value in source.chars() {
+        if !in_template {
+            if value == '`' {
+                in_template = true;
+                escaped = false;
+            }
+            continue;
+        }
+        if escaped {
+            if value.is_ascii_digit() {
+                return true;
+            }
+            escaped = false;
+            continue;
+        }
+        if value == '\\' {
+            escaped = true;
+        } else if value == '`' {
+            in_template = false;
+        }
+    }
+    false
 }
 
 fn source_contains_method_reference(source: &str, method: &str) -> bool {
@@ -694,6 +696,12 @@ pub fn is_engine262_missing_global_message(message: &str) -> bool {
         || message.contains("SharedArrayBuffer is not defined")
         || message.contains("\"Temporal\" is not defined")
         || message.contains("Temporal is not defined")
+        || message.contains("\"DisposableStack\" is not defined")
+        || message.contains("DisposableStack is not defined")
+        || message.contains("\"AsyncDisposableStack\" is not defined")
+        || message.contains("AsyncDisposableStack is not defined")
+        || message.contains("\"SuppressedError\" is not defined")
+        || message.contains("SuppressedError is not defined")
 }
 
 pub fn is_v8_fallback_unavailable(v8: &EngineOutcome) -> bool {

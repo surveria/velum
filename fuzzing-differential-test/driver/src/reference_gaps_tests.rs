@@ -53,6 +53,31 @@ fn missing_math_f16round_v8_fallback_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
+fn missing_resource_management_v8_fallback_globals_disable_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    for (global, engine_message, v8_message) in [
+        (
+            "DisposableStack",
+            "ReferenceError: \"DisposableStack\" is not defined",
+            "DisposableStack is not defined",
+        ),
+        (
+            "SuppressedError",
+            "ReferenceError: \"SuppressedError\" is not defined",
+            "SuppressedError is not defined",
+        ),
+    ] {
+        let source = format!("const value = {global};");
+        let engine262 = reference_error(engine_message);
+        let v8 = reference_error(v8_message);
+        let unsupported = is_engine262_unsupported(&source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(&source, &engine262, &v8, unsupported).is_none());
+    }
+    Ok(())
+}
+
+#[test]
 fn annex_b_string_legacy_engine262_gap_falls_back_to_v8() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error("TypeError: (\"\").bold is not a function");
@@ -202,6 +227,48 @@ fn engine262_locale_validation_gap_falls_back_to_v8() -> anyhow::Result<()> {
         Some("Incorrect locale information provided".to_owned()),
     );
     let source = "(5).toLocaleString(\"o\")";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(unsupported);
+    ensure!(outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
+fn engine262_locale_type_error_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = type_error("Intl locale entry is invalid");
+    let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = type_error("Language ID should be string or object.");
+    let source = "new Date().toLocaleDateString([-1], [])";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
+        anyhow::bail!("expected V8 fallback oracle");
+    };
+    ensure!(unsupported);
+    ensure!(outcomes_equivalent(oracle, &v8));
+    Ok(())
+}
+
+#[test]
+fn engine262_template_octal_escape_gap_falls_back_to_v8() -> anyhow::Result<()> {
+    let velum = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("invalid escape sequence in untagged template literal".to_owned()),
+    );
+    let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("SyntaxError".to_owned()),
+        Some("Octal escape sequences are not allowed in template strings.".to_owned()),
+    );
+    let source = "`const value = /\\cA\\1112/dg;`";
     let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
     let Some(oracle) = correctness_oracle(source, &engine262, &v8, unsupported) else {
         anyhow::bail!("expected V8 fallback oracle");
@@ -558,10 +625,14 @@ fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
     let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-    let source = "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);";
-    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-    ensure!(unsupported);
-    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    for source in [
+        "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);",
+        "const buffer = new SharedArrayBuffer(459); const empty = buffer.slice(459, 501); empty.slice(-9223372036854775807, -65536);",
+    ] {
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    }
     Ok(())
 }
 
