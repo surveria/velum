@@ -558,10 +558,14 @@ fn shared_array_buffer_zero_length_slice_gap_disables_oracle() -> anyhow::Result
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
     let v8 = type_error("SharedArrayBuffer subclass returned this from species constructor");
-    let source = "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);";
-    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
-    ensure!(unsupported);
-    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    for source in [
+        "const buffer = new SharedArrayBuffer(SharedArrayBuffer, SharedArrayBuffer); buffer.slice(buffer, buffer);",
+        "const buffer = new SharedArrayBuffer(459); const empty = buffer.slice(459, 501); empty.slice(-9223372036854775807, -65536);",
+    ] {
+        let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+        ensure!(unsupported);
+        ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    }
     Ok(())
 }
 

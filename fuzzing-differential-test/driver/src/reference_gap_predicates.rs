@@ -4,7 +4,6 @@ const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
 const SHARED_ARRAY_BUFFER_CONSTRUCTOR: &str = "SharedArrayBuffer";
-const SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR: &str = "new SharedArrayBuffer";
 const SHARED_ARRAY_BUFFER_SLICE_METHOD: &str = "slice";
 const SYMBOL_DISPOSE_ACCESS: &str = "Symbol.dispose";
 const SYMBOL_ASYNC_DISPOSE_ACCESS: &str = "Symbol.asyncDispose";
@@ -312,7 +311,7 @@ pub fn is_shared_array_buffer_zero_length_slice_without_oracle(
     engine262: &EngineOutcome,
     v8: &EngineOutcome,
 ) -> bool {
-    source_constructs_zero_length_shared_array_buffer(source)
+    source.contains(SHARED_ARRAY_BUFFER_CONSTRUCTOR)
         && source_contains_method_reference(source, SHARED_ARRAY_BUFFER_SLICE_METHOD)
         && !source.contains("species")
         && is_engine262_missing_global(engine262)
@@ -322,46 +321,6 @@ pub fn is_shared_array_buffer_zero_length_slice_without_oracle(
             .error_message
             .as_deref()
             .is_some_and(|message| message.contains(V8_SHARED_ARRAY_BUFFER_SAME_SPECIES_ERROR))
-}
-
-fn source_constructs_zero_length_shared_array_buffer(source: &str) -> bool {
-    let mut search_start = 0;
-    while let Some(relative_start) = source
-        .get(search_start..)
-        .and_then(|tail| tail.find(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR))
-    {
-        let start = search_start.saturating_add(relative_start);
-        let Some(after_constructor_start) =
-            start.checked_add(SHARED_ARRAY_BUFFER_NEW_CONSTRUCTOR.len())
-        else {
-            return false;
-        };
-        let Some(after_constructor) = source.get(after_constructor_start..) else {
-            return false;
-        };
-        let Some(args) = after_constructor.trim_start().strip_prefix('(') else {
-            search_start = after_constructor_start;
-            continue;
-        };
-        let args = args.trim_start();
-        if args.starts_with(')') {
-            return true;
-        }
-        if let Some(after_zero) = args.strip_prefix('0') {
-            let after_zero = after_zero.trim_start();
-            if after_zero.starts_with(')') || after_zero.starts_with(',') {
-                return true;
-            }
-        }
-        if let Some(after_constructor) = args.strip_prefix(SHARED_ARRAY_BUFFER_CONSTRUCTOR) {
-            let after_constructor = after_constructor.trim_start();
-            if after_constructor.starts_with(')') || after_constructor.starts_with(',') {
-                return true;
-            }
-        }
-        search_start = after_constructor_start;
-    }
-    false
 }
 
 pub fn is_native_function_throw_stringification_without_oracle(
