@@ -87,7 +87,39 @@ fn rejects_fixed_buffer_resize_before_new_length_coercion() -> TestResult {
             resizableCoercedLength = error instanceof RangeError && calls.join() === 'valueOf';
         }
 
-        fixedRejectedFirst && resizableCoercedLength ? 42 : 0
+        const detaching = new ArrayBuffer(64, { maxByteLength: 1024 });
+        let detachDuringCoercionCalled = false;
+        let detachDuringCoercionRejected = false;
+        try {
+            detaching.resize({
+                valueOf() {
+                    detaching.transfer();
+                    detachDuringCoercionCalled = true;
+                    return 0;
+                }
+            });
+        } catch (error) {
+            detachDuringCoercionRejected =
+                error instanceof TypeError && detachDuringCoercionCalled;
+        }
+
+        const alreadyDetached = new ArrayBuffer(64, { maxByteLength: 1024 });
+        alreadyDetached.transfer();
+        let alreadyDetachedCalled = false;
+        let alreadyDetachedRejected = false;
+        try {
+            alreadyDetached.resize({
+                valueOf() {
+                    alreadyDetachedCalled = true;
+                    return 0;
+                }
+            });
+        } catch (error) {
+            alreadyDetachedRejected = error instanceof TypeError && alreadyDetachedCalled;
+        }
+
+        fixedRejectedFirst && resizableCoercedLength &&
+            detachDuringCoercionRejected && alreadyDetachedRejected ? 42 : 0
         ",
     )?;
     ensure_value(&value, &Value::Number(42.0))

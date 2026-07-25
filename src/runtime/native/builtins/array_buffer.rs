@@ -125,14 +125,14 @@ impl Context {
     ) -> Result<Value> {
         let (id, buffer) = self.array_buffer_receiver(this_value)?;
         buffer.ensure_mutable()?;
-        if buffer.is_detached() {
-            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
-        }
         if !buffer.is_resizable() {
             return Err(Error::type_error(FIXED_BUFFER_ERROR));
         }
         let new_length =
             Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_LIMIT_ERROR)?;
+        if buffer.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
         self.objects.resize_array_buffer(id, new_length)?;
         Ok(Value::Undefined)
     }
