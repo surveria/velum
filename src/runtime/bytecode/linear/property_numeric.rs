@@ -31,7 +31,13 @@ impl Context {
         }
         let old_value = self.get_static_property_value(object, property, access)?;
         let value = self.eval_numeric_compound_value(op, &old_value, rhs)?;
-        self.set_static_property_value(object, property, access, value.clone())?;
+        self.set_bytecode_static_property_reference(
+            object,
+            property,
+            access,
+            value.clone(),
+            false,
+        )?;
         Ok(value)
     }
 

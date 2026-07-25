@@ -33,6 +33,22 @@ fn missing_v8_array_buffer_transfer_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
+fn missing_v8_map_get_or_insert_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+    let v8 = type_error("v1.getOrInsert is not a function");
+    let source = "\
+        const map = new Map();\
+        const shared = new SharedArrayBuffer(66, { maxByteLength: 536870889 });\
+        map.getOrInsert(66, -536870889);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn native_typed_array_throw_without_oracle_is_ignored() -> anyhow::Result<()> {
     let velum = js_error("Error", "function()");
     let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
