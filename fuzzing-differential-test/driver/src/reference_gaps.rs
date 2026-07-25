@@ -1,4 +1,5 @@
 use crate::compare::EngineOutcome;
+use crate::reference_gap_date as date;
 use crate::reference_gap_globals as globals;
 use crate::reference_gap_rab as rab;
 use crate::reference_gap_predicates as predicates;
@@ -30,6 +31,7 @@ pub fn is_engine262_unsupported(
         || predicates::is_immutable_array_buffer_method_with_v8_rab_alignment_without_oracle(
             source, engine262, v8,
         )
+        || date::is_engine262_missing_date_set_year(source, velum, engine262, v8)
         || predicates::is_reference_unsupported_date_temporal_instant_method(source, velum, engine262, v8)
         || predicates::is_engine262_locale_validation_gap(source, velum, engine262, v8)
         || predicates::is_engine262_template_literal_octal_escape_gap(source, velum, engine262, v8)
