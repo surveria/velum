@@ -14,6 +14,7 @@ use crate::{
 
 const RECEIVER_TYPE_ERROR: &str = "ArrayBuffer method receiver is not an ArrayBuffer";
 const DETACHED_BUFFER_ERROR: &str = "ArrayBuffer is detached";
+const FIXED_BUFFER_ERROR: &str = "ArrayBuffer is not resizable";
 const LENGTH_LIMIT_ERROR: &str = "ArrayBuffer length exceeded supported range";
 const SPECIES_ERROR: &str = "ArrayBuffer species is not a constructor";
 const SPECIES_RESULT_ERROR: &str = "ArrayBuffer species constructor returned an invalid buffer";
@@ -124,8 +125,14 @@ impl Context {
     ) -> Result<Value> {
         let (id, buffer) = self.array_buffer_receiver(this_value)?;
         buffer.ensure_mutable()?;
+        if !buffer.is_resizable() {
+            return Err(Error::type_error(FIXED_BUFFER_ERROR));
+        }
         let new_length =
             Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_LIMIT_ERROR)?;
+        if buffer.is_detached() {
+            return Err(Error::type_error(DETACHED_BUFFER_ERROR));
+        }
         self.objects.resize_array_buffer(id, new_length)?;
         Ok(Value::Undefined)
     }

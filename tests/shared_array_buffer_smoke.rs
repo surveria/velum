@@ -31,6 +31,39 @@ fn shares_bytes_across_views_and_grows_without_shrinking() -> TestResult {
 }
 
 #[test]
+fn rejects_fixed_shared_buffer_grow_before_new_length_coercion() -> TestResult {
+    ensure_eval(
+        r"
+        const fixed = new SharedArrayBuffer();
+        const calls = [];
+        const length = {
+            valueOf() {
+                calls.push('valueOf');
+                return -1000;
+            }
+        };
+        let fixedRejectedFirst = false;
+        try {
+            fixed.grow(length);
+        } catch (error) {
+            fixedRejectedFirst = error instanceof TypeError && calls.length === 0;
+        }
+
+        const growable = new SharedArrayBuffer(0, { maxByteLength: 4 });
+        let growableCoercedLength = false;
+        try {
+            growable.grow(length);
+        } catch (error) {
+            growableCoercedLength = error instanceof RangeError && calls.join() === 'valueOf';
+        }
+
+        fixedRejectedFirst && growableCoercedLength ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn accepts_large_logical_max_byte_length_without_allocating_it() -> TestResult {
     ensure_eval(
         r"

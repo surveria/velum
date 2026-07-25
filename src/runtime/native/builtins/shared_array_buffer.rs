@@ -16,6 +16,7 @@ use crate::{
 };
 
 const RECEIVER_ERROR: &str = "SharedArrayBuffer method receiver is not a SharedArrayBuffer";
+const FIXED_BUFFER_ERROR: &str = "SharedArrayBuffer is not growable";
 const LENGTH_ERROR: &str = "SharedArrayBuffer length exceeded supported range";
 const SPECIES_ERROR: &str = "SharedArrayBuffer species is not a constructor";
 const SPECIES_RESULT_ERROR: &str =
@@ -127,7 +128,10 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let (id, _) = self.shared_array_buffer_receiver(this_value)?;
+        let (id, buffer) = self.shared_array_buffer_receiver(this_value)?;
+        if !buffer.is_resizable() {
+            return Err(Error::type_error(FIXED_BUFFER_ERROR));
+        }
         let length = Self::length_to_usize(self.to_index(args.as_slice().first())?, LENGTH_ERROR)?;
         self.objects.grow_shared_array_buffer(id, length)?;
         Ok(Value::Undefined)

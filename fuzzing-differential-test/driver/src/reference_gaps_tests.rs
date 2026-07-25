@@ -420,6 +420,73 @@ fn engine262_invalid_quantifier_and_v8_resizable_alignment_gap_disables_oracle()
 }
 
 #[test]
+fn user_constructor_throw_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = outcome(
+        OutcomeStatus::JsError,
+        1,
+        "",
+        Some("Error".to_owned()),
+        Some("'must be called with new'".to_owned()),
+    );
+    let v8 = range_error("byte length of Uint16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(5, { maxByteLength: 675 });\
+        new Uint16Array(buffer);\
+        function F() { if (!new.target) { throw 'must be called with new'; } }\
+        F();\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn regexp_compile_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = type_error("TypeError: v14.compile is not a function");
+    let v8 = range_error("byte length of BigUint64Array should be a multiple of 8");
+    let source = "\
+        const buffer = new ArrayBuffer(127, { maxByteLength: 4096 });\
+        new BigUint64Array(buffer);\
+        /[xyz]/is.compile('function');\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn locale_validation_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
+    let velum = type_error("Intl locale entry is invalid");
+    let engine262 = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let v8 = range_error("byte length of Int16Array should be a multiple of 2");
+    let source = "\
+        const buffer = new ArrayBuffer(17, { maxByteLength: 1073741824 });\
+        const locales = new Int16Array(buffer);\
+        ('bigint').toLocaleLowerCase(locales);\
+    ";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
+fn missing_map_group_by_v8_fallback_disables_oracle() -> anyhow::Result<()> {
+    let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
+    let engine262 = reference_error("ReferenceError: \"SharedArrayBuffer\" is not defined");
+    let v8 = type_error("Map.groupBy is not a function");
+    let source = "new SharedArrayBuffer(0); Map.groupBy([], Date);";
+    let unsupported = is_engine262_unsupported(source, &velum, &engine262, &v8);
+    ensure!(unsupported);
+    ensure!(correctness_oracle(source, &engine262, &v8, unsupported).is_none());
+    Ok(())
+}
+
+#[test]
 fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(
