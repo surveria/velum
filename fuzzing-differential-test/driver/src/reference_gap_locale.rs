@@ -2,6 +2,7 @@ use crate::compare::{EngineOutcome, OutcomeStatus};
 use crate::reference_gap_predicates::outcomes_equivalent;
 
 const STRING_LOCALE_CASE_METHODS: [&str; 2] = ["toLocaleLowerCase", "toLocaleUpperCase"];
+const LOCALE_COMPARE_METHOD: &str = "localeCompare";
 
 pub fn is_engine262_string_case_locale_validation_gap(
     source: &str,
@@ -12,6 +13,19 @@ pub fn is_engine262_string_case_locale_validation_gap(
     source_contains_string_locale_case_reference(source)
         && outcomes_equivalent(velum, v8)
         && !outcomes_equivalent(velum, engine262)
+        && locale_validation_error(velum)
+        && locale_validation_error(v8)
+}
+
+pub fn is_engine262_locale_compare_validation_gap(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+) -> bool {
+    source_contains_method_reference(source, LOCALE_COMPARE_METHOD)
+        && outcomes_equivalent(velum, v8)
+        && engine262.status == OutcomeStatus::Ok
         && locale_validation_error(velum)
         && locale_validation_error(v8)
 }
