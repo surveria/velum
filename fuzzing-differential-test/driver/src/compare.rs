@@ -12,11 +12,14 @@ use velum::{
 };
 
 use crate::{
+    correctness::{self, CorrectnessEvaluation},
     engine262_worker::Engine262Worker,
     node_worker::NodeWorker,
-    reference_gaps,
+    reference_gaps::{self, ReferenceAnalysis},
     time::{duration_millis_u64, duration_nanos_u64},
 };
+
+pub use crate::correctness::{CaseClassification, CaseFinding};
 
 const DIFFERENTIAL_MAX_CALL_STACK_BYTES: usize = 984 * 1_024;
 const ECMASCRIPT_ERROR_NAMES: [&str; 8] = [
@@ -34,8 +37,14 @@ const PARSER_ERROR_PREFIX: &str = "parser error";
 const SYNTAX_ERROR_NAME: &str = "SyntaxError";
 const VELUM_RESOURCE_LIMIT_PREFIX: &str = "resource limit exceeded:";
 const VELUM_REGEXP_INSTRUCTION_LIMIT_FRAGMENT: &str = "RegExp compile error InstructionLimit";
-const VELUM_SPARSE_ARRAY_STORAGE_LIMIT_FRAGMENT: &str = "sparse array property key is not available";
+const VELUM_SPARSE_ARRAY_STORAGE_LIMIT_FRAGMENT: &str =
+    "sparse array property key is not available";
 const VELUM_SUPPORTED_RANGE_LIMIT_FRAGMENT: &str = "exceeded supported range";
+pub const CASE_RECORD_SCHEMA_VERSION: u32 = 2;
+
+const fn legacy_case_record_schema_version() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -77,6 +86,8 @@ impl Default for EngineOutcome {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CaseRecord {
+    #[serde(default = "legacy_case_record_schema_version")]
+    pub schema_version: u32,
     pub case_id: String,
     pub worker_pid: u32,
     pub sequence: u64,
@@ -85,6 +96,10 @@ pub struct CaseRecord {
     pub classification: CaseClassification,
     #[serde(default)]
     pub findings: Vec<CaseFinding>,
+    #[serde(default)]
+    pub reference_analysis: ReferenceAnalysis,
+    #[serde(default)]
+    pub correctness_evaluation: CorrectnessEvaluation,
     pub saved_script: Option<String>,
     #[serde(default)]
     pub saved_scripts: Vec<String>,
@@ -93,39 +108,6 @@ pub struct CaseRecord {
     #[serde(default)]
     pub engine262: EngineOutcome,
     pub v8: EngineOutcome,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CaseClassification {
-    Match,
-    #[serde(alias = "mismatch")]
-    CorrectnessMismatch,
-    #[serde(alias = "slow")]
-    PerformanceSlow,
-    VelumTimeout,
-    VelumCrash,
-    VelumResourceLimit,
-    Engine262Timeout,
-    Engine262Crash,
-    Engine262Unsupported,
-    V8Timeout,
-    V8Crash,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CaseFinding {
-    CorrectnessMismatch,
-    PerformanceSlow,
-    VelumTimeout,
-    VelumCrash,
-    VelumResourceLimit,
-    Engine262Timeout,
-    Engine262Crash,
-    Engine262Unsupported,
-    V8Timeout,
-    V8Crash,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -153,15 +135,16 @@ pub fn compare_script(
         engine262_worker.execute(source, duration_millis_u64(config.engine262_timeout))?;
     let v8 = node_worker.execute(source, duration_millis_u64(config.v8_timeout))?;
     let ratio = timing_ratio(&velum, &v8);
-    let findings = findings(source, &velum, &engine262, &v8, ratio, config);
-    let classification = primary_classification(&findings);
+    let analysis = analyze_case(source, &velum, &engine262, &v8, ratio, config);
     Ok(ComparedScript {
         velum,
         engine262,
         v8,
         ratio,
-        classification,
-        findings,
+        classification: analysis.classification,
+        findings: analysis.findings,
+        reference_analysis: analysis.reference,
+        correctness_evaluation: analysis.correctness,
     })
 }
 
@@ -173,8 +156,30 @@ pub struct ComparedScript {
     pub ratio: Option<f64>,
     pub classification: CaseClassification,
     pub findings: Vec<CaseFinding>,
+    pub reference_analysis: ReferenceAnalysis,
+    pub correctness_evaluation: CorrectnessEvaluation,
 }
 
+struct CaseAnalysis {
+    classification: CaseClassification,
+    findings: Vec<CaseFinding>,
+    reference: ReferenceAnalysis,
+    correctness: CorrectnessEvaluation,
+}
+
+#[derive(Clone, Copy)]
+struct FindingContext<'a> {
+    velum: &'a EngineOutcome,
+    engine262: &'a EngineOutcome,
+    v8: &'a EngineOutcome,
+    ratio: Option<f64>,
+    config: CompareConfig,
+    velum_resource_limit: bool,
+    reference: &'a ReferenceAnalysis,
+    correctness: &'a CorrectnessEvaluation,
+}
+
+#[cfg(test)]
 fn findings(
     source: &str,
     velum: &EngineOutcome,
@@ -183,6 +188,49 @@ fn findings(
     ratio: Option<f64>,
     config: CompareConfig,
 ) -> Vec<CaseFinding> {
+    analyze_case(source, velum, engine262, v8, ratio, config).findings
+}
+
+fn analyze_case(
+    source: &str,
+    velum: &EngineOutcome,
+    engine262: &EngineOutcome,
+    v8: &EngineOutcome,
+    ratio: Option<f64>,
+    config: CompareConfig,
+) -> CaseAnalysis {
+    let velum_resource_limit = is_velum_resource_limit(velum);
+    let reference = reference_gaps::analyze(source, velum, engine262, v8);
+    let correctness = correctness::evaluate(velum, engine262, v8, &reference, velum_resource_limit);
+    let findings = collect_findings(FindingContext {
+        velum,
+        engine262,
+        v8,
+        ratio,
+        config,
+        velum_resource_limit,
+        reference: &reference,
+        correctness: &correctness,
+    });
+    CaseAnalysis {
+        classification: primary_classification(&findings),
+        findings,
+        reference,
+        correctness,
+    }
+}
+
+fn collect_findings(context: FindingContext<'_>) -> Vec<CaseFinding> {
+    let FindingContext {
+        velum,
+        engine262,
+        v8,
+        ratio,
+        config,
+        velum_resource_limit,
+        reference,
+        correctness,
+    } = context;
     let mut findings = Vec::new();
     if velum.status == OutcomeStatus::Timeout {
         findings.push(CaseFinding::VelumTimeout);
@@ -190,7 +238,6 @@ fn findings(
     if velum.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::VelumCrash);
     }
-    let velum_resource_limit = is_velum_resource_limit(velum);
     if velum_resource_limit {
         findings.push(CaseFinding::VelumResourceLimit);
     }
@@ -206,20 +253,14 @@ fn findings(
     if v8.status == OutcomeStatus::Crash {
         findings.push(CaseFinding::V8Crash);
     }
-    let engine262_unsupported =
-        reference_gaps::is_engine262_unsupported(source, velum, engine262, v8);
-    if engine262_unsupported {
+    if !reference.engine262_gaps.is_empty() {
         findings.push(CaseFinding::Engine262Unsupported);
     }
-    let correctness_oracle =
-        reference_gaps::correctness_oracle(source, engine262, v8, engine262_unsupported);
-    if let Some(correctness_oracle) = correctness_oracle
-        && velum.is_completed()
-        && !velum_resource_limit
-        && correctness_oracle.is_completed()
-        && !reference_gaps::outcomes_equivalent(velum, correctness_oracle)
-    {
+    if correctness.is_mismatch() {
         findings.push(CaseFinding::CorrectnessMismatch);
+    }
+    if correctness.is_unverified() {
+        findings.push(CaseFinding::CorrectnessUnverified);
     }
     if let Some(value) = ratio
         && value >= config.slow_ratio
@@ -240,12 +281,14 @@ fn primary_classification(findings: &[CaseFinding]) -> CaseClassification {
         CaseFinding::Engine262Timeout,
         CaseFinding::V8Crash,
         CaseFinding::V8Timeout,
+        CaseFinding::CorrectnessUnverified,
         CaseFinding::Engine262Unsupported,
         CaseFinding::PerformanceSlow,
     ] {
         if findings.contains(&candidate) {
             return match candidate {
                 CaseFinding::CorrectnessMismatch => CaseClassification::CorrectnessMismatch,
+                CaseFinding::CorrectnessUnverified => CaseClassification::CorrectnessUnverified,
                 CaseFinding::PerformanceSlow => CaseClassification::PerformanceSlow,
                 CaseFinding::VelumTimeout => CaseClassification::VelumTimeout,
                 CaseFinding::VelumCrash => CaseClassification::VelumCrash,
@@ -309,9 +352,7 @@ fn execute_velum(source: &str) -> anyhow::Result<EngineOutcome> {
                 .map_err(|error| Error::runtime(format!("failed to write fuzz output: {error}")))?;
             Ok(())
         })
-        .map_err(|error| {
-            anyhow::anyhow!("failed to create the Fuzzilli host callback: {error}")
-        })?;
+        .map_err(|error| anyhow::anyhow!("failed to create the Fuzzilli host callback: {error}"))?;
     let global = vm
         .eval_retained("globalThis")
         .map_err(|error| anyhow::anyhow!("failed to retain globalThis: {error}"))?;
@@ -414,10 +455,7 @@ mod tests {
 
     use anyhow::ensure;
 
-    use super::{
-        CaseFinding, CompareConfig, OutcomeStatus, SYNTAX_ERROR_NAME, error_name_from_text,
-        findings, outcome,
-    };
+    use super::{CaseFinding, CompareConfig, OutcomeStatus, SYNTAX_ERROR_NAME, findings, outcome};
 
     fn config() -> CompareConfig {
         CompareConfig {
@@ -430,38 +468,13 @@ mod tests {
 
     #[test]
     fn velum_fuzzilli_hook_allows_global_assignment() -> anyhow::Result<()> {
-        let outcome = super::execute_velum(
-            "fuzzilli('FUZZILLI_PRINT', 'before'); fuzzilli = new Set();",
-        )?;
+        let outcome =
+            super::execute_velum("fuzzilli('FUZZILLI_PRINT', 'before'); fuzzilli = new Set();")?;
         ensure!(
             outcome.status == OutcomeStatus::Ok,
             "unexpected outcome: {outcome:?}"
         );
         ensure!(outcome.stdout_bytes == 7, "unexpected stdout size");
-        Ok(())
-    }
-
-    #[test]
-    fn error_name_parser_extracts_nested_js_error() -> anyhow::Result<()> {
-        let name =
-            error_name_from_text("javascript exception: TypeError: constructor requires 'new'");
-        ensure!(name == "TypeError", "unexpected error name: {name}");
-        Ok(())
-    }
-
-    #[test]
-    fn error_name_parser_preserves_primary_reference_error() -> anyhow::Result<()> {
-        let name = error_name_from_text("ReferenceError: \"Intl\" is not defined");
-        ensure!(name == "ReferenceError", "unexpected error name: {name}");
-        Ok(())
-    }
-
-    #[test]
-    fn error_name_parser_maps_lexer_errors_to_syntax_error() -> anyhow::Result<()> {
-        let name = error_name_from_text(
-            "lexer error at 11: invalid regular expression pattern: RegExp compile error",
-        );
-        ensure!(name == SYNTAX_ERROR_NAME, "unexpected error name: {name}");
         Ok(())
     }
 
@@ -520,7 +533,9 @@ mod tests {
             None,
             config(),
         );
-        ensure!(temporal_findings.as_slice() == [CaseFinding::Engine262Unsupported]);
+        ensure!(temporal_findings.contains(&CaseFinding::Engine262Unsupported));
+        ensure!(temporal_findings.contains(&CaseFinding::CorrectnessUnverified));
+        ensure!(!temporal_findings.contains(&CaseFinding::CorrectnessMismatch));
         Ok(())
     }
 

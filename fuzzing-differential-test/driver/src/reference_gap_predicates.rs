@@ -1,5 +1,7 @@
 use crate::compare::{EngineOutcome, OutcomeStatus};
 
+pub use crate::correctness::outcomes_equivalent;
+
 const RESIZABLE_ARRAY_BUFFER_MARKER: &str = "maxByteLength";
 const RESOURCE_MANAGEMENT_KEYWORD: &str = "using";
 const RESOURCE_FOR_OF_KEYWORD: &str = "of";
@@ -59,18 +61,6 @@ const ANNEX_B_STRING_LEGACY_METHODS: [&str; 16] = [
     "trimLeft",
     "trimRight",
 ];
-
-pub fn outcomes_equivalent(left: &EngineOutcome, right: &EngineOutcome) -> bool {
-    if left.status != right.status {
-        return false;
-    }
-    match left.status {
-        OutcomeStatus::Ok => left.stdout_sha256 == right.stdout_sha256,
-        OutcomeStatus::JsError => left.error_name == right.error_name,
-        OutcomeStatus::Timeout | OutcomeStatus::Crash => true,
-    }
-}
-
 
 pub fn is_resizable_array_buffer_reference_divergence(
     source: &str,
@@ -154,8 +144,7 @@ pub fn is_legacy_decimal_escape_with_v8_rab_alignment_without_oracle(
 fn source_contains_legacy_decimal_escape(source: &str) -> bool {
     let bytes = source.as_bytes();
     bytes.windows(2).any(|window| {
-        window.first() == Some(&b'\\')
-            && window.get(1).is_some_and(u8::is_ascii_digit)
+        window.first() == Some(&b'\\') && window.get(1).is_some_and(u8::is_ascii_digit)
     })
 }
 
@@ -224,7 +213,9 @@ fn source_contains_legacy_malformed_control_escape(source: &str) -> bool {
     bytes.windows(3).any(|window| {
         window.first() == Some(&b'\\')
             && window.get(1) == Some(&b'c')
-            && window.get(2).is_some_and(|byte| !byte.is_ascii_alphabetic())
+            && window
+                .get(2)
+                .is_some_and(|byte| !byte.is_ascii_alphabetic())
     })
 }
 
@@ -245,14 +236,20 @@ pub fn is_legacy_quantified_lookahead_with_v8_rab_alignment_without_oracle(
 }
 
 fn source_contains_legacy_quantified_lookahead(source: &str) -> bool {
-    [REGEXP_POSITIVE_LOOKAHEAD_MARKER, REGEXP_NEGATIVE_LOOKAHEAD_MARKER]
-        .into_iter()
-        .any(|marker| source_contains_quantified_lookahead(source, marker))
+    [
+        REGEXP_POSITIVE_LOOKAHEAD_MARKER,
+        REGEXP_NEGATIVE_LOOKAHEAD_MARKER,
+    ]
+    .into_iter()
+    .any(|marker| source_contains_quantified_lookahead(source, marker))
 }
 
 fn source_contains_quantified_lookahead(source: &str, marker: &str) -> bool {
     let mut search_start = 0;
-    while let Some(relative_start) = source.get(search_start..).and_then(|tail| tail.find(marker)) {
+    while let Some(relative_start) = source
+        .get(search_start..)
+        .and_then(|tail| tail.find(marker))
+    {
         let start = search_start.saturating_add(relative_start);
         let Some(after_marker_start) = start.checked_add(marker.len()) else {
             return false;
@@ -272,9 +269,11 @@ fn source_contains_quantified_lookahead(source: &str, marker: &str) -> bool {
         let Some(after_close) = source.get(after_close_start..) else {
             return false;
         };
-        if after_close.as_bytes().first().is_some_and(|byte| {
-            matches!(*byte, b'?' | b'*' | b'+' | b'{')
-        }) {
+        if after_close
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| matches!(*byte, b'?' | b'*' | b'+' | b'{'))
+        {
             return true;
         }
         search_start = after_close_start;
@@ -621,6 +620,7 @@ pub fn source_contains_resource_management_symbol_access(source: &str) -> bool {
     source.contains(SYMBOL_DISPOSE_ACCESS) || source.contains(SYMBOL_ASYNC_DISPOSE_ACCESS)
 }
 
+#[must_use]
 pub fn source_contains_resource_management_syntax(source: &str) -> bool {
     let mut search_start = 0;
     while let Some(relative_start) = source

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs::{self, OpenOptions},
     io::{BufRead as _, BufReader, Write as _},
     path::{Path, PathBuf},
@@ -11,6 +12,8 @@ use tabled::{Table, Tabled};
 use crate::{
     artifacts::normalized_findings,
     compare::{CaseFinding, CaseRecord, OutcomeStatus},
+    correctness::CorrectnessEvaluation,
+    reference_gaps::{OracleDecision, OracleUnavailableReason, ReferenceGapReason},
 };
 
 const LATEST_FINDING_LIMIT: usize = 10;
@@ -52,8 +55,13 @@ impl DifferentialReport {
 #[derive(Default)]
 struct Summary {
     total: u64,
-    engine262_equivalent: u64,
+    correctness_equivalent: u64,
     correctness_mismatches: u64,
+    correctness_unverified: u64,
+    legacy_untyped: u64,
+    engine262_oracle_selected: u64,
+    v8_fallback_selected: u64,
+    oracle_unavailable: u64,
     performance_slow: u64,
     velum_timeouts: u64,
     velum_crashes: u64,
@@ -70,6 +78,8 @@ struct Summary {
     ratio_count: u64,
     max_ratio: Option<f64>,
     max_ratio_case: Option<String>,
+    reference_gap_counts: BTreeMap<ReferenceGapReason, u64>,
+    oracle_unavailable_counts: BTreeMap<OracleUnavailableReason, u64>,
 }
 
 #[derive(Tabled)]
@@ -78,6 +88,14 @@ struct SummaryRow {
     metric: &'static str,
     #[tabled(rename = "Value")]
     value: String,
+}
+
+#[derive(Tabled)]
+struct DetailRow {
+    #[tabled(rename = "Typed reason")]
+    reason: &'static str,
+    #[tabled(rename = "Cases")]
+    cases: u64,
 }
 
 /// Builds and stores a differential fuzzing summary.
@@ -96,15 +114,17 @@ pub fn build_report(
     let latest_findings = latest_javascript_files(&session_dir.join("findings"))?;
     let pending_count = javascript_file_count(&session_dir.join("pending"))?;
     let summary_path = session_dir.join("summary.txt");
-    let table = Table::new(rows(
-        session_dir,
+    let table = render_tables(
+        rows(
+            session_dir,
+            &summary,
+            elapsed,
+            outcome,
+            latest_findings.len(),
+            pending_count,
+        ),
         &summary,
-        elapsed,
-        outcome,
-        latest_findings.len(),
-        pending_count,
-    ))
-    .to_string();
+    );
     let report = DifferentialReport {
         table,
         latest_findings,
@@ -134,12 +154,36 @@ fn rows(
         row("Elapsed", &humantime::format_duration(elapsed).to_string()),
         row("Compared scripts", &summary.total.to_string()),
         row(
-            "Engine262-equivalent scripts",
-            &summary.engine262_equivalent.to_string(),
+            "Correctness verified",
+            &summary.correctness_verified().to_string(),
+        ),
+        row(
+            "Correctness equivalent",
+            &summary.correctness_equivalent.to_string(),
         ),
         row(
             "Correctness mismatches",
             &summary.correctness_mismatches.to_string(),
+        ),
+        row(
+            "Correctness unverified",
+            &summary.correctness_unverified.to_string(),
+        ),
+        row(
+            "Engine262 oracle selected",
+            &summary.engine262_oracle_selected.to_string(),
+        ),
+        row(
+            "V8 fallback selected",
+            &summary.v8_fallback_selected.to_string(),
+        ),
+        row(
+            "No reliable oracle",
+            &summary.oracle_unavailable.to_string(),
+        ),
+        row(
+            "Legacy records without typed verdict",
+            &summary.legacy_untyped.to_string(),
         ),
         row(
             "Performance slow cases",
@@ -196,44 +240,107 @@ fn row(metric: &'static str, value: &str) -> SummaryRow {
     }
 }
 
+fn render_tables(rows: Vec<SummaryRow>, summary: &Summary) -> String {
+    let mut output = Table::new(rows).to_string();
+    if !summary.reference_gap_counts.is_empty() {
+        let details = summary
+            .reference_gap_counts
+            .iter()
+            .map(|(reason, cases)| DetailRow {
+                reason: reason.as_str(),
+                cases: *cases,
+            })
+            .collect::<Vec<_>>();
+        output.push_str("\n\nEngine262 reference gap reasons\n");
+        output.push_str(&Table::new(details).to_string());
+    }
+    if !summary.oracle_unavailable_counts.is_empty() {
+        let details = summary
+            .oracle_unavailable_counts
+            .iter()
+            .map(|(reason, cases)| DetailRow {
+                reason: reason.as_str(),
+                cases: *cases,
+            })
+            .collect::<Vec<_>>();
+        output.push_str("\n\nNo-reliable-oracle reasons\n");
+        output.push_str(&Table::new(details).to_string());
+    }
+    output
+}
+
 impl Summary {
     fn add(&mut self, record: &CaseRecord) {
         self.total = self.total.saturating_add(1);
         let findings = normalized_findings(record);
-        let mut has_correctness_problem = false;
-        let mut has_engine262_unsupported = false;
+        let legacy_untyped = matches!(
+            record.correctness_evaluation,
+            CorrectnessEvaluation::LegacyUnspecified
+        );
+        match &record.correctness_evaluation {
+            CorrectnessEvaluation::Equivalent { .. } => {
+                self.correctness_equivalent = self.correctness_equivalent.saturating_add(1);
+            }
+            CorrectnessEvaluation::Mismatch { .. } => {
+                self.correctness_mismatches = self.correctness_mismatches.saturating_add(1);
+            }
+            CorrectnessEvaluation::Unverified { .. } => {
+                self.correctness_unverified = self.correctness_unverified.saturating_add(1);
+            }
+            CorrectnessEvaluation::LegacyUnspecified => {
+                self.legacy_untyped = self.legacy_untyped.saturating_add(1);
+            }
+        }
+        match &record.reference_analysis.oracle {
+            OracleDecision::Engine262 => {
+                self.engine262_oracle_selected = self.engine262_oracle_selected.saturating_add(1);
+            }
+            OracleDecision::V8Fallback => {
+                self.v8_fallback_selected = self.v8_fallback_selected.saturating_add(1);
+            }
+            OracleDecision::Unavailable { reasons } => {
+                self.oracle_unavailable = self.oracle_unavailable.saturating_add(1);
+                for reason in reasons {
+                    increment_count(&mut self.oracle_unavailable_counts, *reason);
+                }
+            }
+            OracleDecision::LegacyUnspecified => {}
+        }
+        for reason in &record.reference_analysis.engine262_gaps {
+            increment_count(&mut self.reference_gap_counts, *reason);
+        }
         for finding in &findings {
             match finding {
                 CaseFinding::CorrectnessMismatch => {
-                    self.correctness_mismatches = self.correctness_mismatches.saturating_add(1);
-                    has_correctness_problem = true;
+                    if legacy_untyped {
+                        self.correctness_mismatches = self.correctness_mismatches.saturating_add(1);
+                    }
+                }
+                CaseFinding::CorrectnessUnverified => {
+                    if legacy_untyped {
+                        self.correctness_unverified = self.correctness_unverified.saturating_add(1);
+                    }
                 }
                 CaseFinding::PerformanceSlow => {
                     self.performance_slow = self.performance_slow.saturating_add(1);
                 }
                 CaseFinding::VelumTimeout => {
                     self.velum_timeouts = self.velum_timeouts.saturating_add(1);
-                    has_correctness_problem = true;
                 }
                 CaseFinding::VelumCrash => {
                     self.velum_crashes = self.velum_crashes.saturating_add(1);
-                    has_correctness_problem = true;
                 }
                 CaseFinding::VelumResourceLimit => {
                     self.velum_resource_limits = self.velum_resource_limits.saturating_add(1);
-                    has_correctness_problem = true;
                 }
                 CaseFinding::Engine262Timeout => {
                     self.engine262_timeouts = self.engine262_timeouts.saturating_add(1);
-                    has_correctness_problem = true;
                 }
                 CaseFinding::Engine262Crash => {
                     self.engine262_crashes = self.engine262_crashes.saturating_add(1);
-                    has_correctness_problem = true;
                 }
                 CaseFinding::Engine262Unsupported => {
                     self.engine262_unsupported = self.engine262_unsupported.saturating_add(1);
-                    has_engine262_unsupported = true;
                 }
                 CaseFinding::V8Timeout => {
                     self.v8_timeouts = self.v8_timeouts.saturating_add(1);
@@ -242,9 +349,6 @@ impl Summary {
                     self.v8_crashes = self.v8_crashes.saturating_add(1);
                 }
             }
-        }
-        if !has_correctness_problem && !has_engine262_unsupported {
-            self.engine262_equivalent = self.engine262_equivalent.saturating_add(1);
         }
         if record.velum.status == OutcomeStatus::JsError {
             self.velum_js_errors = self.velum_js_errors.saturating_add(1);
@@ -274,6 +378,16 @@ impl Summary {
         #[allow(clippy::cast_precision_loss)]
         Some(self.ratio_sum / self.ratio_count as f64)
     }
+
+    const fn correctness_verified(&self) -> u64 {
+        self.correctness_equivalent
+            .saturating_add(self.correctness_mismatches)
+    }
+}
+
+fn increment_count<T: Copy + Ord>(counts: &mut BTreeMap<T, u64>, key: T) {
+    let count = counts.entry(key).or_insert(0);
+    *count = count.saturating_add(1);
 }
 
 fn summarize(records: &[CaseRecord]) -> Summary {
@@ -369,17 +483,20 @@ fn append_jsonl_listing(session_dir: &Path, records: &[CaseRecord]) -> anyhow::R
         .with_context(|| format!("failed to write '{}'", path.display()))?;
     writeln!(
         file,
-        "ratio\tcase_id\tclassification\tfindings\tvelum_ns\tv8_ns\tsaved_scripts"
+        "ratio\tcase_id\tclassification\tfindings\tcorrectness\toracle\treference_gaps\tvelum_ns\tv8_ns\tsaved_scripts"
     )
     .with_context(|| format!("failed to write '{}'", path.display()))?;
     for (ratio, record) in sorted.into_iter().take(100) {
         writeln!(
             file,
-            "{}\t{}\t{:?}\t{:?}\t{}\t{}\t{}",
+            "{}\t{}\t{:?}\t{:?}\t{:?}\t{:?}\t{:?}\t{}\t{}\t{}",
             format_ratio(ratio),
             record.case_id,
             record.classification,
             normalized_findings(record),
+            record.correctness_evaluation,
+            record.reference_analysis.oracle,
+            record.reference_analysis.engine262_gaps,
             record.velum.elapsed_nanos,
             record.v8.elapsed_nanos,
             saved_scripts_text(record)

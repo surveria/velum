@@ -195,8 +195,7 @@ fn missing_immutable_array_buffer_reference_methods_disable_oracle() -> anyhow::
 }
 
 #[test]
-fn immutable_array_buffer_method_and_v8_rab_alignment_gap_disables_oracle(
-) -> anyhow::Result<()> {
+fn immutable_array_buffer_method_and_v8_rab_alignment_gap_disables_oracle() -> anyhow::Result<()> {
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = type_error(
         "TypeError: v5.transferToImmutable is not a function. \
@@ -390,8 +389,8 @@ fn shared_array_buffer_alignment_gap_disables_oracle() -> anyhow::Result<()> {
 }
 
 #[test]
-fn resizable_array_buffer_alignment_and_engine262_stack_gap_disables_oracle()
--> anyhow::Result<()> {
+fn resizable_array_buffer_alignment_and_engine262_stack_gap_disables_oracle() -> anyhow::Result<()>
+{
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(
         OutcomeStatus::Crash,
@@ -609,8 +608,8 @@ fn legacy_control_escape_and_v8_resizable_alignment_gap_disables_oracle() -> any
 }
 
 #[test]
-fn legacy_quantified_lookahead_and_v8_resizable_alignment_gap_disables_oracle()
--> anyhow::Result<()> {
+fn legacy_quantified_lookahead_and_v8_resizable_alignment_gap_disables_oracle() -> anyhow::Result<()>
+{
     let velum = outcome(OutcomeStatus::Ok, 1, "", None, None);
     let engine262 = outcome(
         OutcomeStatus::JsError,
@@ -691,8 +690,8 @@ fn engine262_super_property_syntax_gap_falls_back_to_v8() -> anyhow::Result<()> 
 }
 
 #[test]
-fn unstable_fuzzilli_introspection_disables_oracle_when_references_disagree()
--> anyhow::Result<()> {
+fn unstable_fuzzilli_introspection_disables_oracle_when_references_disagree() -> anyhow::Result<()>
+{
     let velum = outcome(OutcomeStatus::Ok, 1, "EXPLORE_ACTION: left\n", None, None);
     let engine262 = outcome(
         OutcomeStatus::Ok,

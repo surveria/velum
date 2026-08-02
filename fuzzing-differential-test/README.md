@@ -12,9 +12,12 @@ each generated program the target:
 1. executes the program in a fresh Velum runtime;
 2. executes the same program in Engine262 as the correctness oracle;
 3. executes the same program in V8/Node for performance ratio and diagnostics;
-4. compares normalized status and `fuzzilli('FUZZILLI_PRINT', value)` output;
-5. records per-case timing and the Velum/V8 ratio;
-6. saves correctness, timeout, crash, performance, and reference-unsupported
+4. records the selected correctness oracle and every typed reference-gap reason;
+5. compares normalized status and `fuzzilli('FUZZILLI_PRINT', value)` output;
+6. records a typed correctness verdict with the exact status, output hash, or
+   JavaScript error-class difference;
+7. records per-case timing and the Velum/V8 ratio;
+8. saves correctness, unverified, timeout, crash, performance, and reference-unsupported
    cases immediately.
 
 The default workflow stops after 10 Velum-vs-Engine262 correctness mismatches.
@@ -34,6 +37,8 @@ absolute shared directory. The session contains:
 
 - `cases/*.jsonl` with one record per compared program;
 - `findings/correctness-mismatches/*.js` for Velum-vs-Engine262 differences;
+- `findings/correctness-unverified/*.js` for cases where no safe correctness
+  verdict can be made, including missing or incomplete reference engines;
 - `findings/performance-slow/*.js` for cases where Velum is slower than V8 by
   the configured ratio;
 - `findings/velum-resource-limits/*.js` for cases where Velum stops execution
@@ -48,6 +53,15 @@ absolute shared directory. The session contains:
 - `all/*.js` only when `--save-all` is requested;
 - `fuzzilli/` with Fuzzilli corpus, crashes, timeouts, and statistics;
 - `summary.txt`, `slowest.tsv`, and the final detailed `fuzzilli-*.log`.
+
+Each JSONL record has a schema version plus `reference_analysis` and
+`correctness_evaluation` objects. The reference analysis distinguishes direct
+Engine262 use, an explicit V8 fallback, and a missing reliable oracle. The
+correctness evaluation distinguishes equivalent, mismatch, and unverified
+outcomes. JavaScript error messages are diagnostic rather than standardized,
+so error outcomes are compared by a typed ECMAScript error class and the JSONL
+record states that limited equivalence basis explicitly. Missing or unknown
+error classes never count as equivalent.
 
 Generated scripts that matter for follow-up triage are saved as JavaScript
 files, so later agents can reproduce them directly without relying on a stable
