@@ -88,16 +88,20 @@ engine itself follows its own Rust architecture.
 
 Velum currently publishes these high-level validation signals:
 
-- **Test262 conformance:** the complete pinned ECMAScript Test262 profile passes
-  with 102,578 of 102,578 required execution variants.
-- **Engine262-first differential fuzzing:** closed campaigns through PR #716
-  compared 3,725,550 generated Fuzzilli scripts, including 3,088,915 executions
-  where the pinned Engine262 oracle produced a comparable result. The campaign
-  fixed 11 confirmed Velum issues and replayed 1,003 saved correctness artifacts
-  to zero remaining Velum-vs-Engine262 mismatches.
+- **Test262 conformance:** the complete pinned ECMAScript profile is the
+  canonical standards gate.
+- **Engine262-first differential fuzzing:** generated Fuzzilli programs are
+  compared against Engine262 as the primary semantic oracle.
 - **V8/Node diagnostics:** V8 is used as a secondary diagnostic engine and as
-  the reference for generated-program performance ratios when Engine262 is the
-  correctness oracle.
+  the reference for generated-program performance ratios.
+
+Current quality summary:
+
+| Method | Reference or corpus | Completed volume | Current result | Notes |
+| --- | --- | ---: | --- | --- |
+| Test262 conformance | Pinned Test262 snapshot | 53,404 files / 102,578 required variants | 102,578 passed, 0 failed, 0 skipped | Exact-tree correctness gate |
+| Engine262 differential fuzzing | Fuzzilli-generated programs compared with Engine262 | 3,725,550 scripts compared; 3,088,915 Engine262-comparable executions | 1,003 saved correctness artifacts replayed to 0 remaining Velum-vs-Engine262 mismatches; 11 confirmed Velum issues fixed | Closed campaigns through PR #716 |
+| V8/Node diagnostics | V8/Node on generated programs | Same generated-program workflow when Engine262 needs fallback or performance context | Secondary diagnostics and per-case Velum/V8 performance ratios | Not the primary correctness oracle |
 
 Long-running fuzzing and differential runs are opt-in local workflows, not CI
 jobs. When a bounded campaign reaches a reviewed milestone, this section should
