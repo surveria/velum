@@ -8,8 +8,8 @@ use std::{
 use anyhow::{Context as _, ensure};
 
 use crate::compare::{
-    CaseClassification, CaseFinding, CaseRecord, CompareConfig, OutcomeStatus, compare_script,
-    sha256_hex,
+    CASE_RECORD_SCHEMA_VERSION, CaseClassification, CaseFinding, CaseRecord, CompareConfig,
+    OutcomeStatus, compare_script, sha256_hex,
 };
 use crate::engine262_worker::Engine262Worker;
 use crate::node_worker::NodeWorker;
@@ -180,6 +180,7 @@ impl ArtifactRecorder {
         let saved_script = saved_scripts.first().cloned();
         let velum_status = compared.velum.status;
         let record = CaseRecord {
+            schema_version: CASE_RECORD_SCHEMA_VERSION,
             case_id,
             worker_pid: self.worker_pid,
             sequence: self.sequence,
@@ -187,6 +188,8 @@ impl ArtifactRecorder {
             script_bytes: u64::try_from(script.len()).unwrap_or(u64::MAX),
             classification: compared.classification,
             findings: compared.findings,
+            reference_analysis: compared.reference_analysis,
+            correctness_evaluation: compared.correctness_evaluation,
             saved_script: saved_script.as_ref().map(|path| path.display().to_string()),
             saved_scripts: saved_scripts
                 .iter()
@@ -262,6 +265,7 @@ impl ArtifactRecorder {
 fn finding_directory(root: &Path, finding: CaseFinding) -> PathBuf {
     match finding {
         CaseFinding::CorrectnessMismatch => root.join("findings/correctness-mismatches"),
+        CaseFinding::CorrectnessUnverified => root.join("findings/correctness-unverified"),
         CaseFinding::PerformanceSlow => root.join("findings/performance-slow"),
         CaseFinding::VelumTimeout => root.join("findings/velum-timeouts"),
         CaseFinding::VelumCrash => root.join("findings/velum-crashes"),
@@ -280,6 +284,7 @@ impl CaseClassification {
         match self {
             Self::Match => None,
             Self::CorrectnessMismatch => Some(CaseFinding::CorrectnessMismatch),
+            Self::CorrectnessUnverified => Some(CaseFinding::CorrectnessUnverified),
             Self::PerformanceSlow => Some(CaseFinding::PerformanceSlow),
             Self::VelumTimeout => Some(CaseFinding::VelumTimeout),
             Self::VelumCrash => Some(CaseFinding::VelumCrash),
@@ -311,6 +316,7 @@ fn create_layout(root: &Path) -> anyhow::Result<()> {
         &root.join("cases"),
         &root.join("findings"),
         &root.join("findings/correctness-mismatches"),
+        &root.join("findings/correctness-unverified"),
         &root.join("findings/performance-slow"),
         &root.join("findings/velum-timeouts"),
         &root.join("findings/velum-crashes"),

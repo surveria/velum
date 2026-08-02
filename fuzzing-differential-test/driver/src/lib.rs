@@ -1,5 +1,6 @@
 pub mod artifacts;
 pub mod compare;
+pub mod correctness;
 pub mod diff_config;
 pub mod engine262_worker;
 pub mod node_worker;
@@ -10,7 +11,7 @@ pub(crate) mod reference_gap_predicates;
 pub(crate) mod reference_gap_rab;
 pub(crate) mod reference_gap_syntax;
 pub(crate) mod reference_gap_v8;
-pub(crate) mod reference_gaps;
+pub mod reference_gaps;
 #[cfg(test)]
 mod reference_gaps_additional_tests;
 #[cfg(test)]
