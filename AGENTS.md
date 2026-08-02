@@ -187,6 +187,18 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Ordinary feature PRs must not commit generated reports. Required correctness artifacts live under `target/velum-reports/` as `velum-correctness-<tree>` uploads. The post-merge benchmark-only job produces `velum-reports-<tree>` without preparing or rerunning Test262; canonical publication requires and composes both exact-tree artifacts.
 - Canonical tracked test reports belong under `reports/test-runs/` as a compact schema-versioned YAML source plus a derived Markdown file with the same sortable UTC timestamp. Both ordinary YAML files are limited to 1,000 lines, retain exact suite, feature-area, category, and benchmark totals, and include at most 30 deterministic actionable failure groups. The bounded `*-component.yaml` is artifact-only and is the publisher input; its TSV view is bounded too. Exhaustive per-case `*-exhaustive.yaml` and `*-exhaustive-timings.tsv` are local-only outputs enabled by `VELUM_REPORT_EXHAUSTIVE=1`; GitHub Actions rejects that mode, and those files are never artifact metadata, uploads, or commits. Canonical tracked JetStream shell reports belong under `reports/jetstream-runs/` as derived Markdown plus compact schema-v1 YAML; every selected official row remains visible, while component YAML, TSV, exhaustive output, and the QuickJS baseline are never canonical report-history files.
 - Test reports must include complete summary counts for passed, failed, and skipped cases. Bounded reports use exact aggregate categories plus representative diagnostic groups; use the explicit local exhaustive mode only when every case row is needed.
+- After any bounded iterative quality campaign reaches a reviewed milestone,
+  update the `README.md` quality-evidence block in the same PR, or in a
+  dedicated follow-up documentation PR if the campaign PR has already merged.
+  This applies to ordinary fuzzing, differential comparison against Engine262,
+  V8, QuickJS, or another reference engine, performance-comparison campaigns,
+  and similar future generated-corpus workflows. Keep the README entry brief and
+  evidence-based: include the completed script or iteration count, reference
+  engines or corpora used, pass/equivalence or mismatch totals, crash, timeout,
+  and resource-limit totals when relevant, replay outcome for saved artifacts,
+  confirmed engine fixes, and known limitations. Do not promote in-progress or
+  speculative counts, and do not commit local fuzzing artifacts or exhaustive
+  generated-script logs solely to support the README summary.
 - Official ECMAScript compatibility work should use Test262 as the external corpus and track pass or skip status by feature area.
 - The ready-PR correctness artifact contains the exact complete-corpus pass candidate. The trusted post-merge publisher validates and commits it with the canonical report, so feature agents must not run or commit a local full baseline refresh. Use `VELUM_TEST262_UPDATE_PASS_BASELINE=1` only for explicit recovery/maintenance, and never to hide a regression.
 - QuickJS should remain the reference implementation for differential behavior checks where the feature is implemented locally.
