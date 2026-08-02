@@ -84,6 +84,26 @@ The project initially used `QuickJS` as a behavioral and performance comparison;
 that historical baseline remains visible in the benchmark graph while the
 engine itself follows its own Rust architecture.
 
+## Quality evidence
+
+Velum currently publishes these high-level validation signals:
+
+- **Test262 conformance:** the complete pinned ECMAScript Test262 profile passes
+  with 102,578 of 102,578 required execution variants.
+- **Engine262-first differential fuzzing:** closed campaigns through PR #716
+  compared 3,725,550 generated Fuzzilli scripts, including 3,088,915 executions
+  where the pinned Engine262 oracle produced a comparable result. The campaign
+  fixed 11 confirmed Velum issues and replayed 1,003 saved correctness artifacts
+  to zero remaining Velum-vs-Engine262 mismatches.
+- **V8/Node diagnostics:** V8 is used as a secondary diagnostic engine and as
+  the reference for generated-program performance ratios when Engine262 is the
+  correctness oracle.
+
+Long-running fuzzing and differential runs are opt-in local workflows, not CI
+jobs. When a bounded campaign reaches a reviewed milestone, this section should
+be updated with the completed iteration count, reference engines, replay
+outcome, confirmed fixes, and any important limitations.
+
 ## Why Velum
 
 [Velum](https://www.merriam-webster.com/dictionary/velum) (pronounced
