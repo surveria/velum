@@ -12,6 +12,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[path = "fixtures/pgo/mock_time.rs"]
+mod mock_time;
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 type Fallible<T> = Result<T, Box<dyn std::error::Error>>;
 type Overrides = Vec<(&'static str, OsString)>;
@@ -88,12 +91,45 @@ fn clean_corpus_runs_with_sanitized_git_environment_and_preserved_sentinels() ->
                 "clean fixture never reached fake PGO",
             )?;
             fixture.check_child_git_environment()?;
+            fixture.check_synthetic_timing()?;
             require(
                 fixture.protected_snapshot()? == before,
                 &format!("{name} changed corpus, pristine clone, or external Git storage"),
             )?;
             fs::remove_file(fixture.root.join("executed.txt"))?;
             fs::remove_file(fixture.root.join("child-environment.txt"))?;
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn missing_owned_timer_is_rejected_before_fake_correctness_runner() -> TestResult {
+    with_fixture(|fixture| {
+        fs::remove_file(fixture.root.join("mock-time"))?;
+        let output = fixture.launch(&[])?;
+        require(
+            output.status.code() == Some(2),
+            "missing fixture timer was not rejected",
+        )?;
+        let stderr = String::from_utf8(output.stderr)?;
+        require(
+            stderr.contains("missing /usr/bin/time"),
+            "missing fixture timer failed for an unrelated reason",
+        )?;
+        require(
+            !fixture.root.join("executed.txt").exists(),
+            "missing timer reached fake PGO",
+        )?;
+        for entry in fs::read_dir(&fixture.experiment)? {
+            let entry = entry?;
+            require(
+                !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("correctness-"),
+                "missing timer created a correctness run before preflight completed",
+            )?;
         }
         Ok(())
     })
@@ -165,7 +201,10 @@ impl Fixture {
                 "external Git objects must not change\n",
             )?;
         }
-        fs::write(self.root.join("launcher.sh"), LAUNCHER)?;
+        fs::write(
+            self.root.join("launcher.sh"),
+            mock_time::launcher(LAUNCHER, &self.root)?,
+        )?;
         Ok(())
     }
 
@@ -453,6 +492,36 @@ impl Fixture {
         require(
             actual == expected,
             &format!("fake PGO inherited unexpected Git context: {actual:?}"),
+        )
+    }
+
+    fn check_synthetic_timing(&self) -> TestResult {
+        let mut found = false;
+        for entry in fs::read_dir(&self.experiment)? {
+            let entry = entry?;
+            if !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("correctness-")
+            {
+                continue;
+            }
+            let timing = fs::read_to_string(entry.path().join("time.txt"))?;
+            require(
+                timing
+                    .lines()
+                    .any(|line| line == "timing_source=synthetic-fixture"),
+                "successful correctness fixture omitted synthetic timing provenance",
+            )?;
+            require(
+                timing.lines().any(|line| line == "exit_status=0"),
+                "successful correctness fixture did not record the child exit status",
+            )?;
+            found = true;
+        }
+        require(
+            found,
+            "successful correctness fixture has no owned timing report",
         )
     }
 }

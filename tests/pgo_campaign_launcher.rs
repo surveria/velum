@@ -1,6 +1,9 @@
 //! Linux-only orchestration fixtures; no real compiler or benchmark is invoked.
 #![cfg(target_os = "linux")]
 
+#[path = "fixtures/pgo/mock_time.rs"]
+mod mock_time;
+
 use std::{
     env,
     ffi::OsString,
@@ -246,6 +249,33 @@ fn pgo_thin_lto_preset_is_identical_for_all_three_fake_builds() -> TestResult {
 }
 
 #[test]
+fn pgo_fixture_timer_missing_or_failing_never_reaches_a_successful_step() -> TestResult {
+    with_fixture(|fixture| {
+        let timer = fixture.root.join("mock-time");
+        fs::remove_file(&timer)?;
+        rejected(
+            &fixture.launch(&["--execute"], "success")?,
+            "GNU /usr/bin/time is required",
+        )?;
+        require(
+            !fixture.artifacts.exists(),
+            "missing timer created artifacts",
+        )?;
+        write_executable(&timer, "#!/usr/bin/env bash\nexit 97\n")?;
+        rejected(
+            &fixture.launch(&["--execute"], "success")?,
+            "source-export failed with status 97",
+        )?;
+        let run = fixture.run_directory()?;
+        check_stage_codes(&run, Some(("source-export", "97")))?;
+        require(
+            !run.join("mock-summary.txt").exists(),
+            "broken timer reached summary",
+        )
+    })
+}
+
+#[test]
 fn pgo_preserves_build_exit_seven_and_does_not_start_training() -> TestResult {
     with_fixture(|fixture| {
         rejected(
@@ -332,7 +362,7 @@ impl Fixture {
         fs::create_dir_all(&self.tools)?;
         fs::write(
             self.checkout.join("scripts/run-pgo-experiment.sh"),
-            LAUNCHER,
+            mock_time::launcher(LAUNCHER, &self.root)?,
         )?;
         fs::write(
             self.checkout.join("runner/Cargo.toml"),
@@ -633,6 +663,12 @@ fn check_preserved_artifacts(fixture: &Fixture, run: &Path) -> TestResult {
         "ambient data changed",
     )?;
     for variant in ["ordinary", "instrumented", "pgo"] {
+        let time = fs::read_to_string(run.join(format!("steps/{variant}-build.time")))?;
+        require(
+            time.starts_with("timing_source=synthetic-fixture\n")
+                && time.contains("exit_status=0\n"),
+            "fake build used a host timer or lost its child status",
+        )?;
         require(
             fs::read_to_string(run.join("bin").join(variant))? == MOCK_TOOL,
             "saved fake runner changed",
