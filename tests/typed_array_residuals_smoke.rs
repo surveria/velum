@@ -109,6 +109,28 @@ fn length_tracking_resizable_views_accept_unaligned_initial_byte_length() -> Tes
 }
 
 #[test]
+fn reflected_bigint_views_track_unaligned_growable_shared_buffers() -> TestResult {
+    // A non-fixed-length buffer accepts an omitted length even when its current
+    // byte length is not divisible by the element size (InitializeTypedArrayFromArrayBuffer).
+    ensure_eval(
+        r"
+        const buffer = new SharedArrayBuffer(1261, { maxByteLength: 1280 });
+        const tracking = Reflect.construct(BigUint64Array, [buffer]);
+        const offsetTracking = Reflect.construct(BigInt64Array, [buffer, 8]);
+        const fixed = Reflect.construct(BigUint64Array, [buffer, 0, 157]);
+        const before = tracking.length === 157 && tracking.byteLength === 1256 &&
+            offsetTracking.length === 156 && offsetTracking.byteLength === 1248;
+        tracking[156] = 42n;
+        buffer.grow(1264);
+        before && tracking.length === 158 && tracking.byteLength === 1264 &&
+            offsetTracking.length === 157 && fixed.length === 157 &&
+            tracking[156] === 42n && tracking[157] === 0n ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn observes_coercion_before_detached_backing_store_checks() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
