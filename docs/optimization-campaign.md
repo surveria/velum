@@ -248,4 +248,5 @@ External evidence is under
 explicit replacements, discarded measurements and memory phases. Source
 snapshots, executable digests, scripts, raw logs and neutral-build controls
 remain beside it. PGO is the next separate experiment; ordinary build defaults
-are unchanged.
+are unchanged. Its frozen protocol and review boundaries are described in
+[Controlled PGO Experiment](pgo-experiment.md).
