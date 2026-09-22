@@ -182,8 +182,16 @@ The saved profile-use executable has SHA-256
 `f9df83620b9b0e696b684b9d6e231eb726e84021fd310c5884d02c2bb6086f10`;
 the frozen merged profile is
 `6d57ecb3d392069cced20c1d5ce7251c6ecc8bae138f808a7813e21c2e6c8f1e`.
-Its independent complete Test262/QuickJS correctness run is in progress after
-all timed execution; ordinary exact-head CI remains a separate required gate.
+Its independent complete correctness run, performed after all timed execution,
+passes all 102,578 Test262 variants / 53,404 files, all 99 QuickJS differential
+cases, 69 engine fixtures and 121 active-subset cases: zero failures or skips.
+The expected-pass baseline also matches all 102,578 variants. This directly
+executes the saved binary without rebuilding, with 30 workers, no filters,
+no baseline updates and no profile output. Wall time is 362.01 seconds;
+source, corpus, binary and profile integrity checks pass before/after execution.
+Artifacts are in `correctness-20260922T201204Z-V79X6sQk` inside the experiment
+directory. The required ordinary exact-head CI is a separate gate, linked with
+its exact-tree artifact in [PR #723](https://github.com/surveria/velum/pull/723).
 
 The experiment supports a later opt-in PGO packaging task, not automatic
 enablement here. Ordinary release defaults remain unchanged. Before adoption,
