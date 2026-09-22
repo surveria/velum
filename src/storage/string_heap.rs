@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use alloc::{collections::BTreeSet, rc::Rc};
 use core::{cell::OnceCell, fmt, mem::size_of};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, hash_map::EntryRef};
 
 use crate::{
     error::{Error, Result},
@@ -12,6 +12,7 @@ use crate::{
 
 const UTF16_UNIT_BYTES: usize = size_of::<u16>();
 const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
+const ASCII_MAX_CODE_UNIT: u16 = 0x7F;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct StringId(u32);
@@ -176,9 +177,13 @@ struct StringDataRef(Rc<StringData>);
 
 impl StringDataRef {
     fn new(units: Vec<u16>) -> Self {
+        Self::from_shared_units(Rc::from(units.into_boxed_slice()))
+    }
+
+    fn from_shared_units(units: Rc<[u16]>) -> Self {
         let (well_formed, rendered_bytes) = utf16_rendering_metadata(&units);
         let payload = StringPayloadRef(Rc::new(StringPayload {
-            units: Rc::from(units.into_boxed_slice()),
+            units,
             text: OnceCell::new(),
             well_formed,
             rendered_bytes,
@@ -244,6 +249,11 @@ impl StringPayloadRef {
 }
 
 fn utf16_rendering_metadata(units: &[u16]) -> (bool, usize) {
+    // The reduction can be vectorized without a per-code-unit decode branch.
+    // ASCII needs one rendering byte per exact UTF-16 code unit, including NUL.
+    if units.iter().fold(0, |bits, unit| bits | unit) <= ASCII_MAX_CODE_UNIT {
+        return (true, units.len());
+    }
     let mut well_formed = true;
     let mut rendered_bytes = 0_usize;
     for decoded in char::decode_utf16(units.iter().copied()) {
@@ -277,6 +287,11 @@ impl fmt::Display for JsString {
 pub struct StringHeap {
     identity: VmIdentity,
     entries: HashMap<Rc<[u16]>, StringId>,
+    records: StringRecords,
+}
+
+#[derive(Debug, Clone)]
+struct StringRecords {
     strings: Vec<Option<StringDataRef>>,
     free: Vec<usize>,
     live: usize,
@@ -290,62 +305,93 @@ impl StringHeap {
         Self {
             identity,
             entries: HashMap::new(),
-            strings: Vec::new(),
-            free: Vec::new(),
-            live: 0,
-            bytes: 0,
-            max_count,
-            max_bytes,
+            records: StringRecords {
+                strings: Vec::new(),
+                free: Vec::new(),
+                live: 0,
+                bytes: 0,
+                max_count,
+                max_bytes,
+            },
         }
     }
 
     pub const fn len(&self) -> usize {
-        self.live
+        self.records.live
     }
 
     pub const fn bytes(&self) -> usize {
-        self.bytes
+        self.records.bytes
     }
 
     pub(crate) fn index_entry_count(&self) -> usize {
         self.entries.len()
     }
 
-    pub(crate) fn contains(&self, text: &str) -> bool {
+    pub(crate) fn intern<R>(
+        &mut self,
+        text: &str,
+        reserve: impl FnOnce() -> Result<R>,
+    ) -> Result<(JsString, Option<R>)> {
         let units = text.encode_utf16().collect::<Vec<_>>();
-        self.contains_utf16(&units)
+        self.intern_utf16(&units, reserve)
     }
 
-    pub(crate) fn contains_utf16(&self, units: &[u16]) -> bool {
-        self.entries.contains_key(units)
+    pub(crate) fn intern_js_string<R>(
+        &mut self,
+        string: &JsString,
+        reserve: impl FnOnce() -> Result<R>,
+    ) -> Result<(JsString, Option<R>)> {
+        self.intern_data(string.as_utf16(), || string.data.clone(), reserve)
     }
 
-    pub fn intern(&mut self, text: &str) -> Result<JsString> {
-        let units = text.encode_utf16().collect::<Vec<_>>();
-        if let Some(id) = self.entries.get(units.as_slice()).copied() {
-            return self.js_string(id);
+    pub(crate) fn intern_utf16<R>(
+        &mut self,
+        units: &[u16],
+        reserve: impl FnOnce() -> Result<R>,
+    ) -> Result<(JsString, Option<R>)> {
+        self.intern_data(
+            units,
+            || StringDataRef::from_shared_units(Rc::from(units)),
+            reserve,
+        )
+    }
+
+    // The reservation is created only for a vacant entry. An insertion error
+    // drops it; the caller commits it only after admission succeeds. Keeping the
+    // entry borrowed also avoids rehashing the same text to publish the index.
+    fn intern_data<R>(
+        &mut self,
+        units: &[u16],
+        make_data: impl FnOnce() -> StringDataRef,
+        reserve: impl FnOnce() -> Result<R>,
+    ) -> Result<(JsString, Option<R>)> {
+        match self.entries.entry_ref(units) {
+            EntryRef::Occupied(entry) => {
+                let string = self.records.js_string(*entry.get())?;
+                Ok((string, None))
+            }
+            EntryRef::Vacant(entry) => {
+                let reservation = reserve()?;
+                let (id, data) = self.records.insert_data(&make_data(), &self.identity)?;
+                // Both producers above retain exactly the queried code units.
+                // No caller can supply a different key for this vacant entry.
+                entry.insert_with_key(data.0.payload.0.units.clone(), id);
+                Ok((JsString::new(data), Some(reservation)))
+            }
         }
-        self.insert_string(units)
-    }
-
-    pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
-        if let Some(id) = self.entries.get(string.as_utf16()).copied() {
-            return self.js_string(id);
-        }
-        self.insert_data(&string.data)
-    }
-
-    pub fn intern_utf16(&mut self, units: &[u16]) -> Result<JsString> {
-        if let Some(id) = self.entries.get(units).copied() {
-            return self.js_string(id);
-        }
-        self.insert_string(units.to_vec())
     }
 
     pub(crate) fn validate_id(&self, id: StringId) -> Result<()> {
-        self.string_data(id).map(|_data| ())
+        self.records.string_data(id).map(|_data| ())
     }
 
+    pub(crate) fn sweep_unmarked(&mut self, marked: &BTreeSet<StringId>) -> Result<usize> {
+        self.records.sweep_unmarked(marked, &mut self.entries)
+    }
+}
+
+impl StringRecords {
     fn string_data(&self, id: StringId) -> Result<&StringDataRef> {
         self.strings
             .get(id.index()?)
@@ -357,11 +403,11 @@ impl StringHeap {
         self.string_data(id).cloned().map(JsString::new)
     }
 
-    fn insert_string(&mut self, units: Vec<u16>) -> Result<JsString> {
-        self.insert_data(&StringDataRef::new(units))
-    }
-
-    fn insert_data(&mut self, data: &StringDataRef) -> Result<JsString> {
+    fn insert_data(
+        &mut self,
+        data: &StringDataRef,
+        identity: &VmIdentity,
+    ) -> Result<(StringId, StringDataRef)> {
         if self.live >= self.max_count {
             return Err(Error::limit(format!(
                 "HeapString record count exceeded {}",
@@ -375,7 +421,7 @@ impl StringHeap {
                 .map_err(|error| Error::limit(format!("string heap exhausted: {error}")))?;
         }
         let id = StringId::from_index(index)?;
-        let data = data.with_owner(self.identity.clone(), id);
+        let data = data.with_owner(identity.clone(), id);
         let updated_bytes = self
             .bytes
             .checked_add(data.storage_bytes()?)
@@ -396,16 +442,19 @@ impl StringHeap {
         } else {
             self.strings.push(Some(data.clone()));
         }
-        self.entries.insert(data.0.payload.0.units.clone(), id);
         self.live = self
             .live
             .checked_add(1)
             .ok_or_else(|| Error::limit("string heap live count overflowed"))?;
         self.bytes = updated_bytes;
-        self.js_string(id)
+        Ok((id, data))
     }
 
-    pub(crate) fn sweep_unmarked(&mut self, marked: &BTreeSet<StringId>) -> Result<usize> {
+    fn sweep_unmarked(
+        &mut self,
+        marked: &BTreeSet<StringId>,
+        entries: &mut HashMap<Rc<[u16]>, StringId>,
+    ) -> Result<usize> {
         let mut removed = 0_usize;
         for (index, slot) in self.strings.iter().enumerate() {
             let id = StringId::from_index(index)?;
@@ -430,7 +479,7 @@ impl StringHeap {
                 .bytes
                 .checked_sub(data.storage_bytes()?)
                 .ok_or_else(|| Error::runtime("string heap byte count underflowed"))?;
-            let removed_id = self.entries.remove(data.as_utf16());
+            let removed_id = entries.remove(data.as_utf16());
             if removed_id != Some(id) {
                 return Err(Error::runtime("string heap index removal mismatch"));
             }

@@ -149,15 +149,10 @@ impl Context {
 
     pub(crate) fn intern_heap_string(&mut self, text: &str) -> Result<JsString> {
         self.check_string_len(text)?;
-        let reservation = if self.strings.contains(text) {
-            None
-        } else {
-            Some(
-                self.storage_ledger
-                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
-            )
-        };
-        let string = self.strings.intern(text)?;
+        let (string, reservation) = self.strings.intern(text, || {
+            self.storage_ledger
+                .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)
+        })?;
         if let Some(reservation) = reservation {
             reservation.commit()?;
         }
@@ -166,15 +161,10 @@ impl Context {
 
     pub(crate) fn intern_js_string(&mut self, string: &JsString) -> Result<JsString> {
         self.check_utf16_string_len(string.as_utf16())?;
-        let reservation = if self.strings.contains_utf16(string.as_utf16()) {
-            None
-        } else {
-            Some(
-                self.storage_ledger
-                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
-            )
-        };
-        let string = self.strings.intern_js_string(string)?;
+        let (string, reservation) = self.strings.intern_js_string(string, || {
+            self.storage_ledger
+                .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)
+        })?;
         if let Some(reservation) = reservation {
             reservation.commit()?;
         }
@@ -183,15 +173,10 @@ impl Context {
 
     pub(crate) fn intern_utf16_heap_string(&mut self, units: &[u16]) -> Result<JsString> {
         self.check_utf16_string_len(units)?;
-        let reservation = if self.strings.contains_utf16(units) {
-            None
-        } else {
-            Some(
-                self.storage_ledger
-                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
-            )
-        };
-        let string = self.strings.intern_utf16(units)?;
+        let (string, reservation) = self.strings.intern_utf16(units, || {
+            self.storage_ledger
+                .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)
+        })?;
         if let Some(reservation) = reservation {
             reservation.commit()?;
         }
