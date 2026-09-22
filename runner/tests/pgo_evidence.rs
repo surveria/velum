@@ -549,11 +549,17 @@ fn summary_rejects_reused_raw_reports_even_with_regenerated_sidecars() -> Result
         success(&fixture.summarize()?)?;
         let first = "round-1-ordinary-holdout_object_transform";
         let second = "round-2-ordinary-holdout_object_transform";
-        fs::copy(fixture.performance_path(first), fixture.performance_path(second))?;
+        fs::copy(
+            fixture.performance_path(first),
+            fixture.performance_path(second),
+        )?;
         success(&fixture.verify("ordinary", second, "performance", Some(CASE))?)?;
         let output = fixture.summarize()?;
         failure(&output)?;
-        ensure!(String::from_utf8_lossy(&output.stderr).contains("raw PGO report reused across observations"));
+        ensure!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("raw PGO report reused across observations")
+        );
         fixture.report(second, CASE, false)?;
         success(&fixture.verify("ordinary", second, "performance", Some(CASE))?)?;
         success(&fixture.summarize()?)?;
@@ -564,8 +570,12 @@ fn summary_rejects_reused_raw_reports_even_with_regenerated_sidecars() -> Result
         success(&fixture.verify("ordinary", "round-2-ordinary-memory", "memory", None)?)?;
         let output = fixture.summarize()?;
         failure(&output)?;
-        ensure!(String::from_utf8_lossy(&output.stderr).contains("raw PGO report reused across observations"));
-        let summary: Value = serde_json::from_slice(&fs::read(fixture.run.join("holdout-comparison.json"))?)?;
+        ensure!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("raw PGO report reused across observations")
+        );
+        let summary: Value =
+            serde_json::from_slice(&fs::read(fixture.run.join("holdout-comparison.json"))?)?;
         ensure!(summary.get("evidence_validated") == Some(&json!(false)));
         Ok(())
     })

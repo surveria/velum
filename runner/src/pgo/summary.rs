@@ -122,7 +122,9 @@ pub fn summarize(run: &Path) -> Result<()> {
         commit: &experiment.commit,
         tree: &experiment.tree,
         preset: &experiment.preset,
-        cpu_affinity: validation.affinity.context("summary has no verified CPU affinity")?,
+        cpu_affinity: validation
+            .affinity
+            .context("summary has no verified CPU affinity")?,
         profile_sha256,
         rows,
         round_geomeans,
@@ -221,7 +223,9 @@ fn revalidate(
         "verified report or sidecar identity changed: {label}"
     );
     ensure!(
-        validation.report_sha256.insert(actual.report_sha256.clone()),
+        validation
+            .report_sha256
+            .insert(actual.report_sha256.clone()),
         "raw PGO report reused across observations: {label}"
     );
     if let Some(expected) = &validation.affinity {

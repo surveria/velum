@@ -155,7 +155,10 @@ fn legacy_local_trait_symbols() -> [String; 6] {
         BORROWED_CONVERSION.to_owned(),
         STRING_CONVERSION.to_owned(),
         legacy_impl("bool", Some("velum..api..host..IntoJsValue")),
-        legacy_impl("f64", Some("velum..api..host..async_callable..IntoOwnedJsValue")),
+        legacy_impl(
+            "f64",
+            Some("velum..api..host..async_callable..IntoOwnedJsValue"),
+        ),
         legacy_impl("external..UserType", Some("velum..api..host..IntoJsValue")),
         legacy_impl(
             "core..option..Option$LT$$LT$core..foreign..Type$u20$as$u20$core..Trait$GT$..Assoc$GT$",
@@ -327,7 +330,10 @@ fn profile_rejects_foreign_legacy_roots_despite_nested_velum_mentions() -> Resul
             Some("core..fmt..Debug"),
         ),
         legacy_impl("alloc..vec..Vec$LT$velum..Value$GT$", None),
-        legacy_impl("std..external..Type", Some("core..Trait$LT$velum..Value$GT$")),
+        legacy_impl(
+            "std..external..Type",
+            Some("core..Trait$LT$velum..Value$GT$"),
+        ),
         legacy_impl("bool", Some("core..Trait$LT$velum..Value$GT$")),
         legacy_impl("std..external..Type", Some("velum_extra..HostTrait")),
         legacy_impl(
@@ -340,7 +346,10 @@ fn profile_rejects_foreign_legacy_roots_despite_nested_velum_mentions() -> Resul
         legacy_impl("velum..Type", Some("")),
     ] {
         with_fixture(|fixture| {
-            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)?;
+            rejected(
+                &fixture.profile(&profile(&record(&symbol, "7")))?,
+                NO_ENGINE,
+            )?;
             rejected(
                 &fixture.diagnostics("", &symbol)?,
                 "invalid normalized Velum-related symbol",
@@ -376,7 +385,11 @@ fn profile_keeps_cold_legacy_velum_trait_implementations_review_only() -> Result
             let trained = fixture.read("symbols.txt")?;
             ensure!(trained == format!("{ENGINE}\n"));
             success(&fixture.diagnostics(&missing(&symbol), &trained)?)?;
-            ensure!(fixture.read("diagnostics.txt")?.contains("human review: 1\n"));
+            ensure!(
+                fixture
+                    .read("diagnostics.txt")?
+                    .contains("human review: 1\n")
+            );
             Ok(())
         })?;
     }
@@ -390,10 +403,16 @@ fn profile_rejects_unbalanced_legacy_generics_and_duplicate_outer_trait_separato
         legacy_impl("velum..Type$GT$", Some("core..fmt..Debug")),
         legacy_impl("bool", Some("velum..Trait$LT$core..Marker")),
         legacy_impl("bool", Some("velum..Trait$GT$")),
-        legacy_impl("velum..Type$u20$as$u20$core..Trait", Some("core..fmt..Debug")),
+        legacy_impl(
+            "velum..Type$u20$as$u20$core..Trait",
+            Some("core..fmt..Debug"),
+        ),
     ] {
         with_fixture(|fixture| {
-            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)
+            rejected(
+                &fixture.profile(&profile(&record(&symbol, "7")))?,
+                NO_ENGINE,
+            )
         })?;
     }
     Ok(())
@@ -410,7 +429,10 @@ fn profile_rejects_malformed_legacy_component_lengths() -> Result<()> {
         "_ZN5velum999executeE".to_owned(),
     ] {
         with_fixture(|fixture| {
-            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)
+            rejected(
+                &fixture.profile(&profile(&record(&symbol, "7")))?,
+                NO_ENGINE,
+            )
         })?;
     }
     Ok(())
@@ -487,7 +509,10 @@ fn diagnostics_reject_missing_trained_legacy_trait_impl_after_cgu_normalization(
         let records = format!(
             "{}{}",
             record(ENGINE, "7"),
-            record(&format!("{MODULE};{ENGINE_DROP}"), "317491491, 187251358, 0, 0"),
+            record(
+                &format!("{MODULE};{ENGINE_DROP}"),
+                "317491491, 187251358, 0, 0"
+            ),
         );
         success(&fixture.profile(&profile(&records))?)?;
         let trained = fixture.read("symbols.txt")?;

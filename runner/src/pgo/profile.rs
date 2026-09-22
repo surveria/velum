@@ -74,8 +74,12 @@ pub fn verify_profile(show: &Path, symbols_out: &Path) -> Result<()> {
     for symbol in hot_symbols {
         writeln!(output, "{symbol}").context("failed to write executed Velum-related symbol")?;
     }
-    output.flush().context("failed to flush Velum-related symbols")?;
-    println!("Validated nonempty IR profile with observed executed recognized Velum-related functions.");
+    output
+        .flush()
+        .context("failed to flush Velum-related symbols")?;
+    println!(
+        "Validated nonempty IR profile with observed executed recognized Velum-related functions."
+    );
     Ok(())
 }
 
@@ -192,8 +196,7 @@ fn legacy_impl_parts(implementation: &str) -> Option<(&str, Option<&str>)> {
             depth = depth.checked_add(1)?;
         } else if suffix.starts_with("$GT$") {
             depth = depth.checked_sub(1)?;
-        } else if depth == 0 && suffix.starts_with(LEGACY_AS)
-            && separator.replace(offset).is_some()
+        } else if depth == 0 && suffix.starts_with(LEGACY_AS) && separator.replace(offset).is_some()
         {
             return None;
         }
@@ -290,17 +293,26 @@ pub fn verify_diagnostics(stderr: &Path, symbols: &Path, report_out: &Path) -> R
 }
 
 fn read_trained_symbols(path: &Path) -> Result<BTreeSet<String>> {
-    let text = fs::read_to_string(path)
-        .with_context(|| format!("failed to read trained Velum-related symbols '{}'", path.display()))?;
+    let text = fs::read_to_string(path).with_context(|| {
+        format!(
+            "failed to read trained Velum-related symbols '{}'",
+            path.display()
+        )
+    })?;
     let mut symbols = BTreeSet::new();
     for line in text.lines() {
         ensure!(
-            recognized_velum_symbol(line) && !line.contains(char::is_whitespace) && !line.contains(';'),
+            recognized_velum_symbol(line)
+                && !line.contains(char::is_whitespace)
+                && !line.contains(';'),
             "invalid normalized Velum-related symbol '{line}'"
         );
         symbols.insert(line.to_owned());
     }
-    ensure!(!symbols.is_empty(), "trained Velum-related symbols are empty");
+    ensure!(
+        !symbols.is_empty(),
+        "trained Velum-related symbols are empty"
+    );
     Ok(symbols)
 }
 
