@@ -248,4 +248,23 @@ External evidence is under
 explicit replacements, discarded measurements and memory phases. Source
 snapshots, executable digests, scripts, raw logs and neutral-build controls
 remain beside it. PGO is the next separate experiment; ordinary build defaults
-are unchanged.
+are unchanged. Its frozen protocol and review boundaries are described in
+[Controlled PGO Experiment](pgo-experiment.md).
+
+## Reviewed PGO milestone: 2026-09-22
+
+The fourth experiment is now measured on fresh source after repairing an
+existing dense-array shift/unshift accounting defect discovered by its first
+attempt. The [complete PGO report](pgo-experiment.md#reviewed-experiment-2026-09-22)
+records six independent holdouts in two alternating rounds: 24 valid timing
+rows, matching output checksums and 144 successful isolated memory workers.
+The geometric time ratio is 0.6599, with improvements in every case and both
+rounds. Whole-runner file size falls 3.9%; logical storage is unchanged.
+
+This completes the measurement, profiling, memory and controlled-build
+experiments planned here; it does not make optimization an exhausted problem.
+Normal build defaults remain unchanged. Wider application/embedding holdouts,
+additional target hardware and maintainable profile refresh are prerequisites
+for a separately scoped opt-in PGO delivery. The initial failed attempt,
+correctness repair and complete ordinary/profile-use validation are described
+in the linked report; its final correctness gates remain explicit there.
