@@ -133,7 +133,12 @@ The committed `tests/corpora/test262/full-pass-baseline.txt` records every varia
 
 The 1.00x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work. The current CI report records over-budget benchmark rows as tracked exceptions rather than hard failures until the baseline is below the target; once that happens, the same metrics should become a regression gate.
 
-Memory reporting should track both peak resident memory and engine-owned heap counters where available. The current report uses process-level maximum resident set size for CLI parity. The long-term target is VM-level accounting exposed through the library API.
+Memory reporting must distinguish physical process residency from logical
+engine-owned records and payload counters. The ordinary latency report does not
+measure memory: its historical `memory_ratio` column remains unavailable (`-`).
+The separate opt-in campaign described in [optimization-campaign.md](optimization-campaign.md)
+records memory lifecycle evidence without inventing a cross-engine ratio from
+incompatible internal counters.
 
 ## Measurement Quality Gate
 

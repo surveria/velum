@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str = "usage: velum-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --jetstream <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: velum-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --memory-benchmarks <path> | --jetstream <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {
@@ -19,6 +19,12 @@ pub enum Config {
     },
     Benchmarks {
         report_path: PathBuf,
+    },
+    MemoryBenchmarks {
+        report_path: PathBuf,
+    },
+    MemoryBenchmarkWorker {
+        encoded_config: String,
     },
     JetStream {
         report_path: PathBuf,
@@ -54,6 +60,22 @@ impl Config {
             return Ok(Self::Benchmarks {
                 report_path: PathBuf::from(report_path),
             });
+        }
+        if flag == "--memory-benchmarks" {
+            let report_path = args
+                .next()
+                .context("missing path after --memory-benchmarks")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::MemoryBenchmarks {
+                report_path: PathBuf::from(report_path),
+            });
+        }
+        if flag == "--memory-benchmark-worker" {
+            let encoded_config = args
+                .next()
+                .context("missing internal memory benchmark worker configuration")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::MemoryBenchmarkWorker { encoded_config });
         }
         if flag == "--compose-reports" {
             let expected_tree = args

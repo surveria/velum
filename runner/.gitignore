@@ -9,3 +9,7 @@
 !/src/
 !/src/**/
 !/src/**/*.rs
+!/tests/
+!/tests/**/
+!/tests/**/*.rs
+!/tests/**/*.txt
