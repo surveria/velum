@@ -239,6 +239,13 @@ proxies; several built-ins repeat the same matches.
 - Static-name caches now receive only explicit ordinary-object tails from the
   semantic facade; the remaining cache code owns shape/version mechanics, not
   value-kind dispatch.
+  Own-data read hits may reuse the same immutable shape/slot on a different
+  ordinary receiver, after checking the current receiver's storage brand,
+  descriptor kind and prototype epoch. The value always comes from the current
+  receiver; the old receiver need not remain alive. Global bindings and exotic
+  receivers return to semantic dispatch, and inherited, missing, native-call,
+  write and delete guards remain receiver-specific. This changes cache reuse,
+  not the semantic owner, root set or storage-accounting model.
 
 For new compatibility code after AS-03b2, use the abstract `Context` operation
 when one exists and extend it once when it does not. Direct `ObjectHeap` access

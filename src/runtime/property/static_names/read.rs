@@ -11,10 +11,9 @@ use crate::{
 };
 
 impl Context {
-    /// Validated per-site cache hit for a plain-object read. The cache is
-    /// only ever filled from the plain-object tail of the lookup chain and
-    /// its guard pins the receiver, so a validated hit can skip the exotic
-    /// receiver probes entirely.
+    /// Validated per-site cache hit for an ordinary property read. Inherited
+    /// hits pin the receiver; own-data hits may reuse a shape/slot only after
+    /// validating the current receiver's ordinary storage and descriptor.
     fn cached_static_property_fast_read(
         &mut self,
         object: &Value,
@@ -24,6 +23,10 @@ impl Context {
         let Value::Object(id) = object else {
             return Ok(None);
         };
+        // Global binding dispatch belongs to Context rather than ObjectHeap.
+        if self.is_global_object_id(*id) {
+            return Ok(None);
+        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(None);
         };

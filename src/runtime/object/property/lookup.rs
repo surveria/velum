@@ -262,10 +262,45 @@ impl ObjectHeap {
         id: ObjectId,
         lookup: CacheablePropertyLookup,
     ) -> Result<CacheablePropertyValue> {
+        if lookup.guard.receiver != id {
+            return self.read_same_shape_own_property_value(id, lookup);
+        }
         if !lookup.guard.is_valid_for(self, id)? {
             return Ok(CacheablePropertyValue::Uncacheable);
         }
         self.read_valid_cacheable_property_value(lookup)
+    }
+
+    fn read_same_shape_own_property_value(
+        &self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyValue> {
+        let CacheablePropertyLookupResult::Hit(hit) = lookup.result else {
+            return Ok(CacheablePropertyValue::Uncacheable);
+        };
+        if hit.depth != PrototypeLookupDepth::root()
+            || hit.owner != lookup.guard.receiver
+            || self.prototype_lookup_version() != lookup.guard.prototype_lookup_version
+        {
+            return Ok(CacheablePropertyValue::Uncacheable);
+        }
+
+        // Shapes describe named-property layouts, not receiver brands or
+        // accessor kinds. Validate both before bypassing semantic dispatch.
+        // Read from the current receiver; the cached owner need not be alive.
+        let object = self.object(id)?;
+        if object.shape != lookup.guard.receiver_shape
+            || object.shape != hit.owner_shape
+            || !object.can_reuse_ordinary_own_slot()
+        {
+            return Ok(CacheablePropertyValue::Uncacheable);
+        }
+        let property = object.named_property_at_slot(hit.slot)?;
+        if property.is_accessor() {
+            return Ok(CacheablePropertyValue::Uncacheable);
+        }
+        Ok(CacheablePropertyValue::Hit(property.value()))
     }
 
     pub(crate) fn read_cacheable_native_property_value_for(
@@ -512,6 +547,15 @@ impl ObjectHeap {
 }
 
 impl Object {
+    const fn can_reuse_ordinary_own_slot(&self) -> bool {
+        self.proxy_value.is_none()
+            && self.array_length.is_none()
+            && self.string_value.is_none()
+            && self.typed_array.is_none()
+            && !self.arguments_brand
+            && !self.module_namespace
+    }
+
     fn cacheable_property_hit(
         &self,
         owner: ObjectId,
