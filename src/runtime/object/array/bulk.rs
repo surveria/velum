@@ -1,8 +1,59 @@
+use super::storage::ShiftedArrayElement;
 use super::{Object, ObjectProperty};
 use crate::error::{Error, Result};
 use crate::value::Value;
 
 impl Object {
+    pub(in crate::runtime::object) fn shift_dense_for_len_if_default(
+        &mut self,
+        len: usize,
+        allow_holey: bool,
+    ) -> Result<Option<ShiftedArrayElement>> {
+        let shifted = self
+            .array_storage
+            .shift_dense_for_len_if_default(len, allow_holey);
+        if let Some(ShiftedArrayElement::Property(property)) = &shifted {
+            if property.is_enumerable() {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+            }
+            self.release_property()?;
+        }
+        Ok(shifted)
+    }
+
+    pub(in crate::runtime::object) fn unshift_dense_for_len_if_default(
+        &mut self,
+        len: usize,
+        values: &[Value],
+        max_properties: usize,
+        allow_holey: bool,
+    ) -> Result<bool> {
+        // Check eligibility before reserving: fallback paths retain their own
+        // observable ordering and incremental storage-limit enforcement.
+        if !self.array_storage.can_unshift_dense_for_len_if_default(
+            len,
+            values.len(),
+            max_properties,
+            allow_holey,
+        ) {
+            return Ok(false);
+        }
+        let reservation = self.reserve_property_growth_by(values.len())?;
+        if !self.array_storage.unshift_dense_for_len_if_default(
+            len,
+            values,
+            max_properties,
+            allow_holey,
+        ) {
+            return Ok(false);
+        }
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        self.add_enumerable_properties(values.len())?;
+        Ok(true)
+    }
+
     pub(in crate::runtime::object) fn append_packed_default_value_iter(
         &mut self,
         values: impl IntoIterator<Item = Value>,

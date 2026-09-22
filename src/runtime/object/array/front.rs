@@ -21,8 +21,7 @@ impl ObjectHeap {
         let allow_holey = self.allow_front_holey_fast_path(id, length_usize)?;
         if let Some(first_property) = self
             .object_mut(id)?
-            .array_storage
-            .shift_dense_for_len_if_default(length_usize, allow_holey)
+            .shift_dense_for_len_if_default(length_usize, allow_holey)?
         {
             self.object_mut(id)?.array_length = Some(last_index.length());
             self.bump_prototype_lookup_version()?;
@@ -54,11 +53,12 @@ impl ObjectHeap {
 
         let length_usize = length.to_usize()?;
         let allow_holey = self.allow_front_holey_fast_path(id, length_usize)?;
-        if self
-            .object_mut(id)?
-            .array_storage
-            .unshift_dense_for_len_if_default(length_usize, values, max_properties, allow_holey)
-        {
+        if self.object_mut(id)?.unshift_dense_for_len_if_default(
+            length_usize,
+            values,
+            max_properties,
+            allow_holey,
+        )? {
             self.object_mut(id)?.array_length = Some(new_length);
             self.bump_prototype_lookup_version()?;
             return Ok(new_length.value());

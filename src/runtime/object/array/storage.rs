@@ -319,6 +319,37 @@ impl ArrayStorage {
         }
     }
 
+    pub(in crate::runtime::object) fn can_unshift_dense_for_len_if_default(
+        &self,
+        len: usize,
+        value_count: usize,
+        max_properties: usize,
+        allow_holey: bool,
+    ) -> bool {
+        if self.has_sparse_keys() {
+            return false;
+        }
+        let Some(new_property_count) = self.property_count.checked_add(value_count) else {
+            return false;
+        };
+        let Some(new_len) = len.checked_add(value_count) else {
+            return false;
+        };
+        if new_property_count > max_properties || new_len > max_properties {
+            return false;
+        }
+        match &self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => elements
+                .iter()
+                .all(ObjectProperty::has_default_array_attributes),
+            ArrayElements::Holey(elements) if allow_holey && elements.len() == len => elements
+                .iter()
+                .flatten()
+                .all(ObjectProperty::has_default_array_attributes),
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => false,
+        }
+    }
+
     pub(in crate::runtime::object) fn unshift_dense_for_len_if_default(
         &mut self,
         len: usize,
@@ -326,47 +357,32 @@ impl ArrayStorage {
         max_properties: usize,
         allow_holey: bool,
     ) -> bool {
-        if self.has_sparse_keys() {
+        if !self.can_unshift_dense_for_len_if_default(
+            len,
+            values.len(),
+            max_properties,
+            allow_holey,
+        ) {
             return false;
         }
         let Some(new_property_count) = self.property_count.checked_add(values.len()) else {
             return false;
         };
-        let Some(new_len) = len.checked_add(values.len()) else {
-            return false;
-        };
-        if new_property_count > max_properties || new_len > max_properties {
-            return false;
-        }
         match &mut self.elements {
-            ArrayElements::Packed(elements) if elements.len() == len => {
-                if !elements
-                    .iter()
-                    .all(ObjectProperty::has_default_array_attributes)
-                {
-                    return false;
-                }
+            ArrayElements::Packed(elements) => {
                 let properties = values
                     .iter()
                     .cloned()
                     .map(|value| ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
                 elements.splice(0..0, properties);
             }
-            ArrayElements::Holey(elements) if allow_holey && elements.len() == len => {
-                if !elements
-                    .iter()
-                    .flatten()
-                    .all(ObjectProperty::has_default_array_attributes)
-                {
-                    return false;
-                }
+            ArrayElements::Holey(elements) => {
                 let properties = values
                     .iter()
                     .cloned()
                     .map(|value| Some(ObjectProperty::ordinary(value, PropertyEnumerable::Yes)));
                 elements.splice(0..0, properties);
             }
-            ArrayElements::Packed(_) | ArrayElements::Holey(_) => return false,
         }
         self.property_count = new_property_count;
         true
