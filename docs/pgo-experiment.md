@@ -22,12 +22,17 @@ tool, reject corrupt inputs and profile mismatch diagnostics, and establish
 that actual engine-owned functions executed. Freeze the merged profile before
 evaluating any `holdout_*` workload or memory scenario. Never incorporate
 holdout measurements or correctness runs into training.
+Training weights follow the observed execution counts, not equal weights for
+the six workload families. Rust dependencies are instrumented too; precompiled
+standard-library code and the bundled C QuickJS reference are not.
 
 Evaluate six structurally different holdouts in ordinary/PGO order, then
 PGO/ordinary order, sequentially on CPU 0. JSON and tree-allocation cases use
 15,000 ms minimum sampling, three samples and a 60,000 ms total budget. Other
 cases use 5,000 ms, five samples and a 30,000 ms budget. All retain a 150 ms
 warmup, the existing 1 ms minimum operation, 10% maximum CV and three attempts.
+The maximum operation is 2,000 ms. These sampling settings apply to both
+training and evaluation; the 144 memory workers cover ordinary/PGO only.
 These settings are fixed before training. A quality failure remains
 inconclusive; do not tune the protocol after inspecting holdout results.
 
@@ -42,7 +47,7 @@ match across variants and rounds.
 
 The external prototype and its tests live under
 `$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/`. It requires Linux
-x86_64, Rust with matching bundled LLVM 22 tools, GNU time and Python with
+x86_64, `setsid`, Rust with matching bundled LLVM 22 tools, GNU time and Python with
 PyYAML; it never installs dependencies. Every invocation owns a fresh directory
 outside the checkout, containing immutable sources and binaries, raw and merged
 profiles, source/tool hashes, commands, reports and completion status. This
@@ -57,8 +62,9 @@ bash "$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/pgo-plan-proto
 
 Run the prototype's lightweight and fake-tool integration checks before real
 compilation. Keep compilers, CI and fuzzers off the measured host during timed
-execution; the existing runner owns the shared performance lock. Missing cold
-function profiles remain visible for review. A missing previously trained
+execution; the existing runner owns the shared performance lock. Missing-function
+diagnostics remain visible for review; they differ from retained zero-count
+profile records. A missing previously trained
 engine function, invalid profile or unclassified PGO warning blocks evaluation.
 The final status `complete-needs-review` means collection finished, not adoption.
 
@@ -97,7 +103,11 @@ mutation. Pure eligibility checks preserve the existing generic fallback's
 observable order. Regression tests cover packed/holey arrays, enumeration,
 fallback descriptors/prototypes, automatic and explicit collection, rejected
 reservations and independent VM budgets. Five of the first six regressions
-failed before the repair; all pass afterwards in both optimization modes.
+failed before the repair; all eleven final cases pass afterwards with Velum's
+`OptimizationMode::Enabled` and `OptimizationMode::Disabled`. These are engine
+optimization modes, not ordinary/profile-use compiler variants. The full local
+gate passes 1,844 test results without failures or ignored cases. Focused
+Test262 passes all 84 variants from 42 files, plus 99 QuickJS differential cases.
 
 The failed attempt remains at
 `$HOME/velum-fuzzing-artifacts/performance/pgo/pgo-20260922T193128Z-Fz8y5zqe`.
