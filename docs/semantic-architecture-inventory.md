@@ -583,6 +583,18 @@ reachable until no new edge is found. Sweep physically removes dead weak
 entries and reconciles their collection-entry accounting before vacating
 unreachable owner records.
 
+The ephemeron contract is a fixed point, not a requirement to clone a work-list
+container. Each pass considers its existing entries; newly discovered WeakMaps
+contribute after the next strong-edge drain. Unreachable key cycles must never
+become strong roots. The September performance tranche removes the guard's
+obsolete exact `ephemerons.clone()` source requirement while preserving the
+typed visitor, direct-root, sweep, cache-invalidation and ledger boundaries.
+`tests/gc_ephemeron_pass_smoke.rs` covers reverse-ordered chains requiring
+multiple passes, dead key cycles, callable/Symbol keys, newly discovered maps,
+and exact entry reclamation and storage reconciliation. This behavioral
+coverage permits allocation-free iteration without fixing a new loop spelling
+as an architectural invariant.
+
 `RuntimeLimits` retains its source, syntax, step, string, binding, object, and
 per-object property limits. AS-05b2c1 adds `VmStorageLimits`, an unlimited-by-
 default immutable policy keyed by all twenty-six `VmStorageKind` categories.
@@ -594,6 +606,11 @@ that ledger to collection, Promise/job, retained/transient root,
 execution-frame, association, and Module owners. Suspended top-level module
 execution contributes its detached bindings, caches, and activation frames to
 the same reconciliation path as suspended async functions and generators.
+Persisted module scopes also contribute their owned bindings and cache entries.
+The scope is transferred out while active or suspended, so the independent
+owner recount sees exactly one owner across execution, suspension and restore.
+`tests/module_scope_accounting_smoke.rs` covers completed and failed evaluation,
+canonical aliases, realm transfers and top-level-await suspension/resumption.
 Every snapshot reconciles the ledger and checks all twenty-six owner totals
 against the configured policy.
 

@@ -1623,7 +1623,6 @@ check_gc_boundary() {
 
   for source in \
     'context.visit_direct_roots(&mut marker)?;' \
-    'for (key, value) in marker.ephemerons.clone() {' \
     'pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport> {' \
     'self.invalidate_identity_caches();' \
     'self.release_collected_storage(&before, &after)?;' \
@@ -1632,6 +1631,9 @@ check_gc_boundary() {
       fail "garbage collection boundary changed; root, ephemeron, sweep, cache, or accounting source '${source}' is missing"
     fi
   done
+
+  # Ephemeron fixed-point behavior is covered by gc_ephemeron_pass_smoke;
+  # the architecture does not require cloning a particular work-list container.
 
   for source in \
     'functions: SlotArena<Function>,' \
