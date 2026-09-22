@@ -1,6 +1,8 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, collections::CollectionIteratorId},
+    runtime::{
+        Context, call::RuntimeCallArgs, collections::CollectionIteratorId, roots::VmRootKind,
+    },
     value::Value,
 };
 
@@ -22,6 +24,10 @@ impl Context {
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_utf16_string_value(&input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         let constructor = self.regexp_species_constructor(receiver)?;
         let flags_value = self.get_named(receiver, REGEXP_FLAGS_PROPERTY)?;
         let flags = self.to_string(&flags_value)?;

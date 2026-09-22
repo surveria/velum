@@ -344,6 +344,7 @@ impl Context {
         counter.record(VmStorageKind::Symbol, self.symbols.len())?;
 
         self.record_binding_storage(counter)?;
+        self.record_module_scope_storage(counter)?;
         self.record_callable_storage(counter)?;
         self.record_object_storage(counter)?;
         self.record_async_storage(counter)?;
@@ -444,6 +445,20 @@ impl Context {
             if let Some(binding_count) = environment.binding_count()? {
                 counter.record(VmStorageKind::Binding, binding_count)?;
             }
+        }
+        Ok(())
+    }
+
+    fn record_module_scope_storage(&self, counter: &mut StorageCounter) -> Result<()> {
+        for module in &self.modules {
+            let Some(scope) = module.scope() else {
+                continue;
+            };
+            // Active and suspended module scopes leave this owner while their
+            // storage is counted by the local or detached execution paths.
+            let footprint = scope.storage_footprint()?;
+            counter.record(VmStorageKind::Binding, footprint.binding_count())?;
+            counter.record(VmStorageKind::CacheEntry, footprint.cache_entry_count())?;
         }
         Ok(())
     }

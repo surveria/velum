@@ -263,7 +263,7 @@ impl Context {
                 let Some(id) = text.id() else {
                     return Err(Error::runtime("string is not owned by a VM"));
                 };
-                self.strings.get(id)?;
+                self.strings.validate_id(id)?;
             }
             Value::Symbol(symbol) => {
                 if let Some(description) = symbol.description() {

@@ -11,8 +11,20 @@ use super::{BytecodeLinearOp, BytecodeState};
 
 #[derive(Debug)]
 pub(in crate::runtime) struct BytecodeLinearPlan<'a> {
-    segments: Vec<BytecodeLinearSegment<'a>>,
-    entry_by_pc: Vec<Option<usize>>,
+    storage: BytecodeLinearPlanStorage<'a>,
+}
+
+#[derive(Debug)]
+enum BytecodeLinearPlanStorage<'a> {
+    Single {
+        end: usize,
+        op: BytecodeLinearOp<'a>,
+        span: crate::SourceSpan,
+    },
+    Segmented {
+        segments: Vec<BytecodeLinearSegment<'a>>,
+        entry_by_pc: Vec<Option<usize>>,
+    },
 }
 
 #[derive(Debug)]
@@ -21,6 +33,13 @@ struct BytecodeLinearSegment<'a> {
     end: usize,
     ops: Vec<BytecodeLinearOp<'a>>,
     spans: Vec<crate::SourceSpan>,
+}
+
+#[derive(Clone, Copy)]
+struct BytecodeLinearSegmentView<'plan, 'bytecode> {
+    end: usize,
+    ops: &'plan [BytecodeLinearOp<'bytecode>],
+    spans: &'plan [crate::SourceSpan],
 }
 
 impl Context {
@@ -51,12 +70,17 @@ impl Context {
                 self.bind_bytecode_linear_peephole(instructions, index, peepholes)?
             {
                 ensure_positive_consumed(consumed)?;
+                let span = linear_op_span(block, index, consumed)?;
+                let end = checked_segment_end(index, consumed)?;
+                if index == 0 && end == instructions.len() {
+                    return Ok(Some(BytecodeLinearPlan::single(end, op, span)));
+                }
                 if segment_start.is_none() {
                     segment_start = Some(index);
                 }
                 ops.push(op);
-                spans.push(linear_op_span(block, index, consumed)?);
-                index = checked_segment_end(index, consumed)?;
+                spans.push(span);
+                index = end;
                 continue;
             }
 
@@ -66,12 +90,17 @@ impl Context {
             if template.instruction_is_linear(index)?
                 && let Some(op) = self.compile_bytecode_linear_op(instruction)?
             {
+                let span = linear_op_span(block, index, 1)?;
+                let end = checked_segment_end(index, 1)?;
+                if index == 0 && end == instructions.len() {
+                    return Ok(Some(BytecodeLinearPlan::single(end, op, span)));
+                }
                 if segment_start.is_none() {
                     segment_start = Some(index);
                 }
                 ops.push(op);
-                spans.push(linear_op_span(block, index, 1)?);
-                index = checked_segment_end(index, 1)?;
+                spans.push(span);
+                index = end;
                 continue;
             }
 
@@ -159,7 +188,7 @@ impl Context {
 
     fn eval_bytecode_linear_segment(
         &mut self,
-        segment: &BytecodeLinearSegment<'_>,
+        segment: BytecodeLinearSegmentView<'_, '_>,
         state: &mut BytecodeState,
     ) -> Result<Option<Completion>> {
         let span = segment
@@ -168,7 +197,7 @@ impl Context {
             .ok_or_else(|| Error::runtime("bytecode linear segment has no source span"))?;
         self.record_bytecode_linear_segment_run()
             .map_err(|error| error.with_runtime_span(*span))?;
-        for (op, span) in segment.ops.iter().zip(&segment.spans) {
+        for (op, span) in segment.ops.iter().zip(segment.spans) {
             self.step()
                 .map_err(|error| error.with_runtime_span(*span))?;
             if let Err(error) = self.eval_bytecode_linear_op(state, op) {
@@ -181,6 +210,12 @@ impl Context {
 }
 
 impl<'a> BytecodeLinearPlan<'a> {
+    const fn single(end: usize, op: BytecodeLinearOp<'a>, span: crate::SourceSpan) -> Self {
+        Self {
+            storage: BytecodeLinearPlanStorage::Single { end, op, span },
+        }
+    }
+
     fn new(block_len: usize, segments: Vec<BytecodeLinearSegment<'a>>) -> Result<Option<Self>> {
         if segments.is_empty() {
             return Ok(None);
@@ -200,27 +235,48 @@ impl<'a> BytecodeLinearPlan<'a> {
         }
 
         Ok(Some(Self {
-            segments,
-            entry_by_pc,
+            storage: BytecodeLinearPlanStorage::Segmented {
+                segments,
+                entry_by_pc,
+            },
         }))
     }
 
-    fn segment_at(&self, pc: usize) -> Option<&BytecodeLinearSegment<'a>> {
-        let segment_index = self.entry_by_pc.get(pc).copied().flatten()?;
-        self.segments.get(segment_index)
+    fn segment_at(&self, pc: usize) -> Option<BytecodeLinearSegmentView<'_, 'a>> {
+        match &self.storage {
+            BytecodeLinearPlanStorage::Single { end, op, span } => {
+                if pc != 0 {
+                    return None;
+                }
+                Some(BytecodeLinearSegmentView {
+                    end: *end,
+                    ops: core::slice::from_ref(op),
+                    spans: core::slice::from_ref(span),
+                })
+            }
+            BytecodeLinearPlanStorage::Segmented {
+                segments,
+                entry_by_pc,
+            } => {
+                let segment_index = entry_by_pc.get(pc).copied().flatten()?;
+                let segment = segments.get(segment_index)?;
+                Some(BytecodeLinearSegmentView {
+                    end: segment.end,
+                    ops: &segment.ops,
+                    spans: &segment.spans,
+                })
+            }
+        }
     }
 
     pub(super) fn single_full_block_op(
         &self,
         block: &BytecodeBlock,
     ) -> Option<(&BytecodeLinearOp<'a>, crate::SourceSpan)> {
-        let segment = self.segments.first()?;
-        if self.segments.len() == 1
-            && segment.start == 0
-            && segment.end == block.instructions().len()
-            && segment.ops.len() == 1
+        if let BytecodeLinearPlanStorage::Single { end, op, span } = &self.storage
+            && *end == block.instructions().len()
         {
-            return segment.ops.first().zip(segment.spans.first().copied());
+            return Some((op, *span));
         }
         None
     }

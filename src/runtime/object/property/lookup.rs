@@ -372,6 +372,9 @@ impl ObjectHeap {
         lookup: CacheablePropertyLookup,
         value: Value,
     ) -> Result<CacheablePropertyWrite> {
+        if lookup.guard.receiver != id {
+            return self.write_same_shape_own_property_value(id, lookup, value);
+        }
         if !lookup.guard.is_valid_for(self, id)? {
             return Ok(CacheablePropertyWrite::Uncacheable);
         }
@@ -390,6 +393,40 @@ impl ObjectHeap {
         }
         let object = self.object_mut(hit.owner)?;
         if object.shape != hit.owner_shape || object.array_length.is_some() {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+        object.update_named_property_at_slot(hit.slot, value)?;
+        Ok(CacheablePropertyWrite::Updated)
+    }
+
+    fn write_same_shape_own_property_value(
+        &mut self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+        value: Value,
+    ) -> Result<CacheablePropertyWrite> {
+        let CacheablePropertyLookupResult::Hit(hit) = lookup.result else {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        };
+        if hit.depth != PrototypeLookupDepth::root()
+            || hit.owner != lookup.guard.receiver
+            || self.prototype_lookup_version() != lookup.guard.prototype_lookup_version
+        {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+
+        // Coercion between a cached read and this write may run JavaScript.
+        // Revalidate the current receiver without touching the cached owner,
+        // which may already have been collected.
+        let object = self.object_mut(id)?;
+        if object.shape != lookup.guard.receiver_shape
+            || object.shape != hit.owner_shape
+            || !object.can_reuse_ordinary_own_slot()
+        {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+        let property = object.named_property_at_slot(hit.slot)?;
+        if property.is_accessor() || !property.is_writable() {
             return Ok(CacheablePropertyWrite::Uncacheable);
         }
         object.update_named_property_at_slot(hit.slot, value)?;

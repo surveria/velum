@@ -19,8 +19,10 @@ resident memory. Whole-runner size is not standalone engine-library size.
 Train only the six `representative_*` prepared workloads. Each exact-ID process
 must emit a new nonempty raw profile. Merge with the matching Rust-bundled LLVM
 tool, reject corrupt inputs and profile mismatch diagnostics, and establish
-that actual engine-owned functions executed. Freeze the merged profile before
-evaluating any `holdout_*` workload or memory scenario. Never incorporate
+that recognized Velum-related functions executed. The conservative symbol guard
+also protects trait implementations whose top-level self type or trait belongs
+to Velum; this is not an exhaustive defining-crate demangler. Freeze the merged
+profile before evaluating any `holdout_*` workload or memory scenario. Never incorporate
 holdout measurements or correctness runs into training.
 Training weights follow the observed execution counts, not equal weights for
 the six workload families. Rust dependencies are instrumented too; precompiled
@@ -45,13 +47,90 @@ match across variants and rounds.
 
 ## Execution and acceptance boundaries
 
-The external prototype and its tests live under
+The repository now provides an explicit opt-in launcher. Run it from a clean,
+committed checkout; it never changes ordinary Cargo settings or CI. Its Rust
+artifact validators live in the runner crate, with no additional engine
+dependencies or Python requirement. Prerequisites are Linux x86_64, the selected
+Rust toolchain's matching LLVM 22 `llvm-profdata` and `llvm-size`, `setsid`,
+`taskset`, `/usr/bin/time`, and the ordinary shell/Git/Cargo tools. Install missing
+tools separately: the launcher never installs anything.
+
+```bash
+bash scripts/run-pgo-experiment.sh --execute \
+  --repo /absolute/path/to/clean/velum-checkout \
+  --artifact-root "$HOME/velum-fuzzing-artifacts/performance/pgo" \
+  --preset release --rounds 2 --cpu 0
+
+# A separate, freshly trained experiment; not six builds on every invocation.
+bash scripts/run-pgo-experiment.sh --execute \
+  --repo /absolute/path/to/clean/velum-checkout \
+  --artifact-root "$HOME/velum-fuzzing-artifacts/performance/pgo" \
+  --preset thin-lto --rounds 2 --cpu 0
+
+# After timing, execute that experiment's exact saved PGO binary without rebuilding.
+bash scripts/check-pgo-correctness.sh \
+  /absolute/path/to/completed-experiment \
+  /absolute/path/to/pinned-patched-test262 /absolute/path/to/qjs
+```
+
+Each invocation builds only ordinary, instrumented and profile-use variants of
+one preset. `release` preserves the repository's release configuration;
+`thin-lto` applies Cargo overrides `profile.release.lto="thin"` and
+`profile.release.codegen-units=1` consistently to all three variants. This tests
+the combined configuration, not each setting's independent effect. Cargo's
+default `lto=false` may still perform local ThinLTO, so this is not a comparison
+against an entirely LTO-free compiler. Neither preset promises a speedup.
+Profiles are never shared between presets, source snapshots or toolchains.
+Each preset invocation has its own absolute source path. Its ordinary/PGO pair
+is controlled, but separate invocations do not isolate the causal effect of
+ThinLTO: cross-preset attribution requires an additional same-path comparison
+with all other settings fixed. Inherited compiler/profile overrides and visible
+Cargo configuration files are rejected instead of silently altering a preset.
+The launchers clear inherited `GIT_*` routing/configuration variables, ignore
+system/global Git configuration, and bind Git operations explicitly to the
+requested checkout. The correctness wrapper uses only experiment-owned temporary
+index/object storage when checking the pinned, patched corpus.
+
+CPU 0 is the default, with no automatic fallback. Select another available CPU
+explicitly or use `--cpu inherit`; compare results only with matching affinity
+and report the choice. The default two rounds preserve AB/BA ordering; one to
+five rounds may be selected before execution. The frozen sampling and quality
+thresholds are not adjustable launcher knobs. The Rust validators reject exact
+ID/source/checksum/build-identity mismatches, malformed or missing profiles,
+unclassified PGO diagnostics, and missing functions observed during training.
+They preserve per-round absolute Velum medians and ratios in
+`holdout-comparison.{tsv,json}`. Build/training costs remain in `steps/*.time`,
+whole-runner bytes and hashes in `binaries.tsv`, ELF sections in
+`steps/*-sections.log`, and memory observations in the per-round JSON reports.
+Memory validation requires the complete worker/phase matrix, workload checksums,
+per-VM indices and category totals. The comparison also checks Velum's logical
+records, payload, runtime steps and reclaimed records across variants and
+rounds. Logical drift retains a diagnostic and blocks acceptance; RSS/PSS and
+QuickJS allocator bytes remain separate observations, not equality gates.
+A failed revalidation invalidates prior derived comparisons instead of leaving
+stale successful results visible; raw inputs and diagnostics remain preserved.
+
+`complete-needs-review` is collection status, not adoption. The correctness
+wrapper verifies the frozen Test262 pin and tracked patch set, records the
+external QuickJS executable hash, runs the saved candidate without filters,
+rebuilding, benchmark execution, baseline updates or profile output, and checks
+source/corpus/binary/profile integrity afterwards, including interrupted runs.
+Its stricter PGO acceptance gate requires all six correctness suites to pass
+without failures or skips and a full pass candidate containing the frozen
+baseline. Outputs remain in a unique `correctness-*` artifact subdirectory.
+Interrupted or failed steps retain commands, logs, exit status and available
+resource timings; only each step's owned process group is cancelled.
+
+### Historical prototype
+
+The initial external prototype and its tests live under
 `$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/`. It requires Linux
 x86_64, `setsid`, Rust with matching bundled LLVM 22 tools, GNU time and Python with
 PyYAML; it never installs dependencies. Every invocation owns a fresh directory
 outside the checkout, containing immutable sources and binaries, raw and merged
 profiles, source/tool hashes, commands, reports and completion status. This
-prototype is not a shipped portable repository entrypoint.
+prototype produced the historical results below; it is not the repository
+launcher described above.
 
 ```bash
 bash "$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/pgo-plan-prototype.sh" \
@@ -74,7 +153,7 @@ Ordinary correctness CI does not validate the profile-use executable. Its
 correctness must be checked separately before recommending deployment. Retaining
 the ordinary build, even after an interesting experimental speedup, is valid.
 
-The launcher passes 71 lightweight and fake-tool integration tests, including
+The historical prototype passes 71 lightweight and fake-tool integration tests, including
 full synthetic AB/BA execution and bounded SIGINT/SIGTERM cleanup of descendant
 processes. The summary validator passes 17 tests; the saved-binary correctness
 report validator passes six. A tiny real LLVM probe confirms profile grammar
@@ -193,12 +272,80 @@ Artifacts are in `correctness-20260922T201204Z-V79X6sQk` inside the experiment
 directory. The required ordinary exact-head CI is a separate gate, linked with
 its exact-tree artifact in [PR #723](https://github.com/surveria/velum/pull/723).
 
-The experiment supports a later opt-in PGO packaging task, not automatic
-enablement here. Ordinary release defaults remain unchanged. Before adoption,
+The experiment motivated the opt-in workflow above, not automatic enablement.
+Ordinary release defaults remain unchanged. Before broader adoption,
 add unrelated application and embedding/async/regexp holdouts, other target
 hardware, and a maintainable profile-refresh/revalidation policy. This small
 six-family training set cannot represent all embedders, and the result does
 not extend the earlier JetStream or direct-library measurements to PGO.
+
+## Reviewed repository launcher: 2026-09-22
+
+The productized Rust-validated launcher completed a fresh `release` experiment
+after the second runtime tranche, using source
+`b7406f15e2ddbad1b3531d6a13e4b939f12cc2b4`, tree
+`df6d31562693591060c64262440e4c711bf988a3`. The experiment is preserved under
+`$HOME/velum-fuzzing-artifacts/performance/next-campaign-20260922/pgo/pgo-20260922T220707Z-keSmWwFg`.
+It does not reuse the historical prototype's profile or measurements.
+
+All six training programs, 24 holdout timing rows and 144 memory workers pass.
+There are no missing-function or profile-mismatch diagnostics. Six raw profiles
+merge into 27,418 IR function records and 341,443 blocks; the conservative
+symbol recognizer observes execution of 1,333 Velum-related functions. These
+are profile records, not language-feature, source-line or exact crate-ownership
+coverage. The compiler, hardware, CPU affinity and frozen sampling protocol
+match the documented experiment setup above.
+
+| Holdout | Ordinary ms | PGO ms | PGO / ordinary, round 1 | Round 2 | Time reduction |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Object transformation | 43.290 | 27.830 | 0.6465 | 0.6393 | 35.7% |
+| Method dispatch | 47.309 | 33.740 | 0.7096 | 0.7168 | 28.7% |
+| JSON ingestion | 13.350 | 9.680 | 0.7263 | 0.7239 | 27.5% |
+| String processing | 57.955 | 40.315 | 0.6960 | 0.6952 | 30.4% |
+| Collection indexing | 15.920 | 11.355 | 0.7117 | 0.7148 | 28.7% |
+| Tree allocation | 35.230 | 25.759 | 0.7407 | 0.7218 | 26.9% |
+
+The geometric-mean time ratio is 0.7029, or 29.7% less time / 1.423x throughput
+on this cohort. Round ratios are 0.7045 and 0.7013; every case improves in both
+rounds. All typed useful-work checksums match. Maximum engine timing CV is 8.0%.
+This is a new within-experiment comparison, not a causal explanation of the
+difference from the historical prototype's 34.0% result: source, runner and
+absolute build locations differ between those experiments.
+
+| Whole runner | File bytes | `.text` bytes | Build wall seconds | Build CPU seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary | 17,779,856 | 11,076,631 | 46.23 | 188.73 |
+| Instrumented | 34,980,344 | 16,815,458 | 48.93 | 189.26 |
+| PGO | 17,077,904 | 9,651,351 | 52.72 | 169.77 |
+
+The final runner file is 3.9% smaller and its `.text` is 12.9% smaller. Training
+takes 107.02 wall seconds / 106.65 CPU seconds, including reference execution;
+merging takes 0.20 seconds. Instrument/train/merge/use costs 208.87 wall seconds,
+excluding evaluation and launcher overhead, versus the 46.23-second ordinary
+build. All variants start with empty Cargo output; dependency downloads are
+already available. These are whole-runner costs on one host.
+
+The four complete memory reports agree on all corresponding Velum checksums,
+logical phases, runtime steps, reclaimed records and per-VM/category counters:
+3,912 VM snapshots and 117,360 category entries are validated. RSS/PSS and
+QuickJS allocator bytes remain separate observations in the raw reports;
+logical equality does not establish equal physical memory usage.
+
+The exact saved PGO executable, SHA256
+`c6abd1cb371530703bcebea1b9b11012056348fb8021da2e4afc69406ddb4f76`,
+passes all 102,578 Test262 variants / 53,404 files, 99 QuickJS differential
+cases, 69 engine fixtures and 121 active-subset cases: no failures or skips.
+The full pass candidate is byte-identical to the frozen baseline. The
+353.78-second run performs no rebuild, benchmark, profile output or baseline
+update; all source/corpus/binary/profile integrity checks pass. Receipts and
+the validated report are in `correctness-20260922T221916Z-SfOvHMXR` inside the
+experiment. Required ordinary exact-tree CI remains a separate integration gate.
+
+Release defaults remain unchanged. The independent ThinLTO+CGU1 result
+in [the runtime report](safe-runtime-performance.md#separate-thinlto-configuration-experiment)
+must not be added to this result; the combined preset is available but has not
+been measured in this campaign. Broader application/embedding holdouts and a
+profile-refresh policy are still required before default adoption.
 
 The build sequence follows the [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html).
 Profile merging and zero-count handling follow the

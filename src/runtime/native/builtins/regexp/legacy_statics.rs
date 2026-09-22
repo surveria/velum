@@ -112,10 +112,9 @@ impl Context {
 
     pub(super) fn record_legacy_regexp_match(
         &mut self,
-        input: &[u16],
+        input: &Value,
         matched: &RegExpMatch,
     ) -> Result<()> {
-        let subject = self.heap_utf16_string_value(input)?;
         let mut captures = Vec::new();
         captures
             .try_reserve(matched.captures.len())
@@ -128,9 +127,11 @@ impl Context {
                 .iter()
                 .map(|capture| capture.as_ref().map(|span| span.code_units.clone())),
         );
-        self.realm
-            .regexp_statics
-            .replace_match(subject, matched.span.code_units.clone(), captures)
+        self.realm.regexp_statics.replace_match(
+            input.clone(),
+            matched.span.code_units.clone(),
+            captures,
+        )
     }
 
     fn legacy_regexp_static_units(&self, kind: LegacyRegExpStaticKind) -> Result<Option<Vec<u16>>> {

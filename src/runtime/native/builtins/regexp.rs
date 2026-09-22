@@ -12,6 +12,7 @@ use crate::{
             PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
             RegExpValue,
         },
+        roots::VmRootKind,
     },
     value::{ObjectId, Value},
 };
@@ -232,8 +233,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        if let Some(Value::String(input)) = args.as_slice().first()
+            && input.is_heap_owned()
+        {
+            let input_value = self.checked_value(Value::String(input.clone()))?;
+            return self.regexp_exec_code_units(this_value, input.as_utf16(), Some(&input_value));
+        }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
-        self.regexp_exec_code_units(this_value, &input)
+        self.regexp_exec_code_units(this_value, &input, None)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_test(
@@ -246,6 +253,10 @@ impl Context {
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_utf16_string_value(&input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         self.regexp_exec_abstract(this_value, &input_value, &input)
             .map(|result| Value::Bool(result.is_some()))
     }
@@ -576,7 +587,12 @@ impl Context {
             .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))
     }
 
-    fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
+    fn regexp_exec_code_units(
+        &mut self,
+        this_value: &Value,
+        input: &[u16],
+        input_value: Option<&Value>,
+    ) -> Result<Value> {
         let last_index = self.regexp_last_index_utf16(this_value, input)?;
         // ToLength(lastIndex) may execute user code, including RegExp.prototype.compile.
         // Read the internal matcher only after that observable conversion has completed.
@@ -601,8 +617,15 @@ impl Context {
         if flags.global() || flags.sticky() {
             self.set_regexp_last_index(this_value, matched.span.code_units.end)?;
         }
-        self.record_legacy_regexp_match(input, &matched)?;
-        self.regexp_match_array(input, &matched, flags.has_indices())
+        // Preserve lazy admission for coerced inputs: failed matches do not need
+        // a heap string. Existing VM strings retain their admitted identity.
+        let input_value = if let Some(value) = input_value {
+            value.clone()
+        } else {
+            self.heap_utf16_string_value(input)?
+        };
+        self.record_legacy_regexp_match(&input_value, &matched)?;
+        self.regexp_match_array(input, &input_value, &matched, flags.has_indices())
     }
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
