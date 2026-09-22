@@ -153,7 +153,7 @@ impl Context {
         } else if let Value::Object(id) = splitter
             && self.objects.regexp_value(*id)?.is_some()
         {
-            self.regexp_exec_code_units(splitter, input)?
+            self.regexp_exec_code_units(splitter, input, Some(input_value))?
         } else {
             return Err(Error::type_error("RegExp exec method is not callable"));
         };

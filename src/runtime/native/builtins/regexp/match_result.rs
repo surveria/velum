@@ -21,6 +21,7 @@ impl Context {
     pub(super) fn regexp_match_array(
         &mut self,
         input: &[u16],
+        input_value: &Value,
         matched: &RegExpMatch,
         has_indices: bool,
     ) -> Result<Value> {
@@ -56,11 +57,10 @@ impl Context {
             PropertyEnumerable::Yes,
             PropertyConfigurable::Yes,
         )?;
-        let input_value = self.heap_utf16_string_value(input)?;
         self.define_regexp_data_property(
             id,
             "input",
-            input_value,
+            input_value.clone(),
             PropertyWritable::Yes,
             PropertyEnumerable::Yes,
             PropertyConfigurable::Yes,
