@@ -63,6 +63,15 @@ so error outcomes are compared by a typed ECMAScript error class and the JSONL
 record states that limited equivalence basis explicitly. Missing or unknown
 error classes never count as equivalent.
 
+The summary separates equivalent executions by oracle and observation strength:
+equal non-empty output, successful completion with no output, and matching
+JavaScript error classes only. A program that prints nothing does not verify its
+computed values. Error-class-only equivalence does not compare messages, thrown
+values, or output before the exception. The distinct source-hash count is separate
+from execution counts because corpus import, mutation, minimization, and replay
+can execute the same program repeatedly. Neither count proves full semantic
+equivalence or absence of bugs.
+
 Generated scripts that matter for follow-up triage are saved as JavaScript
 files, so later agents can reproduce them directly without relying on a stable
 Fuzzilli global script number.
