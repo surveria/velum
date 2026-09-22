@@ -195,7 +195,7 @@ fn ensure_component(
     Ok(())
 }
 
-fn validate_canonical_correctness(report: &ReportDocument) -> anyhow::Result<()> {
+pub fn validate_canonical_correctness(report: &ReportDocument) -> anyhow::Result<()> {
     let configuration = &report.configuration;
     if configuration.test262 != InputAvailability::Configured
         || configuration.quickjs_differential != InputAvailability::Configured

@@ -38,6 +38,10 @@ pub enum Config {
     AggregateReports {
         report_dir: PathBuf,
     },
+    Pgo {
+        command: String,
+        arguments: Vec<String>,
+    },
 }
 
 impl Config {
@@ -45,6 +49,12 @@ impl Config {
         let Some(flag) = args.next() else {
             bail!("{USAGE}");
         };
+        if flag.starts_with("--pgo-") {
+            return Ok(Self::Pgo {
+                command: flag,
+                arguments: args.collect(),
+            });
+        }
         if flag == "--aggregate-reports" {
             let report_dir = args
                 .next()

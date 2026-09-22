@@ -45,13 +45,79 @@ match across variants and rounds.
 
 ## Execution and acceptance boundaries
 
-The external prototype and its tests live under
+The repository now provides an explicit opt-in launcher. Run it from a clean,
+committed checkout; it never changes ordinary Cargo settings or CI. Its Rust
+artifact validators live in the runner crate, with no additional engine
+dependencies or Python requirement. Prerequisites are Linux x86_64, the selected
+Rust toolchain's matching LLVM 22 `llvm-profdata` and `llvm-size`, `setsid`,
+`taskset`, `/usr/bin/time`, and the ordinary shell/Git/Cargo tools. Install missing
+tools separately: the launcher never installs anything.
+
+```bash
+bash scripts/run-pgo-experiment.sh --execute \
+  --repo /absolute/path/to/clean/velum-checkout \
+  --artifact-root "$HOME/velum-fuzzing-artifacts/performance/pgo" \
+  --preset release --rounds 2 --cpu 0
+
+# A separate, freshly trained experiment; not six builds on every invocation.
+bash scripts/run-pgo-experiment.sh --execute \
+  --repo /absolute/path/to/clean/velum-checkout \
+  --artifact-root "$HOME/velum-fuzzing-artifacts/performance/pgo" \
+  --preset thin-lto --rounds 2 --cpu 0
+
+# After timing, execute that experiment's exact saved PGO binary without rebuilding.
+bash scripts/check-pgo-correctness.sh \
+  /absolute/path/to/completed-experiment \
+  /absolute/path/to/pinned-patched-test262 /absolute/path/to/qjs
+```
+
+Each invocation builds only ordinary, instrumented and profile-use variants of
+one preset. `release` preserves the repository's release configuration;
+`thin-lto` applies Cargo overrides `profile.release.lto="thin"` and
+`profile.release.codegen-units=1` consistently to all three variants. This tests
+the combined configuration, not each setting's independent effect. Cargo's
+default `lto=false` may still perform local ThinLTO, so this is not a comparison
+against an entirely LTO-free compiler. Neither preset promises a speedup.
+Profiles are never shared between presets, source snapshots or toolchains.
+Each preset invocation has its own absolute source path. Its ordinary/PGO pair
+is controlled, but separate invocations do not isolate the causal effect of
+ThinLTO: cross-preset attribution requires an additional same-path comparison
+with all other settings fixed. Inherited compiler/profile overrides and visible
+Cargo configuration files are rejected instead of silently altering a preset.
+
+CPU 0 is the default, with no automatic fallback. Select another available CPU
+explicitly or use `--cpu inherit`; compare results only with matching affinity
+and report the choice. The default two rounds preserve AB/BA ordering; one to
+five rounds may be selected before execution. The frozen sampling and quality
+thresholds are not adjustable launcher knobs. The Rust validators reject exact
+ID/source/checksum/build-identity mismatches, malformed or missing profiles,
+unclassified PGO diagnostics, and missing functions observed during training.
+They preserve per-round absolute Velum medians and ratios in
+`holdout-comparison.{tsv,json}`. Build/training costs remain in `steps/*.time`,
+whole-runner bytes and hashes in `binaries.tsv`, ELF sections in
+`steps/*-sections.log`, and memory observations in the per-round JSON reports.
+
+`complete-needs-review` is collection status, not adoption. The correctness
+wrapper verifies the frozen Test262 pin and tracked patch set, records the
+external QuickJS executable hash, runs the saved candidate without filters,
+rebuilding, benchmark execution, baseline updates or profile output, and checks
+source/corpus/binary/profile integrity afterwards, including interrupted runs.
+Its stricter PGO acceptance gate requires all six correctness suites to pass
+without failures or skips and a full pass candidate containing the frozen
+baseline. Outputs remain in a unique `correctness-*` artifact subdirectory.
+Interrupted or failed steps retain commands, logs, exit status and available
+resource timings; only each step's owned process group is cancelled.
+
+### Historical prototype
+
+The initial external prototype and its tests live under
 `$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/`. It requires Linux
 x86_64, `setsid`, Rust with matching bundled LLVM 22 tools, GNU time and Python with
 PyYAML; it never installs dependencies. Every invocation owns a fresh directory
 outside the checkout, containing immutable sources and binaries, raw and merged
 profiles, source/tool hashes, commands, reports and completion status. This
-prototype is not a shipped portable repository entrypoint.
+prototype produced the historical results below; it is not the repository
+launcher described above.
 
 ```bash
 bash "$HOME/velum-fuzzing-artifacts/performance/campaign-20260922/pgo-plan-prototype.sh" \
@@ -74,7 +140,7 @@ Ordinary correctness CI does not validate the profile-use executable. Its
 correctness must be checked separately before recommending deployment. Retaining
 the ordinary build, even after an interesting experimental speedup, is valid.
 
-The launcher passes 71 lightweight and fake-tool integration tests, including
+The historical prototype passes 71 lightweight and fake-tool integration tests, including
 full synthetic AB/BA execution and bounded SIGINT/SIGTERM cleanup of descendant
 processes. The summary validator passes 17 tests; the saved-binary correctness
 report validator passes six. A tiny real LLVM probe confirms profile grammar
@@ -193,8 +259,8 @@ Artifacts are in `correctness-20260922T201204Z-V79X6sQk` inside the experiment
 directory. The required ordinary exact-head CI is a separate gate, linked with
 its exact-tree artifact in [PR #723](https://github.com/surveria/velum/pull/723).
 
-The experiment supports a later opt-in PGO packaging task, not automatic
-enablement here. Ordinary release defaults remain unchanged. Before adoption,
+The experiment motivated the opt-in workflow above, not automatic enablement.
+Ordinary release defaults remain unchanged. Before broader adoption,
 add unrelated application and embedding/async/regexp holdouts, other target
 hardware, and a maintainable profile-refresh/revalidation policy. This small
 six-family training set cannot represent all embedders, and the result does

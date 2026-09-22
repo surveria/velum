@@ -27,6 +27,7 @@ mod jetstream;
 mod jetstream_baseline;
 mod jetstream_mode;
 mod memory_benchmarks;
+mod pgo;
 mod prepared_benchmarks;
 mod quickjs_baseline;
 mod report_benchmark_methodology;
@@ -103,6 +104,7 @@ fn main() {
 fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
     let (report_path, report_kind) = match config {
+        Config::Pgo { command, arguments } => return pgo::run(&command, arguments),
         Config::Run { report_path } => (report_path, ReportKind::Full),
         Config::Correctness { report_path } => (report_path, ReportKind::Correctness),
         Config::Performance { report_path } => (report_path, ReportKind::Performance),
