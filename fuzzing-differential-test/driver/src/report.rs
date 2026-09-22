@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufRead as _, BufReader, Write as _},
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context as _;
@@ -116,7 +116,9 @@ pub fn build_report(
     elapsed: Duration,
     outcome: &str,
 ) -> anyhow::Result<DifferentialReport> {
+    let drain_started = Instant::now();
     let _report_lock = SessionLock::report(session_dir, REPORT_DRAIN_TIMEOUT)?;
+    let elapsed = elapsed.saturating_add(drain_started.elapsed());
     let records = read_records(&session_dir.join("cases"))?;
     let summary = summarize(&records);
     let latest_findings = latest_javascript_files(&session_dir.join("findings"))?;
