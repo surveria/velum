@@ -164,7 +164,11 @@ launcher overhead and evaluation. Training includes the live QuickJS reference
 and runner work; build CPU time includes compiler child processes. These are
 whole-runner, warm-dependency-cache results, not standalone engine build costs.
 
-All 162 paired logical phase/repetition comparisons are equal. Median live
+All 162 paired logical phase/repetition comparisons are equal. A detailed
+cross-round audit also finds exact equality across 3,912 per-VM snapshots and
+117,360 category entries, including runtime steps and reclaimed records.
+QuickJS's separate allocator-byte counter varies by at most 176 bytes across
+15 groups; its other counters match. Median live
 process RSS across six samples is 9.146 to 8.049 MiB for hello-world, 13.133 to
 11.762 MiB for the retained graph, and 28.180 to 26.812 MiB for 50 independent
 VMs. This is lower measured process residency, not fewer logical allocations or
