@@ -97,6 +97,16 @@ and useful-work checksums. Avoid concurrent compiler, fuzzing, or other heavy
 host load while collecting final evidence. Use the existing minimum-duration
 and variation gates without weakening thresholds to make new workloads pass.
 
+For acceptance comparisons, keep the absolute compilation path and Cargo
+metadata stable across variants and record CPU affinity. The snapshot launcher
+provides isolation and replay, but independently built timestamped snapshots
+are not automatically a controlled A/B experiment. A September 22 neutral
+source control exposed roughly 28% variation in a direct Rust-callback case
+between distinct-path builds despite unchanged runtime/runner sources and low
+within-run CV. Rebuilding from one path and pinning one CPU removed the large
+difference. Exact microarchitectural attribution remains unproven; do not call
+every binary-level difference a gain or regression in the changed helper.
+
 ## Memory evidence boundaries
 
 The separate memory lane uses new processes for each engine/scenario/repetition
