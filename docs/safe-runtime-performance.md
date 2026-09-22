@@ -74,7 +74,121 @@ inconclusive results and deferred candidates separately; do not promise a
 general speedup from one synthetic case. Update the README quality summary
 only after the tranche reaches a reviewed milestone.
 
-## Current status
+## Reviewed runtime results: 2026-09-22
 
-Implementation and measurement are in progress. No gain from this tranche has
-yet been accepted, and no PGO or compiler preset is enabled by default.
+The frozen runtime comparison is parent `50405bae81597603c04a33caf20252e92ff8e6e7`
+(tree `ff2a2fed92e6c819a15af4c8448db187a6a67cd6`) against
+`b91845ef6d571810f587616c31577e2eacaa56dc`
+(tree `e3f066f5d6047538b7e3d055e593fe8e8b1e59a6`). Later launcher, validator and
+documentation changes do not enter this runtime comparison. Both release
+runners use the same absolute source/output paths, Rust 1.96.0 / LLVM 22.1.2,
+and CPU 0 on the Ryzen 9 9950X3D host. The archived candidate retains the original
+pre-measurement protocol document; its SHA256 is recorded in the comparison.
+
+All 116 commands passed: 28 workloads with four observations each and four
+36-worker memory campaigns. Every engine and available QuickJS timing meets
+the frozen CV gate; no failed cohort, replacement sample or fastest rerun was
+selected. Exact typed prepared-workload checksums agree across all observations.
+Embedding and JetStream reports do not export equivalent checksums, so successful
+runner verification is not an additional cross-build output-equivalence proof.
+
+| Cohort | Cases | Candidate / parent time | Round 1 | Round 2 |
+| --- | ---: | ---: | ---: | ---: |
+| Sentinels | 5 | 0.9968 | 0.9923 | 1.0014 |
+| Representative mixed workloads | 6 | 0.9757 | 0.9760 | 0.9755 |
+| Distinct holdouts | 6 | 0.9914 | 0.9900 | 0.9928 |
+| Existing embedding controls | 5 | 0.9510 | 0.9504 | 0.9516 |
+| Selected JetStream workloads | 6 | 0.7678 | 0.7703 | 0.7653 |
+
+These are geometric means of paired absolute Velum times. The runtime holdouts
+are not entirely blind: `holdout_method_dispatch` was among the diagnostic CPU
+profiles. They are separate programs, not an untouched statistical test set.
+The separate PGO experiment trains only on the representative cohort.
+
+The largest gains are Base64 (-38.4% time), js-tokens (-27.1%) and tagcloud
+(-51.6%). Representative method dispatch improves 5.4%; the existing Rust
+callback control improves 21.6%. Conversely, the arithmetic sentinel is 2.6%
+slower in aggregate (2.1% and 3.1% in the two pairs); synchronous embedding calls
+and host-object payload controls are about 0.3% slower. These regressions remain
+visible. The combined tranche is accepted for its bounded workload gains, not
+as a claim that every optimization or arbitrary program becomes faster. Two
+rounds and a CV threshold do not establish statistical significance.
+
+All 144 memory workers pass. Every corresponding Velum VM logical record and
+payload counter matches at every measured phase, including churn and teardown.
+Selected phase median paired RSS changes range from -0.055 to +0.129 MiB; this
+is process residency, not allocator-byte equality or proof of a memory saving.
+The PGO validator additionally compares category-level logical counters.
+
+### JetStream and remaining QuickJS gaps
+
+The fresh complete baseline selected 86 shell-adapted workloads: 30 measured,
+26 failed and 30 skipped, with 24 valid QuickJS pairs and a geometric mean
+Velum/QuickJS time ratio of 18.0568. Failed, unsupported and unavailable-reference
+workloads remain visible and never become speedups. This is not an official
+JetStream score. That full baseline preceded this tranche; only the six selected
+workloads received the controlled before/after comparison below.
+
+| Workload | Candidate / parent time | Candidate / QuickJS time |
+| --- | ---: | ---: |
+| Richards | 0.9875 | 36.18x |
+| hash-map | 0.9794 | 27.34x |
+| SunSpider Base64 | 0.6164 | 35.46x |
+| SunSpider n-body | 0.9747 | 32.54x |
+| js-tokens | 0.7287 | 9.48x |
+| SunSpider tagcloud | 0.4838 | 12.63x |
+
+Fresh profiles identified eager UTF-16-to-UTF-8 conversion during string-ID
+validation, repeated RegExp subject admission, bytecode-plan construction, and
+property/binding dispatch. The changes target those paths. Large call/object
+and numeric-workload gaps remain; the JavaScript `hash-map` workload must not be
+misclassified as a direct measurement of the built-in `Map` implementation.
+
+### Correctness and artifacts
+
+The tranche adds 49 engine regression cases across the six runtime test files.
+Collecting-callback tests exposed one new RegExp optimization lifetime defect
+and two pre-existing input-lifetime gaps; all are fixed. Module namespace
+coverage also exposed pre-existing missing persisted-scope storage ownership,
+reproduced before the write optimization and repaired with six regression cases.
+The local engine gate passes, and the saved runtime candidate passes all 6,416
+focused Test262 variants from 3,591 files in the affected areas. Full ready-PR
+correctness remains the final integration gate.
+
+Complete raw reports, immutable binaries/sources and validator diagnostics live
+under the external campaign root. Key paths are
+`baseline/campaign-20260922T204537Z-399232/`, `profiles/`,
+`paired/reviewed-ab-ba/comparison.{json,md}`, and `focused-test262.yaml`.
+The comparison validator passes 74 positive/negative fixtures. Build-time logs
+from the initial runtime binaries overlap correctness compilation and are
+diagnostic only; do not use them for a controlled compiler build-cost ratio.
+
+## Focused ephemeron GC diagnostic
+
+The standalone public-API probe keeps 8,192 WeakMap edges alive in chains of
+depth 1, 8 and 32. Setup and JavaScript execution are outside the GC timer;
+repeated steady-state collections must reclaim nothing and preserve exact
+checksums, entries and logical storage counts. Each of the twelve AB/BA runs
+has 31 calibrated samples targeting at least 250 ms of accumulated GC time per
+sample and at least five seconds per run. The per-collection figures are
+derived from these batches; this is not a new microsecond-scale active corpus
+benchmark or the prepared runner's 1 ms operation gate.
+
+| Chain depth | Parent / candidate speedup | AB pair | BA pair |
+| --- | ---: | ---: | ---: |
+| 1 | 1.079x | 1.085x | 1.073x |
+| 8 | 1.756x | 1.763x | 1.748x |
+| 32 | 2.692x | 2.649x | 2.734x |
+
+All 372 samples and twelve processes pass the independent raw-statistics,
+identity, checksum and quality checks. Total measured GC time is 136.21 seconds;
+the largest within-run CV is 1.61%. This supports the focused fixed-point GC
+change, not a general GC or application speedup. The compared binaries contain
+the entire runtime tranche, not an isolated single-commit ablation. Artifacts:
+`gc-pairs/reviewed-ab-ba/`, including raw TSV, captured lock ownership, immutable
+probe inputs and `summary.json`.
+
+## Remaining experiment stages
+
+Separate build-configuration experiments are still in progress. No PGO or
+compiler preset is enabled by default.
