@@ -326,7 +326,7 @@ impl Reachability {
                     }
                 }
                 MarkTarget::HeapString(id) => {
-                    context.strings.get(id)?;
+                    context.strings.validate_id(id)?;
                 }
                 MarkTarget::Generator(id) => context
                     .generators

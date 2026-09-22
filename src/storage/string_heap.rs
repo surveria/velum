@@ -342,22 +342,19 @@ impl StringHeap {
         self.insert_string(units.to_vec())
     }
 
-    pub fn get(&self, id: StringId) -> Result<&str> {
+    pub(crate) fn validate_id(&self, id: StringId) -> Result<()> {
+        self.string_data(id).map(|_data| ())
+    }
+
+    fn string_data(&self, id: StringId) -> Result<&StringDataRef> {
         self.strings
             .get(id.index()?)
             .and_then(Option::as_ref)
-            .map(StringDataRef::as_str)
             .ok_or_else(|| Error::runtime("string id is not defined"))
     }
 
     fn js_string(&self, id: StringId) -> Result<JsString> {
-        let data = self
-            .strings
-            .get(id.index()?)
-            .and_then(Option::as_ref)
-            .cloned()
-            .ok_or_else(|| Error::runtime("string id is not defined"))?;
-        Ok(JsString::new(data))
+        self.string_data(id).cloned().map(JsString::new)
     }
 
     fn insert_string(&mut self, units: Vec<u16>) -> Result<JsString> {
