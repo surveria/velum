@@ -104,6 +104,7 @@ Current quality summary:
 | V8/Node diagnostics | V8/Node on generated programs | Same generated-program workflow when Engine262 needs fallback or performance context | Secondary diagnostics and per-case Velum/V8 performance ratios | Not the primary correctness oracle |
 | Performance baseline | Pinned `QuickJS`; prepared workloads, direct Rust API and `JetStream` | 22 project cases; 86 `JetStream` candidates | 22 valid project measurements; `JetStream`: 30 measured, 26 failed, 30 skipped | [September 22 baseline](docs/optimization-campaign.md#reviewed-baseline-2026-09-22); host-specific timings, not an official `JetStream` score |
 | Process-isolated memory | Velum and independent `QuickJS` runtimes | 6 scenarios × 2 engines × 3 repetitions = 36 workers | 36 passed; no failed or skipped workers | RSS/PSS, explicit GC and teardown, including 1/10/50 VMs; logical counters are not allocator-byte ratios |
+| Profiled runtime optimization | Parent/candidate; `QuickJS` checks for prepared JS | 25 cases × 4 = 100 valid timing rows; 144 memory workers passed | Mixed workloads -4.0% time; independent holdouts -3.3%; focused `JetStream` -2.7% | [Reviewed tranche](docs/optimization-campaign.md#reviewed-runtime-tranche-2026-09-22); 15 new both-mode regressions; some cases about 2% slower; host-specific evidence |
 
 Long-running fuzzing and differential runs are opt-in local workflows, not CI
 jobs. When a bounded campaign reaches a reviewed milestone, this section should
