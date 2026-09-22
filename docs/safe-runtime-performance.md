@@ -214,7 +214,24 @@ seconds. No controlled build-cost ratio is available because the ordinary
 build overlapped correctness compilation. Sources, commands, binary hashes and
 raw reports are under `thinlto/build/` and `thinlto/runs/reviewed-ab-ba/`.
 
-Saved-binary correctness and the separate productized release PGO experiment
-remain pending. No PGO or compiler preset is enabled by default. Gains from
-different experiments must not be added or multiplied into an unmeasured
-combined-speedup claim.
+The exact saved ThinLTO executable, SHA256
+`279d24ce70014b17905fbb522860ba3a2d6d7270dff55ff6faa1b8888cc09a7d`,
+passes all 102,578 Test262 variants / 53,404 files, 99 QuickJS differential
+cases, 69 engine fixtures and 121 active-subset cases, with zero failures or
+skips. Its pass candidate preserves the complete frozen baseline. Execution
+takes 213.31 seconds, with no rebuild, benchmark or baseline refresh; all input,
+corpus and source checks pass before/after execution. This correctness duration
+is not a controlled performance comparison against another compiler preset.
+Receipts and the independently validated six-suite report are under
+`thinlto/correctness-20260922T222528Z-nohGEkfh/`.
+
+The separate [productized release PGO experiment](pgo-experiment.md#reviewed-repository-launcher-2026-09-22)
+also completed and validated its saved binary against the complete corpus.
+The local engine gate passes 1,905 tests; the runner passes 197 tests plus
+strict clippy and documentation checks. Required exact-tree integration CI and
+its artifact are linked from [PR #724](https://github.com/surveria/velum/pull/724).
+
+No PGO or compiler preset is enabled by default. Gains from different
+experiments must not be added or multiplied into an unmeasured combined-speedup
+claim. Unrelated application/embedding holdouts, other hardware and a sustainable
+profile-refresh policy remain future work; no JIT or unsafe code is introduced.
