@@ -28,7 +28,7 @@ impl Object {
         max_properties: usize,
         allow_holey: bool,
     ) -> Result<bool> {
-        // Check eligibility before reserving: fallback paths retain their own
+        // Check eligibility before reserving: slow paths retain their own
         // observable ordering and incremental storage-limit enforcement.
         if !self.array_storage.can_unshift_dense_for_len_if_default(
             len,
