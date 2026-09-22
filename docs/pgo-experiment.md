@@ -331,8 +331,17 @@ logical phases, runtime steps, reclaimed records and per-VM/category counters:
 QuickJS allocator bytes remain separate observations in the raw reports;
 logical equality does not establish equal physical memory usage.
 
-The exact saved PGO executable is undergoing its separate full correctness
-gate. Release defaults remain unchanged. The independent ThinLTO+CGU1 result
+The exact saved PGO executable, SHA256
+`c6abd1cb371530703bcebea1b9b11012056348fb8021da2e4afc69406ddb4f76`,
+passes all 102,578 Test262 variants / 53,404 files, 99 QuickJS differential
+cases, 69 engine fixtures and 121 active-subset cases: no failures or skips.
+The full pass candidate is byte-identical to the frozen baseline. The
+353.78-second run performs no rebuild, benchmark, profile output or baseline
+update; all source/corpus/binary/profile integrity checks pass. Receipts and
+the validated report are in `correctness-20260922T221916Z-SfOvHMXR` inside the
+experiment. Required ordinary exact-tree CI remains a separate integration gate.
+
+Release defaults remain unchanged. The independent ThinLTO+CGU1 result
 in [the runtime report](safe-runtime-performance.md#separate-thinlto-configuration-experiment)
 must not be added to this result; the combined preset is available but has not
 been measured in this campaign. Broader application/embedding holdouts and a
