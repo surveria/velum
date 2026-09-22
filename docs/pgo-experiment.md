@@ -279,6 +279,65 @@ hardware, and a maintainable profile-refresh/revalidation policy. This small
 six-family training set cannot represent all embedders, and the result does
 not extend the earlier JetStream or direct-library measurements to PGO.
 
+## Reviewed repository launcher: 2026-09-22
+
+The productized Rust-validated launcher completed a fresh `release` experiment
+after the second runtime tranche, using source
+`b7406f15e2ddbad1b3531d6a13e4b939f12cc2b4`, tree
+`df6d31562693591060c64262440e4c711bf988a3`. The experiment is preserved under
+`$HOME/velum-fuzzing-artifacts/performance/next-campaign-20260922/pgo/pgo-20260922T220707Z-keSmWwFg`.
+It does not reuse the historical prototype's profile or measurements.
+
+All six training programs, 24 holdout timing rows and 144 memory workers pass.
+There are no missing-function or profile-mismatch diagnostics. Six raw profiles
+merge into 27,418 IR function records and 341,443 blocks; the conservative
+symbol recognizer observes execution of 1,333 Velum-related functions. These
+are profile records, not language-feature, source-line or exact crate-ownership
+coverage. The compiler, hardware, CPU affinity and frozen sampling protocol
+match the documented experiment setup above.
+
+| Holdout | Ordinary ms | PGO ms | PGO / ordinary, round 1 | Round 2 | Time reduction |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Object transformation | 43.290 | 27.830 | 0.6465 | 0.6393 | 35.7% |
+| Method dispatch | 47.309 | 33.740 | 0.7096 | 0.7168 | 28.7% |
+| JSON ingestion | 13.350 | 9.680 | 0.7263 | 0.7239 | 27.5% |
+| String processing | 57.955 | 40.315 | 0.6960 | 0.6952 | 30.4% |
+| Collection indexing | 15.920 | 11.355 | 0.7117 | 0.7148 | 28.7% |
+| Tree allocation | 35.230 | 25.759 | 0.7407 | 0.7218 | 26.9% |
+
+The geometric-mean time ratio is 0.7029, or 29.7% less time / 1.423x throughput
+on this cohort. Round ratios are 0.7045 and 0.7013; every case improves in both
+rounds. All typed useful-work checksums match. Maximum engine timing CV is 8.0%.
+This is a new within-experiment comparison, not a causal explanation of the
+difference from the historical prototype's 34.0% result: source, runner and
+absolute build locations differ between those experiments.
+
+| Whole runner | File bytes | `.text` bytes | Build wall seconds | Build CPU seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary | 17,779,856 | 11,076,631 | 46.23 | 188.73 |
+| Instrumented | 34,980,344 | 16,815,458 | 48.93 | 189.26 |
+| PGO | 17,077,904 | 9,651,351 | 52.72 | 169.77 |
+
+The final runner file is 3.9% smaller and its `.text` is 12.9% smaller. Training
+takes 107.02 wall seconds / 106.65 CPU seconds, including reference execution;
+merging takes 0.20 seconds. Instrument/train/merge/use costs 208.87 wall seconds,
+excluding evaluation and launcher overhead, versus the 46.23-second ordinary
+build. All variants start with empty Cargo output; dependency downloads are
+already available. These are whole-runner costs on one host.
+
+The four complete memory reports agree on all corresponding Velum checksums,
+logical phases, runtime steps, reclaimed records and per-VM/category counters:
+3,912 VM snapshots and 117,360 category entries are validated. RSS/PSS and
+QuickJS allocator bytes remain separate observations in the raw reports;
+logical equality does not establish equal physical memory usage.
+
+The exact saved PGO executable is undergoing its separate full correctness
+gate. Release defaults remain unchanged. The independent ThinLTO+CGU1 result
+in [the runtime report](safe-runtime-performance.md#separate-thinlto-configuration-experiment)
+must not be added to this result; the combined preset is available but has not
+been measured in this campaign. Broader application/embedding holdouts and a
+profile-refresh policy are still required before default adoption.
+
 The build sequence follows the [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html).
 Profile merging and zero-count handling follow the
 [LLVM 22 profile-tool documentation](https://releases.llvm.org/22.1.0/docs/CommandGuide/llvm-profdata.html).
