@@ -57,7 +57,12 @@ impl Config {
                 1,
             ));
         }
-        if let Ok(filter) = env::var("VELUM_MEMORY_FILTER") {
+        let filter = match env::var("VELUM_MEMORY_FILTER") {
+            Ok(value) => Some(value),
+            Err(env::VarError::NotPresent) => None,
+            Err(error) => return Err(error).context("failed to read VELUM_MEMORY_FILTER"),
+        };
+        if let Some(filter) = filter {
             let selected: Vec<_> = filter.split(',').map(str::trim).collect();
             for id in &selected {
                 if id.is_empty() || !scenarios.iter().any(|case| case.id == *id) {

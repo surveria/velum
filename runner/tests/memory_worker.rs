@@ -108,3 +108,24 @@ fn independent_deadline_stops_a_worker_waiting_for_its_parent() -> Result<()> {
     ensure!(String::from_utf8(output.stderr)?.contains("independent wall deadline"));
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn non_unicode_scenario_filter_is_rejected_before_report_preparation() -> Result<()> {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt as _};
+
+    // An invalid report parent prevents any measurement even if this validation
+    // regresses. The diagnostic must nevertheless identify the bad filter first.
+    let child = Command::new(env!("CARGO_BIN_EXE_velum-test-runner"))
+        .args(["--memory-benchmarks", "/dev/null/memory.md"])
+        .env("VELUM_MEMORY_FILTER", OsString::from_vec(vec![0xff]))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let output = bounded_output(child)?;
+    ensure!(!output.status.success());
+    ensure!(output.stdout.is_empty());
+    ensure!(String::from_utf8(output.stderr)?.contains("failed to read VELUM_MEMORY_FILTER"));
+    Ok(())
+}

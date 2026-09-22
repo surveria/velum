@@ -16,7 +16,7 @@ function __velumBenchMakeHandler(kind, factor) {
 
 function __velumBenchSetup() {
     __velumBenchEvents = [];
-    for (var i = 0; i < 8192; i++) {
+    for (var i = 0; i < 16384; i++) {
         __velumBenchEvents.push({ amount: i % 23, sequence: i % 13, kind: (i * 7) % 5 });
     }
 }
@@ -38,5 +38,5 @@ function __velumBenchRun() {
 }
 
 function __velumBenchVerify() {
-    return "8192:131367:50723067";
+    return "16384:262046:202376056";
 }

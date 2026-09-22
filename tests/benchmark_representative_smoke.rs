@@ -40,7 +40,7 @@ fn object_transform_workloads_are_repeatable_in_both_modes() -> TestResult {
 fn method_dispatch_workloads_are_repeatable_in_both_modes() -> TestResult {
     check_pair([
         workload!("representative_method_dispatch", "8192:14996:62767175"),
-        workload!("holdout_method_dispatch", "8192:131367:50723067"),
+        workload!("holdout_method_dispatch", "16384:262046:202376056"),
     ])
 }
 

@@ -176,7 +176,7 @@ impl MemoryReport {
             format!("- Campaign elapsed: {} ns.", self.elapsed_ns),
             format!("- Raw phase snapshots and exact workload sources: `{}` and `{}`.", json.display(), yaml.display()),
             format!("- Executable content digest (non-cryptographic FNV-1a): `{}`.", self.executable_digest),
-            "- Cells are the lower median [minimum..maximum] in KiB across successful fresh workers; n denotes available samples. Unavailable samples are never zero-filled.".to_owned(),
+            "- Cells are the lower median [minimum..maximum] in KiB across successful fresh workers; n denotes available samples. Live/after-GC columns select the last churn round, not a maximum across rounds. Unavailable samples are never zero-filled.".to_owned(),
             String::new(),
             format!("```text\n{}\n```", Table::new(self.summary_rows())),
             String::new(),
