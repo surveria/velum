@@ -68,9 +68,43 @@ Ordinary correctness CI does not validate the profile-use executable. Its
 correctness must be checked separately before recommending deployment. Retaining
 the ordinary build, even after an interesting experimental speedup, is valid.
 
-At this checkpoint, 59 lightweight prototype tests and a tiny real LLVM
-compatibility/mismatch probe have passed. No Velum PGO result is claimed yet.
-The actual experiment and reviewed evidence are pending.
+The launcher passes 71 lightweight and fake-tool integration tests, including
+full synthetic AB/BA execution and bounded SIGINT/SIGTERM cleanup of descendant
+processes. The summary validator passes 17 tests; the saved-binary correctness
+report validator passes six. A tiny real LLVM probe confirms profile grammar
+and rejection of actual mismatch diagnostics. These are infrastructure checks,
+not evidence of a faster engine.
+
+## Initial attempt and discovered array accounting defect
+
+The first actual attempt used source
+`1b9fa119611b1c0c4623e7dc1762a2e24d2de035`, after PR #722. All three builds and
+six training cases completed; profile diagnostics reported no missing-function
+or mismatch warnings. Before any PGO holdout execution, however, the ordinary
+build failed the string-processing holdout during automatic collection:
+`ObjectProperty storage ledger mismatch: tracked 2816258, observed 2630789`.
+
+The cause was an existing July array-front fast path: dense `shift` removed
+properties without releasing the owner's logical property count; dense
+`unshift` inserted properties without reserving them. Both bypassed enumerable
+property accounting. Besides failing collection/accounting checks, inserting
+into an empty array could leave `for...in` unaware of the new elements.
+
+The repair routes these operations through the owning object's accounting
+helpers. Shifting a hole releases no property; shifting a present element
+releases one. Eligible dense insertion reserves its complete growth before
+mutation. Pure eligibility checks preserve the existing generic fallback's
+observable order. Regression tests cover packed/holey arrays, enumeration,
+fallback descriptors/prototypes, automatic and explicit collection, rejected
+reservations and independent VM budgets. Five of the first six regressions
+failed before the repair; all pass afterwards in both optimization modes.
+
+The failed attempt remains at
+`$HOME/velum-fuzzing-artifacts/performance/pgo/pgo-20260922T193128Z-Fz8y5zqe`.
+Its status is `incomplete`; partial timings are not accepted PGO evidence.
+The repaired engine requires a fresh snapshot, new training and new profile,
+under the unchanged sampling protocol. The reviewed PGO comparison remains
+pending at this checkpoint.
 
 The build sequence follows the [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html).
 Profile merging and zero-count handling follow the

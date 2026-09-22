@@ -1,4 +1,4 @@
-use velum::{OptimizationMode, Value, Vm, VmConfig};
+use velum::{OptimizationMode, RuntimeLimits, Value, Vm, VmConfig, VmStorageKind};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -74,6 +74,38 @@ fn repeated_front_mutations_reconcile_after_explicit_collection() -> TestResult 
              total += fields.length; \
          } total === 256;",
     )
+}
+
+#[test]
+fn front_mutations_reconcile_during_automatic_collection() -> TestResult {
+    const OBJECT_LIMIT: usize = 128;
+    for source in [
+        "var total = 0; for (var i = 0; i < 512; i++) { \
+             var row = [i, i + 1]; row.shift(); total += row.length; \
+         } total === 512;",
+        "var total = 0; for (var i = 0; i < 512; i++) { \
+             var row = []; row.unshift(i); total += row.length; \
+         } total === 512;",
+    ] {
+        for mode in MODES {
+            let config = VmConfig::with_limits(RuntimeLimits {
+                max_objects: OBJECT_LIMIT,
+                ..RuntimeLimits::default()
+            })
+            .with_optimization_mode(mode);
+            let mut vm = Vm::with_config(config);
+            let value = vm.eval(source)?;
+            let snapshot = vm.storage_snapshot()?;
+            if value != Value::Bool(true) || snapshot.count(VmStorageKind::Object) >= OBJECT_LIMIT {
+                return Err(format!(
+                    "automatic collection in {mode:?}: unexpected result {value:?} \
+                     or object retention {snapshot:?} for {source}"
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn check_case(label: &str, source: &str) -> TestResult {
