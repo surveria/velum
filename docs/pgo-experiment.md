@@ -96,6 +96,13 @@ They preserve per-round absolute Velum medians and ratios in
 `holdout-comparison.{tsv,json}`. Build/training costs remain in `steps/*.time`,
 whole-runner bytes and hashes in `binaries.tsv`, ELF sections in
 `steps/*-sections.log`, and memory observations in the per-round JSON reports.
+Memory validation requires the complete worker/phase matrix, workload checksums,
+per-VM indices and category totals. The comparison also checks Velum's logical
+records, payload, runtime steps and reclaimed records across variants and
+rounds. Logical drift retains a diagnostic and blocks acceptance; RSS/PSS and
+QuickJS allocator bytes remain separate observations, not equality gates.
+A failed revalidation invalidates prior derived comparisons instead of leaving
+stale successful results visible; raw inputs and diagnostics remain preserved.
 
 `complete-needs-review` is collection status, not adoption. The correctness
 wrapper verifies the frozen Test262 pin and tracked patch set, records the

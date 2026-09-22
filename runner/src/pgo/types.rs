@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
-    io::{BufReader, Read as _},
+    io::BufReader,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -185,6 +185,7 @@ pub(super) struct VerifiedReport {
     pub kind: String,
     pub expected_case: Option<String>,
     pub performance: Option<PerformanceEvidence>,
+    pub memory: Option<super::memory::MemoryEvidence>,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -302,26 +303,4 @@ pub(super) fn check_hash(path: &Path, expected: &str) -> Result<()> {
         path.display()
     );
     Ok(())
-}
-
-pub(super) fn fnv_digest(path: &Path) -> Result<String> {
-    let mut file = File::open(path).context("failed to open executable for memory identity")?;
-    let mut buffer = [0_u8; 16_384];
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    loop {
-        let count = file
-            .read(&mut buffer)
-            .context("failed to read memory executable")?;
-        if count == 0 {
-            break;
-        }
-        for byte in buffer
-            .get(..count)
-            .context("executable read exceeded buffer")?
-        {
-            hash ^= u64::from(*byte);
-            hash = hash.overflowing_mul(0x0000_0100_0000_01b3).0;
-        }
-    }
-    Ok(format!("fnv1a64-{hash:016x}"))
 }

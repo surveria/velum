@@ -7,9 +7,11 @@ use std::{
 
 use anyhow::{Context as _, Result, ensure};
 use serde::Serialize;
+use serde_json::json;
 
 use super::{
     evidence::collect_report,
+    memory::{MemoryEvidence, ensure_equivalent},
     types::{
         CASE_SUFFIXES, Checksum, Experiment, PerformanceEvidence, VARIANTS, VerifiedReport,
         check_hash, label_path, read_json, sha256, write_json,
@@ -37,6 +39,7 @@ struct RoundMean {
 #[derive(Serialize)]
 struct Summary<'a> {
     schema_version: u32,
+    evidence_validated: bool,
     commit: &'a str,
     tree: &'a str,
     preset: &'a str,
@@ -44,10 +47,12 @@ struct Summary<'a> {
     profile_sha256: String,
     rows: Vec<Comparison>,
     round_geomeans: Vec<RoundMean>,
+    memory_comparison: serde_json::Value,
     limitations: [&'static str; 4],
 }
 
 pub fn summarize(run: &Path) -> Result<()> {
+    invalidate_derived_reports(run)?;
     let experiment = Experiment::load(run)?;
     for variant in VARIANTS {
         experiment.binary(variant)?;
@@ -97,10 +102,6 @@ pub fn summarize(run: &Path) -> Result<()> {
                 pgo_cv_permille: pgo.engine_cv_permille,
             });
         }
-        for variant in ["ordinary", "pgo"] {
-            let label = format!("round-{round}-{variant}-memory");
-            revalidate(run, &experiment, variant, &label, None, &mut affinity)?;
-        }
         round_geomeans.push(RoundMean {
             round,
             ordinary_over_pgo_geomean: (log_speedups
@@ -108,8 +109,10 @@ pub fn summarize(run: &Path) -> Result<()> {
             .exp(),
         });
     }
+    let memory_comparison = compare_memory(run, &experiment, &mut affinity)?;
     let summary = Summary {
         schema_version: 1,
+        evidence_validated: true,
         commit: &experiment.commit,
         tree: &experiment.tree,
         preset: &experiment.preset,
@@ -117,6 +120,7 @@ pub fn summarize(run: &Path) -> Result<()> {
         profile_sha256,
         rows,
         round_geomeans,
+        memory_comparison,
         limitations: [
             "Observed paired timings are descriptive, not a significance test or adoption decision.",
             "Speedup above one compares absolute Velum execution times, not Velum-to-QuickJS ratios.",
@@ -128,6 +132,67 @@ pub fn summarize(run: &Path) -> Result<()> {
     write_json(&run.join("holdout-comparison.json"), &summary)?;
     fs::write(run.join("holdout-comparison.tsv"), tsv)
         .context("failed to write paired PGO comparison")
+}
+
+fn invalidate_derived_reports(run: &Path) -> Result<()> {
+    ensure!(run.is_dir(), "PGO artifact directory does not exist");
+    let unverified = json!({
+        "schema_version": 1, "evidence_validated": false, "status": "unverified",
+        "reason": "Derived results remain invalid unless this complete revalidation succeeds."
+    });
+    write_json(&run.join("holdout-comparison.json"), &unverified)?;
+    write_json(&run.join("memory-comparison.json"), &unverified)?;
+    fs::write(run.join("holdout-comparison.tsv"), comparison_tsv(&[])?)
+        .context("failed to invalidate stale PGO comparisons")
+}
+
+fn compare_memory(
+    run: &Path,
+    experiment: &Experiment,
+    affinity: &mut Option<String>,
+) -> Result<serde_json::Value> {
+    let mut baseline: Option<(String, MemoryEvidence)> = None;
+    let mut reports = 0_u32;
+    for round in 1..=experiment.rounds {
+        for variant in ["ordinary", "pgo"] {
+            let label = format!("round-{round}-{variant}-memory");
+            let actual = revalidate(run, experiment, variant, &label, None, affinity)?
+                .memory
+                .context("memory sidecar has no logical evidence")?;
+            if let Some((baseline_label, expected)) = &baseline {
+                if let Err(error) = ensure_equivalent(expected, &actual) {
+                    write_json(
+                        &run.join("memory-comparison.json"),
+                        &json!({
+                            "schema_version": 1, "status": "needs-review", "equal": false,
+                            "baseline_report": baseline_label, "changed_report": label,
+                            "difference": format!("{error:#}"),
+                            "scope": "Same-engine logical phases, checksums and per-VM/category counters; physical residency is not compared."
+                        }),
+                    )?;
+                    return Err(error)
+                        .with_context(|| format!("memory logical drift needs review: {label}"));
+                }
+            } else {
+                baseline = Some((label, actual));
+            }
+            reports = reports
+                .checked_add(1)
+                .context("memory comparison count overflowed")?;
+        }
+    }
+    let (label, evidence) = baseline.context("memory comparison has no baseline")?;
+    let result = json!({
+        "schema_version": 1, "status": "equal", "equal": true,
+        "baseline_report": label, "reports_verified": reports,
+        "workers_per_report": evidence.worker_count,
+        "velum_phases_per_report": evidence.velum_phase_count,
+        "velum_vm_snapshots_per_report": evidence.velum_vm_snapshots,
+        "velum_category_records_per_report": evidence.velum_category_records,
+        "scope": "Same-engine logical phases, checksums and per-VM/category counters; physical residency is not compared."
+    });
+    write_json(&run.join("memory-comparison.json"), &result)?;
+    Ok(result)
 }
 
 fn revalidate(

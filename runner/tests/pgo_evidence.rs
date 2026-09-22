@@ -11,6 +11,9 @@ use std::{
 use anyhow::{Context as _, Result, ensure};
 use serde_json::{Value, json};
 
+#[path = "support/pgo_memory_fixture.rs"]
+mod memory_fixture;
+
 const SUFFIXES: [&str; 6] = [
     "object_transform",
     "method_dispatch",
@@ -137,32 +140,11 @@ impl Fixture {
     }
 
     fn memory(&self, label: &str, variant: &str) -> Result<Value> {
-        let specs = [
-            ("hello-world", "hello_world", 1, 0, 0, 1),
-            ("retained-graph", "retained_graph", 1, 1_024, 256, 1),
-            ("cyclic-churn", "cyclic_churn", 1, 1_024, 256, 3),
-            ("independent-vms-1", "independent_vms", 1, 64, 256, 1),
-            ("independent-vms-10", "independent_vms", 10, 64, 256, 1),
-            ("independent-vms-50", "independent_vms", 50, 64, 256, 1),
-        ];
-        let mut runs = Vec::new();
-        let mut scenarios = Vec::new();
-        for (id, kind, count, nodes, bytes, rounds) in specs {
-            scenarios.push(json!({"id": id, "kind": kind, "vm_count": count,
-                "nodes_per_vm": nodes, "bytes_per_node": bytes, "rounds": rounds}));
-            for engine in ["velum", "quickjs"] {
-                for repetition in 0..3 {
-                    runs.push(json!({"scenario_id": id, "engine": engine, "repetition": repetition, "outcome": "passed"}));
-                }
-            }
-        }
-        let value = json!({
-            "schema_version": 1, "artifact_kind": "local_process_isolated_memory_campaign",
-            "metadata": metadata(), "environment": environment(),
-            "executable_path": self.run.join("bin").join(variant), "executable_digest": fnv(variant),
-            "configuration": {"repetitions": 3, "quickjs_compiled": true, "scenarios": scenarios},
-            "expected_worker_count": 36, "campaign_complete": true, "runs": runs,
-        });
+        let value = memory_fixture::report(
+            &self.run.join("bin").join(variant),
+            &metadata(),
+            &environment(),
+        )?;
         write(
             &self.run.join("reports").join(format!("{label}.json")),
             &value,
@@ -245,15 +227,6 @@ fn environment() -> Value {
 fn measurement(ns: u64) -> Value {
     json!({"availability": "measured", "wall_duration_ns": ns, "median_duration_ns": ns,
         "coefficient_variation_permille": 20})
-}
-
-fn fnv(text: &str) -> String {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in text.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.overflowing_mul(0x0000_0100_0000_01b3).0;
-    }
-    format!("fnv1a64-{hash:016x}")
 }
 
 fn sha(path: &Path) -> Result<String> {
@@ -500,6 +473,7 @@ fn summary_revalidates_artifacts_and_cross_round_checksums() -> Result<()> {
         success(&fixture.summarize()?)?;
         let summary: Value =
             serde_json::from_slice(&fs::read(fixture.run.join("holdout-comparison.json"))?)?;
+        ensure!(summary.get("evidence_validated") == Some(&json!(true)));
         ensure!(
             summary
                 .get("rows")
@@ -514,6 +488,37 @@ fn summary_revalidates_artifacts_and_cross_round_checksums() -> Result<()> {
                 .and_then(Value::as_f64)
                 == Some(2.0)
         );
+        let memory_label = "round-2-pgo-memory";
+        let mut memory = fixture.memory(memory_label, "pgo")?;
+        set(
+            &mut memory,
+            "/runs/0/phases/1/diagnostics/vms/0/runtime_steps",
+            json!(99),
+        )?;
+        write(
+            &fixture.run.join("reports/round-2-pgo-memory.json"),
+            &memory,
+        )?;
+        success(&fixture.verify("pgo", memory_label, "memory", None)?)?;
+        failure(&fixture.summarize()?)?;
+        let invalidated: Value =
+            serde_json::from_slice(&fs::read(fixture.run.join("holdout-comparison.json"))?)?;
+        ensure!(invalidated.get("evidence_validated") == Some(&json!(false)));
+        ensure!(invalidated.get("rows").is_none());
+        ensure!(
+            fs::read_to_string(fixture.run.join("holdout-comparison.tsv"))?
+                .lines()
+                .count()
+                == 1
+        );
+        let drift: Value =
+            serde_json::from_slice(&fs::read(fixture.run.join("memory-comparison.json"))?)?;
+        ensure!(
+            drift.get("equal") == Some(&json!(false))
+                && drift.get("status") == Some(&json!("needs-review"))
+        );
+        fixture.memory(memory_label, "pgo")?;
+        success(&fixture.verify("pgo", memory_label, "memory", None)?)?;
         let label = "round-2-pgo-holdout_object_transform";
         let mut report = fixture.report(label, CASE, true)?;
         set(
@@ -529,6 +534,10 @@ fn summary_revalidates_artifacts_and_cross_round_checksums() -> Result<()> {
         success(&fixture.verify("pgo", label, "performance", Some(CASE))?)?;
         fs::write(fixture.run.join("merged.profdata"), "changed")?;
         failure(&fixture.summarize()?)?;
+        let unverified: Value =
+            serde_json::from_slice(&fs::read(fixture.run.join("memory-comparison.json"))?)?;
+        ensure!(unverified.get("status") == Some(&json!("unverified")));
+        ensure!(unverified.get("equal").is_none());
         Ok(())
     })
 }

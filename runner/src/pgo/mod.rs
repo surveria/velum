@@ -10,6 +10,7 @@ use anyhow::{Context as _, bail, ensure};
 use serde_json::{Value, json};
 
 mod evidence;
+mod memory;
 mod profile;
 mod summary;
 mod types;

@@ -1,4 +1,5 @@
 //! Validate manifests without compiling or executing a benchmark workload.
+#![cfg(target_os = "linux")]
 
 use std::{
     fmt::Write as _,

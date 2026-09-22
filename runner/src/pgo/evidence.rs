@@ -2,7 +2,7 @@ use std::{
     collections::BTreeSet,
     fs::{self, File},
     io::BufReader,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use anyhow::{Context as _, Result, ensure};
@@ -21,8 +21,8 @@ use crate::{
 };
 
 use super::types::{
-    BASELINE_PATH, Checksum, Experiment, PerformanceEvidence, Sampling, VerifiedReport, fnv_digest,
-    hex_digest, label_path, read_json, sha256, write_json,
+    BASELINE_PATH, Checksum, Experiment, PerformanceEvidence, Sampling, VerifiedReport, hex_digest,
+    label_path, read_json, sha256, write_json,
 };
 
 pub fn verify_report(
@@ -46,7 +46,7 @@ pub(super) fn collect_report(
     case: Option<&str>,
 ) -> Result<VerifiedReport> {
     let binary = experiment.binary(variant)?;
-    let (path, affinity, performance) = match kind {
+    let (path, affinity, performance, memory) = match kind {
         "performance" => {
             let id = case.context("performance verification requires an exact workload ID")?;
             ensure!(
@@ -57,7 +57,7 @@ pub(super) fn collect_report(
             let report = read_document(&path)?;
             let affinity = check_identity(experiment, &report.metadata, &report.environment, true)?;
             let performance = check_performance(experiment, &report, &path, id)?;
-            (path, affinity, Some(performance))
+            (path, affinity, Some(performance), None)
         }
         "memory" => {
             ensure!(
@@ -65,10 +65,10 @@ pub(super) fn collect_report(
                 "memory evaluation cannot train profiles or select a case"
             );
             let path = label_path(run, label, ".json")?;
-            let report: MemoryReport = read_json(&path)?;
+            let report: MemoryHeader = read_json(&path)?;
             let affinity = check_identity(experiment, &report.metadata, &report.environment, true)?;
-            check_memory(&report, &binary.path)?;
-            (path, affinity, None)
+            let memory = super::memory::verify_memory(&path, &binary.path)?;
+            (path, affinity, None, Some(memory))
         }
         _ => anyhow::bail!("unknown PGO report kind {kind}"),
     };
@@ -94,6 +94,7 @@ pub(super) fn collect_report(
         kind: kind.to_owned(),
         expected_case: case.map(str::to_owned),
         performance,
+        memory,
     })
 }
 
@@ -254,117 +255,9 @@ fn measurement(value: &Measurement) -> Result<(u64, u32)> {
 }
 
 #[derive(Deserialize)]
-struct MemoryReport {
-    schema_version: u32,
-    artifact_kind: String,
+struct MemoryHeader {
     metadata: RunMetadata,
     environment: EnvironmentInfo,
-    executable_path: PathBuf,
-    executable_digest: String,
-    configuration: MemoryConfiguration,
-    expected_worker_count: usize,
-    campaign_complete: bool,
-    runs: Vec<MemoryWorker>,
-}
-
-#[derive(Deserialize)]
-struct MemoryConfiguration {
-    repetitions: u32,
-    quickjs_compiled: bool,
-    scenarios: Vec<MemoryScenario>,
-}
-
-#[derive(Deserialize)]
-struct MemoryScenario {
-    id: String,
-    kind: String,
-    vm_count: u32,
-    nodes_per_vm: u32,
-    bytes_per_node: u32,
-    rounds: u32,
-}
-
-#[derive(Deserialize)]
-struct MemoryWorker {
-    scenario_id: String,
-    engine: String,
-    repetition: u32,
-    outcome: String,
-}
-
-fn check_memory(report: &MemoryReport, executable: &Path) -> Result<()> {
-    const SCENARIOS: [(&str, &str, u32, u32, u32, u32); 6] = [
-        ("hello-world", "hello_world", 1, 0, 0, 1),
-        ("retained-graph", "retained_graph", 1, 1_024, 256, 1),
-        ("cyclic-churn", "cyclic_churn", 1, 1_024, 256, 3),
-        ("independent-vms-1", "independent_vms", 1, 64, 256, 1),
-        ("independent-vms-10", "independent_vms", 10, 64, 256, 1),
-        ("independent-vms-50", "independent_vms", 50, 64, 256, 1),
-    ];
-    ensure!(
-        report.schema_version == 1
-            && report.artifact_kind == "local_process_isolated_memory_campaign",
-        "unsupported memory report schema or kind"
-    );
-    ensure!(
-        report.campaign_complete && report.expected_worker_count == 36 && report.runs.len() == 36,
-        "incomplete memory campaign"
-    );
-    ensure!(
-        report.executable_path == executable && report.executable_digest == fnv_digest(executable)?,
-        "memory executable identity mismatch"
-    );
-    ensure!(
-        report.configuration.repetitions == 3 && report.configuration.quickjs_compiled,
-        "memory configuration mismatch"
-    );
-    let scenarios: BTreeSet<_> = report
-        .configuration
-        .scenarios
-        .iter()
-        .map(|case| {
-            (
-                case.id.as_str(),
-                case.kind.as_str(),
-                case.vm_count,
-                case.nodes_per_vm,
-                case.bytes_per_node,
-                case.rounds,
-            )
-        })
-        .collect();
-    ensure!(
-        report.configuration.scenarios.len() == SCENARIOS.len()
-            && scenarios == BTreeSet::from(SCENARIOS),
-        "memory scenario parameters changed"
-    );
-    let mut expected = BTreeSet::new();
-    for (id, _, _, _, _, _) in SCENARIOS {
-        for engine in ["velum", "quickjs"] {
-            for repetition in 0..3 {
-                ensure!(
-                    expected.insert((id, engine, repetition)),
-                    "duplicate expected memory worker"
-                );
-            }
-        }
-    }
-    let actual: BTreeSet<_> = report
-        .runs
-        .iter()
-        .map(|row| {
-            (
-                row.scenario_id.as_str(),
-                row.engine.as_str(),
-                row.repetition,
-            )
-        })
-        .collect();
-    ensure!(
-        actual == expected && report.runs.iter().all(|row| row.outcome == "passed"),
-        "memory worker failed, skipped, duplicated, or is missing"
-    );
-    Ok(())
 }
 
 pub fn verify_correctness(run: &Path, report_path: &Path, output: &Path) -> Result<()> {
@@ -428,7 +321,7 @@ pub fn verify_correctness(run: &Path, report_path: &Path, output: &Path) -> Resu
     let paths: BTreeSet<_> = candidate
         .1
         .iter()
-        .map(|id| id.split_once('#').map_or(id.as_str(), |(path, _)| path))
+        .map(|id| id.rsplit_once('#').map_or(id.as_str(), |(path, _)| path))
         .collect();
     ensure!(
         suite_passes(&report, "Test262 file conformance")? == u64::try_from(paths.len())?,
@@ -497,6 +390,15 @@ fn pass_list(path: &Path) -> Result<(Vec<String>, BTreeSet<String>)> {
         ensure!(
             line == line.trim() && previous.is_none_or(|value| value < line),
             "Test262 pass list is not sorted and unique"
+        );
+        let (source, variant) = line
+            .rsplit_once('#')
+            .context("Test262 pass ID has no variant suffix")?;
+        ensure!(
+            source.starts_with("test/")
+                && Path::new(source).extension() == Some(std::ffi::OsStr::new("js"))
+                && matches!(variant, "default" | "strict" | "module" | "raw"),
+            "invalid Test262 pass ID or variant"
         );
         ensure!(ids.insert(line.to_owned()), "duplicate Test262 pass ID");
         previous = Some(line);
