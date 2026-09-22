@@ -54,6 +54,9 @@ subdirectory and a build-and-copy lock. Each invocation creates a unique directo
 containing the full tracked source snapshot, source commit/tree identity, compiler information, build diagnostics,
 an immutable copy of the executable and its SHA-256, separate lane logs and
 reports, local reference snapshots, and `lanes.tsv` completion statuses.
+Keep ordinary project reports split by lane: the existing 1,000-line YAML bound
+can reject a combined report containing all 22 selected workloads. The launcher
+already writes separate reports and does not weaken that reporting bound.
 
 A nonzero lane exit remains visible and makes the campaign exit unsuccessfully,
 but does not discard reports from other lanes. A zero lane exit is not a claim
@@ -124,10 +127,49 @@ controls are `VELUM_MEMORY_REPETITIONS`, `VELUM_MEMORY_CHILD_TIMEOUT_MS`,
 IDs: `hello-world`, `retained-graph`, `cyclic-churn`, `independent-vms-1`,
 `independent-vms-10`, or `independent-vms-50`. The report records effective values.
 
-## Progress
+## Reviewed baseline: 2026-09-22
 
-The first implementation tranche adds the opt-in workloads, launcher and memory
-lane. Fresh runs are being collected outside the repository; no completed
-runtime optimization or PGO benefit is claimed by this infrastructure change.
-Record reviewed milestone totals in the README quality-evidence block, without
-committing exhaustive local reports.
+The first tranche is baseline infrastructure, not a runtime optimization. On the
+recorded Linux / Ryzen 9 9950X3D host, the completed measurements are:
+
+| Lane | Completed evidence | Velum / QuickJS time, geometric mean |
+| --- | --- | ---: |
+| Existing sentinels | 5 valid, 0 failed/invalid; matching checksums | 0.14× |
+| Representative mixed workloads | 6 valid, 0 failed/invalid; matching checksums | 10.26× |
+| Structurally different holdouts | 6 valid, 0 failed/invalid; matching checksums | 8.44× |
+| Direct Rust embedding | 5 valid, 0 failed/invalid | No equivalent reference API |
+| JetStream shell candidates | 86 selected: 30 measured, 26 failed, 30 skipped; 24 paired measurements | 18.61× across those 24 pairs |
+| Isolated memory | 36 workers passed; 0 failed/skipped; 3 repetitions per engine/scenario | Not a latency or allocator-parity ratio |
+
+Ratios above one mean Velum took longer. These are separate workload cohorts,
+not one aggregate engine score or an official JetStream score. The five fast
+sentinels do not describe the broader mixed workloads. Unsupported JetStream
+harness requirements and resource-limit failures remain visible. The 50-VM
+memory case has roughly 28 MiB live process RSS for Velum versus 14 MiB for
+QuickJS; this includes the worker/runtime and is not a per-VM allocation claim.
+
+Project and memory measurements use source commit `3e09be2e45403352fd8810d28d4df77e44610c2a`
+and tree `3ab735572f51d9157950e590a3605edcacd22661`. The JetStream baseline uses
+`ae20f7cc46722b5833c461ee70e05e29ba9a709e` / tree
+`0812a3c7661e09f10d2abbbb0518ae44bfd400ed`; engine source is unchanged between
+these snapshots. The reference is the pinned `rquickjs` 0.9 bundled QuickJS.
+
+Complete local evidence is outside the worktree under
+`$HOME/velum-fuzzing-artifacts/performance/campaign-20260922`:
+
+- `baseline/jetstream.yaml` and its bounded timing/component siblings;
+- `campaign-20260922T174028Z-3805068/reviewed-{sentinel,representative,holdout,embedding}.yaml`;
+- `campaign-20260922T174028Z-3805068/reviewed-memory.{md,json,yaml}`;
+- preserved source snapshots, binaries, source/configuration metadata and logs.
+
+Earlier calibration attempts are retained but excluded from the reviewed
+totals: the short holdout dispatch workload was doubled to clear the existing
+1 ms minimum, and an oversized combined report was rerun as separate lanes.
+No quality threshold was relaxed. Local root checks passed 1,818 tests;
+runner checks and focused follow-ups cover 150 tests, including 17 memory tests.
+These local results do not replace the required exact-head correctness CI gate.
+
+Next: collect profiles of method dispatch, object transformation and tree/GC
+work; accept common runtime improvements through paired parent/candidate runs;
+then evaluate PGO on separate training and holdout inputs. No runtime speedup
+or PGO benefit is claimed by this infrastructure change.
