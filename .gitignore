@@ -104,6 +104,10 @@
 !/runner/src/
 !/runner/src/**/
 !/runner/src/**/*.rs
+!/runner/tests/
+!/runner/tests/**/
+!/runner/tests/**/*.rs
+!/runner/tests/**/*.txt
 
 !/fuzzing-test/
 !/fuzzing-test/.gitignore
@@ -120,6 +124,7 @@
 !/tests/**/*.md
 !/tests/**/*.patch
 !/tests/**/*.rs
+!/tests/**/*.sh
 !/tests/**/*.js
 !/tests/**/*.txt
 !/tests/**/*.tsv

@@ -4,6 +4,12 @@ use velum::{OptimizationMode, OwnedValue, RuntimeLimits, Vm, VmConfig};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+// Debug Rust frames are much larger than release benchmark frames. Semantic
+// replay uses a dedicated native stack; measured runner limits stay unchanged.
+const TEST_NATIVE_STACK_BYTES: usize = 32 * 1_024 * 1_024;
+const TEST_GUARDED_STACK_BYTES: usize = 8 * 1_024 * 1_024;
+
+#[derive(Clone, Copy)]
 struct Workload {
     id: &'static str,
     source: &'static str,
@@ -73,12 +79,18 @@ fn tree_allocation_workloads_are_repeatable_in_both_modes() -> TestResult {
 fn check_pair(workloads: [Workload; 2]) -> TestResult {
     for workload in workloads {
         for mode in [OptimizationMode::Enabled, OptimizationMode::Disabled] {
-            check_workload(&workload, mode).map_err(|error| {
-                format!(
-                    "benchmark fixture '{}' in {mode:?} mode: {error}",
-                    workload.id
-                )
-            })?;
+            std::thread::Builder::new()
+                .stack_size(TEST_NATIVE_STACK_BYTES)
+                .spawn(move || {
+                    check_workload(&workload, mode).map_err(|error| {
+                        format!(
+                            "benchmark fixture '{}' in {mode:?} mode: {error}",
+                            workload.id
+                        )
+                    })
+                })?
+                .join()
+                .map_err(|_| "benchmark semantic-replay thread panicked")??;
         }
     }
     Ok(())
@@ -87,6 +99,7 @@ fn check_pair(workloads: [Workload; 2]) -> TestResult {
 fn check_workload(workload: &Workload, mode: OptimizationMode) -> TestResult {
     let limits = RuntimeLimits {
         max_runtime_steps: 20_000_000,
+        max_call_stack_bytes: TEST_GUARDED_STACK_BYTES,
         max_bindings: 65_536,
         max_objects: 1_000_000,
         max_object_properties: 1_000_000,
@@ -97,8 +110,8 @@ fn check_workload(workload: &Workload, mode: OptimizationMode) -> TestResult {
     let setup = vm.compile("__velumBenchSetup()")?;
     let run = vm.compile("__velumBenchRun()")?;
     let verify = vm.compile("__velumBenchVerify()")?;
-    vm.eval_compiled_owned(&source)?;
-    vm.eval_compiled_owned(&setup)?;
+    vm.eval_compiled(&source)?;
+    vm.eval_compiled(&setup)?;
     for iteration in 0..2 {
         let value = vm.eval_compiled_owned(&run)?;
         ensure_checksum(&value, workload.expected, &format!("run {iteration}"))?;
@@ -108,7 +121,7 @@ fn check_workload(workload: &Workload, mode: OptimizationMode) -> TestResult {
         workload.expected,
         "verify",
     )?;
-    vm.eval_compiled_owned(&setup)?;
+    vm.eval_compiled(&setup)?;
     ensure_checksum(
         &vm.eval_compiled_owned(&run)?,
         workload.expected,

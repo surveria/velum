@@ -26,6 +26,7 @@ mod host_benchmark_lock;
 mod jetstream;
 mod jetstream_baseline;
 mod jetstream_mode;
+mod memory_benchmarks;
 mod prepared_benchmarks;
 mod quickjs_baseline;
 mod report_benchmark_methodology;
@@ -107,6 +108,12 @@ fn run() -> anyhow::Result<()> {
         Config::Performance { report_path } => (report_path, ReportKind::Performance),
         Config::Benchmarks { report_path } => {
             return benchmark_mode::run(&report_path);
+        }
+        Config::MemoryBenchmarks { report_path } => {
+            return memory_benchmarks::run(&report_path);
+        }
+        Config::MemoryBenchmarkWorker { encoded_config } => {
+            return memory_benchmarks::run_worker(&encoded_config);
         }
         Config::ComposeReports {
             expected_tree,
