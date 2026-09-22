@@ -227,7 +227,7 @@ Receipts and the independently validated six-suite report are under
 
 The separate [productized release PGO experiment](pgo-experiment.md#reviewed-repository-launcher-2026-09-22)
 also completed and validated its saved binary against the complete corpus.
-The local engine gate passes 1,905 tests; the runner passes 197 tests plus
+The local engine gate passes 1,907 tests; the runner passes 197 tests plus
 strict clippy and documentation checks. Required exact-tree integration CI and
 its artifact are linked from [PR #724](https://github.com/surveria/velum/pull/724).
 
