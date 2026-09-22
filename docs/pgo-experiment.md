@@ -19,8 +19,10 @@ resident memory. Whole-runner size is not standalone engine-library size.
 Train only the six `representative_*` prepared workloads. Each exact-ID process
 must emit a new nonempty raw profile. Merge with the matching Rust-bundled LLVM
 tool, reject corrupt inputs and profile mismatch diagnostics, and establish
-that actual engine-owned functions executed. Freeze the merged profile before
-evaluating any `holdout_*` workload or memory scenario. Never incorporate
+that recognized Velum-related functions executed. The conservative symbol guard
+also protects trait implementations whose top-level self type or trait belongs
+to Velum; this is not an exhaustive defining-crate demangler. Freeze the merged
+profile before evaluating any `holdout_*` workload or memory scenario. Never incorporate
 holdout measurements or correctness runs into training.
 Training weights follow the observed execution counts, not equal weights for
 the six workload families. Rust dependencies are instrumented too; precompiled
@@ -84,6 +86,10 @@ is controlled, but separate invocations do not isolate the causal effect of
 ThinLTO: cross-preset attribution requires an additional same-path comparison
 with all other settings fixed. Inherited compiler/profile overrides and visible
 Cargo configuration files are rejected instead of silently altering a preset.
+The launchers clear inherited `GIT_*` routing/configuration variables, ignore
+system/global Git configuration, and bind Git operations explicitly to the
+requested checkout. The correctness wrapper uses only experiment-owned temporary
+index/object storage when checking the pinned, patched corpus.
 
 CPU 0 is the default, with no automatic fallback. Select another available CPU
 explicitly or use `--cpu inherit`; compare results only with matching affinity

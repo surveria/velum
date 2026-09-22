@@ -11,29 +11,30 @@ use anyhow::{Context as _, Result, ensure};
 
 const TOTAL_FIELDS: [&str; 3] = ["Total functions", "Total number of blocks", "Total count"];
 const MISSING_FUNCTION: &str = "no profile data available for function";
-const NO_ENGINE: &str = "profile contains no observed executed Velum engine function";
+const NO_ENGINE: &str = "profile contains no observed executed Velum-related function";
 const MISMATCH: &str = "Profile mismatch or invalid profile diagnostics";
+const LEGACY_AS: &str = "$u20$as$u20$";
 
-/// Checks an LLVM IR profile dump and preserves normalized executed engine names.
+/// Checks an LLVM IR profile dump and preserves recognized executed Velum-related names.
 pub fn verify_profile(show: &Path, symbols_out: &Path) -> Result<()> {
     let file = File::open(show)
         .with_context(|| format!("failed to open profile dump '{}'", show.display()))?;
     let mut ir_headers = 0_usize;
     let mut totals = BTreeSet::new();
-    let mut hot_engine = BTreeSet::new();
-    let mut current_engine: Option<String> = None;
+    let mut hot_symbols = BTreeSet::new();
+    let mut current_symbol: Option<String> = None;
     for line in BufReader::new(file).lines() {
         let line = line.context("failed to read profile dump")?;
         if let Some(body) = line.strip_prefix("    ") {
-            if let Some(symbol) = &current_engine
+            if let Some(symbol) = &current_symbol
                 && executed_count(body)?
             {
-                hot_engine.insert(symbol.clone());
+                hot_symbols.insert(symbol.clone());
             }
             continue;
         }
-        current_engine = profile_function(&line)
-            .filter(|symbol| engine_owned(symbol))
+        current_symbol = profile_function(&line)
+            .filter(|symbol| recognized_velum_symbol(symbol))
             .map(str::to_owned);
         if let Some(level) = line.strip_prefix("Instrumentation level:") {
             ensure!(
@@ -62,19 +63,19 @@ pub fn verify_profile(show: &Path, symbols_out: &Path) -> Result<()> {
     for field in TOTAL_FIELDS {
         ensure!(totals.contains(field), "missing or zero {field}");
     }
-    ensure!(!hot_engine.is_empty(), "{NO_ENGINE}");
+    ensure!(!hot_symbols.is_empty(), "{NO_ENGINE}");
     let file = File::create(symbols_out).with_context(|| {
         format!(
-            "failed to create engine symbols '{}'",
+            "failed to create Velum-related symbols '{}'",
             symbols_out.display()
         )
     })?;
     let mut output = BufWriter::new(file);
-    for symbol in hot_engine {
-        writeln!(output, "{symbol}").context("failed to write executed engine symbol")?;
+    for symbol in hot_symbols {
+        writeln!(output, "{symbol}").context("failed to write executed Velum-related symbol")?;
     }
-    output.flush().context("failed to flush engine symbols")?;
-    println!("Validated nonempty IR profile with observed executed engine functions.");
+    output.flush().context("failed to flush Velum-related symbols")?;
+    println!("Validated nonempty IR profile with observed executed recognized Velum-related functions.");
     Ok(())
 }
 
@@ -117,12 +118,9 @@ fn executed_count(body: &str) -> Result<bool> {
     Ok(executed)
 }
 
-fn engine_owned(symbol: &str) -> bool {
-    if let Some(tail) = symbol.strip_prefix("_ZN5velum") {
-        return tail
-            .bytes()
-            .next()
-            .is_some_and(|byte| byte.is_ascii_digit());
+fn recognized_velum_symbol(symbol: &str) -> bool {
+    if let Some(path) = symbol.strip_prefix("_ZN") {
+        return legacy_velum_symbol(path);
     }
     // Inspect the first v0 crate root, never an engine type in another crate's
     // generic arguments. Unknown mangling forms deliberately fail closed.
@@ -149,6 +147,80 @@ fn engine_owned(symbol: &str) -> bool {
             .next()
             .is_some_and(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase() || byte == b'_')
     })
+}
+
+fn legacy_velum_symbol(path: &str) -> bool {
+    let Some((component, tail)) = legacy_component(path) else {
+        return false;
+    };
+    if legacy_component(tail).is_none() {
+        return false;
+    }
+    if component == "velum" {
+        return true;
+    }
+    // Conservatively protect implementations whose top-level self type or
+    // trait is rooted in Velum, including local traits for primitive/std types.
+    // This is not exhaustive crate provenance: an external crate can implement
+    // a Velum trait too. Generic-argument mentions alone are not enough.
+    let Some(implementation) = component
+        .strip_prefix("_$LT$")
+        .and_then(|name| name.strip_suffix("$GT$"))
+    else {
+        return false;
+    };
+    let Some((self_type, trait_type)) = legacy_impl_parts(implementation) else {
+        return false;
+    };
+    legacy_velum_root(self_type) || trait_type.is_some_and(legacy_velum_root)
+}
+
+fn legacy_velum_root(name: &str) -> bool {
+    name.strip_prefix("velum..").is_some_and(|path| {
+        path.bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+    })
+}
+
+fn legacy_impl_parts(implementation: &str) -> Option<(&str, Option<&str>)> {
+    let mut depth = 0_usize;
+    let mut separator = None;
+    for (offset, _) in implementation.match_indices('$') {
+        let suffix = implementation.get(offset..)?;
+        if suffix.starts_with("$LT$") {
+            depth = depth.checked_add(1)?;
+        } else if suffix.starts_with("$GT$") {
+            depth = depth.checked_sub(1)?;
+        } else if depth == 0 && suffix.starts_with(LEGACY_AS)
+            && separator.replace(offset).is_some()
+        {
+            return None;
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+    let Some(offset) = separator else {
+        return Some((implementation, None));
+    };
+    let self_type = implementation.get(..offset)?;
+    let trait_offset = offset.checked_add(LEGACY_AS.len())?;
+    let trait_type = implementation.get(trait_offset..)?;
+    if self_type.is_empty() || trait_type.is_empty() {
+        return None;
+    }
+    Some((self_type, Some(trait_type)))
+}
+
+fn legacy_component(path: &str) -> Option<(&str, &str)> {
+    let digits = path.bytes().take_while(u8::is_ascii_digit).count();
+    let length = path.get(..digits)?.parse::<usize>().ok()?;
+    if length == 0 {
+        return None;
+    }
+    let rest = path.get(digits..)?;
+    Some((rest.get(..length)?, rest.get(length..)?))
 }
 
 /// Reports missing records and rejects mismatches, missing hot symbols or unknown warnings.
@@ -178,7 +250,7 @@ pub fn verify_diagnostics(stderr: &Path, symbols: &Path, report_out: &Path) -> R
                 .and_then(|name| name.rsplit(';').next());
             match symbol {
                 Some(symbol) if trained.contains(symbol) => errors.push(format!(
-                    "A previously executed engine symbol is now missing from profile-use compilation: {symbol}"
+                    "A previously executed Velum-related symbol is now missing from profile-use compilation: {symbol}"
                 )),
                 Some(_) => {}
                 None => errors.push("Malformed missing-function diagnostic".to_owned()),
@@ -219,16 +291,16 @@ pub fn verify_diagnostics(stderr: &Path, symbols: &Path, report_out: &Path) -> R
 
 fn read_trained_symbols(path: &Path) -> Result<BTreeSet<String>> {
     let text = fs::read_to_string(path)
-        .with_context(|| format!("failed to read trained engine symbols '{}'", path.display()))?;
+        .with_context(|| format!("failed to read trained Velum-related symbols '{}'", path.display()))?;
     let mut symbols = BTreeSet::new();
     for line in text.lines() {
         ensure!(
-            engine_owned(line) && !line.contains(char::is_whitespace) && !line.contains(';'),
-            "invalid normalized engine symbol '{line}'"
+            recognized_velum_symbol(line) && !line.contains(char::is_whitespace) && !line.contains(';'),
+            "invalid normalized Velum-related symbol '{line}'"
         );
         symbols.insert(line.to_owned());
     }
-    ensure!(!symbols.is_empty(), "trained engine symbols are empty");
+    ensure!(!symbols.is_empty(), "trained Velum-related symbols are empty");
     Ok(symbols)
 }
 

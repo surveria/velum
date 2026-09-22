@@ -120,6 +120,39 @@ fn pgo_rejects_dirty_checkout_before_toolchain_selection() -> TestResult {
 }
 
 #[test]
+fn pgo_git_overrides_cannot_hide_a_dirty_requested_checkout() -> TestResult {
+    with_fixture(|fixture| {
+        let pristine = fixture.root.join("pristine");
+        success(
+            &fixture.command("git").args(["clone", "--quiet", "--no-local"])
+                .arg(&fixture.checkout).arg(&pristine).output()?,
+            "create pristine local fixture",
+        )?;
+        let sentinel = fixture.root.join("external-index");
+        fs::write(&sentinel, "external index must remain untouched\n")?;
+        fs::write(fixture.checkout.join("workload.txt"), "uncommitted edit\n")?;
+        let work_tree = pristine.to_string_lossy().into_owned();
+        let overrides = [
+            vec![("GIT_WORK_TREE", work_tree.clone())],
+            vec![("GIT_DIR", pristine.join(".git").to_string_lossy().into_owned()), ("GIT_WORK_TREE", work_tree.clone())],
+            vec![("GIT_COMMON_DIR", pristine.join(".git").to_string_lossy().into_owned())],
+            vec![("GIT_INDEX_FILE", sentinel.to_string_lossy().into_owned())],
+            vec![("GIT_OBJECT_DIRECTORY", pristine.join(".git/objects").to_string_lossy().into_owned())],
+            vec![("GIT_CONFIG_COUNT", "1".to_owned()), ("GIT_CONFIG_KEY_0", "core.worktree".to_owned()), ("GIT_CONFIG_VALUE_0", work_tree.clone())],
+            vec![("GIT_CONFIG_PARAMETERS", format!("'core.worktree'='{work_tree}'"))],
+            vec![("GIT_PREFIX", "outside/".to_owned())],
+        ];
+        for values in overrides {
+            let mut command = fixture.launcher(&["--execute"], "success")?;
+            command.envs(values);
+            rejected(&bounded_output(command.spawn()?, TEST_TIMEOUT)?, "clean committed checkout")?;
+        }
+        require(!fixture.root.join("events.tsv").exists(), "Git overrides reached compiler tools")?;
+        require(fs::read_to_string(sentinel)? == "external index must remain untouched\n", "inherited index was modified")
+    })
+}
+
+#[test]
 fn pgo_fake_full_run_preserves_ab_ba_training_and_owned_artifacts() -> TestResult {
     with_fixture(|fixture| {
         success(

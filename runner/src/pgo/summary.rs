@@ -51,6 +51,12 @@ struct Summary<'a> {
     limitations: [&'static str; 4],
 }
 
+#[derive(Default)]
+struct Revalidation {
+    affinity: Option<String>,
+    report_sha256: BTreeSet<String>,
+}
+
 pub fn summarize(run: &Path) -> Result<()> {
     invalidate_derived_reports(run)?;
     let experiment = Experiment::load(run)?;
@@ -59,7 +65,7 @@ pub fn summarize(run: &Path) -> Result<()> {
     }
     let profile_sha256 = checked_profile(run)?;
     check_execution_order(run, experiment.rounds)?;
-    let mut affinity = None;
+    let mut validation = Revalidation::default();
     for suffix in CASE_SUFFIXES {
         let id = format!("representative_{suffix}");
         let label = format!("training-{id}");
@@ -69,7 +75,7 @@ pub fn summarize(run: &Path) -> Result<()> {
             "instrumented",
             &label,
             Some(&id),
-            &mut affinity,
+            &mut validation,
         )?;
     }
     let mut baseline = BTreeMap::new();
@@ -79,8 +85,8 @@ pub fn summarize(run: &Path) -> Result<()> {
         let mut log_speedups = 0.0;
         for suffix in CASE_SUFFIXES {
             let case = format!("holdout_{suffix}");
-            let ordinary = holdout(run, &experiment, round, "ordinary", &case, &mut affinity)?;
-            let pgo = holdout(run, &experiment, round, "pgo", &case, &mut affinity)?;
+            let ordinary = holdout(run, &experiment, round, "ordinary", &case, &mut validation)?;
+            let pgo = holdout(run, &experiment, round, "pgo", &case, &mut validation)?;
             check_checksum(&mut baseline, &case, &ordinary.checksum)?;
             check_checksum(&mut baseline, &case, &pgo.checksum)?;
             let before = duration_float(ordinary.engine_ns)?;
@@ -109,14 +115,14 @@ pub fn summarize(run: &Path) -> Result<()> {
             .exp(),
         });
     }
-    let memory_comparison = compare_memory(run, &experiment, &mut affinity)?;
+    let memory_comparison = compare_memory(run, &experiment, &mut validation)?;
     let summary = Summary {
         schema_version: 1,
         evidence_validated: true,
         commit: &experiment.commit,
         tree: &experiment.tree,
         preset: &experiment.preset,
-        cpu_affinity: affinity.context("summary has no verified CPU affinity")?,
+        cpu_affinity: validation.affinity.context("summary has no verified CPU affinity")?,
         profile_sha256,
         rows,
         round_geomeans,
@@ -149,14 +155,14 @@ fn invalidate_derived_reports(run: &Path) -> Result<()> {
 fn compare_memory(
     run: &Path,
     experiment: &Experiment,
-    affinity: &mut Option<String>,
+    validation: &mut Revalidation,
 ) -> Result<serde_json::Value> {
     let mut baseline: Option<(String, MemoryEvidence)> = None;
     let mut reports = 0_u32;
     for round in 1..=experiment.rounds {
         for variant in ["ordinary", "pgo"] {
             let label = format!("round-{round}-{variant}-memory");
-            let actual = revalidate(run, experiment, variant, &label, None, affinity)?
+            let actual = revalidate(run, experiment, variant, &label, None, validation)?
                 .memory
                 .context("memory sidecar has no logical evidence")?;
             if let Some((baseline_label, expected)) = &baseline {
@@ -201,7 +207,7 @@ fn revalidate(
     variant: &str,
     label: &str,
     case: Option<&str>,
-    affinity: &mut Option<String>,
+    validation: &mut Revalidation,
 ) -> Result<VerifiedReport> {
     let kind = if case.is_some() {
         "performance"
@@ -214,13 +220,17 @@ fn revalidate(
         saved == actual,
         "verified report or sidecar identity changed: {label}"
     );
-    if let Some(expected) = affinity {
+    ensure!(
+        validation.report_sha256.insert(actual.report_sha256.clone()),
+        "raw PGO report reused across observations: {label}"
+    );
+    if let Some(expected) = &validation.affinity {
         ensure!(
             *expected == actual.cpu_affinity,
             "CPU affinity drift across PGO reports"
         );
     } else {
-        *affinity = Some(actual.cpu_affinity.clone());
+        validation.affinity = Some(actual.cpu_affinity.clone());
     }
     Ok(actual)
 }
@@ -231,10 +241,10 @@ fn holdout(
     round: u32,
     variant: &str,
     case: &str,
-    affinity: &mut Option<String>,
+    validation: &mut Revalidation,
 ) -> Result<PerformanceEvidence> {
     let label = format!("round-{round}-{variant}-{case}");
-    revalidate(run, experiment, variant, &label, Some(case), affinity)?
+    revalidate(run, experiment, variant, &label, Some(case), validation)?
         .performance
         .context("holdout has no performance evidence")
 }

@@ -12,6 +12,12 @@ if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
   exit 0
 fi
 [[ $# == 3 ]] || fail 'usage: bash check-pgo-correctness.sh /absolute/completed-experiment /absolute/frozen-test262 /absolute/qjs'
+# `git -C` does not override inherited repository, index, object, or config
+# routing. Clear the complete namespace before discovering the supplied corpus.
+while IFS= read -r variable; do
+  case "$variable" in GIT_*) unset "$variable" ;; esac
+done < <(compgen -e)
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_OPTIONAL_LOCKS=0
 for tool in git awk sha256sum timeout mktemp find sort xargs cmp setsid realpath grep cut cp date mkdir sleep; do
   command -v "$tool" >/dev/null 2>&1 || fail "missing prerequisite: $tool"
 done
@@ -21,6 +27,11 @@ for argument in "$@"; do
 done
 experiment="$(cd "$1" && pwd -P)"
 corpus="$(cd "$2" && pwd -P)"
+[[ "$(git -C "$corpus" rev-parse --show-toplevel)" == "$corpus" ]] || fail 'Test262 path must name the checkout root'
+corpus_git_dir="$(git -C "$corpus" rev-parse --absolute-git-dir)"
+corpus_git() {
+  git --git-dir="$corpus_git_dir" --work-tree="$corpus" -C "$corpus" -c core.fsmonitor=false "$@"
+}
 quickjs="$(realpath "$3")"
 source_root="$experiment/source"
 executable="$experiment/bin/pgo"
@@ -34,7 +45,7 @@ patches="$(awk -F= '/^# test262_patches=/ {print $2; count++} END {if (count != 
 [[ -x "$executable" && -x "$verifier" && -x "$quickjs" && -s "$profile" ]] || fail 'saved PGO executable, merged profile, or external qjs is unavailable'
 grep -Fxq 'status=complete-needs-review' "$experiment/result.txt" || fail 'timed experiment has not completed; correctness must run afterwards'
 grep -Fxq 'exit_code=0' "$experiment/result.txt" || fail 'timed experiment did not finish successfully'
-[[ "$(git -C "$corpus" rev-parse HEAD)" == "$pin" ]] || fail 'Test262 checkout is not the pinned commit'
+[[ "$(corpus_git rev-parse HEAD)" == "$pin" ]] || fail 'Test262 checkout is not the pinned commit'
 [[ -d "$corpus/test" && -d "$corpus/harness" ]] || fail 'Test262 test/harness directories are missing'
 sha256sum --check "$executable.sha256" "$verifier.sha256" "$experiment/profile.sha256"
 
@@ -107,16 +118,16 @@ sha256sum "$executable" "$verifier" "$profile" "$quickjs" > "$out/inputs-before.
 # Build the expected patched index using experiment-owned Git storage only.
 # The frozen corpus checkout, its index, and its objects are never modified.
 mkdir "$out/corpus-objects"
-corpus_objects="$(git -C "$corpus" rev-parse --path-format=absolute --git-path objects)"
+corpus_objects="$(corpus_git rev-parse --path-format=absolute --git-path objects)"
 expected_git() {
   GIT_INDEX_FILE="$out/corpus.index" GIT_OBJECT_DIRECTORY="$out/corpus-objects" \
-    GIT_ALTERNATE_OBJECT_DIRECTORIES="$corpus_objects" git -C "$corpus" "$@"
+    GIT_ALTERNATE_OBJECT_DIRECTORIES="$corpus_objects" corpus_git "$@"
 }
 expected_git read-tree "$pin"
 patch_root="$source_root/tests/corpora/test262/patches"
 expected_git apply --cached "$patch_root/f2d1435644797268dca1f7988cad5a4e89ccd8d2.patch" \
   "$patch_root/staging-annex-b-arguments-object.patch"
-expected_git diff --no-ext-diff --exit-code -- test harness > "$out/corpus-diff.txt" || fail 'Test262 content differs from the exact pinned commit plus two tracked patches'
+expected_git diff --no-ext-diff --no-textconv --exit-code -- test harness > "$out/corpus-diff.txt" || fail 'Test262 content differs from the exact pinned commit plus two tracked patches'
 expected_git ls-files --others -- test harness > "$out/corpus-untracked.txt"
 [[ ! -s "$out/corpus-untracked.txt" ]] || fail 'unexpected untracked files in Test262 test/harness'
 (cd "$corpus" && find test harness -type f -print0 | sort -z | xargs -0 sha256sum) > "$out/corpus-before.sha256"
@@ -149,6 +160,7 @@ cd "$source_root"
 {
   printf 'cd %q\n' "$PWD"
   printf 'executable=%q\nprofile=%q\ntest262=%q\nquickjs=%q\n' "$executable" "$profile" "$corpus" "$quickjs"
+  printf 'git_environment=cleared\ntest262_git_dir=%q\ngit_work_tree=%q\n' "$corpus_git_dir" "$corpus"
   printf 'test262_commit=%s\nworkers=30\nfilters=none\nbaseline_update=disabled\nLLVM_PROFILE_FILE=unset\n' "$pin"
   printf 'command: %q --correctness %q\n' "$executable" "$out/report.md"
   printf 'timeout_seconds=3600\nkill_grace_seconds=10\n'

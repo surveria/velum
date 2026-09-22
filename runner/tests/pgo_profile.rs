@@ -12,9 +12,15 @@ use anyhow::{Context as _, Result, bail, ensure};
 
 const ENGINE: &str = "_ZN5velum7runtime7execute17h1234567890abcdefE";
 const OTHER_ENGINE: &str = "_ZN5velum6parser5parse17h1234567890abcdefE";
+// Observed in the archived LLVM 22 profile of the controlled PGO experiment.
+const ENGINE_DROP: &str = "_ZN93_$LT$velum..runtime..transient_roots..TransientRootScope$u20$as$u20$core..ops..drop..Drop$GT$4drop17h23fb3f3347eedf49E";
+// These actual conversion symbols had zero counters in the archived profile;
+// tests deliberately synthesize positive counters to exercise missing-hot guards.
+const BORROWED_CONVERSION: &str = "_ZN57_$LT$$RF$str$u20$as$u20$velum..api..host..IntoJsValue$GT$13into_js_value17he82636d5d515ea0aE";
+const STRING_CONVERSION: &str = "_ZN71_$LT$alloc..string..String$u20$as$u20$velum..api..host..FromJsValue$GT$13from_js_value17hc061d51f529962beE";
 const RUNNER: &str = "_ZN17velum_test_runner4main17h1234567890abcdefE";
 const MODULE: &str = "velum_test_runner.243cb84678a5d0f8-cgu.0";
-const NO_ENGINE: &str = "no observed executed Velum engine function";
+const NO_ENGINE: &str = "no observed executed Velum-related function";
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 struct Fixture {
@@ -134,6 +140,28 @@ fn missing(symbol: &str) -> String {
     format!(
         "warning: {MODULE}: no profile data available for function {symbol} Hash = 123 up to 0 count discarded\n"
     )
+}
+
+fn legacy_impl(self_type: &str, trait_type: Option<&str>) -> String {
+    let component = trait_type.map_or_else(
+        || format!("_$LT${self_type}$GT$"),
+        |trait_type| format!("_$LT${self_type}$u20$as$u20${trait_type}$GT$"),
+    );
+    format!("_ZN{}{component}4drop17h1234567890abcdefE", component.len())
+}
+
+fn legacy_local_trait_symbols() -> [String; 6] {
+    [
+        BORROWED_CONVERSION.to_owned(),
+        STRING_CONVERSION.to_owned(),
+        legacy_impl("bool", Some("velum..api..host..IntoJsValue")),
+        legacy_impl("f64", Some("velum..api..host..async_callable..IntoOwnedJsValue")),
+        legacy_impl("external..UserType", Some("velum..api..host..IntoJsValue")),
+        legacy_impl(
+            "core..option..Option$LT$$LT$core..foreign..Type$u20$as$u20$core..Trait$GT$..Assoc$GT$",
+            Some("velum..api..host..IntoJsValue"),
+        ),
+    ]
 }
 
 #[test]
@@ -264,6 +292,131 @@ fn profile_accepts_v0_engine_roots_with_optional_disambiguator_and_cgu() -> Resu
 }
 
 #[test]
+fn profile_accepts_legacy_trait_and_inherent_impls_with_velum_self_roots() -> Result<()> {
+    for symbol in [
+        ENGINE_DROP.to_owned(),
+        legacy_impl(
+            "velum..Value$LT$core..marker..PhantomData$GT$",
+            Some("core..fmt..Debug"),
+        ),
+        legacy_impl("velum..Value$LT$alloc..string..String$GT$", None),
+    ] {
+        with_fixture(|fixture| {
+            let records = record(&format!("{MODULE};{symbol}"), "0, 7, 0");
+            success(&fixture.profile(&profile(&records))?)?;
+            ensure!(fixture.read("symbols.txt")? == format!("{symbol}\n"));
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn profile_rejects_unexecuted_legacy_trait_impls_with_velum_self_roots() -> Result<()> {
+    with_fixture(|fixture| {
+        let records = format!("{}{}", record(ENGINE_DROP, "0, 0, 0"), record(RUNNER, "7"));
+        rejected(&fixture.profile(&profile(&records))?, NO_ENGINE)
+    })
+}
+
+#[test]
+fn profile_rejects_foreign_legacy_roots_despite_nested_velum_mentions() -> Result<()> {
+    for symbol in [
+        legacy_impl(
+            "core..option..Option$LT$velum..Value$GT$",
+            Some("core..fmt..Debug"),
+        ),
+        legacy_impl("alloc..vec..Vec$LT$velum..Value$GT$", None),
+        legacy_impl("std..external..Type", Some("core..Trait$LT$velum..Value$GT$")),
+        legacy_impl("bool", Some("core..Trait$LT$velum..Value$GT$")),
+        legacy_impl("std..external..Type", Some("velum_extra..HostTrait")),
+        legacy_impl(
+            "core..option..Option$LT$$LT$core..foreign..Type$u20$as$u20$velum..IntoJsValue$GT$..Assoc$GT$",
+            Some("core..fmt..Debug"),
+        ),
+        legacy_impl("velum_extra..Type", Some("core..fmt..Debug")),
+        legacy_impl("velum", Some("core..fmt..Debug")),
+        legacy_impl("velum...Type", Some("core..fmt..Debug")),
+        legacy_impl("velum..Type", Some("")),
+    ] {
+        with_fixture(|fixture| {
+            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)?;
+            rejected(
+                &fixture.diagnostics("", &symbol)?,
+                "invalid normalized Velum-related symbol",
+            )
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn profile_protects_hot_legacy_velum_traits_for_primitive_and_foreign_self_types() -> Result<()> {
+    for symbol in legacy_local_trait_symbols() {
+        with_fixture(|fixture| {
+            let records = record(&format!("{MODULE};{symbol}"), "7");
+            success(&fixture.profile(&profile(&records))?)?;
+            let trained = fixture.read("symbols.txt")?;
+            ensure!(trained == format!("{symbol}\n"));
+            rejected(
+                &fixture.diagnostics(&missing(&symbol), &trained)?,
+                "previously executed Velum-related symbol",
+            )
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn profile_keeps_cold_legacy_velum_trait_implementations_review_only() -> Result<()> {
+    for symbol in legacy_local_trait_symbols() {
+        with_fixture(|fixture| {
+            let records = format!("{}{}", record(ENGINE, "7"), record(&symbol, "0"));
+            success(&fixture.profile(&profile(&records))?)?;
+            let trained = fixture.read("symbols.txt")?;
+            ensure!(trained == format!("{ENGINE}\n"));
+            success(&fixture.diagnostics(&missing(&symbol), &trained)?)?;
+            ensure!(fixture.read("diagnostics.txt")?.contains("human review: 1\n"));
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn profile_rejects_unbalanced_legacy_generics_and_duplicate_outer_trait_separators() -> Result<()> {
+    for symbol in [
+        legacy_impl("velum..Type$LT$core..Marker", Some("core..fmt..Debug")),
+        legacy_impl("velum..Type$GT$", Some("core..fmt..Debug")),
+        legacy_impl("bool", Some("velum..Trait$LT$core..Marker")),
+        legacy_impl("bool", Some("velum..Trait$GT$")),
+        legacy_impl("velum..Type$u20$as$u20$core..Trait", Some("core..fmt..Debug")),
+    ] {
+        with_fixture(|fixture| {
+            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn profile_rejects_malformed_legacy_component_lengths() -> Result<()> {
+    for symbol in [
+        ENGINE_DROP.replacen("_ZN93_", "_ZN92_", 1),
+        ENGINE_DROP.replacen("_ZN93_", "_ZN94_", 1),
+        "_ZN184467440737095516160_velumE".to_owned(),
+        "_ZN500velum7executeE".to_owned(),
+        "_ZN0velum7executeE".to_owned(),
+        "_ZN5velum999executeE".to_owned(),
+    ] {
+        with_fixture(|fixture| {
+            rejected(&fixture.profile(&profile(&record(&symbol, "7")))?, NO_ENGINE)
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
 fn profile_rejects_malformed_engine_counter_values() -> Result<()> {
     for counts in ["7, invalid", "-1", "7,", "18446744073709551616"] {
         with_fixture(|fixture| {
@@ -307,7 +460,7 @@ fn diagnostics_reject_missing_trained_symbol_with_separate_module_prefix() -> Re
         let warning = missing(ENGINE);
         rejected(
             &fixture.diagnostics(&warning, ENGINE)?,
-            "previously executed engine symbol",
+            "previously executed Velum-related symbol",
         )?;
         let report = fixture.read("diagnostics.txt")?;
         ensure!(report.contains(&warning) && report.contains("human review: 1\n"));
@@ -323,8 +476,41 @@ fn diagnostics_match_normalized_symbols_from_profile_output() -> Result<()> {
         let trained = fixture.read("symbols.txt")?;
         rejected(
             &fixture.diagnostics(&missing(ENGINE), &trained)?,
-            "previously executed engine symbol",
+            "previously executed Velum-related symbol",
         )
+    })
+}
+
+#[test]
+fn diagnostics_reject_missing_trained_legacy_trait_impl_after_cgu_normalization() -> Result<()> {
+    with_fixture(|fixture| {
+        let records = format!(
+            "{}{}",
+            record(ENGINE, "7"),
+            record(&format!("{MODULE};{ENGINE_DROP}"), "317491491, 187251358, 0, 0"),
+        );
+        success(&fixture.profile(&profile(&records))?)?;
+        let trained = fixture.read("symbols.txt")?;
+        rejected(
+            &fixture.diagnostics(&missing(ENGINE_DROP), &trained)?,
+            "previously executed Velum-related symbol",
+        )?;
+        ensure!(fixture.read("diagnostics.txt")?.contains(ENGINE_DROP));
+        Ok(())
+    })
+}
+
+#[test]
+fn diagnostics_preserve_missing_cold_velum_self_trait_impl_for_review() -> Result<()> {
+    with_fixture(|fixture| {
+        let records = format!("{}{}", record(ENGINE, "7"), record(ENGINE_DROP, "0"));
+        success(&fixture.profile(&profile(&records))?)?;
+        let trained = fixture.read("symbols.txt")?;
+        ensure!(trained == format!("{ENGINE}\n"));
+        success(&fixture.diagnostics(&missing(ENGINE_DROP), &trained)?)?;
+        let report = fixture.read("diagnostics.txt")?;
+        ensure!(report.contains("human review: 1\n") && report.contains(ENGINE_DROP));
+        Ok(())
     })
 }
 
@@ -402,11 +588,11 @@ fn diagnostics_allow_unrelated_warnings_but_missing_records_do_not_mask_mismatch
 #[test]
 fn diagnostics_reject_empty_or_invalid_trained_symbol_manifests() -> Result<()> {
     for (symbols, reason) in [
-        ("", "trained engine symbols are empty"),
-        (RUNNER, "invalid normalized engine symbol"),
+        ("", "trained Velum-related symbols are empty"),
+        (RUNNER, "invalid normalized Velum-related symbol"),
         (
             "_ZN5velum7execute;foreign",
-            "invalid normalized engine symbol",
+            "invalid normalized Velum-related symbol",
         ),
     ] {
         with_fixture(|fixture| rejected(&fixture.diagnostics("", symbols)?, reason))?;

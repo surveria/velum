@@ -47,6 +47,12 @@ done
 [[ "$cpu" == inherit || "$cpu" =~ ^(0|[1-9][0-9]{0,4})$ ]] || fail '--cpu must be a nonnegative CPU number or inherit'
 [[ "${GITHUB_ACTIONS:-false}" != true ]] || fail 'this opt-in experiment must not run in ordinary CI'
 [[ "$(uname -s)" == Linux ]] || fail 'this workflow requires Linux memory sampling'
+# A checkout path must not be redirected by inherited Git repository or config
+# variables, including indexed GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n overrides.
+while IFS= read -r variable; do
+  case "$variable" in GIT_*) unset "$variable" ;; esac
+done < <(compgen -e)
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_OPTIONAL_LOCKS=0
 for tool in git cargo rustc date mkdir mktemp cp sha256sum tar timeout stat find sort xargs awk grep chmod cmp taskset setsid sleep; do
   command -v "$tool" >/dev/null 2>&1 || fail "missing prerequisite: $tool"
 done
@@ -63,12 +69,16 @@ done < <(compgen -e)
 
 repo="$(cd "$repo" && pwd -P)"
 [[ "$(git -C "$repo" rev-parse --show-toplevel)" == "$repo" ]] || fail '--repo must name the checkout root'
+repo_git_dir="$(git -C "$repo" rev-parse --absolute-git-dir)"
+repo_git() {
+  git --git-dir="$repo_git_dir" --work-tree="$repo" -C "$repo" -c core.fsmonitor=false "$@"
+}
 mkdir -p "$root"
 root="$(cd "$root" && pwd -P)"
 case "$root/" in "$repo/"*) fail 'artifact root must be outside the measured checkout' ;; esac
 [[ "$repo$root" != *$'\n'* && "$repo$root" != *$'\t'* ]] || fail 'paths must not contain tabs or newlines'
 [[ "$root" != *%* && "$root" != *$'\x1f'* ]] || fail 'artifact root must not contain LLVM profile substitutions or flag separators'
-[[ -z "$(git -C "$repo" status --porcelain)" ]] || fail 'measurement requires a clean committed checkout'
+[[ -z "$(repo_git status --porcelain)" ]] || fail 'measurement requires a clean committed checkout'
 # Cargo searches the working directory's ancestors and CARGO_HOME. Do not let
 # an unrecorded profile, source replacement, or compiler setting alter a preset.
 cargo_home="${CARGO_HOME:-$HOME/.cargo}"
@@ -84,8 +94,8 @@ while :; do
   [[ "$ancestor" != / ]] || break
   ancestor="$(dirname "$ancestor")"
 done
-commit="$(git -C "$repo" rev-parse HEAD)"
-tree="$(git -C "$repo" rev-parse "$commit^{tree}")"
+commit="$(repo_git rev-parse HEAD)"
+tree="$(repo_git rev-parse "$commit^{tree}")"
 sysroot="$(rustc --print sysroot)"
 rustc_bin="$sysroot/bin/rustc"
 cargo_bin="$sysroot/bin/cargo"
@@ -231,6 +241,7 @@ export VELUM_MEMORY_REPETITIONS=3 VELUM_MEMORY_CHILD_TIMEOUT_MS=120000
 export VELUM_MEMORY_NODES=1024 VELUM_MEMORY_BYTES_PER_NODE=256 VELUM_MEMORY_CHURN_ROUNDS=3
 {
   printf 'schema_version=1\ncommit=%s\ntree=%s\nhost=%s\nrounds=%s\npreset=%s\n' "$commit" "$tree" "$host" "$rounds" "$preset"
+  printf 'git_environment=cleared\nsource_git_dir=%q\ngit_work_tree=%q\n' "$repo_git_dir" "$repo"
   printf 'cargo_profile_overrides='; printf '%q ' "${cargo_config[@]}"; printf '\n'
   printf 'source=%q\ntarget=%q\ncommon_encoded_rustflags=%q\n' "$source_root" "$target" "$common_flags"
   printf 'cargo_build_dir=%q\ncargo_build_jobs=%q\nrustc_wrapper=disabled\nworkspace_wrapper=disabled\n' "$target" "${CARGO_BUILD_JOBS:-<cargo-default>}"
@@ -250,7 +261,8 @@ export VELUM_MEMORY_NODES=1024 VELUM_MEMORY_BYTES_PER_NODE=256 VELUM_MEMORY_CHUR
 } > "$run/provenance.txt"
 cp "${BASH_SOURCE[0]}" "$run/launcher.sh"
 sha256sum "$rustc_bin" "$cargo_bin" "$profdata" "$llvm_size" "$run/launcher.sh" > "$run/tools.sha256"
-run_step source-export 120 git -C "$repo" archive --format=tar --output="$run/source.tar" "$commit"
+run_step source-export 120 git --git-dir="$repo_git_dir" --work-tree="$repo" -C "$repo" \
+  -c core.fsmonitor=false archive --format=tar --output="$run/source.tar" "$commit"
 sha256sum "$run/source.tar" > "$run/source-archive.sha256"
 run_step source-extract 120 tar -xf "$run/source.tar" -C "$source_root"
 chmod -R a-w "$source_root"

@@ -82,7 +82,7 @@ impl Fixture {
         let long = id.ends_with("_json_ingestion") || id.ends_with("_tree_allocation");
         let median = if pgo { 3_000_000 } else { 6_000_000 };
         let value = json!({
-            "schema_version": 1, "detail_level": "full", "metadata": metadata(),
+            "schema_version": 1, "detail_level": "full", "metadata": metadata(label),
             "environment": environment(), "duration_ns": 1,
             "configuration": {
                 "report_mode": "performance", "jetstream": "disabled",
@@ -97,7 +97,7 @@ impl Fixture {
                     "maximum_total_duration_ns": if long { 60_000_000_000_u64 } else { 30_000_000_000_u64 },
                 }
             },
-            "components": [{"mode": "performance", "timestamp": "fixture", "commit": COMMIT,
+            "components": [{"mode": "performance", "timestamp": label, "commit": COMMIT,
                 "tree": TREE, "run_id": "", "duration_ns": 1}], "suites": [],
             "benchmarks": {
                 "name": "Benchmarks", "duration_ns": 1,
@@ -142,7 +142,7 @@ impl Fixture {
     fn memory(&self, label: &str, variant: &str) -> Result<Value> {
         let value = memory_fixture::report(
             &self.run.join("bin").join(variant),
-            &metadata(),
+            &metadata(label),
             &environment(),
         )?;
         write(
@@ -211,8 +211,8 @@ impl Fixture {
     }
 }
 
-fn metadata() -> Value {
-    json!({"timestamp": "fixture", "commit": COMMIT, "tree": TREE, "event": "local",
+fn metadata(label: &str) -> Value {
+    json!({"timestamp": label, "commit": COMMIT, "tree": TREE, "event": "local",
         "run_id": "", "run_attempt": "", "repository": "fixture", "workflow": "", "pull_request": "",
         "task": "fixture", "engine_version": "fixture", "engine_commit": COMMIT,
         "runner_version": "fixture", "runner_commit": COMMIT})
@@ -538,6 +538,35 @@ fn summary_revalidates_artifacts_and_cross_round_checksums() -> Result<()> {
             serde_json::from_slice(&fs::read(fixture.run.join("memory-comparison.json"))?)?;
         ensure!(unverified.get("status") == Some(&json!("unverified")));
         ensure!(unverified.get("equal").is_none());
+        Ok(())
+    })
+}
+
+#[test]
+fn summary_rejects_reused_raw_reports_even_with_regenerated_sidecars() -> Result<()> {
+    with_fixture(|fixture| {
+        fixture.campaign()?;
+        success(&fixture.summarize()?)?;
+        let first = "round-1-ordinary-holdout_object_transform";
+        let second = "round-2-ordinary-holdout_object_transform";
+        fs::copy(fixture.performance_path(first), fixture.performance_path(second))?;
+        success(&fixture.verify("ordinary", second, "performance", Some(CASE))?)?;
+        let output = fixture.summarize()?;
+        failure(&output)?;
+        ensure!(String::from_utf8_lossy(&output.stderr).contains("raw PGO report reused across observations"));
+        fixture.report(second, CASE, false)?;
+        success(&fixture.verify("ordinary", second, "performance", Some(CASE))?)?;
+        success(&fixture.summarize()?)?;
+        fs::copy(
+            fixture.run.join("reports/round-1-ordinary-memory.json"),
+            fixture.run.join("reports/round-2-ordinary-memory.json"),
+        )?;
+        success(&fixture.verify("ordinary", "round-2-ordinary-memory", "memory", None)?)?;
+        let output = fixture.summarize()?;
+        failure(&output)?;
+        ensure!(String::from_utf8_lossy(&output.stderr).contains("raw PGO report reused across observations"));
+        let summary: Value = serde_json::from_slice(&fs::read(fixture.run.join("holdout-comparison.json"))?)?;
+        ensure!(summary.get("evidence_validated") == Some(&json!(false)));
         Ok(())
     })
 }
