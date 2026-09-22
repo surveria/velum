@@ -14,6 +14,7 @@ use crate::{
     compare::{CaseFinding, CaseRecord, OutcomeStatus},
     correctness::{CorrectnessEvaluation, EquivalenceBasis, OracleEngine},
     reference_gaps::{OracleDecision, OracleUnavailableReason, ReferenceGapReason},
+    session_lock::{REPORT_DRAIN_TIMEOUT, SessionLock},
 };
 
 const LATEST_FINDING_LIMIT: usize = 10;
@@ -115,6 +116,7 @@ pub fn build_report(
     elapsed: Duration,
     outcome: &str,
 ) -> anyhow::Result<DifferentialReport> {
+    let _report_lock = SessionLock::report(session_dir, REPORT_DRAIN_TIMEOUT)?;
     let records = read_records(&session_dir.join("cases"))?;
     let summary = summarize(&records);
     let latest_findings = latest_javascript_files(&session_dir.join("findings"))?;

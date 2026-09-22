@@ -54,6 +54,14 @@ absolute shared directory. The session contains:
 - `fuzzilli/` with Fuzzilli corpus, crashes, timeouts, and statistics;
 - `summary.txt`, `slowest.tsv`, and the final detailed `fuzzilli-*.log`.
 
+The report waits for artifact recorders to release their session locks after
+Fuzzilli exits. If writers remain active for more than two minutes, reporting
+fails explicitly instead of publishing partial totals; case files remain saved.
+Pending scripts are removed only after their finding files and JSONL record have
+been written. These locks coordinate current tools, not older binaries that do
+not implement the protocol. Do not run two campaigns against the same session
+directory concurrently.
+
 Each JSONL record has a schema version plus `reference_analysis` and
 `correctness_evaluation` objects. The reference analysis distinguishes direct
 Engine262 use, an explicit V8 fallback, and a missing reliable oracle. The
