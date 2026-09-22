@@ -236,10 +236,17 @@ impl Reachability {
         loop {
             marker.drain_queue(context)?;
             let mut added = false;
-            for (key, value) in marker.ephemerons.clone() {
-                if marker.weak_key_is_reachable(&key) {
-                    added |= marker.mark_value(&value)?;
+            // Marking only enqueues values; the next queue drain discovers new ephemerons.
+            let pass_length = marker.ephemerons.len();
+            for index in 0..pass_length {
+                let (key, value) = marker.ephemerons.get(index).ok_or_else(|| {
+                    Error::runtime("ephemeron disappeared during reachability pass")
+                })?;
+                if !marker.weak_key_is_reachable(key) {
+                    continue;
                 }
+                let value = value.clone();
+                added |= marker.mark_value(&value)?;
             }
             if !added {
                 break;
