@@ -112,9 +112,81 @@ Test262 passes all 84 variants from 42 files, plus 99 QuickJS differential cases
 The failed attempt remains at
 `$HOME/velum-fuzzing-artifacts/performance/pgo/pgo-20260922T193128Z-Fz8y5zqe`.
 Its status is `incomplete`; partial timings are not accepted PGO evidence.
-The repaired engine requires a fresh snapshot, new training and new profile,
-under the unchanged sampling protocol. The reviewed PGO comparison remains
-pending at this checkpoint.
+The repaired engine was measured with a fresh snapshot, new training and new
+profile under the unchanged sampling protocol. None of the failed attempt's
+timings or profile records enter the comparison below.
+
+## Reviewed experiment: 2026-09-22
+
+The complete second attempt is preserved under
+`$HOME/velum-fuzzing-artifacts/performance/pgo/pgo-20260922T200005Z-jeTteKWB`.
+Its `reviewed-summary.md` and `.json` bind all reports to source
+`be9dc9a2c206c10681a3a8c08c15e5f1e7ac5d72`, tree
+`3560eb0d9efaddefb181b9ac931ee9aec0f58505`. Later PR commits change documentation
+only. The compiler is Rust 1.96.0 / LLVM 22.1.2 on the same Linux / Ryzen 9
+9950X3D host, with 30 build jobs and sequential measurements pinned to CPU 0.
+
+All six training cases, 24 holdout timing rows and 144 memory workers passed.
+There were no invalid measurements, failed rows, missing-function warnings or
+profile mismatch diagnostics. Six fresh raw profiles contain observed execution
+of 1,316 engine-owned functions; the complete IR profile has 25,966 functions
+and 325,221 blocks. These counts are not language-feature or source-line coverage.
+
+| Holdout | Ordinary ms | PGO ms | PGO / ordinary, round 1 | Round 2 | Time reduction |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Object transformation | 42.550 | 25.520 | 0.5996 | 0.5999 | 40.0% |
+| Method dispatch | 48.225 | 30.940 | 0.6392 | 0.6440 | 35.8% |
+| JSON ingestion | 13.345 | 9.450 | 0.7089 | 0.7073 | 29.2% |
+| String processing | 58.520 | 39.650 | 0.6751 | 0.6800 | 32.2% |
+| Collection indexing | 15.975 | 10.204 | 0.6454 | 0.6322 | 36.1% |
+| Tree allocation | 35.275 | 24.710 | 0.6983 | 0.7027 | 29.9% |
+
+The millisecond columns are geometric means of the two per-round medians.
+The six-case time ratio is 0.6599: 34.0% lower time, or about 1.52 times the
+throughput for these workloads. Round means are 0.6600 and 0.6599; every case
+improved in both rounds. Typed useful-work checksums match exactly across all
+four observations per holdout. Two rounds and the CV gate do not establish
+statistical significance or predict performance on arbitrary applications.
+
+### Build cost, size and memory
+
+| Whole runner | File bytes | `.text` bytes | Build wall seconds | Build CPU seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary | 16,957,224 | 10,530,471 | 45.63 | 181.36 |
+| Instrumented | 33,536,096 | 16,058,434 | 48.33 | 182.66 |
+| PGO | 16,297,584 | 9,197,911 | 52.22 | 165.22 |
+
+The final runner is 3.9% smaller; its `.text` section is 12.7% smaller.
+Training takes another 107.22 wall seconds / 106.71 CPU seconds; merging takes
+0.20 seconds. A from-scratch instrument/train/merge/use sequence therefore costs
+about 208 wall seconds versus 46 seconds for the ordinary build, excluding
+launcher overhead and evaluation. Training includes the live QuickJS reference
+and runner work; build CPU time includes compiler child processes. These are
+whole-runner, warm-dependency-cache results, not standalone engine build costs.
+
+All 162 paired logical phase/repetition comparisons are equal. Median live
+process RSS across six samples is 9.146 to 8.049 MiB for hello-world, 13.133 to
+11.762 MiB for the retained graph, and 28.180 to 26.812 MiB for 50 independent
+VMs. This is lower measured process residency, not fewer logical allocations or
+a per-VM heap-size claim. Full RSS/PSS phases and availability remain in the
+external summary. Raw Linux `VmHWM` readings sometimes decrease at teardown;
+they are retained as observations, not asserted to be an exact monotonic peak.
+
+### Correctness and decision
+
+The saved profile-use executable has SHA-256
+`f9df83620b9b0e696b684b9d6e231eb726e84021fd310c5884d02c2bb6086f10`;
+the frozen merged profile is
+`6d57ecb3d392069cced20c1d5ce7251c6ecc8bae138f808a7813e21c2e6c8f1e`.
+Its independent complete Test262/QuickJS correctness run is in progress after
+all timed execution; ordinary exact-head CI remains a separate required gate.
+
+The experiment supports a later opt-in PGO packaging task, not automatic
+enablement here. Ordinary release defaults remain unchanged. Before adoption,
+add unrelated application and embedding/async/regexp holdouts, other target
+hardware, and a maintainable profile-refresh/revalidation policy. This small
+six-family training set cannot represent all embedders, and the result does
+not extend the earlier JetStream or direct-library measurements to PGO.
 
 The build sequence follows the [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html).
 Profile merging and zero-count handling follow the
