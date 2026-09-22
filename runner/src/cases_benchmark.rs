@@ -2,6 +2,9 @@ use crate::benchmark_case::EmbeddingBenchmark;
 
 use super::super::BenchmarkCase;
 
+#[path = "cases_benchmark_representative.rs"]
+mod representative;
+
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
 const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
 const PATH_BENCH_WHILE_STATEMENTS: &str = "tests/corpora/benchmarks/active/while_statements.js";
@@ -148,6 +151,7 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     cases.extend(benchmark_runtime_cases());
     cases.extend(benchmark_embedding_cases());
     cases.extend(benchmark_prepared_sentinel_cases());
+    cases.extend(representative::benchmark_cases());
     cases
 }
 

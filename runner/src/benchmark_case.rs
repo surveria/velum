@@ -42,14 +42,21 @@ impl BenchmarkCase {
         }
     }
 
-    pub const fn prepared_sentinel(id: &'static str, path: &'static str) -> Self {
+    pub const fn prepared(id: &'static str, path: &'static str) -> Self {
         Self {
             id,
             path,
             mode: BenchmarkMode::PreparedExecution,
             input: BenchmarkInput::Standard,
-            sentinel: true,
+            sentinel: false,
             embedding: None,
+        }
+    }
+
+    pub const fn prepared_sentinel(id: &'static str, path: &'static str) -> Self {
+        Self {
+            sentinel: true,
+            ..Self::prepared(id, path)
         }
     }
 
