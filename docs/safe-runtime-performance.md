@@ -188,7 +188,33 @@ the entire runtime tranche, not an isolated single-commit ablation. Artifacts:
 `gc-pairs/reviewed-ab-ba/`, including raw TSV, captured lock ownership, immutable
 probe inputs and `summary.json`.
 
-## Remaining experiment stages
+## Separate ThinLTO configuration experiment
 
-Separate build-configuration experiments are still in progress. No PGO or
-compiler preset is enabled by default.
+The same runtime candidate and absolute source/target paths were used for a
+clean build with only `profile.release.lto="thin"` and
+`profile.release.codegen-units=1` changed. This measures their combined effect,
+not either flag independently; no PGO profile is involved. All 24 AB/BA holdout
+observations passed with identical typed checksums and a maximum CV of 7.5%.
+
+| Holdout | ThinLTO / ordinary time | Round 1 | Round 2 |
+| --- | ---: | ---: | ---: |
+| Object transformation | 0.9209 | 0.9192 | 0.9226 |
+| Method dispatch | 0.9514 | 0.9566 | 0.9462 |
+| JSON ingestion | 0.9133 | 0.9133 | 0.9133 |
+| String processing | 0.9112 | 0.9122 | 0.9102 |
+| Collection indexing | 0.9467 | 0.9616 | 0.9321 |
+| Tree allocation | 0.9271 | 0.9219 | 0.9324 |
+
+The six-case geometric mean is 0.9283 (rounds 0.9306 and 0.9261): 7.2% less
+execution time on this host/cohort. Whole-runner file size decreases from
+16,963,584 to 14,889,224 bytes (-12.2%); ELF `.text` decreases from 10,535,463
+to 10,013,367 bytes (-5.0%). These are not standalone engine-library sizes.
+The separately scheduled clean build takes 78.88 wall seconds and 167.29 CPU
+seconds. No controlled build-cost ratio is available because the ordinary
+build overlapped correctness compilation. Sources, commands, binary hashes and
+raw reports are under `thinlto/build/` and `thinlto/runs/reviewed-ab-ba/`.
+
+Saved-binary correctness and the separate productized release PGO experiment
+remain pending. No PGO or compiler preset is enabled by default. Gains from
+different experiments must not be added or multiplied into an unmeasured
+combined-speedup claim.
