@@ -74,6 +74,7 @@ fn campaign_snapshots_committed_inputs_and_preserves_external_replay() -> TestRe
 #[test]
 fn campaign_records_failed_and_timed_out_lanes_then_continues() -> TestResult {
     with_fixture(|fixture| {
+        let timeout_status = fixture.timeout_status()?.to_string();
         let output = fixture.launch("all", true)?;
         require(
             output.status.code() == Some(1),
@@ -83,7 +84,7 @@ fn campaign_records_failed_and_timed_out_lanes_then_continues() -> TestResult {
         let campaign = fixture.campaign_directory()?;
         let watchdog_log = fs::read_to_string(campaign.join("holdout.log"))?;
         require(
-            stderr.contains("process watchdog"),
+            stderr.contains(&format!("Lane holdout returned {timeout_status}")),
             &format!("watchdog diagnostic was lost: {stderr}; log: {watchdog_log}"),
         )?;
         let statuses = fs::read_to_string(campaign.join("lanes.tsv"))?;
@@ -91,7 +92,7 @@ fn campaign_records_failed_and_timed_out_lanes_then_continues() -> TestResult {
         for (lane, status) in [
             ("sentinel", "0"),
             ("representative", "7"),
-            ("holdout", "124"),
+            ("holdout", timeout_status.as_str()),
             ("embedding", "0"),
             ("jetstream", "0"),
             ("memory", "0"),
@@ -231,6 +232,24 @@ impl Fixture {
             .env("MOCK_FAILURES", if failures { "1" } else { "0" })
             .output()?;
         Ok(output)
+    }
+
+    fn timeout_status(&self) -> Result<i32, Box<dyn std::error::Error>> {
+        // GNU timeout uses 124; uutils 0.2.2 on the development host uses 125.
+        // Probe a finite command instead of assuming which implementation is installed.
+        let output = self
+            .command("timeout")
+            .args(["--kill-after=1s", "0.05s", "sleep", "0.2"])
+            .output()?;
+        let status = output
+            .status
+            .code()
+            .ok_or("timeout probe was terminated by a signal")?;
+        require(
+            matches!(status, 124 | 125),
+            &format!("unexpected native timeout status: {status}"),
+        )?;
+        Ok(status)
     }
 
     fn campaign_directory(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {

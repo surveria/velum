@@ -77,6 +77,10 @@ export VELUM_JETSTREAM_QUICKJS_BASELINE_PATH="${output}/quickjs-jetstream.tsv"
   printf 'checkout_root=%q\nsource_snapshot=%q\nartifact_root=%q\nbuild_cache=%q\n' "${repo_root}" "${snapshot}" "${output}" "${CARGO_TARGET_DIR}"
   printf 'lane_timeout_seconds=%s\n' "${lane_timeout}"
   printf 'rustflags=%q\ncargo_encoded_rustflags=%q\n' "${RUSTFLAGS:-}" "${CARGO_ENCODED_RUSTFLAGS:-}"
+  for setting in OPT_LEVEL CODEGEN_UNITS LTO PANIC DEBUG DEBUG_ASSERTIONS OVERFLOW_CHECKS STRIP INCREMENTAL; do
+    variable="CARGO_PROFILE_RELEASE_${setting}"
+    printf '%s=%q\n' "${variable}" "${!variable:-<default>}"
+  done
   cargo --version
   rustc --version --verbose
 } > "${output}/provenance.txt"
@@ -127,7 +131,9 @@ run_lane() {
     campaign_failed=1
     printf 'Lane %s returned %s; inspect %s/%s.log and its report\n' "${selected}" "${status}" "${output}" "${selected}" >&2
     if [[ "${status}" == 124 || "${status}" == 137 ]]; then
-      printf 'Lane %s reached the process watchdog; its report may be incomplete\n' "${selected}" >&2
+      printf 'Lane %s has a watchdog-compatible timeout/signal status; inspect its log, as worker exits can share this code\n' "${selected}" >&2
+    elif [[ "${status}" == 125 ]]; then
+      printf 'Lane %s has a process watchdog/tool failure or worker exit 125; its report may be incomplete\n' "${selected}" >&2
     fi
   fi
   printf '%s\t%s\t%s\t%s\t%s\n' "${selected}" "${status}" "$((SECONDS - start))" "${report}" "${output}/${selected}.log" >> "${output}/lanes.tsv"
