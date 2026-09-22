@@ -1,4 +1,4 @@
-use velum::{Engine, Runtime, Value};
+use velum::{Engine, HostOperation, Runtime, RuntimeLimits, Value};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -8,12 +8,12 @@ fn preserves_exact_match_input_captures_and_legacy_roots_after_collection() -> T
     let mut context = runtime.context();
     let input = context.eval(r#"globalThis.subject = "prefix\uD800x\uDC00tail"; subject"#)?;
     let matched_input = context.eval(
-        r#"
+        r"
         globalThis.matcher = /(?<unit>\uD800)x/dy;
         matcher.lastIndex = 6;
         globalThis.saved = matcher.exec(subject);
         saved.input
-        "#,
+        ",
     )?;
     let (Value::String(input), Value::String(matched_input)) = (&input, &matched_input) else {
         return Err("expected heap-owned subject and match input strings".into());
@@ -121,9 +121,10 @@ fn preserves_throwing_last_index_writes_and_prior_legacy_state() -> TestResult {
 fn failed_coerced_matches_do_not_admit_unused_subject_strings() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
-    ensure_true(&vm.context().eval(
-        "globalThis.matcher = /unmatched/; matcher.exec(123456789) === null",
-    )?)?;
+    ensure_true(
+        &vm.context()
+            .eval("globalThis.matcher = /unmatched/; matcher.exec(123456789) === null")?,
+    )?;
     let before = vm.resource_usage();
     ensure_true(&vm.context().eval("matcher.exec(987654321) === null")?)?;
     let after = vm.resource_usage();
@@ -172,6 +173,133 @@ fn regexp_input_cannot_import_a_foreign_vm_string() -> TestResult {
         return Ok(());
     }
     Err(format!("unexpected foreign RegExp input error: {error}").into())
+}
+
+#[test]
+fn roots_coerced_test_input_across_exec_getter_and_last_index_collection() -> TestResult {
+    for native_exec in [false, true] {
+        let source = format!(
+            r#"
+            const matcher = /[0-9]+/g;
+            const originalExec = RegExp.prototype.exec;
+            Object.defineProperty(matcher, "exec", {{
+                get() {{ gcAndAllocate(); return {native_exec} ? originalExec : 7; }}
+            }});
+            matcher.lastIndex = {{ valueOf() {{ gcAndAllocate(); return 0; }} }};
+            const matched = matcher.test(123456789);
+            matched && matcher.lastIndex === 9 && RegExp.input.length === 9 &&
+                RegExp.input.charCodeAt(0) === 49 && RegExp.input.charCodeAt(8) === 57
+            "#,
+        );
+        run_collecting_regexp_script(&source)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn roots_coerced_symbol_match_input_before_flags_getter() -> TestResult {
+    run_collecting_regexp_script(
+        r#"
+        const matcher = /[0-9]+/;
+        Object.defineProperty(matcher, "flags", {
+            get() { gcAndAllocate(); return ""; }
+        });
+        const result = RegExp.prototype[Symbol.match].call(matcher, 123456789);
+        result.input.length === 9 && result.input.charCodeAt(0) === 49 &&
+            result.input.charCodeAt(8) === 57
+        "#,
+    )
+}
+
+#[test]
+fn roots_coerced_symbol_search_input_before_last_index_getter() -> TestResult {
+    run_collecting_regexp_script(
+        r"
+        const answer = { index: 4 };
+        let observed;
+        const receiver = {
+            get lastIndex() { gcAndAllocate(); return 0; },
+            exec(input) { observed = input; return answer; }
+        };
+        RegExp.prototype[Symbol.search].call(receiver, 123456789) === 4 &&
+            observed.length === 9 && observed.charCodeAt(0) === 49
+        ",
+    )
+}
+
+#[test]
+fn roots_coerced_replace_input_before_replacement_conversion() -> TestResult {
+    run_collecting_regexp_script(
+        r#"
+        const matcher = /[0-9]+/;
+        const replacement = { toString() { gcAndAllocate(); return "x"; } };
+        RegExp.prototype[Symbol.replace].call(matcher, 123456789, replacement) === "x" &&
+            RegExp.input.length === 9 && RegExp.input.charCodeAt(0) === 49
+        "#,
+    )
+}
+
+#[test]
+fn roots_coerced_match_all_input_before_species_lookup() -> TestResult {
+    run_collecting_regexp_script(
+        r#"
+        const matcher = /[0-9]+/g;
+        Object.defineProperty(matcher, "constructor", {
+            get() { gcAndAllocate(); return RegExp; }
+        });
+        const iterator = RegExp.prototype[Symbol.matchAll].call(matcher, 123456789);
+        gcAndAllocate();
+        const result = iterator.next().value;
+        result.input.length === 9 && result.input.charCodeAt(0) === 49 &&
+            iterator.next().done
+        "#,
+    )
+}
+
+#[test]
+fn roots_coerced_split_input_across_repeated_exec_getters() -> TestResult {
+    run_collecting_regexp_script(
+        r#"
+        const matcher = /3/;
+        matcher.constructor = {
+            [Symbol.species]: function() {
+                const splitter = /3/y;
+                Object.defineProperty(splitter, "exec", {
+                    get() { gcAndAllocate(); return 7; }
+                });
+                return splitter;
+            }
+        };
+        const result = RegExp.prototype[Symbol.split].call(matcher, 123456789);
+        result.length === 2 && result[0] === "12" && result[1] === "456789" &&
+            RegExp.input.length === 9 && RegExp.input.charCodeAt(0) === 49
+        "#,
+    )
+}
+
+fn run_collecting_regexp_script(source: &str) -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_objects: 256,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    context.register_host_operation("hostGc", HostOperation::CollectGarbage)?;
+    context.eval(
+        r"
+        function gcAndAllocate() {
+            for (let index = 0; index < 64; index += 1) {
+                const temporary = { index };
+                if (temporary.index % 8 === 0) hostGc();
+            }
+            hostGc();
+        }
+        ",
+    )?;
+    let value = context.eval(source)?;
+    ensure_true(&value)?;
+    context.collect_garbage()?;
+    context.storage_snapshot()?;
+    Ok(())
 }
 
 fn ensure_true(value: &Value) -> TestResult {

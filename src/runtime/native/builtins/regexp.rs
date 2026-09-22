@@ -12,6 +12,7 @@ use crate::{
             PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
             RegExpValue,
         },
+        roots::VmRootKind,
     },
     value::{ObjectId, Value},
 };
@@ -236,11 +237,7 @@ impl Context {
             && input.is_heap_owned()
         {
             let input_value = self.checked_value(Value::String(input.clone()))?;
-            return self.regexp_exec_code_units(
-                this_value,
-                input.as_utf16(),
-                Some(&input_value),
-            );
+            return self.regexp_exec_code_units(this_value, input.as_utf16(), Some(&input_value));
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         self.regexp_exec_code_units(this_value, &input, None)
@@ -256,6 +253,10 @@ impl Context {
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_utf16_string_value(&input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         self.regexp_exec_abstract(this_value, &input_value, &input)
             .map(|result| Value::Bool(result.is_some()))
     }

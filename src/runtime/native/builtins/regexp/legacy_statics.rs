@@ -127,9 +127,11 @@ impl Context {
                 .iter()
                 .map(|capture| capture.as_ref().map(|span| span.code_units.clone())),
         );
-        self.realm
-            .regexp_statics
-            .replace_match(input.clone(), matched.span.code_units.clone(), captures)
+        self.realm.regexp_statics.replace_match(
+            input.clone(),
+            matched.span.code_units.clone(),
+            captures,
+        )
     }
 
     fn legacy_regexp_static_units(&self, kind: LegacyRegExpStaticKind) -> Result<Option<Vec<u16>>> {

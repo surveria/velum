@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, roots::VmRootKind},
     value::{ErrorName, Value},
 };
 
@@ -31,6 +31,10 @@ impl Context {
         let input = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let input_units = self.to_utf16_string(&input)?;
         let input_value = self.heap_utf16_string_value(&input_units)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         let replacement = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         let functional = self.semantic_is_callable(&replacement)?;
         let (replacement, global, unicode) =

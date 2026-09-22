@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, abstract_operations::same_value, call::RuntimeCallArgs},
+    runtime::{Context, abstract_operations::same_value, call::RuntimeCallArgs, roots::VmRootKind},
     value::Value,
 };
 
@@ -22,6 +22,10 @@ impl Context {
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_utf16_string_value(&input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         let flags = self.get_named(receiver, REGEXP_FLAGS_PROPERTY)?;
         let flags = self.to_string(&flags)?;
         let global = flags.contains('g');
@@ -72,6 +76,10 @@ impl Context {
         }
         let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_utf16_string_value(&input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         let previous = self.get_named(receiver, REGEXP_LAST_INDEX_PROPERTY)?;
         if !same_value(&previous, &Value::Number(0.0)) {
             self.set_regexp_last_index(receiver, 0)?;

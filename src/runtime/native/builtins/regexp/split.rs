@@ -8,6 +8,7 @@ use crate::{
         call::RuntimeCallArgs,
         numeric::number_to_uint32,
         object::{PropertyKey, PropertyLookup},
+        roots::VmRootKind,
     },
     value::Value,
 };
@@ -93,6 +94,10 @@ impl Context {
             return Ok(values);
         }
         let input_value = self.heap_utf16_string_value(input)?;
+        let _input_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            core::iter::once(&input_value),
+        )?;
         if input.is_empty() {
             if self
                 .regexp_exec_abstract(splitter, &input_value, input)?
@@ -141,6 +146,8 @@ impl Context {
         Ok(values)
     }
 
+    /// The caller roots the admitted input across its earlier observable
+    /// conversions and this operation's `exec` lookup and invocation.
     pub(super) fn regexp_exec_abstract(
         &mut self,
         splitter: &Value,

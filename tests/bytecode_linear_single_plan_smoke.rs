@@ -33,10 +33,7 @@ fn linear_plans_keep_bindings_local_across_compiled_runs_and_vms() -> TestResult
             )?;
             for repetition in 0_u32..3 {
                 let input = f64::from(seed) + f64::from(repetition);
-                ensure_value(
-                    &vm.eval_compiled(&script)?,
-                    &Value::Number(input + 61.0),
-                )?;
+                ensure_value(&vm.eval_compiled(&script)?, &Value::Number(input + 61.0))?;
                 ensure_value(&vm.eval("input = input + 1;")?, &Value::Number(input + 1.0))?;
             }
             ensure_direct_path_mode(&vm, mode)?;
