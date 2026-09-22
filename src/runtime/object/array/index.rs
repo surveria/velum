@@ -41,8 +41,12 @@ impl ArrayIndex {
     }
 
     pub(in crate::runtime) fn parse(property: &str) -> Option<Self> {
+        let first = property.as_bytes().first()?;
+        if !first.is_ascii_digit() || (*first == b'0' && property.len() != 1) {
+            return None;
+        }
         let value = property.parse::<u32>().ok()?;
-        if value == u32::MAX || value.to_string() != property {
+        if value == u32::MAX {
             return None;
         }
         Some(Self(value))
@@ -74,5 +78,3 @@ impl ArrayIndex {
         ArrayLength(self.0)
     }
 }
-#[cfg(not(feature = "std"))]
-use crate::prelude::*;

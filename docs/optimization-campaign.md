@@ -97,6 +97,16 @@ and useful-work checksums. Avoid concurrent compiler, fuzzing, or other heavy
 host load while collecting final evidence. Use the existing minimum-duration
 and variation gates without weakening thresholds to make new workloads pass.
 
+For acceptance comparisons, keep the absolute compilation path and Cargo
+metadata stable across variants and record CPU affinity. The snapshot launcher
+provides isolation and replay, but independently built timestamped snapshots
+are not automatically a controlled A/B experiment. A September 22 neutral
+source control exposed roughly 28% variation in a direct Rust-callback case
+between distinct-path builds despite unchanged runtime/runner sources and low
+within-run CV. Rebuilding from one path and pinning one CPU removed the large
+difference. Exact microarchitectural attribution remains unproven; do not call
+every binary-level difference a gain or regression in the changed helper.
+
 ## Memory evidence boundaries
 
 The separate memory lane uses new processes for each engine/scenario/repetition
@@ -173,3 +183,69 @@ Next: collect profiles of method dispatch, object transformation and tree/GC
 work; accept common runtime improvements through paired parent/candidate runs;
 then evaluate PGO on separate training and holdout inputs. No runtime speedup
 or PGO benefit is claimed by this infrastructure change.
+
+## Reviewed runtime tranche: 2026-09-22
+
+PR #722 removes temporary formatting allocation from canonical array-index
+validation and permits guarded own-data slot reuse across ordinary receivers
+with the same immutable shape. Values come from the current receiver; accessors,
+exotic objects, global bindings, inherited/missing entries and mutation paths
+retain their semantic guards. No cache storage, roots or resource exemptions
+were added. Fifteen regression cases cover both optimization modes, including
+GC identity reuse, descriptor changes, realm globals and independent VMs.
+
+The exact measured parent is `b080c5603570b631a4b5a1f848ee272d2916c895`, and the
+candidate is `ecda04b85031f8838220c662b9c2a4e7f8c5012b`. Later PR commits update
+documentation only. Both release runners were built from one absolute source
+path with the same compiler, features and Cargo metadata, then preserved
+separately. Measurements ran sequentially on CPU 0 of the baseline host,
+without concurrent compilation or fuzzing, in parent/candidate then
+candidate/parent order. These ratios compare absolute Velum timings with its
+parent, not ratios to independently sampled QuickJS timings.
+
+| Cohort | Cases | Candidate / parent time | Observed change |
+| --- | ---: | ---: | ---: |
+| Existing sentinels | 5 | 1.0034× | +0.3% |
+| Representative mixed workloads | 6 | 0.9598× | -4.0% |
+| Independent holdouts | 6 | 0.9669× | -3.3% |
+| Direct Rust embedding | 5 | 1.0095× | +0.9% |
+| Focused JetStream: Richards, hash-map, base64 | 3 | 0.9733× | -2.7% |
+
+This is 100 valid timing rows across 25 cases, two builds and two rounds.
+Object transformation improved about 9%, method dispatch about 4-5%, and the
+representative JSON case about 6.6%. Not every case improved: both collection
+cases took about 2% longer, the Rust callback about 1.9%, and Richards about
+0.5%. The bounded change is accepted for repeatable general object/dispatch
+gains with these measured trade-offs; it is not a universal speedup or a
+statistical significance claim.
+
+Evidence selection preserves every earlier observation. Distinct-path builds
+are diagnostic only, as described above. Both JSON cases use separate paired
+15-second minimum sampling with three samples. One ordinary representative
+lane failed because QuickJS collection CV was 13%, exceeding the unchanged
+10% gate; all five non-JSON representative cases were repeated across all
+four builds/rounds with five-second minimum sampling and five samples.
+Cross-round variation in tree allocation then prompted four independent
+15-second/three-sample measurements: 63.27/63.55 ms parent versus
+61.62/61.89 ms candidate, a consistent 2.6% reduction. No fastest-run selection
+or relaxed quality threshold is used. Exact IDs, source identities, complete
+status matrices and typed checksums bind the joined reports; these are not
+one simultaneous full-suite run.
+
+The 17 prepared JavaScript cases retain identical checksums across both builds
+and rounds. Embedding and JetStream reports do not export comparable checksums,
+so their successful runner checks are not an additional cross-build output
+equivalence proof. All 144 process-isolated memory workers passed. Logical
+record/payload counts match across all corresponding phases, while process RSS
+remains separately reported; no allocator-parity or automatic-GC pause claim
+is made. The full local gate passed 1,833 test results, including strict lint,
+no-std, documentation and architecture checks. Required exact-head correctness
+CI and its artifact are linked from PR #722 before merge.
+
+External evidence is under
+`$HOME/velum-fuzzing-artifacts/performance/property-fastpaths-20260922`:
+`same-path/paired-ab-ba/comparison.{md,json}` indexes accepted reports,
+explicit replacements, discarded measurements and memory phases. Source
+snapshots, executable digests, scripts, raw logs and neutral-build controls
+remain beside it. PGO is the next separate experiment; ordinary build defaults
+are unchanged.
