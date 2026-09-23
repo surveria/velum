@@ -79,6 +79,89 @@ GC/re-entry, closures, isolated VMs, and both interpreter modes. Require the
 strict local fast gate, relevant focused Test262, and exact-base complete CI
 before integration. Publish reviewed results in this document and README.
 
-## Current status
+## Reviewed results (2026-09-23)
 
-Implementation is experimental. No performance improvement has been accepted.
+The accepted matrix is `paired/acceptance-1` under the external artifact root.
+All 116 command statuses and report identities/configurations passed validation:
+112 timing observations over 28 cases, plus four complete memory campaigns.
+The report validator passes 74 acceptance/rejection fixtures. No failed run,
+fastest rerun, or replacement sample was selected for the accepted matrix.
+
+Parent: `3e34817ef0e8083a4b3ef2684c7d11055e07343a`, tree
+`0f283034d837822fda2a35565e0287239b069bba`. Measured candidate:
+`5124b3892f9a59cab3f58878ad3591a0b81bf40e`, tree
+`cfe0897996fd0a554671a1aea4683e0bc39dbe7f`. Later PR changes only document the
+reviewed evidence. Saved runner SHA-256 hashes:
+
+- Parent: `22be60b33f06ea5e47a5ed57540084db61f86f0977442583685d352c890e6084`.
+- Candidate: `dfea7b1c1e6f01f25ec35fe6a03eb9a4d4da1f636688e151eb359e53c9bcffe6`.
+
+Both builds use the ordinary release profile, Rust 1.96.0 / LLVM 22.1.2 and
+identical absolute source/target paths. Measurements are sequential on CPU 0
+of an AMD Ryzen 9 9950X3D under the shared host lock. The archived candidate's
+frozen protocol SHA-256 is
+`dc22ca095c8dc65d6e648538d0b08a56e23f1d32a2191efcac0967bd31bc674b`.
+
+Changes are geometric means of paired median time ratios. Negative means
+less execution time. These are host/cohort observations, not confidence
+intervals, a universal speedup claim, or an official JetStream score.
+
+| Cohort | Cases | Time change | First pair | Reverse pair |
+| --- | ---: | ---: | ---: | ---: |
+| Sentinels | 5 | +0.6% | +0.3% | +0.9% |
+| Representative programs | 6 | -1.6% | -1.4% | -1.8% |
+| Separate holdouts | 6 | -2.0% | -1.9% | -2.1% |
+| Direct embedding API | 5 | -1.1% | -1.1% | -1.2% |
+| Selected JetStream programs | 6 | -0.9% | -0.7% | -1.0% |
+
+The sentinel cohort regresses; this is not hidden by the improving groups.
+The largest individual regression is array indexing at +2.4%, in both paired
+orders. The function-call sentinel is +0.3%, while property-read and string-scan
+sentinels are unchanged. The four improving cohort means improve in both
+orders. Method dispatch improves by 3.5% in the representative set and 3.6%
+in the separate holdout; embedding Rust callbacks improve by 3.3%.
+The complete matrix passes the predeclared 1% cohort / 3% individual regression
+ceilings. Smaller mixed-direction differences should be treated conservatively.
+
+| JetStream case | Parent seconds | Candidate seconds | Time change | Parent / QuickJS | Candidate / QuickJS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Richards | 5.174 | 5.090 | -1.6% | 36.45x | 35.51x |
+| hash-map | 6.597 | 6.526 | -1.1% | 27.99x | 27.89x |
+| SunSpider Base64 | 2.626 | 2.621 | -0.2% | 23.23x | 23.34x |
+| SunSpider n-body | 2.951 | 2.911 | -1.4% | 33.19x | 32.75x |
+| js-tokens | 1.249 | 1.242 | -0.6% | 9.77x | 9.82x |
+| SunSpider tagcloud | 1.139 | 1.134 | -0.4% | 10.04x | 10.13x |
+
+QuickJS timings vary independently. Each ratio uses that build's own paired
+reference observations, so a slightly lower Velum time does not always imply
+a better Velum/QuickJS ratio. The large reference gaps remain open.
+
+Prepared-program useful-work checksums match exactly across all four
+observations, including typed u64 number bits. Embedding and JetStream rows
+do not export those checksums. All 144 memory workers pass with identical
+corresponding VM logical record/payload counters in every phase, and zero
+logical records/payload after owner teardown. Selected paired-median RSS
+deltas range from -0.078 to +0.156 MiB; process residency is separate from VM
+logical accounting and QuickJS allocator statistics.
+
+The earlier eight-observation Richards/n-body diagnostic is retained in
+`paired/diagnostic-1`, separately from acceptance. Total campaign volume is
+120 timing observations and 144 memory workers. The interrupted build and
+withdrawn catch-environment experiment contributed no accepted timing samples.
+
+### Correctness and remaining work
+
+- Twenty new integration tests pass in both interpreter modes. Seven eval
+  recreation scenarios independently fail on the immutable starting main and
+  now pass; these are scenarios of one defect, not seven distinct fixes.
+- The final runtime's local fast gate passes 1,964 tests in 320 suites with
+  zero failures or skips, strict Clippy including no-std, formatting,
+  architecture guards, examples and documentation.
+- The saved candidate passes 4,184 focused Test262 variants in 2,908 files,
+  99 QuickJS differential cases, 69 engine fixtures and 121 active cases,
+  with zero failures or skips.
+- Complete exact-tree correctness CI is the remaining integration gate. Its
+  artifact link will be recorded in the PR description before merge.
+- The two catch-environment repros above are deliberately unresolved. Future
+  performance work should refresh profiles before changing linear-plan
+  preparation or long-string hashing; neither is changed by this tranche.
