@@ -582,6 +582,16 @@ impl Context {
 
     fn continue_async_disposable_stack_disposal(
         &mut self,
+        continuation: AsyncDisposableStackContinuation,
+        resume: Option<Completion>,
+    ) -> Result<()> {
+        self.with_active_async_promise(continuation.result_promise, |context| {
+            context.settle_async_disposable_stack_disposal(continuation, resume)
+        })
+    }
+
+    fn settle_async_disposable_stack_disposal(
+        &mut self,
         mut continuation: AsyncDisposableStackContinuation,
         resume: Option<Completion>,
     ) -> Result<()> {
@@ -623,14 +633,16 @@ impl Context {
         &mut self,
         continuation: &mut AsyncDisposableStackContinuation,
     ) -> Result<AsyncDisposalDrive> {
-        let root_values: Vec<&Value> = continuation
-            .resources
-            .iter()
-            .flat_map(AsyncDisposableResource::root_values)
-            .chain(continuation.thrown.iter())
-            .collect();
-        let _root_scope = self.transient_root_scope(VmRootKind::TransientTemporary, root_values)?;
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            continuation
+                .resources
+                .iter()
+                .flat_map(AsyncDisposableResource::root_values),
+        )?;
         while let Some(resource) = continuation.resources.pop() {
+            let _error_scope = self
+                .transient_root_scope(VmRootKind::TransientTemporary, continuation.thrown.iter())?;
             let result = match self.call_async_disposable_resource(resource) {
                 Ok(result) => result,
                 Err(error) => {

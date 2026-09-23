@@ -10,6 +10,7 @@ use crate::{
         control::{Completion, runtime_exception_value},
         function::SuspendedExecutionStorageFootprint,
         object::AtomicWaitOutcome,
+        roots::VmRootKind,
     },
     value::{ErrorName, ObjectId, Value},
 };
@@ -555,6 +556,29 @@ impl Context {
                 }
             };
         };
+        match result {
+            PromiseReactionResult::Intrinsic(promise) => self
+                .with_active_async_promise(promise, |context| {
+                    context.run_then_reaction(result, on_fulfilled, on_rejected, state)
+                }),
+            PromiseReactionResult::Capability {
+                ref resolve,
+                ref reject,
+            } => {
+                let _result_scope =
+                    self.transient_root_scope(VmRootKind::TransientTemporary, [resolve, reject])?;
+                self.run_then_reaction(result, on_fulfilled, on_rejected, state)
+            }
+        }
+    }
+
+    fn run_then_reaction(
+        &mut self,
+        result: PromiseReactionResult,
+        on_fulfilled: Option<Value>,
+        on_rejected: Option<Value>,
+        state: PromiseSettledState,
+    ) -> Result<()> {
         let handler = match state.status {
             PromiseStatus::Fulfilled => on_fulfilled,
             PromiseStatus::Rejected => on_rejected,

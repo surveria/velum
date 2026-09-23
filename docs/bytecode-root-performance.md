@@ -27,6 +27,23 @@ Suspended state and every linear segment retain full roots. Both ordinary
 interpreter modes use the same safepoint invariant. No collection trigger,
 runtime-step charge, ownership identity or root-visitor contract is removed.
 
+## Correctness findings from boundary tests
+
+The new safepoint regressions found a pre-existing lifetime gap: an object
+returned from a function with `using` could be collected inside `Symbol.dispose`.
+The same test fails on the immutable starting commit, independently of the
+optimization. Disposal must explicitly root completions and detached resource
+values/methods while callbacks run, including new suppressed errors produced by
+earlier callbacks. Async disposal must also keep its result Promise rooted while
+its continuation is no longer queued. Promise reaction result resolvers need the
+same protection when a handler collects garbage.
+
+The fix uses scoped roots and the existing active-Promise owner, without disabling
+collection. Dedicated integration tests exercise synchronous and asynchronous
+disposal, return/throw/tail-call operands, pending callbacks, suppression chains,
+unobserved result Promises, handler re-entry, root-budget rejection and cleanup in
+both interpreter modes. Resource-free function exits keep their empty fast path.
+
 ## Frozen acceptance protocol
 
 Artifacts live outside worktrees under

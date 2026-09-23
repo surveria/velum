@@ -158,6 +158,13 @@ impl Context {
         resources: Vec<BindingResourceStack>,
         mut completion: Completion,
     ) -> Result<Completion> {
+        if resources.is_empty() {
+            return Ok(completion);
+        }
+        let _resources_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            resources.iter().map(BindingResourceStack::value),
+        )?;
         for resource in resources.into_iter().rev() {
             match resource {
                 BindingResourceStack::Sync(stack) => {
@@ -189,7 +196,7 @@ impl Context {
         let (result_promise, promise_object) = self.create_pending_promise()?;
         let _root_scope = self.transient_root_scope(
             VmRootKind::TransientTemporary,
-            core::iter::once(&promise_object),
+            core::iter::once(&promise_object).chain(completion.disposal_root_values()?),
         )?;
         let continuation = ResourceScopeContinuation::new(result_promise, resources, &completion);
         self.continue_resource_scope_disposal(continuation, None)?;
@@ -206,13 +213,32 @@ impl Context {
 
     fn continue_resource_scope_disposal(
         &mut self,
+        continuation: ResourceScopeContinuation,
+        resume: Option<Completion>,
+    ) -> Result<()> {
+        self.with_active_async_promise(continuation.result_promise, |context| {
+            context.drive_resource_scope_disposal(continuation, resume)
+        })
+    }
+
+    fn drive_resource_scope_disposal(
+        &mut self,
         mut continuation: ResourceScopeContinuation,
         resume: Option<Completion>,
     ) -> Result<()> {
+        let _resources_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            continuation
+                .resources
+                .iter()
+                .map(BindingResourceStack::value),
+        )?;
         if let Some(Completion::Throw(reason)) = resume {
             self.record_resource_scope_error(&mut continuation, reason)?;
         }
         while let Some(resource) = continuation.resources.pop() {
+            let _error_scope = self
+                .transient_root_scope(VmRootKind::TransientTemporary, continuation.thrown.iter())?;
             match resource {
                 BindingResourceStack::Sync(stack) => {
                     let completion = continuation
