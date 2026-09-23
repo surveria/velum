@@ -17,6 +17,7 @@ use crate::{
             PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
         },
         property::DynamicPropertyKey,
+        roots::VmRootKind,
         trace::{StrongEdgeReference, StrongEdgeVisitor},
     },
     value::{ObjectId, Value},
@@ -37,6 +38,14 @@ enum DisposableResource {
 }
 
 impl DisposableResource {
+    fn root_values(&self) -> impl Iterator<Item = &Value> {
+        let (first, second) = match self {
+            Self::Use { value, method } | Self::Adopt { value, method } => (value, Some(method)),
+            Self::Defer { method } => (method, None),
+        };
+        core::iter::once(first).chain(second)
+    }
+
     fn visit_edges<V: StrongEdgeVisitor<crate::runtime::async_trace::VmAsyncEdgeKind>>(
         &self,
         visitor: &mut V,
@@ -425,17 +434,31 @@ impl Context {
         mut completion: Completion,
     ) -> Result<Completion> {
         let id = self.disposable_stack_id(this_value)?;
+        let data = self.disposable_stack_data(id)?;
+        if data.disposed {
+            return Ok(completion);
+        }
+        // Register detached resources before mutating the stack, so a root-budget
+        // rejection does not discard pending callbacks or change disposed state.
+        let _resources_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            data.resources
+                .iter()
+                .flat_map(DisposableResource::root_values),
+        )?;
         let resources = {
             let data = self.disposable_stack_data_mut(id)?;
-            if data.disposed {
-                return Ok(completion);
-            }
             data.disposed = true;
             core::mem::take(&mut data.resources)
         };
         self.storage_ledger
             .release_count(VmStorageKind::CollectionEntry, resources.len())?;
         for resource in resources.into_iter().rev() {
+            // Each callback can replace the completion with a newly allocated error.
+            let _completion_scope = self.transient_root_scope(
+                VmRootKind::TransientTemporary,
+                completion.disposal_root_values()?,
+            )?;
             if let Some(error) = self.dispose_resource(resource)? {
                 completion = match completion {
                     Completion::Throw(suppressed) => {

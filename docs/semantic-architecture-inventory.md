@@ -734,6 +734,23 @@ captures are inspectable. AS-05a2d roots embedder-held data through opaque
 identity- and slot-generation-stamped handles. Collector-enabled APIs must use
 that boundary; legacy raw-result calls cannot authorize arena reclamation.
 
+Bytecode operand registration may be omitted only for an explicitly reviewed
+non-reentrant instruction when no automatic collection is pending and the
+transient-root record budget is unlimited. The next safepoint or operation that
+can invoke JavaScript/host code must register the entire live operand state.
+Finite root budgets retain the original per-instruction registrations and
+failure points. Suspended-state handling and linear segments remain fully
+rooted; a segment cannot inherit the effect of only its first instruction.
+Disposal callbacks explicitly root detached resource values/methods and the
+current completion, including tail-call operands and evolving suppressed errors.
+Async disposal and intrinsic Promise reactions share the existing active-Promise
+root owner while their continuations are executing rather than queued. Custom
+Promise reaction capabilities keep both resolvers in a scoped transient root.
+The allowlist defaults unknown instructions to full roots. GC re-entry through
+coercions, properties, bindings, calls, disposal, generators and jobs, as well
+as low object limits and root-budget failures, is exercised by
+`tests/bytecode_root_safepoint_smoke.rs`.
+
 ### Executable Root Set For AS-07
 
 The collector root/trace contract enumerates:

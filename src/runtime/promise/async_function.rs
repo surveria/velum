@@ -33,7 +33,7 @@ impl Context {
         Ok(object)
     }
 
-    fn with_active_async_promise<T>(
+    pub(in crate::runtime) fn with_active_async_promise<T>(
         &mut self,
         promise: PromiseId,
         run: impl FnOnce(&mut Self) -> Result<T>,

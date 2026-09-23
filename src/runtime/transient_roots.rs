@@ -397,7 +397,7 @@ pub struct TransientRootScope {
 }
 
 impl TransientRootScope {
-    const fn inactive() -> Self {
+    pub(in crate::runtime) const fn inactive() -> Self {
         Self {
             state: None,
             scope: 0,

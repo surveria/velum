@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock},
     error::{Error, Result},
-    runtime::{Context, control::Completion, roots::VmRootKind},
+    runtime::{Context, control::Completion},
 };
 
 use super::{BytecodeLinearOp, BytecodeState};
@@ -149,17 +149,15 @@ impl Context {
         }
         while let Some(step) = block.step(state.pc)? {
             let instruction = step.instruction();
-            let _root_scope = if let Some((values, last)) = state.simple_synchronous_root_values() {
-                self.transient_bytecode_root_scope(values, last)?
+            let segment = plan.segment_at(state.pc.index());
+            let _root_scope = if segment.is_some() {
+                self.synchronous_bytecode_root_scope(state)?
             } else {
-                self.transient_root_scope(
-                    VmRootKind::TransientOperand,
-                    state.synchronous_root_values(),
-                )?
+                self.bytecode_instruction_root_scope(state, instruction)?
             };
             self.collect_garbage_at_bytecode_safe_point()
                 .map_err(|error| error.with_runtime_span(step.span()))?;
-            if let Some(segment) = plan.segment_at(state.pc.index()) {
+            if let Some(segment) = segment {
                 if let Some(completion) = self.eval_bytecode_linear_segment(segment, state)? {
                     return Ok(completion);
                 }

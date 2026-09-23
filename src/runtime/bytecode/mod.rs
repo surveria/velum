@@ -15,6 +15,7 @@ mod instruction_stack;
 mod linear;
 mod ops;
 mod private_ops;
+mod rooting;
 mod spread;
 pub(in crate::runtime) mod state;
 mod string_concat;

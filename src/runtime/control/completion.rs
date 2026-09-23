@@ -43,6 +43,13 @@ impl TailCall {
     pub(in crate::runtime) const fn callee(&self) -> &Value {
         &self.callee
     }
+
+    fn root_values(&self) -> impl Iterator<Item = &Value> {
+        core::iter::once(&self.callee)
+            .chain(&self.arguments)
+            .chain(core::iter::once(&self.this_value))
+            .chain(self.return_mode.root_value())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,6 +171,28 @@ pub enum Completion {
 }
 
 impl Completion {
+    /// Disposal runs only after execution completes, never while it is suspended.
+    /// Tail calls keep all operands alive until their function owner consumes them.
+    pub(in crate::runtime) fn disposal_root_values(&self) -> Result<impl Iterator<Item = &Value>> {
+        let (value, tail_call) = match self {
+            Self::Normal(value)
+            | Self::Throw(value)
+            | Self::Return(value)
+            | Self::ReturnDirect(value)
+            | Self::Break { value, .. }
+            | Self::Continue { value, .. } => (Some(value), None),
+            Self::TailCall(request) => (None, Some(request)),
+            Self::Suspend(_) => {
+                return Err(Error::runtime(
+                    "suspended completion reached resource disposal",
+                ));
+            }
+        };
+        Ok(value
+            .into_iter()
+            .chain(tail_call.into_iter().flat_map(TailCall::root_values)))
+    }
+
     pub const fn suspends_execution(&self) -> bool {
         matches!(self, Self::Suspend(_))
     }
