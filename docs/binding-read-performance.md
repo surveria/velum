@@ -27,12 +27,20 @@ kept its inactive environment index entry, but redeclaration tried to install a
 new scope cell through the active-cell identity guard. The fix replaces only
 inactive entries, restores their deletability/visibility, and reuses their
 existing storage charge. Active entries retain the original identity guard.
-A related catch-shadowing defect omitted the function variable from captured
-eval environments altogether. Hoisting now always registers that variable;
-lookup gives the intervening simple catch parameter priority during direct
-eval, without dropping the variable seen by earlier closures. These preserve
-the distinct variable creation and lexical reference-resolution steps of
+This follows the creation of a new deletable variable binding in
 [EvalDeclarationInstantiation](https://tc39.es/ecma262/multipage/global-object.html#sec-evaldeclarationinstantiation).
+
+### Deferred catch-environment issue
+
+Two additional fixtures expose a pre-existing catch-shadowing problem: a
+closure created before eval does not see the function variable introduced
+under an intervening simple catch parameter. An experimental registration
+change fixed those fixtures but broke a closure created inside that eval.
+That broader change was withdrawn; the original catch/hoisting/capture logic
+is unchanged, and an added guard test preserves the inside-eval closure.
+The two failing fixtures are retained in the external
+`deferred-catch-boundaries.rs` and `parent-redeclaration.log`. They need a
+separate ordered-environment design; they are not reported as fixed or passed.
 
 ## Frozen experiment protocol
 

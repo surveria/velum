@@ -452,15 +452,6 @@ impl Context {
                 }
                 DynamicEnvironment::EvalBindings(environment) if resolves_eval_var => {
                     let atom = self.intern_static_name_atom(binding.name().name())?;
-                    if self.direct_eval_binding_layout_is_active()
-                        && self
-                            .locals
-                            .iter()
-                            .skip(self.current_local_frame_start())
-                            .any(|scope| scope.shadows_redeclared_eval_var(atom))
-                    {
-                        return Ok(None);
-                    }
                     if environment.binding(atom)?.is_some() {
                         return Ok(Some(WithBindingReference::eval_binding(environment, atom)));
                     }

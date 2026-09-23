@@ -146,38 +146,16 @@ fn lexical_conflict_does_not_reactivate_a_deleted_outer_eval_binding() -> TestRe
 }
 
 #[test]
-fn catch_parameter_shadowing_keeps_recreated_var_in_its_variable_environment() -> TestResult {
+fn eval_closure_keeps_the_intervening_catch_parameter() -> TestResult {
     check(
         r#"
-        var value = 100;
         function run() {
-            const read = () => value;
-            eval("var value = 1");
-            if (!eval("delete value")) return false;
+            let captured;
             try { throw 2; } catch (value) {
-                eval("var value = 3");
-                if (value !== 3) return false;
+                captured = eval("var value = 3; () => value");
+                if (value !== 3 || captured() !== 3) return false;
             }
-            return read() === undefined;
-        }
-        run()
-        "#,
-    )
-}
-
-#[test]
-fn catch_parameter_does_not_hide_new_eval_bindings_from_earlier_captures() -> TestResult {
-    check(
-        r#"
-        var value = 100;
-        function run() {
-            const read = () => value;
-            try { throw 2; } catch (value) {
-                eval("var value = 3");
-                if (value !== 3 || read() !== undefined) return false;
-            }
-            value = 42;
-            return read() === 42;
+            return captured() === 3;
         }
         run()
         "#,

@@ -143,7 +143,7 @@ fn deleted_eval_bindings_and_redeclarations_remain_live() -> TestResult {
 #[test]
 fn dynamic_binding_reads_keep_accessors_and_unscopables() -> TestResult {
     check_script(
-        r#"
+        r"
         var item = 40;
         var reads = 0;
         const scope = {
@@ -159,7 +159,7 @@ fn dynamic_binding_reads_keep_accessors_and_unscopables() -> TestResult {
             configurable: true, get() { hostGc(); return ++reads; }
         });
         first === 2 && second === 40 && indirectRead === 2 && indirectRead === 3
-        "#,
+        ",
     )
 }
 
