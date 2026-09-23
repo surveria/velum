@@ -21,6 +21,19 @@ visitors still receive a cloned value after all binding borrows have ended.
 There is no new binding cache, skipped validation, GC rule, or storage charge.
 Both interpreter modes use this common semantic read operation.
 
+Boundary tests also found a pre-existing eval redeclaration defect, independently
+reproduced on the immutable starting main. Deleting an eval-created variable
+kept its inactive environment index entry, but redeclaration tried to install a
+new scope cell through the active-cell identity guard. The fix replaces only
+inactive entries, restores their deletability/visibility, and reuses their
+existing storage charge. Active entries retain the original identity guard.
+A related catch-shadowing defect omitted the function variable from captured
+eval environments altogether. Hoisting now always registers that variable;
+lookup gives the intervening simple catch parameter priority during direct
+eval, without dropping the variable seen by earlier closures. These preserve
+the distinct variable creation and lexical reference-resolution steps of
+[EvalDeclarationInstantiation](https://tc39.es/ecma262/multipage/global-object.html#sec-evaldeclarationinstantiation).
+
 ## Frozen experiment protocol
 
 Artifacts are retained outside worktrees under

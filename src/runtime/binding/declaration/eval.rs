@@ -9,7 +9,6 @@ use crate::{
 struct EvalVarHoist {
     cell: BindingCell,
     deletable: bool,
-    shadowed: bool,
 }
 
 impl Context {
@@ -21,9 +20,6 @@ impl Context {
     ) -> Result<()> {
         for binding in plan.var_declarations() {
             let hoist = self.hoist_eval_local_var(binding, variable_scope_index)?;
-            if hoist.shadowed {
-                continue;
-            }
             let atom = self.intern_static_name_atom(binding.name())?;
             environment
                 .insert(atom, hoist.cell, hoist.deletable)
@@ -33,11 +29,9 @@ impl Context {
             let hoist =
                 self.hoist_eval_local_var(declaration.name().name(), variable_scope_index)?;
             let atom = self.intern_static_name_atom(declaration.name().name().name())?;
-            if !hoist.shadowed {
-                environment
-                    .insert(atom, hoist.cell.clone(), hoist.deletable)
-                    .map(|_| ())?;
-            }
+            environment
+                .insert(atom, hoist.cell.clone(), hoist.deletable)
+                .map(|_| ())?;
             let function = self.instantiate_hoisted_function(declaration)?;
             hoist
                 .cell
@@ -55,9 +49,10 @@ impl Context {
         let shadow_start = variable_scope_index
             .checked_add(1)
             .ok_or_else(|| Error::limit("eval variable scope index overflowed"))?;
-        let mut shadow_scopes = self.locals.iter().skip(shadow_start);
-        if shadow_scopes
-            .clone()
+        if self
+            .locals
+            .iter()
+            .skip(shadow_start)
             .any(|scope| scope.conflicts_with_eval_var(atom))
         {
             return Err(Error::exception(
@@ -65,7 +60,6 @@ impl Context {
                 format!("'{name}' has already been declared"),
             ));
         }
-        let shadowed = shadow_scopes.any(|scope| scope.shadows_redeclared_eval_var(atom));
         if let Some(cell) = self
             .locals
             .get(variable_scope_index)
@@ -81,7 +75,6 @@ impl Context {
             return Ok(EvalVarHoist {
                 cell,
                 deletable: false,
-                shadowed,
             });
         }
 
@@ -96,7 +89,6 @@ impl Context {
         Ok(EvalVarHoist {
             cell,
             deletable: true,
-            shadowed,
         })
     }
 }

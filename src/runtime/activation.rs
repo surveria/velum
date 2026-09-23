@@ -113,6 +113,14 @@ impl EvalBindingEnvironment {
                 let Some(entry) = entries.get_mut(position) else {
                     return Err(Error::runtime("eval binding entry disappeared"));
                 };
+                if !entry.active {
+                    // Deletion removed the binding, not the accounted index entry.
+                    // Redeclaration installs the new scope cell for all captures.
+                    entry.cell = cell;
+                    entry.deletable = deletable;
+                    entry.active = true;
+                    return Ok(false);
+                }
                 if !entry.cell.same_cell(&cell) {
                     return Err(Error::runtime("eval binding cell identity changed"));
                 }
