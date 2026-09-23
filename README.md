@@ -100,7 +100,9 @@ Current quality summary:
 | Method | Reference or corpus | Completed volume | Current result | Notes |
 | --- | --- | ---: | --- | --- |
 | Test262 conformance | Pinned Test262 snapshot | 53,404 files / 102,578 required variants | 102,578 passed, 0 failed, 0 skipped | Exact-tree correctness gate |
-| Engine262 differential fuzzing | Fuzzilli-generated programs compared with Engine262 | 3,725,550 scripts compared; 3,088,915 Engine262-comparable executions | 1,003 saved correctness artifacts replayed to 0 remaining Velum-vs-Engine262 mismatches; 11 confirmed Velum issues fixed | Closed campaigns through PR #716 |
+| Historical differential fuzzing | Fuzzilli, Engine262, V8 fallback | 3,725,550 comparison executions; 3,088,915 legacy comparable outcomes | 1,003 saved correctness artifacts replayed to 0 remaining classified mismatches; 11 confirmed Velum issues fixed | Legacy accounting through PR #716; not directly comparable with typed verdicts below |
+| Typed differential campaign (2026-09-22) | Engine262 primary, Node 20.19.4 / V8 fallback; 30 workers, 10-minute generation budget | 103,720 executions / 4,758 distinct source hashes | 98,399 equivalent (89,040 Engine262, 9,359 V8); 5,320 unverified; 1 V8 mismatch replayed and traced to its growable-buffer alignment behavior | 0 Velum crashes/timeouts; 5 Velum resource limits; Engine262: 709 host failures, 2 timeouts; V8: 0 crashes, 2 timeouts |
+| Saved-artifact replay (2026-09-22) | Last historical batch, typed classification | 110 executions / 5 distinct source hashes | 109 V8-fallback equivalents; 1 unverified; 0 classified mismatches | No direct Engine262 equivalence; no new ignore rules or confirmed engine fixes |
 | V8/Node diagnostics | V8/Node on generated programs | Same generated-program workflow when Engine262 needs fallback or performance context | Secondary diagnostics and per-case Velum/V8 performance ratios | Not the primary correctness oracle |
 | Performance baseline | Pinned `QuickJS`; prepared workloads, direct Rust API and `JetStream` | 22 project cases; 86 `JetStream` candidates | 22 valid project measurements; refreshed `JetStream`: 30 measured, 26 failed, 30 skipped | [September 22 refresh and remaining gaps](docs/safe-runtime-performance.md#jetstream-and-remaining-quickjs-gaps); host-specific timings, not an official `JetStream` score |
 | Process-isolated memory | Velum and independent `QuickJS` runtimes | 6 scenarios × 2 engines × 3 repetitions = 36 workers | 36 passed; no failed or skipped workers | RSS/PSS, explicit GC and teardown, including 1/10/50 VMs; logical counters are not allocator-byte ratios |
@@ -114,6 +116,15 @@ Long-running fuzzing and differential runs are opt-in local workflows, not CI
 jobs. When a bounded campaign reaches a reviewed milestone, this section should
 be updated with the completed iteration count, reference engines, replay
 outcome, confirmed fixes, and any important limitations.
+
+In the typed campaign, 97,724 equivalent executions produced no output, 651
+matched only their JavaScript error class, and just 24 compared non-empty output.
+Completion-only agreement is weak evidence about computed values; execution
+counts include repeated corpus processing. The remaining V8 difference is kept
+as an artifact, with a Velum regression covering the specification's
+[length-tracking growable-buffer rule](https://tc39.es/ecma262/multipage/indexed-collections.html#sec-initializetypedarrayfromarraybuffer).
+Campaign review also fixed premature report generation while the last worker
+was still recording its result. No additional engine defect was confirmed.
 
 ## Why Velum
 

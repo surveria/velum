@@ -13,6 +13,7 @@ use crate::compare::{
 };
 use crate::engine262_worker::Engine262Worker;
 use crate::node_worker::NodeWorker;
+use crate::session_lock::SessionLock;
 use crate::time::parse_duration;
 
 #[derive(Debug, Clone)]
@@ -111,6 +112,7 @@ pub struct ArtifactRecorder {
     cases: File,
     engine262_worker: Engine262Worker,
     node_worker: NodeWorker,
+    _writer_lock: SessionLock,
 }
 
 impl ArtifactRecorder {
@@ -121,6 +123,7 @@ impl ArtifactRecorder {
     /// Returns an error when directories or JSONL files cannot be created.
     pub fn new(config: TargetConfig) -> anyhow::Result<Self> {
         create_layout(&config.artifact_dir)?;
+        let writer_lock = SessionLock::writer(&config.artifact_dir)?;
         let worker_pid = std::process::id();
         let cases_path = config
             .artifact_dir
@@ -147,6 +150,7 @@ impl ArtifactRecorder {
             cases,
             engine262_worker,
             node_worker,
+            _writer_lock: writer_lock,
         })
     }
 
@@ -175,7 +179,6 @@ impl ArtifactRecorder {
             &mut self.node_worker,
             self.config.compare,
         )?;
-        Self::remove_pending_script(&pending_script)?;
         let saved_scripts = self.save_scripts_if_needed(&case_id, &compared.findings, source)?;
         let saved_script = saved_scripts.first().cloned();
         let velum_status = compared.velum.status;
@@ -208,6 +211,7 @@ impl ArtifactRecorder {
         self.cases
             .flush()
             .context("failed to flush differential case record")?;
+        Self::remove_pending_script(&pending_script)?;
         Ok(match velum_status {
             OutcomeStatus::Ok => 0,
             OutcomeStatus::JsError | OutcomeStatus::Timeout | OutcomeStatus::Crash => 1,
