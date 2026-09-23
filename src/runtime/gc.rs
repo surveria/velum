@@ -630,9 +630,13 @@ impl WeakEdgeVisitor<VmAsyncEdgeKind> for Reachability {
 }
 
 impl Context {
+    pub(in crate::runtime) fn bytecode_gc_is_pending(&self) -> bool {
+        self.automatic_gc
+            .should_collect(self.objects.object_count())
+    }
+
     pub(in crate::runtime) fn collect_garbage_at_bytecode_safe_point(&mut self) -> Result<()> {
-        let object_count = self.objects.object_count();
-        if !self.automatic_gc.should_collect(object_count) {
+        if !self.bytecode_gc_is_pending() {
             return Ok(());
         }
         self.collect_garbage().map(|_report| ())
