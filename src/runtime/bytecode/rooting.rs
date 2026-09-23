@@ -13,7 +13,7 @@ impl Context {
         &self,
         state: &BytecodeState,
         instruction: &BytecodeInstruction,
-    ) -> Result<Option<TransientRootScope>> {
+    ) -> Result<TransientRootScope> {
         // An unregistered operand can survive only until the next collection
         // or re-entry point. Keep the original registrations for finite root
         // budgets too, so their failure point and accounting remain unchanged.
@@ -21,11 +21,12 @@ impl Context {
             && self.limits.storage.max_count(VmStorageKind::TransientRoot) == usize::MAX
             && !self.bytecode_gc_is_pending()
         {
-            return Ok(None);
+            return Ok(TransientRootScope::inactive());
         }
-        self.synchronous_bytecode_root_scope(state).map(Some)
+        self.synchronous_bytecode_root_scope(state)
     }
 
+    #[inline]
     pub(super) fn synchronous_bytecode_root_scope(
         &self,
         state: &BytecodeState,

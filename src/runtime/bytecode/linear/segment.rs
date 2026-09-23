@@ -151,7 +151,7 @@ impl Context {
             let instruction = step.instruction();
             let segment = plan.segment_at(state.pc.index());
             let _root_scope = if segment.is_some() {
-                Some(self.synchronous_bytecode_root_scope(state)?)
+                self.synchronous_bytecode_root_scope(state)?
             } else {
                 self.bytecode_instruction_root_scope(state, instruction)?
             };

@@ -307,7 +307,7 @@ impl Context {
         }
         while let Some(step) = block.step(state.pc)? {
             let _root_scope = if state.has_suspend_state() {
-                Some(self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?)
+                self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?
             } else {
                 self.bytecode_instruction_root_scope(state, step.instruction())?
             };
