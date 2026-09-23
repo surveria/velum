@@ -21,6 +21,7 @@ mod alias;
 mod deletion;
 mod eval;
 mod iteration;
+mod read;
 
 /// Immutable atom-to-slot index shared by every call frame of one
 /// function, so per-call scope construction allocates only the value slots.
@@ -638,32 +639,6 @@ impl BindingCell {
             }),
             kind,
         }))
-    }
-
-    pub fn value(&self, name: &str) -> Result<Value> {
-        let target = {
-            let binding = self.borrow()?;
-            match &binding.state {
-                BindingState::Initialized(value) => return Ok(value.clone()),
-                BindingState::Uninitialized => return Err(reference_error_uninitialized(name)),
-                BindingState::Deleted => return Err(reference_error_undefined(name)),
-                BindingState::Alias(target) => target.clone(),
-            }
-        };
-        let target_binding = target.borrow()?;
-        match &target_binding.state {
-            BindingState::Initialized(value) => Ok(value.clone()),
-            BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
-            BindingState::Deleted => Err(reference_error_undefined(name)),
-            BindingState::Alias(_) => Err(Error::runtime(
-                "import binding alias target is not terminal",
-            )),
-        }
-    }
-
-    pub(crate) fn with_initialized_value<R>(&self, visit: impl FnOnce(&Value) -> R) -> Option<R> {
-        let value = self.value("<binding>").ok()?;
-        Some(visit(&value))
     }
 
     pub fn kind(&self) -> DeclKind {
