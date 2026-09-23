@@ -741,6 +741,11 @@ can invoke JavaScript/host code must register the entire live operand state.
 Finite root budgets retain the original per-instruction registrations and
 failure points. Suspended-state handling and linear segments remain fully
 rooted; a segment cannot inherit the effect of only its first instruction.
+Disposal callbacks explicitly root detached resource values/methods and the
+current completion, including tail-call operands and evolving suppressed errors.
+Async disposal and intrinsic Promise reactions share the existing active-Promise
+root owner while their continuations are executing rather than queued. Custom
+Promise reaction capabilities keep both resolvers in a scoped transient root.
 The allowlist defaults unknown instructions to full roots. GC re-entry through
 coercions, properties, bindings, calls, disposal, generators and jobs, as well
 as low object limits and root-budget failures, is exercised by
