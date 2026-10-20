@@ -80,10 +80,11 @@ cargo install --registry surveria cargo-surveria --locked
 ```
 
 It needs Rust 1.98 or newer and the registry read token. `cargo install` ignores
-the repository `.cargo/config.toml`, so the command needs `[registries.surveria]`
-in `$CARGO_HOME/config.toml`. Alternatively, run it from the repository root
-with `--config .cargo/config.toml` added. Without the CLI, the check prints a
-warning with the install command and repeats it when `check-fast.sh` exits.
+the repository `.cargo/config.toml`, so the command needs the same
+`[registries.surveria]` table in `$CARGO_HOME/config.toml`. Alternatively, run
+it from the repository root with `--config .cargo/config.toml` added. Without
+the CLI, the check prints a warning with the install command and repeats it
+when `check-fast.sh` exits.
 
 CI checks every workspace with a tracked `Cargo.lock`, including the crates.io
 name-shadowing check for workspaces that do not take registry crates yet. The
