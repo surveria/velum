@@ -26,6 +26,35 @@ cargo build --manifest-path runner/Cargo.toml --features reference-quickjs
 The `reference-quickjs` feature adds an in-process QuickJS reference (via the
 `rquickjs` binding) for benchmark comparison.
 
+### Private registry access
+
+The runner takes `human-yaml` from the private Surveria Cargo registry
+(`crates.surveria.org`). The engine and the interactive CLI do not depend on
+it and build without registry access. The repository `.cargo/config.toml`
+defines the `surveria` registry, so Cargo only needs a read token with its
+`Bearer` prefix, either in the environment:
+
+```sh
+export CARGO_REGISTRIES_SURVERIA_TOKEN="Bearer <token>"
+```
+
+or once in `$CARGO_HOME/credentials.toml`:
+
+```toml
+[registries.surveria]
+token = "Bearer <token>"
+```
+
+Use Rust 1.96 or newer with the token: Cargo from Rust 1.68 to 1.95 is
+affected by CVE-2026-5222 and can send a registry token to another registry
+on the same host.
+
+CI passes the token to every job that runs Cargo from the
+`SURVERIA_REGISTRY_TOKEN` repository secret. GitHub does not expose secrets to
+pull requests from forks, so the required CI job runs only for branches of this
+repository; without registry access, fork contributors can still build and test
+the engine and the CLI locally.
+
 ## Standalone JetStream
 
 Run the shell corpus without repeating correctness, Test262, differential, or
