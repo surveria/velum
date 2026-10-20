@@ -81,9 +81,9 @@ case "$root/" in "$repo/"*) fail 'artifact root must be outside the measured che
 [[ -z "$(repo_git status --porcelain)" ]] || fail 'measurement requires a clean committed checkout'
 # Cargo searches the working directory's ancestors and CARGO_HOME. Do not let
 # an unrecorded profile, source replacement, or compiler setting alter a preset.
-# The tracked repository configuration, which the frozen source export carries,
-# and CARGO_HOME may only define registries: with the locked, checksummed graph
-# they choose where packages are downloaded from, never what is compiled.
+# Their config.toml files and the tracked repository one, which the frozen
+# source export carries, may only define registries: with the locked,
+# checksummed graph they choose where packages come from, never what compiles.
 require_registry_only_config() {
   local config="$1" line number=0
   local table='^\[registries\.[A-Za-z0-9_-]+\]$'
@@ -105,9 +105,10 @@ for config in "$cargo_home/config.toml" "$repo/.cargo/config.toml"; do
 done
 ancestor="$root"
 while :; do
-  for config in "$ancestor/.cargo/config" "$ancestor/.cargo/config.toml"; do
-    [[ ! -e "$config" ]] || fail "unsupported ancestor Cargo configuration: $config"
-  done
+  config="$ancestor/.cargo/config"
+  [[ ! -e "$config" ]] || fail "unsupported ancestor Cargo configuration: $config"
+  config="$ancestor/.cargo/config.toml"
+  [[ ! -e "$config" && ! -L "$config" ]] || require_registry_only_config "$config"
   [[ "$ancestor" != / ]] || break
   ancestor="$(dirname "$ancestor")"
 done
