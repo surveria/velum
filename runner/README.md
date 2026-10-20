@@ -55,6 +55,44 @@ forks, so the required CI job runs only for branches of this repository;
 without registry access, fork contributors can still build and test the engine
 and the CLI locally.
 
+### Registry freshness
+
+A crate updated in the registry must also reach this repository.
+`scripts/check-registry-freshness.sh` runs `cargo surveria check --strict` from
+the `cargo-surveria` CLI (sources in `surveria/healthcheck`) and reports in the
+style of clippy:
+
+- `error`: the registry has a newer compatible release of a locked crate, or a
+  crates.io package shadows the name of a registry crate;
+- `warning`: the registry has a newer incompatible release.
+
+A newer compatible release is fixed by updating the lock file of the affected
+workspace, for example
+`cargo update --manifest-path runner/Cargo.toml -p human-yaml`. A newer
+incompatible release needs a raised requirement in `Cargo.toml`.
+
+`scripts/check-fast.sh` runs the check next to clippy for every workspace it
+lints that takes registry crates; with `VELUM_FAST_RUNNER=1`, that includes the
+runner. Install the CLI once:
+
+```sh
+cargo install --registry surveria cargo-surveria --locked
+```
+
+It needs Rust 1.96 or newer and the registry read token. `cargo install` ignores
+the repository `.cargo/config.toml`, so the command needs the same
+`[registries.surveria]` table in `$CARGO_HOME/config.toml`. Alternatively, run
+it from the repository root with `--config .cargo/config.toml` added. Without
+the CLI, the check prints a warning with the install command and repeats it
+when `check-fast.sh` exits.
+
+CI checks every workspace with a tracked `Cargo.lock`, including the crates.io
+name-shadowing check for workspaces that do not take registry crates yet. The
+`rust` job installs the pinned CLI with `scripts/prepare-cargo-surveria.sh` into
+the persistent runner cache; only a cache miss builds it. The check runs before
+the correctness gate, so a stale lock file fails CI early. When the check warns
+that a newer cargo-surveria is out, bump the pin in that script.
+
 ## Standalone JetStream
 
 Run the shell corpus without repeating correctness, Test262, differential, or

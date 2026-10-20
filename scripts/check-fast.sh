@@ -5,6 +5,18 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
+# Warnings that must not scroll away under the test output, such as a Surveria
+# registry freshness check that could not run, are repeated when the gate exits.
+deferred_warnings="$(mktemp)"
+export VELUM_DEFERRED_WARNINGS_FILE="${deferred_warnings}"
+repeat_deferred_warnings() {
+  if [[ -s "${deferred_warnings}" ]]; then
+    cat "${deferred_warnings}" >&2
+  fi
+  rm -f "${deferred_warnings}"
+}
+trap repeat_deferred_warnings EXIT
+
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
 "${script_dir}/check-vendored-regress.sh"
@@ -16,6 +28,7 @@ cd "${repo_root}"
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+"${script_dir}/check-registry-freshness.sh" Cargo.toml
 cargo clippy -p velum --lib --no-default-features -- -D warnings
 cargo clippy -p velum-regexp --lib --no-default-features -- -D warnings
 cargo test --all-targets --all-features
@@ -37,6 +50,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc -p velum-regexp-unicode-gen --no-deps --all
 if [[ "${VELUM_FAST_CLI:-0}" == "1" ]]; then
   cargo fmt --manifest-path cli/Cargo.toml --all -- --check
   cargo clippy --manifest-path cli/Cargo.toml --all-targets --all-features -- -D warnings
+  "${script_dir}/check-registry-freshness.sh" cli/Cargo.toml
   cargo test --manifest-path cli/Cargo.toml --all-targets --all-features
   RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path cli/Cargo.toml --no-deps --all-features
 fi
@@ -44,6 +58,7 @@ fi
 if [[ "${VELUM_FAST_RUNNER:-0}" == "1" ]]; then
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
+  "${script_dir}/check-registry-freshness.sh" runner/Cargo.toml
   cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
   RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
 fi

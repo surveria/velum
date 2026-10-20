@@ -72,6 +72,7 @@ jobs:
       VELUM_QUICKJS_SOURCE: git
       VELUM_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/quickjs
       VELUM_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/test262
+      VELUM_CARGO_SURVERIA_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/cargo-surveria
       VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
       VELUM_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
       VELUM_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
@@ -116,8 +117,10 @@ jobs:
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
           printf 'VELUM_QUICKJS_CACHE_DIR=%s\n' "${VELUM_QUICKJS_CACHE_DIR}"
           printf 'VELUM_TEST262_CACHE_DIR=%s\n' "${VELUM_TEST262_CACHE_DIR}"
+          printf 'VELUM_CARGO_SURVERIA_CACHE_DIR=%s\n' "${VELUM_CARGO_SURVERIA_CACHE_DIR}"
           printf 'VELUM_HOST_LOCK_PATH=%s\n' "${VELUM_HOST_LOCK_PATH}"
-          mkdir -p "${CARGO_TARGET_DIR}" "${VELUM_QUICKJS_CACHE_DIR}" "${VELUM_TEST262_CACHE_DIR}"
+          mkdir -p "${CARGO_TARGET_DIR}" "${VELUM_QUICKJS_CACHE_DIR}" "${VELUM_TEST262_CACHE_DIR}" \
+            "${VELUM_CARGO_SURVERIA_CACHE_DIR}"
           rustc --version
           cargo --version
           cargo fmt --version
@@ -144,6 +147,28 @@ jobs:
       - name: Check PR commit signatures
         if: github.event_name == 'pull_request'
         run: ./scripts/check-pr-commit-signatures.sh
+
+      # cargo-surveria comes from the Surveria registry at a pinned version and
+      # stays in the persistent runner cache next to QuickJS and Test262; only
+      # a cache miss builds it. Correctness recovery skips the freshness steps:
+      # it re-certifies an exact source commit, which may predate these scripts
+      # or registry releases published after it was merged.
+      - name: Prepare cargo-surveria
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          github.event.inputs.correctness != 'true'
+        run: |
+          cargo_surveria="$(./scripts/prepare-cargo-surveria.sh)"
+          printf '%s\n' "$(dirname "${cargo_surveria}")" >> "${GITHUB_PATH}"
+
+      # cargo surveria check --strict for every workspace with a tracked
+      # Cargo.lock: a newer compatible registry release or a crates.io package
+      # named like a registry crate fails the job before the correctness gate.
+      - name: Check Surveria registry freshness
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          github.event.inputs.correctness != 'true'
+        run: ./scripts/check-registry-freshness.sh
 
       - name: CI checks
         env:
