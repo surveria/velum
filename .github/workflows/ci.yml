@@ -150,8 +150,13 @@ jobs:
 
       # cargo-surveria comes from the Surveria registry at a pinned version and
       # stays in the persistent runner cache next to QuickJS and Test262; only
-      # a cache miss builds it.
+      # a cache miss builds it. Correctness recovery skips the freshness steps:
+      # it re-certifies an exact source commit, which may predate these scripts
+      # or registry releases published after it was merged.
       - name: Prepare cargo-surveria
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          github.event.inputs.correctness != 'true'
         run: |
           cargo_surveria="$(./scripts/prepare-cargo-surveria.sh)"
           printf '%s\n' "$(dirname "${cargo_surveria}")" >> "${GITHUB_PATH}"
@@ -160,6 +165,9 @@ jobs:
       # Cargo.lock: a newer compatible registry release or a crates.io package
       # named like a registry crate fails the job before the correctness gate.
       - name: Check Surveria registry freshness
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          github.event.inputs.correctness != 'true'
         run: ./scripts/check-registry-freshness.sh
 
       - name: CI checks
