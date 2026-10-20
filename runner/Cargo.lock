@@ -392,8 +392,9 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "human-yaml"
-version = "0.1.0"
-source = "git+https://github.com/chertov/human-yaml.git?rev=1b83913343223316678776f0c5329d4c577df0f5#1b83913343223316678776f0c5329d4c577df0f5"
+version = "0.2.0"
+source = "sparse+https://crates.surveria.org/api/packages/surveria/cargo/"
+checksum = "09e6804a9e39e442471b23b6b4c12ae2c0c418501257db614d9125ede1990ae1"
 dependencies = [
  "serde",
  "serde_json",

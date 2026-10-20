@@ -1,0 +1,10 @@
+# Private Surveria crate registry (crates.surveria.org). The test runner takes
+# shared crates such as human-yaml from it; the engine and the CLI do not.
+# The index requires authentication, and Cargo sends a token to such a registry
+# only through an explicit credential provider. Pass the read token with its
+# Bearer prefix, as CARGO_REGISTRIES_SURVERIA_TOKEN="Bearer <token>" or in
+# $CARGO_HOME/credentials.toml; CI reads it from the SURVERIA_REGISTRY_TOKEN
+# secret.
+[registries.surveria]
+index = "sparse+https://crates.surveria.org/api/packages/surveria/cargo/"
+credential-provider = "cargo:token"
