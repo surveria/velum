@@ -9,12 +9,10 @@ repo_root="$(cd "${script_dir}/.." && pwd)"
 # Surveria registry; its sources live in surveria/healthcheck. This script
 # installs the pinned release into a version-keyed cache directory, reuses it
 # on later runs, and prints the binary path. CI keeps the cache on the
-# persistent runner volume next to QuickJS and Test262.
-cargo_surveria_version="0.1.0"
-# cargo-surveria 0.1.0 declares rust-version 1.98, which is newer than the CI
-# runner's default toolchain, so the CLI is built with this pinned release.
-# Revisit both pins when `cargo surveria check` reports a newer cargo-surveria.
-cargo_surveria_toolchain="1.98.0"
+# persistent runner volume next to QuickJS and Test262. Bump the pin when
+# `cargo surveria check` reports a newer cargo-surveria; 0.1.1 declares
+# rust-version 1.96, which the CI runner toolchain satisfies.
+cargo_surveria_version="0.1.1"
 
 cache_dir="${VELUM_CARGO_SURVERIA_CACHE_DIR:-${repo_root}/target/cargo-surveria}"
 install_root="${cache_dir}/cargo-surveria-${cargo_surveria_version}"
@@ -36,13 +34,13 @@ require_tool() {
 
 install_cargo_surveria() {
   local tmp_dir="$1"
-  log "Installing cargo-surveria ${cargo_surveria_version} with Rust ${cargo_surveria_toolchain}"
-  rustup toolchain install "${cargo_surveria_toolchain}" --profile minimal --no-self-update >&2
+  log "Installing cargo-surveria ${cargo_surveria_version} from the Surveria registry"
   # cargo install reads only the user and system Cargo configuration, so the
   # repository file that defines the surveria registry and its cargo:token
   # credential provider is passed explicitly. The registry token comes from
-  # CARGO_REGISTRIES_SURVERIA_TOKEN or $CARGO_HOME/credentials.toml.
-  rustup run "${cargo_surveria_toolchain}" cargo install \
+  # CARGO_REGISTRIES_SURVERIA_TOKEN or $CARGO_HOME/credentials.toml. The
+  # explicit target directory keeps the build out of CARGO_TARGET_DIR.
+  cargo install \
     --config "${repo_root}/.cargo/config.toml" \
     --registry surveria \
     --version "=${cargo_surveria_version}" \
@@ -53,7 +51,7 @@ install_cargo_surveria() {
 }
 
 if [[ ! -x "${cargo_surveria_binary}" ]]; then
-  require_tool rustup
+  require_tool cargo
   mkdir -p "${cache_dir}"
   tmp_dir="$(mktemp -d "${cache_dir}/.cargo-surveria-${cargo_surveria_version}.XXXXXX")"
   trap 'rm -rf "${tmp_dir}"' EXIT

@@ -79,7 +79,7 @@ runner. Install the CLI once:
 cargo install --registry surveria cargo-surveria --locked
 ```
 
-It needs Rust 1.98 or newer and the registry read token. `cargo install` ignores
+It needs Rust 1.96 or newer and the registry read token. `cargo install` ignores
 the repository `.cargo/config.toml`, so the command needs the same
 `[registries.surveria]` table in `$CARGO_HOME/config.toml`. Alternatively, run
 it from the repository root with `--config .cargo/config.toml` added. Without
@@ -89,9 +89,9 @@ when `check-fast.sh` exits.
 CI checks every workspace with a tracked `Cargo.lock`, including the crates.io
 name-shadowing check for workspaces that do not take registry crates yet. The
 `rust` job installs the pinned CLI with `scripts/prepare-cargo-surveria.sh` into
-the persistent runner cache. A cache miss builds it with the pinned Rust
-toolchain that the CLI requires. The check runs before the correctness gate, so
-a stale lock file fails CI early.
+the persistent runner cache; only a cache miss builds it. The check runs before
+the correctness gate, so a stale lock file fails CI early. When the check warns
+that a newer cargo-surveria is out, bump the pin in that script.
 
 ## Standalone JetStream
 
