@@ -64,6 +64,11 @@ jobs:
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      # Read token for the private Surveria crate registry. The runner takes
+      # human-yaml from it, so every Cargo command that resolves the runner
+      # workspace needs the token. Fork pull requests do not receive secrets
+      # and are skipped by the condition above.
+      CARGO_REGISTRIES_SURVERIA_TOKEN: Bearer ${{ secrets.SURVERIA_REGISTRY_TOKEN }}
       VELUM_QUICKJS_SOURCE: git
       VELUM_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/quickjs
       VELUM_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/test262
@@ -145,17 +150,15 @@ jobs:
           VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
         run: |
           if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
-            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+            echo "VELUM_DEPENDENCY_TOKEN is required for authenticated repository fetches" >&2
             exit 1
           fi
-          # Token rewrites for private git access: chertov hosts Rust
-          # dependencies such as human-yaml, and surveria is needed for
-          # authenticated base-branch fetches in this private repository.
-          export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
-          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
+          # Token rewrite for authenticated surveria base-branch fetches. Rust
+          # dependencies no longer use git: human-yaml comes from the Surveria
+          # registry through CARGO_REGISTRIES_SURVERIA_TOKEN.
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/surveria/"
           # Persistent self-hosted workspaces can retain .git/shallow from an
           # older checkout even when checkout requests fetch-depth: 0. The
           # rollup needs the complete first-parent main history.
@@ -210,6 +213,10 @@ jobs:
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      # Read token for the private Surveria crate registry. The runner takes
+      # human-yaml from it, so every Cargo command that resolves the runner
+      # workspace needs the token.
+      CARGO_REGISTRIES_SURVERIA_TOKEN: Bearer ${{ secrets.SURVERIA_REGISTRY_TOKEN }}
       VELUM_QUICKJS_SOURCE: git
       VELUM_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/quickjs
       VELUM_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/velum/external/test262
@@ -263,14 +270,12 @@ jobs:
           VELUM_QUICKJS_BASELINE_PATH: tests/corpora/benchmarks/quickjs-baseline.tsv
         run: |
           if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
-            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+            echo "VELUM_DEPENDENCY_TOKEN is required for authenticated repository fetches" >&2
             exit 1
           fi
-          export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
-          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/surveria/"
           ./scripts/test-all.sh
 
       - name: Upload performance reports
@@ -309,6 +314,10 @@ jobs:
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      # Read token for the private Surveria crate registry. The runner takes
+      # human-yaml from it, so every Cargo command that resolves the runner
+      # workspace needs the token.
+      CARGO_REGISTRIES_SURVERIA_TOKEN: Bearer ${{ secrets.SURVERIA_REGISTRY_TOKEN }}
       GH_TOKEN: ${{ github.token }}
       VELUM_MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
       VELUM_MERGED_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -321,27 +330,13 @@ jobs:
           fetch-depth: 0
 
       - name: Configure report publisher
-        env:
-          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
         run: |
-          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
-            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
-            exit 1
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           mkdir -p "${CARGO_TARGET_DIR}"
           rustc --version
           cargo --version
           gh --version
 
       - name: Publish canonical report
-        env:
-          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
-          GIT_CONFIG_COUNT: "1"
-          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}@github.com/chertov/.insteadOf
-          GIT_CONFIG_VALUE_0: https://github.com/chertov/
         run: ./scripts/publish-report-artifact.sh

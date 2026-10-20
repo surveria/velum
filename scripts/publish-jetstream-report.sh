@@ -298,12 +298,6 @@ source_yaml_copy="${tmp_dir}/${report_yaml_file}"
 cp "${source_report}" "${source_copy}"
 cp "${source_yaml}" "${source_yaml_copy}"
 
-if [[ -n "${VELUM_DEPENDENCY_TOKEN:-}" ]]; then
-  export GIT_CONFIG_COUNT=1
-  export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-  export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-fi
-
 checkout_latest_main
 stage_outputs "${source_copy}" "${source_yaml_copy}" "${report_file}" "${report_yaml_file}"
 timestamp="${report_file#velum-jetstream-report-}"

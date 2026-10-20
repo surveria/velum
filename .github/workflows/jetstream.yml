@@ -43,6 +43,10 @@ jobs:
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/velum
+      # Read token for the private Surveria crate registry. The runner takes
+      # human-yaml from it, so every Cargo command that resolves the runner
+      # workspace needs the token.
+      CARGO_REGISTRIES_SURVERIA_TOKEN: Bearer ${{ secrets.SURVERIA_REGISTRY_TOKEN }}
       VELUM_HOST_LOCK_PATH: ${{ vars.VELUM_HOST_LOCK_PATH }}
       # Canonical unfiltered runs must not let newly compatible long workloads
       # starve the later comparison rows that feed the history chart.
@@ -104,17 +108,7 @@ jobs:
           } >> "${GITHUB_ENV}"
 
       - name: Run standalone JetStream lane
-        env:
-          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
-        run: |
-          if [[ -z "${VELUM_DEPENDENCY_TOKEN}" ]]; then
-            echo "VELUM_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
-            exit 1
-          fi
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${VELUM_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          ./scripts/run-jetstream.sh
+        run: ./scripts/run-jetstream.sh
 
       - name: Upload tree-keyed JetStream artifact
         if: always()
@@ -146,6 +140,5 @@ jobs:
           (github.event_name == 'schedule' || inputs.publish == true)
         env:
           GH_TOKEN: ${{ github.token }}
-          VELUM_DEPENDENCY_TOKEN: ${{ secrets[vars.VELUM_DEPENDENCY_SECRET_NAME] }}
           VELUM_JETSTREAM_METADATA_PATH: target/velum-reports/velum-jetstream-metadata.env
         run: ./scripts/publish-jetstream-report.sh
