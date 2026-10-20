@@ -49,11 +49,11 @@ Use Rust 1.96 or newer with the token: Cargo from Rust 1.68 to 1.95 is
 affected by CVE-2026-5222 and can send a registry token to another registry
 on the same host.
 
-CI passes the token to every job that runs Cargo from the
-`SURVERIA_REGISTRY_TOKEN` repository secret. GitHub does not expose secrets to
-pull requests from forks, so the required CI job runs only for branches of this
-repository; without registry access, fork contributors can still build and test
-the engine and the CLI locally.
+CI passes the token from the `SURVERIA_REGISTRY_TOKEN` repository secret to
+every job that runs Cargo. GitHub does not expose secrets to pull requests from
+forks, so the required CI job runs only for branches of this repository;
+without registry access, fork contributors can still build and test the engine
+and the CLI locally.
 
 ## Standalone JetStream
 
