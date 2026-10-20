@@ -81,10 +81,27 @@ case "$root/" in "$repo/"*) fail 'artifact root must be outside the measured che
 [[ -z "$(repo_git status --porcelain)" ]] || fail 'measurement requires a clean committed checkout'
 # Cargo searches the working directory's ancestors and CARGO_HOME. Do not let
 # an unrecorded profile, source replacement, or compiler setting alter a preset.
+# The tracked repository configuration, which the frozen source export carries,
+# and CARGO_HOME may only define registries: with the locked, checksummed graph
+# they choose where packages are downloaded from, never what is compiled.
+require_registry_only_config() {
+  local config="$1" line number=0
+  local table='^\[registries\.[A-Za-z0-9_-]+\]$'
+  local setting='^(index|credential-provider) = "[^"]*"$'
+  [[ -f "$config" && ! -L "$config" ]] || fail "unsupported Cargo configuration: $config"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    number=$((number + 1))
+    [[ -z "$line" || "$line" == '#'* || "$line" =~ $table || "$line" =~ $setting ]] ||
+      fail "unsupported setting on line $number of Cargo configuration $config"
+  done < "$config"
+}
 cargo_home="${CARGO_HOME:-$HOME/.cargo}"
 [[ "$cargo_home" == /* ]] || fail 'CARGO_HOME must be absolute when set'
-for config in "$cargo_home/config" "$cargo_home/config.toml" "$repo/.cargo/config" "$repo/.cargo/config.toml"; do
+for config in "$cargo_home/config" "$repo/.cargo/config"; do
   [[ ! -e "$config" ]] || fail "unsupported ambient Cargo configuration: $config"
+done
+for config in "$cargo_home/config.toml" "$repo/.cargo/config.toml"; do
+  [[ ! -e "$config" && ! -L "$config" ]] || require_registry_only_config "$config"
 done
 ancestor="$root"
 while :; do
