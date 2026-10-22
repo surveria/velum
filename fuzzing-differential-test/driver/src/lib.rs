@@ -18,4 +18,5 @@ mod reference_gaps_additional_tests;
 mod reference_gaps_tests;
 pub mod report;
 pub mod reprl;
+pub mod session_lock;
 pub mod time;

@@ -167,6 +167,7 @@ fn run_replay(
             break;
         }
     }
+    drop(recorder);
     let elapsed = started_at.elapsed();
     let report = build_report(session_dir, elapsed, &outcome)?;
     println!("{}", report.render());

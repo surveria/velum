@@ -54,6 +54,14 @@ absolute shared directory. The session contains:
 - `fuzzilli/` with Fuzzilli corpus, crashes, timeouts, and statistics;
 - `summary.txt`, `slowest.tsv`, and the final detailed `fuzzilli-*.log`.
 
+The report waits for artifact recorders to release their session locks after
+Fuzzilli exits. If writers remain active for more than two minutes, reporting
+fails explicitly instead of publishing partial totals; case files remain saved.
+Pending scripts are removed only after their finding files and JSONL record have
+been written. These locks coordinate current tools, not older binaries that do
+not implement the protocol. Do not run two campaigns against the same session
+directory concurrently.
+
 Each JSONL record has a schema version plus `reference_analysis` and
 `correctness_evaluation` objects. The reference analysis distinguishes direct
 Engine262 use, an explicit V8 fallback, and a missing reliable oracle. The
@@ -62,6 +70,15 @@ outcomes. JavaScript error messages are diagnostic rather than standardized,
 so error outcomes are compared by a typed ECMAScript error class and the JSONL
 record states that limited equivalence basis explicitly. Missing or unknown
 error classes never count as equivalent.
+
+The summary separates equivalent executions by oracle and observation strength:
+equal non-empty output, successful completion with no output, and matching
+JavaScript error classes only. A program that prints nothing does not verify its
+computed values. Error-class-only equivalence does not compare messages, thrown
+values, or output before the exception. The distinct source-hash count is separate
+from execution counts because corpus import, mutation, minimization, and replay
+can execute the same program repeatedly. Neither count proves full semantic
+equivalence or absence of bugs.
 
 Generated scripts that matter for follow-up triage are saved as JavaScript
 files, so later agents can reproduce them directly without relying on a stable

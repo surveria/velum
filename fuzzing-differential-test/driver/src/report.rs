@@ -1,9 +1,9 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, OpenOptions},
     io::{BufRead as _, BufReader, Write as _},
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context as _;
@@ -12,8 +12,9 @@ use tabled::{Table, Tabled};
 use crate::{
     artifacts::normalized_findings,
     compare::{CaseFinding, CaseRecord, OutcomeStatus},
-    correctness::CorrectnessEvaluation,
+    correctness::{CorrectnessEvaluation, EquivalenceBasis, OracleEngine},
     reference_gaps::{OracleDecision, OracleUnavailableReason, ReferenceGapReason},
+    session_lock::{REPORT_DRAIN_TIMEOUT, SessionLock},
 };
 
 const LATEST_FINDING_LIMIT: usize = 10;
@@ -55,7 +56,13 @@ impl DifferentialReport {
 #[derive(Default)]
 struct Summary {
     total: u64,
+    distinct_script_hashes: BTreeSet<String>,
     correctness_equivalent: u64,
+    engine262_equivalent: u64,
+    v8_equivalent: u64,
+    equivalent_nonempty_output: u64,
+    equivalent_empty_output: u64,
+    equivalent_error_class: u64,
     correctness_mismatches: u64,
     correctness_unverified: u64,
     legacy_untyped: u64,
@@ -109,6 +116,9 @@ pub fn build_report(
     elapsed: Duration,
     outcome: &str,
 ) -> anyhow::Result<DifferentialReport> {
+    let drain_started = Instant::now();
+    let _report_lock = SessionLock::report(session_dir, REPORT_DRAIN_TIMEOUT)?;
+    let elapsed = elapsed.saturating_add(drain_started.elapsed());
     let records = read_records(&session_dir.join("cases"))?;
     let summary = summarize(&records);
     let latest_findings = latest_javascript_files(&session_dir.join("findings"))?;
@@ -242,6 +252,8 @@ fn row(metric: &'static str, value: &str) -> SummaryRow {
 
 fn render_tables(rows: Vec<SummaryRow>, summary: &Summary) -> String {
     let mut output = Table::new(rows).to_string();
+    output.push_str("\n\nComparison evidence (execution counts unless marked distinct)\n");
+    output.push_str(&Table::new(evidence_rows(summary)).to_string());
     if !summary.reference_gap_counts.is_empty() {
         let details = summary
             .reference_gap_counts
@@ -269,17 +281,48 @@ fn render_tables(rows: Vec<SummaryRow>, summary: &Summary) -> String {
     output
 }
 
+fn evidence_rows(summary: &Summary) -> Vec<SummaryRow> {
+    vec![
+        row(
+            "Distinct script hashes",
+            &summary.distinct_script_hashes.len().to_string(),
+        ),
+        row(
+            "Equivalent with Engine262",
+            &summary.engine262_equivalent.to_string(),
+        ),
+        row(
+            "Equivalent with V8 fallback",
+            &summary.v8_equivalent.to_string(),
+        ),
+        row(
+            "Equal non-empty output",
+            &summary.equivalent_nonempty_output.to_string(),
+        ),
+        row(
+            "Both successful, no output",
+            &summary.equivalent_empty_output.to_string(),
+        ),
+        row(
+            "Same JS error class only",
+            &summary.equivalent_error_class.to_string(),
+        ),
+    ]
+}
+
 impl Summary {
     fn add(&mut self, record: &CaseRecord) {
         self.total = self.total.saturating_add(1);
+        self.distinct_script_hashes
+            .insert(record.script_sha256.clone());
         let findings = normalized_findings(record);
         let legacy_untyped = matches!(
             record.correctness_evaluation,
             CorrectnessEvaluation::LegacyUnspecified
         );
         match &record.correctness_evaluation {
-            CorrectnessEvaluation::Equivalent { .. } => {
-                self.correctness_equivalent = self.correctness_equivalent.saturating_add(1);
+            CorrectnessEvaluation::Equivalent { oracle, basis } => {
+                self.add_equivalent(*oracle, basis, record.velum.stdout_bytes);
             }
             CorrectnessEvaluation::Mismatch { .. } => {
                 self.correctness_mismatches = self.correctness_mismatches.saturating_add(1);
@@ -369,6 +412,28 @@ impl Summary {
                 self.max_ratio_case = Some(record.case_id.clone());
             }
         }
+    }
+
+    const fn add_equivalent(
+        &mut self,
+        oracle: OracleEngine,
+        basis: &EquivalenceBasis,
+        stdout_bytes: u64,
+    ) {
+        self.correctness_equivalent = self.correctness_equivalent.saturating_add(1);
+        let oracle_count = match oracle {
+            OracleEngine::Engine262 => &mut self.engine262_equivalent,
+            OracleEngine::V8Fallback => &mut self.v8_equivalent,
+        };
+        *oracle_count = oracle_count.saturating_add(1);
+        let basis_count = match basis {
+            EquivalenceBasis::SuccessfulOutputSha256 if stdout_bytes == 0 => {
+                &mut self.equivalent_empty_output
+            }
+            EquivalenceBasis::SuccessfulOutputSha256 => &mut self.equivalent_nonempty_output,
+            EquivalenceBasis::JsErrorClass { .. } => &mut self.equivalent_error_class,
+        };
+        *basis_count = basis_count.saturating_add(1);
     }
 
     fn mean_ratio(&self) -> Option<f64> {
